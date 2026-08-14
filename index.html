@@ -3,99 +3,138 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FDE-AI 無人機 AI 教官平台</title>
+    <title>fde-ai | 無人機 AI 教學平台</title>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <aside class="sidebar">
-      <div class="brand">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="fde-ai home">
         <span class="brand-mark">FDE</span>
-        <div>
-          <strong>FDE-AI</strong>
-          <span>Drone Instructor</span>
-        </div>
-      </div>
-      <nav class="nav" id="moduleNav" aria-label="FDE-AI modules"></nav>
-    </aside>
+        <span>
+          <strong>fde-ai</strong>
+          <small>AI Drone Instructor</small>
+        </span>
+      </a>
+      <nav class="nav" id="moduleNav" aria-label="Main navigation"></nav>
+    </header>
 
-    <main class="workspace">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">AI 教官訓練控制台 · v1.0</p>
-          <h1>學、練、做、測、證，一次完成無人機訓練閉環</h1>
-          <p>
-            第一版先建立完整網站流程，評測區使用模擬 AI 結果。後續可接入 YOLOv8、
-            Python 指標計算與 rules.yaml 規則引擎。
-          </p>
-        </div>
-        <div class="mission-card">
-          <span>目前任務</span>
-          <strong>F450 組裝 + 四面懸停</strong>
-          <div class="progress">
-            <span style="width: 42%"></span>
+    <main>
+      <section class="hero section-block" id="home">
+        <div class="hero-copy">
+          <p class="eyebrow">Boot Sequence · AI Assisted Training</p>
+          <h1 id="heroHeadline"></h1>
+          <p id="heroSummary"></p>
+          <div class="hero-actions">
+            <a class="primary-action" href="#learn">開始學習</a>
+            <a class="secondary-action" href="#assess">槳葉檢測</a>
           </div>
-          <small>整體進度 42%</small>
+        </div>
+        <div class="drone-stage" aria-label="transparent blue drone animation">
+          <div class="scan-ring"></div>
+          <div class="drone">
+            <span class="arm arm-a"></span>
+            <span class="arm arm-b"></span>
+            <span class="body-core"></span>
+            <span class="rotor r1"></span>
+            <span class="rotor r2"></span>
+            <span class="rotor r3"></span>
+            <span class="rotor r4"></span>
+          </div>
+          <div class="boot-lines">
+            <span>AI CORE ONLINE</span>
+            <span>RAG READY</span>
+            <span>YOLOV8 SLOT RESERVED</span>
+          </div>
         </div>
       </section>
 
-      <section class="grid overview" id="moduleCards"></section>
-
-      <section class="panel">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Build · 做</p>
-            <h2>F450 組裝 SOP</h2>
-          </div>
-          <span class="pill">10 階段</span>
+      <section class="section-block module-page" id="learn">
+        <div class="section-intro">
+          <p class="eyebrow">Learn · 學</p>
+          <h2>影片學習與資料下載</h2>
+          <p>先用影片和官方文件建立 F450 組裝、Mission Planner 地面站與飛控校準基礎。</p>
         </div>
-        <div class="timeline" id="buildTimeline"></div>
+        <div class="resource-grid" id="learningResources"></div>
       </section>
 
-      <section class="grid two-column">
-        <div class="panel">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">Assess · 測</p>
-              <h2>F450 照片檢查</h2>
+      <section class="section-block module-page" id="practice">
+        <div class="section-intro">
+          <p class="eyebrow">Practice · 練</p>
+          <h2>模擬器安裝與飛行練習</h2>
+          <p>下載模擬器到本機，先完成定點懸停、四面轉向與降落，再進入實物訓練。</p>
+        </div>
+        <div class="practice-list" id="practiceResources"></div>
+      </section>
+
+      <section class="section-block module-page" id="build">
+        <div class="section-intro">
+          <p class="eyebrow">Build · 做</p>
+          <h2>F450 實物組裝與 AI 問答</h2>
+          <p>依照組裝流程完成實物操作。遇到問題時，上傳照片或 30 秒影片，未來由 RAG 知識庫與 GPT 語音協助排錯。</p>
+        </div>
+        <div class="build-layout">
+          <div class="panel">
+            <div class="section-head">
+              <h3>組裝流程</h3>
+              <span class="pill">SOP</span>
             </div>
-            <span class="pill pending">模擬 AI</span>
+            <ol class="stage-list" id="buildStages"></ol>
           </div>
-          <label class="upload-box">
-            <input type="file" id="photoInput" accept="image/*" />
-            <span>上傳裝機照片</span>
-            <small>目前回傳模擬結果，之後替換成 YOLOv8 檢測。</small>
-          </label>
-          <button class="primary-action" id="photoButton">執行照片評測</button>
-          <div class="result" id="photoResult"></div>
-        </div>
-
-        <div class="panel">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">Assess · 測</p>
-              <h2>四面懸停評分</h2>
+          <div class="panel">
+            <div class="section-head">
+              <h3>AI 教官問答</h3>
+              <span class="pill pending">RAG + GPT 語音預留</span>
             </div>
-            <span class="pill pending">模擬 AI</span>
+            <textarea id="assistantQuestion" rows="5" placeholder="例如：槳葉方向看不懂，飛控主板該朝哪裡？"></textarea>
+            <div class="upload-row">
+              <label>
+                <span>照片</span>
+                <input type="file" accept="image/*" />
+              </label>
+              <label>
+                <span>30 秒影片</span>
+                <input type="file" accept="video/*" />
+              </label>
+            </div>
+            <button class="primary-action button" id="assistantButton">詢問 AI 教官</button>
+            <div class="result" id="assistantResult"></div>
           </div>
-          <label class="upload-box">
-            <input type="file" id="videoInput" accept="video/*" />
-            <span>上傳懸停影片</span>
-            <small>建議影片 30-60 秒，攝影機固定，無人機完整可見。</small>
-          </label>
-          <button class="primary-action" id="videoButton">執行影片評分</button>
-          <div class="result" id="videoResult"></div>
         </div>
       </section>
 
-      <section class="panel">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Certify · 證</p>
-            <h2>能力證明檔案</h2>
-          </div>
-          <span class="pill pass">可提交</span>
+      <section class="section-block module-page" id="assess">
+        <div class="section-intro">
+          <p class="eyebrow">Assess · 測</p>
+          <h2>YOLOv8 槳葉正反面檢測</h2>
+          <p>完成組裝後上傳照片。第一版先顯示模擬檢測結果，後續接入已訓練的 YOLOv8 模型判斷 CW / CCW 槳葉是否裝對。</p>
         </div>
-        <div class="evidence-list" id="certificationList"></div>
+        <div class="assess-layout">
+          <div class="panel">
+            <h3>照片上傳</h3>
+            <label class="dropzone">
+              <input type="file" id="propellerInput" accept="image/*" />
+              <span>選擇組裝照片</span>
+              <small>建議使用俯視圖，讓四片槳葉與機頭方向清楚可見。</small>
+            </label>
+            <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
+          </div>
+          <div class="panel">
+            <div class="section-head">
+              <h3>檢測結果</h3>
+              <span class="pill pending">YOLOv8 placeholder</span>
+            </div>
+            <div class="result" id="propellerResult"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block module-page" id="certify">
+        <div class="section-intro">
+          <p class="eyebrow">Certify · 證</p>
+          <h2>GitHub 成果存證</h2>
+          <p>把學習、組裝、檢測與報告整理成可追蹤的 GitHub 成果，作為能力證明。</p>
+        </div>
+        <div class="cert-grid" id="certificationChecklist"></div>
       </section>
     </main>
 

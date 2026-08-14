@@ -1,86 +1,113 @@
 const {
-  modules,
-  buildStages,
-  certificationItems,
-  simulatePhotoAssessment,
-  simulateHoverAssessment
+  hero,
+  moduleSections,
+  learningResources,
+  practiceResources,
+  buildWorkflow,
+  certificationChecklist,
+  simulateBuildAssistant,
+  simulatePropellerAssessment
 } = window.FdePlatform;
 
 const moduleNav = document.querySelector('#moduleNav');
-const moduleCards = document.querySelector('#moduleCards');
-const buildTimeline = document.querySelector('#buildTimeline');
-const certificationList = document.querySelector('#certificationList');
-const photoInput = document.querySelector('#photoInput');
-const videoInput = document.querySelector('#videoInput');
-const photoButton = document.querySelector('#photoButton');
-const videoButton = document.querySelector('#videoButton');
-const photoResult = document.querySelector('#photoResult');
-const videoResult = document.querySelector('#videoResult');
+const heroHeadline = document.querySelector('#heroHeadline');
+const heroSummary = document.querySelector('#heroSummary');
+const learningResourcesEl = document.querySelector('#learningResources');
+const practiceResourcesEl = document.querySelector('#practiceResources');
+const buildStagesEl = document.querySelector('#buildStages');
+const assistantQuestion = document.querySelector('#assistantQuestion');
+const assistantButton = document.querySelector('#assistantButton');
+const assistantResult = document.querySelector('#assistantResult');
+const propellerInput = document.querySelector('#propellerInput');
+const propellerButton = document.querySelector('#propellerButton');
+const propellerResult = document.querySelector('#propellerResult');
+const certificationChecklistEl = document.querySelector('#certificationChecklist');
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll('_', '-');
 }
 
-function renderModules() {
-  moduleNav.innerHTML = modules
-    .map((module) => `<a href="#${module.key}"><span>${module.label}</span>${module.title}</a>`)
+function renderNavigation() {
+  moduleNav.innerHTML = moduleSections
+    .map((section) => `<a href="#${section.key}"><span>${section.label}</span>${section.title}</a>`)
     .join('');
+}
 
-  moduleCards.innerHTML = modules
+function renderHero() {
+  heroHeadline.textContent = hero.headline;
+  heroSummary.textContent = hero.summary;
+}
+
+function renderLearningResources() {
+  learningResourcesEl.innerHTML = learningResources
     .map(
-      (module) => `
-        <article class="module-card" id="${module.key}">
-          <span class="module-label">${module.label}</span>
-          <h3>${module.title}</h3>
-          <p>${module.summary}</p>
-          <ul>${module.items.map((item) => `<li>${item}</li>`).join('')}</ul>
+      (resource) => `
+        <article class="resource-card">
+          <span class="tag">${resource.type}</span>
+          <h3>${resource.title}</h3>
+          <p>${resource.description}</p>
+          <a href="${resource.url}" target="_blank" rel="noreferrer">開啟資源</a>
         </article>
       `
     )
     .join('');
 }
 
-function renderBuildStages() {
-  buildTimeline.innerHTML = buildStages
+function renderPracticeResources() {
+  practiceResourcesEl.innerHTML = practiceResources
     .map(
-      (stage, index) => `
-        <article class="stage">
-          <div class="stage-number">${String(index + 1).padStart(2, '0')}</div>
+      (resource) => `
+        <article class="practice-card">
           <div>
-            <div class="stage-head">
-              <h3>${stage.title}</h3>
-              <span class="status ${statusClass(stage.status)}">${stage.status}</span>
-            </div>
-            <p>${stage.detail}</p>
+            <span class="tag">${resource.category}</span>
+            <h3>${resource.title}</h3>
+            <p>${resource.description}</p>
           </div>
+          <ol>${resource.steps.map((step) => `<li>${step}</li>`).join('')}</ol>
+          <a href="${resource.url}" target="_blank" rel="noreferrer">下載 / 查看</a>
         </article>
       `
     )
     .join('');
 }
 
-function renderCertificationItems() {
-  certificationList.innerHTML = certificationItems
-    .map((item) => `<div class="evidence-item"><span></span>${item}</div>`)
+function renderBuildWorkflow() {
+  buildStagesEl.innerHTML = buildWorkflow.stages
+    .map((stage, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span>${stage}</li>`)
     .join('');
 }
 
-function renderPhotoResult(result) {
+function renderAssistantResult(result) {
   return `
-    <article class="assessment-card">
-      <div class="stage-head">
-        <h3>${result.fileName}</h3>
+    <article class="result-card">
+      <span class="tag">${result.mode}</span>
+      <h3>${result.topic}</h3>
+      <p>${result.answer}</p>
+      <small>${result.voiceStatus}</small>
+    </article>
+  `;
+}
+
+function renderPropellerResult(result) {
+  return `
+    <article class="result-card">
+      <div class="section-head">
+        <div>
+          <span class="tag">${result.engine}</span>
+          <h3>${result.fileName}</h3>
+        </div>
         <span class="status ${statusClass(result.status)}">${result.status}</span>
       </div>
       <p>${result.summary}</p>
-      <div class="finding-list">
-        ${result.findings
+      <div class="detection-grid">
+        ${result.detections
           .map(
-            (finding) => `
+            (detection) => `
               <div>
-                <strong>${finding.label}</strong>
-                <span class="status ${statusClass(finding.result)}">${finding.result}</span>
-                <p>${finding.detail}</p>
+                <strong>${detection.position}</strong>
+                <span>${detection.className}</span>
+                <small>confidence ${Math.round(detection.confidence * 100)}%</small>
+                <em class="${statusClass(detection.result)}">${detection.result}</em>
               </div>
             `
           )
@@ -91,33 +118,32 @@ function renderPhotoResult(result) {
   `;
 }
 
-function renderVideoResult(result) {
-  return `
-    <article class="assessment-card">
-      <div class="score-ring">${result.totalScore}</div>
-      <h3>${result.fileName}</h3>
-      <p>${result.summary}</p>
-      <div class="score-grid">
-        <span>水平穩定 <strong>${result.scores.horizontalStability}/40</strong></span>
-        <span>高度控制 <strong>${result.scores.verticalStability}/20</strong></span>
-        <span>四面完成 <strong>${result.scores.sideCompletion}/25</strong></span>
-        <span>連續穩定 <strong>${result.scores.continuity}/15</strong></span>
-      </div>
-      <small>${result.recommendation}</small>
-    </article>
-  `;
+function renderCertificationChecklist() {
+  certificationChecklistEl.innerHTML = certificationChecklist
+    .map(
+      (item) => `
+        <article class="cert-card">
+          <span></span>
+          <h3>${item.title}</h3>
+          <p>${item.detail}</p>
+        </article>
+      `
+    )
+    .join('');
 }
 
-photoButton.addEventListener('click', () => {
-  const fileName = photoInput.files[0]?.name || 'demo-f450-photo.jpg';
-  photoResult.innerHTML = renderPhotoResult(simulatePhotoAssessment(fileName));
+assistantButton.addEventListener('click', () => {
+  assistantResult.innerHTML = renderAssistantResult(simulateBuildAssistant(assistantQuestion.value));
 });
 
-videoButton.addEventListener('click', () => {
-  const fileName = videoInput.files[0]?.name || 'demo-four-side-hover.mp4';
-  videoResult.innerHTML = renderVideoResult(simulateHoverAssessment(fileName));
+propellerButton.addEventListener('click', () => {
+  const fileName = propellerInput.files[0]?.name || 'demo-propeller-check.jpg';
+  propellerResult.innerHTML = renderPropellerResult(simulatePropellerAssessment(fileName));
 });
 
-renderModules();
-renderBuildStages();
-renderCertificationItems();
+renderNavigation();
+renderHero();
+renderLearningResources();
+renderPracticeResources();
+renderBuildWorkflow();
+renderCertificationChecklist();

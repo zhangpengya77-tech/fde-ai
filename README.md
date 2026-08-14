@@ -1,19 +1,23 @@
-# FDE-AI 無人機 AI 教官平台
+# fde-ai
 
-FDE-AI 是一個「學、練、做、測、證」五位一體的無人機訓練網站。第一版聚焦 F450 組裝與四面懸停訓練流程，先完成可展示、可操作的網站，再接入真正的 AI 評測系統。
+fde-ai 是一個無需登入的無人機 AI 教學網站，第一階段先完成「學、練、做、測、證」五個獨立板塊與完整操作入口。
 
-## v1.0 範圍
+## v1.1 範圍
 
-- 無需登入，打開網站即可使用。
-- 提供 Learn、Practice、Build、Assess、Certify 五個模組。
-- F450 組裝 SOP 依照 10 個階段呈現。
-- 評測區支援照片與影片上傳介面。
-- AI 評測目前使用模擬結果，方便先展示完整流程。
-- 後續可接入 YOLOv8、Python 指標計算與 rules.yaml 規則引擎。
+- 首頁：透明藍色無人機開機動畫與平台介紹。
+- 學：F450 組裝、Mission Planner 地面站、官方文件與下載連結。
+- 練：模擬器下載入口、安裝步驟與四面懸停練習任務。
+- 做：F450 實物組裝 SOP，支援照片與 30 秒影片入口，預留 RAG 知識庫與 GPT 語音問答。
+- 測：照片上傳與 YOLOv8 槳葉 CW / CCW 正反面檢測預留介面，目前使用模擬結果。
+- 證：GitHub 成果存證清單。
 
 ## 本地開啟
 
-直接用瀏覽器開啟 `index.html`。
+直接用瀏覽器開啟：
+
+```text
+index.html
+```
 
 ## 測試
 
@@ -21,10 +25,9 @@ FDE-AI 是一個「學、練、做、測、證」五位一體的無人機訓練�
 node --test tests/platform.test.js
 ```
 
-## 後續評測系統接入點
+## 後續接入
 
-- `src/platform.js`：可測試的平台資料與模擬評測函式，未來可替換為 API 呼叫。
-- `src/platform-browser.js`：讓 `index.html` 可直接用瀏覽器開啟的資料橋接檔。
-- `simulatePhotoAssessment()`：接入 F450 組裝照片檢測。
-- `simulateHoverAssessment()`：接入四面懸停影片評分。
-- `src/app.js`：負責把評測結果顯示在網站上。
+- RAG 知識庫：替換 `simulateBuildAssistant()`。
+- GPT 語音回答：接入語音輸出服務後更新「做」板塊。
+- YOLOv8 槳葉檢測：替換 `simulatePropellerAssessment()`。
+- GitHub 存證：可加入自動產生報告與提交指引。
