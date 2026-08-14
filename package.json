@@ -1,0 +1,10 @@
+{
+  "name": "fde-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FDE-AI drone instructor website v1",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/platform.test.js"
+  }
+}

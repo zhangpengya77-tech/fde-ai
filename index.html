@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FDE-AI 無人機 AI 教官平台</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">FDE</span>
+        <div>
+          <strong>FDE-AI</strong>
+          <span>Drone Instructor</span>
+        </div>
+      </div>
+      <nav class="nav" id="moduleNav" aria-label="FDE-AI modules"></nav>
+    </aside>
+
+    <main class="workspace">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">AI 教官訓練控制台 · v1.0</p>
+          <h1>學、練、做、測、證，一次完成無人機訓練閉環</h1>
+          <p>
+            第一版先建立完整網站流程，評測區使用模擬 AI 結果。後續可接入 YOLOv8、
+            Python 指標計算與 rules.yaml 規則引擎。
+          </p>
+        </div>
+        <div class="mission-card">
+          <span>目前任務</span>
+          <strong>F450 組裝 + 四面懸停</strong>
+          <div class="progress">
+            <span style="width: 42%"></span>
+          </div>
+          <small>整體進度 42%</small>
+        </div>
+      </section>
+
+      <section class="grid overview" id="moduleCards"></section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Build · 做</p>
+            <h2>F450 組裝 SOP</h2>
+          </div>
+          <span class="pill">10 階段</span>
+        </div>
+        <div class="timeline" id="buildTimeline"></div>
+      </section>
+
+      <section class="grid two-column">
+        <div class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Assess · 測</p>
+              <h2>F450 照片檢查</h2>
+            </div>
+            <span class="pill pending">模擬 AI</span>
+          </div>
+          <label class="upload-box">
+            <input type="file" id="photoInput" accept="image/*" />
+            <span>上傳裝機照片</span>
+            <small>目前回傳模擬結果，之後替換成 YOLOv8 檢測。</small>
+          </label>
+          <button class="primary-action" id="photoButton">執行照片評測</button>
+          <div class="result" id="photoResult"></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Assess · 測</p>
+              <h2>四面懸停評分</h2>
+            </div>
+            <span class="pill pending">模擬 AI</span>
+          </div>
+          <label class="upload-box">
+            <input type="file" id="videoInput" accept="video/*" />
+            <span>上傳懸停影片</span>
+            <small>建議影片 30-60 秒，攝影機固定，無人機完整可見。</small>
+          </label>
+          <button class="primary-action" id="videoButton">執行影片評分</button>
+          <div class="result" id="videoResult"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Certify · 證</p>
+            <h2>能力證明檔案</h2>
+          </div>
+          <span class="pill pass">可提交</span>
+        </div>
+        <div class="evidence-list" id="certificationList"></div>
+      </section>
+    </main>
+
+    <script src="./src/platform-browser.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>
