@@ -2,13 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   hero,
+  designSystem,
   moduleSections,
+  platformModes,
+  missionPacks,
+  learningPath,
+  studentDashboard,
   youtubeVideos,
   learningTracks,
   learningResources,
   practiceResources,
   buildWorkflow,
   assessmentWorkflows,
+  teacherDashboard,
   certificationChecklist,
   simulateBuildAssistant,
   simulatePropellerAssessment,
@@ -16,16 +22,63 @@ import {
   calculateProgress
 } from '../src/platform.js';
 
-test('defines home plus five independent sections in order', () => {
-  assert.deepEqual(moduleSections.map((section) => section.key), ['home', 'learn', 'practice', 'build', 'assess', 'certify']);
-  assert.deepEqual(moduleSections.slice(1).map((section) => section.label), ['學', '練', '做', '測', '證']);
+test('defines the five core control-center pages in order', () => {
+  assert.deepEqual(moduleSections.map((section) => section.key), ['home', 'dashboard', 'missions', 'inspection', 'teacher']);
+  assert.deepEqual(moduleSections.map((section) => section.title), ['科技展廳', '學生任務控制台', 'Mission Pack', '鷹眼 AI 檢測中心', '教師復核中心']);
 });
 
-test('defines a boot hero for an AI-assisted drone training platform', () => {
+test('defines a boot hero for an AI vehicle learning control center', () => {
   assert.equal(hero.name, 'fde-ai');
   assert.equal(hero.headline, 'FDE-AI 無人載具學習平台');
-  assert.match(hero.summary, /AI/);
+  assert.match(hero.summary, /學・練・作・測・證/);
   assert.deepEqual(hero.systems, ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統']);
+  assert.deepEqual(hero.actions.map((action) => action.label), ['進入學習平台', '觀看系統 Demo']);
+});
+
+test('defines the requested visual system and motion limits', () => {
+  assert.equal(designSystem.visualMetaphor, '未來實驗室＋無人機地面站＋AI 教學控制台');
+  assert.equal(designSystem.palette.background, '#07111F');
+  assert.equal(designSystem.palette.primaryBlue, '#168BFF');
+  assert.equal(designSystem.palette.cyan, '#00C2FF');
+  assert.equal(designSystem.motion.length, 6);
+  assert.ok(designSystem.motion.includes('AI 檢測掃描線'));
+  assert.ok(designSystem.avoid.includes('過度霓虹'));
+});
+
+test('defines public, student, and teacher modes with distinct navigation', () => {
+  assert.deepEqual(platformModes.map((mode) => mode.key), ['public', 'student', 'teacher']);
+  assert.ok(platformModes.find((mode) => mode.key === 'student').nav.includes('AI 檢測'));
+  assert.ok(platformModes.find((mode) => mode.key === 'teacher').nav.includes('待復核'));
+});
+
+test('defines twelve Mission Pack cards from the course outline', () => {
+  assert.equal(missionPacks.length, 12);
+  assert.equal(missionPacks[0].code, 'M01');
+  assert.equal(missionPacks[11].title, '智慧城市＋AI 影音＋搜救應用');
+  assert.equal(missionPacks.find((mission) => mission.code === 'M06').title, 'AI 檢測考核 A｜F450 組裝');
+  assert.equal(missionPacks.find((mission) => mission.code === 'M10').status, '教師復核');
+});
+
+test('defines a learning path from soccer drone to integrated projects', () => {
+  assert.deepEqual(learningPath.map((node) => node.title), [
+    '足球無人機',
+    '模擬器',
+    'F450',
+    '自主航線',
+    'AI',
+    '3D',
+    '智慧城市',
+    '綜合項目'
+  ]);
+  assert.ok(learningPath.filter((node) => node.state === 'complete').length >= 3);
+});
+
+test('student dashboard shows a current mission and five-stage progress', () => {
+  assert.equal(studentDashboard.greeting, '早安，張同學');
+  assert.equal(studentDashboard.stats.find((stat) => stat.label === '本週任務').value, '4/6');
+  assert.equal(studentDashboard.currentMission.code, 'M06');
+  assert.deepEqual(studentDashboard.currentMission.progress.map((step) => step.label), ['學', '練', '作', '測', '證']);
+  assert.equal(studentDashboard.currentMission.progress.find((step) => step.state === 'active').label, '測');
 });
 
 test('learn section groups the MVP curriculum and all provided YouTube videos', () => {
@@ -89,6 +142,12 @@ test('assess section includes assembly detection and four-side hover scoring', (
   assert.equal(result.engine, 'YOLOv8 hover scoring placeholder');
   assert.equal(result.score, 82);
   assert.match(result.teacherReview, /線下老師/);
+});
+
+test('teacher dashboard emphasizes review efficiency and AI warnings', () => {
+  assert.equal(teacherDashboard.stats.find((stat) => stat.label === '待復核').value, 7);
+  assert.ok(teacherDashboard.reviewQueue.some((item) => item.aiResult === 'FAIL'));
+  assert.match(teacherDashboard.reviewQueue[0].reason, /槳/);
 });
 
 test('certification checklist includes GitHub evidence upload', () => {

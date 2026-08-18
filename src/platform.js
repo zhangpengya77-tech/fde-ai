@@ -38,19 +38,109 @@ const providedYoutubeUrls = [
 export const hero = {
   name: 'fde-ai',
   headline: 'FDE-AI 無人載具學習平台',
-  summary: 'AI 驅動的學、練、做、測、證一體化 MVP，先跑通課程學習、模擬練習、F450 組裝、AI 評測與 GitHub 成果存證。',
+  summary: 'AI 雙師教學｜學・練・作・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
   systems: ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統'],
-  status: 'v1.0 MVP frontend'
+  status: 'v1.0 MVP frontend',
+  actions: [
+    { label: '進入學習平台', target: '#dashboard', kind: 'primary' },
+    { label: '觀看系統 Demo', target: '#inspection', kind: 'secondary' }
+  ]
+};
+
+export const designSystem = {
+  visualMetaphor: '未來實驗室＋無人機地面站＋AI 教學控制台',
+  principle: '外層炫、內層穩',
+  palette: {
+    background: '#07111F',
+    surface: '#0B1726',
+    primaryBlue: '#168BFF',
+    cyan: '#00C2FF',
+    text: '#DDF3FF',
+    success: '#35E6A8',
+    warning: '#F5B84B',
+    danger: '#FF5C73'
+  },
+  motion: ['頁面淡入', '卡片 hover 浮起 3-5px', '藍色邊框輕微發光', '學練作測證進度流光', 'AI 檢測掃描線', '數字計分遞增'],
+  avoid: ['過度霓虹', '複雜 3D', '遊戲化卡通', '大量閃爍', '影片背景堆疊']
 };
 
 export const moduleSections = [
-  { key: 'home', label: '首頁', title: '平台總覽', summary: '透明藍色無人機開機動畫與平台定位。' },
-  { key: 'learn', label: '學', title: '課程影片與下載說明', summary: '集中學習 F450、模擬器、證照、AI、3D 列印與 GitHub。' },
-  { key: 'practice', label: '練', title: '模擬器與考照練習', summary: '以鳳凰模擬器、證照模擬與題庫練習建立操作能力。' },
-  { key: 'build', label: '做', title: 'F450 Pixhawk 實作', summary: '依 Pixhawk 2.4.8 版本完成 F450 組裝與調參，保留 AI 問答入口。' },
-  { key: 'assess', label: '測', title: 'AI 組裝檢測與懸停評分', summary: '用照片或 30 秒影片進行組裝檢測與四面懸停評分。' },
-  { key: 'certify', label: '證', title: 'GitHub 成果存證', summary: '將學習、實作、測試與反思整理到自己的 GitHub 倉庫。' }
+  { key: 'home', label: '展', title: '科技展廳', summary: '第一屏建立 AI 無人載具系統感。' },
+  { key: 'dashboard', label: '控', title: '學生任務控制台', summary: '顯示目前任務、進度、待檢測與作品成果。' },
+  { key: 'missions', label: '任', title: 'Mission Pack', summary: '以 12 個任務包取代普通課程目錄。' },
+  { key: 'inspection', label: '測', title: '鷹眼 AI 檢測中心', summary: '組裝檢測、四面懸停與 AI 初判儀表板。' },
+  { key: 'teacher', label: '師', title: '教師復核中心', summary: '高資訊密度呈現待辦、AI 異常與班級狀態。' }
 ];
+
+export const platformModes = [
+  {
+    key: 'public',
+    title: 'Public Mode',
+    description: '面向校長、老師、論壇與合作機構，展示專案定位、五階段流程、任務包、AI 評分與成果案例。',
+    nav: ['項目介紹', '學練作測證', '任務包', '鷹眼評分', '作品成果', '合作入口']
+  },
+  {
+    key: 'student',
+    title: 'Student Mode',
+    description: '學生只看任務、練習、檢測、作品、成績與 AI 助教，操作路徑保持簡單。',
+    nav: ['首頁', '我的任務', '模擬訓練', 'AI 檢測', '我的作品', '我的成績', 'AI 助教']
+  },
+  {
+    key: 'teacher',
+    title: 'Teacher Mode',
+    description: '教師端追求快、清楚、資訊密度高，以待復核和 AI 異常為核心。',
+    nav: ['班級', '任務發布', '待復核', 'AI 異常', '學生能力', '成果導出']
+  }
+];
+
+export const missionPacks = [
+  { code: 'M01', title: '無人機安全與基礎認知', outcome: '飛行安全任務單', focus: '建立安全與系統認知', status: '已完成' },
+  { code: 'M02', title: '足球無人機模擬訓練', outcome: '基礎操控成績', focus: '低門檻、人人可練', status: '已完成' },
+  { code: 'M03', title: '足球無人機實機挑戰', outcome: '團隊競賽成果', focus: '安全實飛與團隊合作', status: '已完成' },
+  { code: 'M04', title: '無人機證照模擬訓練', outcome: '四面懸停／八字／起降模擬紀錄', focus: '銜接術科能力', status: '進行中' },
+  { code: 'M05', title: 'F450 開源無人機工程組裝', outcome: '完整 F450 教學機', focus: '工程結構、飛控與感測整合', status: '進行中' },
+  { code: 'M06', title: 'AI 檢測考核 A｜F450 組裝', outcome: '組裝 AI 檢測報告', focus: '測工程實作正確性', status: 'AI 檢測中' },
+  { code: 'M07', title: 'Mission Planner 自主航線', outcome: '自主航線任務報告', focus: '用任務規劃取代初期複雜程式碼', status: '未開始' },
+  { code: 'M08', title: 'AI 視覺目標檢測', outcome: '小型資料集＋AI 模型', focus: '建立資料與 AI 應用能力', status: '未開始' },
+  { code: 'M09', title: '3D 掃描與空拍建模', outcome: '3D 場景／物件模型', focus: '數位建模與空間資料應用', status: '未開始' },
+  { code: 'M10', title: 'AI 檢測考核 B｜四面懸停', outcome: '飛行 AI 評量報告', focus: '測飛行穩定度與標準動作', status: '教師復核' },
+  { code: 'M11', title: '數位轉型＋3D 列印', outcome: 'Q 版形象／無人機配件', focus: '數位設計到實體製造', status: '未開始' },
+  { code: 'M12', title: '智慧城市＋AI 影音＋搜救應用', outcome: '整合專題影片／報告', focus: '綜合應用與成果展示', status: '未開始' }
+];
+
+export const learningPath = [
+  { title: '足球無人機', icon: 'drone', state: 'complete' },
+  { title: '模擬器', icon: 'joystick', state: 'complete' },
+  { title: 'F450', icon: 'frame', state: 'complete' },
+  { title: '自主航線', icon: 'map', state: 'active' },
+  { title: 'AI', icon: 'chip', state: 'locked' },
+  { title: '3D', icon: 'cube', state: 'locked' },
+  { title: '智慧城市', icon: 'city', state: 'locked' },
+  { title: '綜合項目', icon: 'portfolio', state: 'locked' }
+];
+
+export const studentDashboard = {
+  greeting: '早安，張同學',
+  stats: [
+    { label: '本週任務', value: '4/6' },
+    { label: 'AI 待檢測', value: 2 },
+    { label: '教師待複核', value: 1 },
+    { label: '已完成作品', value: 8 }
+  ],
+  currentMission: {
+    code: 'M06',
+    title: 'F450 正反槳 AI 檢測',
+    description: '上傳 F450 俯視照片，確認 CW / CCW 槳葉、飛控方向、GPS 朝向與電池固定。',
+    progress: [
+      { label: '學', state: 'complete' },
+      { label: '練', state: 'complete' },
+      { label: '作', state: 'complete' },
+      { label: '測', state: 'active' },
+      { label: '證', state: 'pending' }
+    ],
+    action: '繼續任務'
+  }
+};
 
 export const youtubeVideos = providedYoutubeUrls.map((url, index) => ({
   type: 'youtube',
@@ -185,6 +275,20 @@ export const assessmentWorkflows = [
   }
 ];
 
+export const teacherDashboard = {
+  stats: [
+    { label: '今日提交', value: 18 },
+    { label: '待復核', value: 7 },
+    { label: 'AI 警告', value: 3 },
+    { label: '本班完成率', value: '72%' }
+  ],
+  reviewQueue: [
+    { student: '學生 A', mission: 'M06 F450 檢測', aiResult: 'FAIL', reason: '右前槳疑似安裝錯誤', action: '查看' },
+    { student: '學生 B', mission: 'M10 四面懸停', aiResult: 'WARNING', reason: '機頭朝後時漂移超出建議範圍', action: '查看' },
+    { student: '學生 C', mission: 'M05 F450 組裝', aiResult: 'PASS', reason: '等待教師完成安全複核', action: '查看' }
+  ]
+};
+
 export const certificationChecklist = [
   { title: 'GitHub 私人專案倉庫', detail: '提交網站、課程記錄、標註流程、模型設定與訓練紀錄。' },
   { title: '學習過程紀錄', detail: '保存 F450、模擬器、證照、AI、3D 列印與 GitHub 的學習過程。' },
@@ -218,12 +322,20 @@ export function simulatePropellerAssessment(fileName = 'propeller-check.jpg') {
     engine: 'YOLOv8 placeholder',
     fileName,
     status: 'NEEDS_RECHECK',
+    score: 82,
+    teacherStatus: '待復核',
     summary: '模擬檢測完成：四個槳葉均已識別，其中前右槳葉方向需要人工確認；飛控方向與電池固定建議再拍一張俯視圖。',
     detections: [
       { position: 'front-left', className: 'ccw_propeller', confidence: 0.91, result: 'PASS' },
       { position: 'front-right', className: 'cw_propeller', confidence: 0.62, result: 'NEEDS_RECHECK' },
       { position: 'rear-left', className: 'cw_propeller', confidence: 0.88, result: 'PASS' },
       { position: 'rear-right', className: 'ccw_propeller', confidence: 0.9, result: 'PASS' }
+    ],
+    checklist: [
+      { label: '正反槳', result: 'PASS' },
+      { label: 'GPS 朝向', result: 'PASS' },
+      { label: '電池固定', result: 'WARNING' },
+      { label: '線材整理', result: 'PASS' }
     ],
     nextStep: '接入真實 YOLOv8 後，系統會用槳葉類別、機頭方向與零件位置規則判斷整體組裝是否正確。'
   };
@@ -236,6 +348,13 @@ export function simulateHoverAssessment(fileName = 'hover.mp4') {
     fileName,
     score: 82,
     summary: '四面懸停影片已完成模擬評分：穩定度良好，機頭朝後時偏移較明顯。',
-    teacherReview: '此分數為 AI 初評，最終結果需由線下老師複核。'
+    teacherReview: '此分數為 AI 初評，最終結果需由線下老師複核。',
+    metrics: [
+      { label: '漂移距離', value: '0.8 m' },
+      { label: '越界次數', value: 1 },
+      { label: '穩定時間', value: '24 s' },
+      { label: '方向完成度', value: '4/4' },
+      { label: '姿態偏差', value: '低' }
+    ]
   };
 }

@@ -3,34 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>fde-ai | 無人機 AI 教學平台</title>
+    <title>FDE-AI | 無人載具學習控制中心</title>
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <a class="brand" href="#home" aria-label="fde-ai home">
+    <aside class="sidebar">
+      <a class="brand" href="#home" aria-label="FDE-AI home">
         <span class="brand-mark">FDE</span>
         <span>
-          <strong>fde-ai</strong>
-          <small>AI Drone Instructor</small>
+          <strong>FDE-AI</strong>
+          <small>Learning Control Center</small>
         </span>
       </a>
       <nav class="nav" id="moduleNav" aria-label="Main navigation"></nav>
-    </header>
+      <div class="sidebar-foot">
+        <span>v1.0 MVP</span>
+        <small>AI 雙師教學系統</small>
+      </div>
+    </aside>
 
     <main>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
-          <p class="eyebrow">Boot Sequence · MVP 1.0</p>
+          <p class="eyebrow">System Boot · AI Vehicle Lab</p>
           <h1 id="heroHeadline"></h1>
           <p id="heroSummary"></p>
           <div class="hero-systems" id="heroSystems"></div>
-          <div class="hero-actions">
-            <a class="primary-action" href="#learn">開始學習</a>
-            <a class="secondary-action" href="#assess">AI 測評</a>
-          </div>
+          <div class="hero-actions" id="heroActions"></div>
+          <div class="motion-strip" id="designMotion"></div>
         </div>
-        <div class="drone-stage" aria-label="transparent blue drone animation">
+        <div class="drone-stage" aria-label="transparent blue F450 wireframe animation">
+          <div class="grid-plane"></div>
           <div class="scan-ring"></div>
           <div class="drone">
             <span class="arm arm-a"></span>
@@ -42,36 +45,82 @@
             <span class="rotor r4"></span>
           </div>
           <div class="boot-lines">
-            <span>AI CORE ONLINE</span>
-            <span>RAG READY</span>
-            <span>YOLOV8 SLOT RESERVED</span>
+            <span>MISSION PACK ONLINE</span>
+            <span>AI INSPECTION READY</span>
+            <span>TEACHER REVIEW CHANNEL</span>
           </div>
         </div>
       </section>
 
-      <section class="section-block module-page" id="learn">
+      <section class="section-block flow-section">
+        <div class="section-intro">
+          <p class="eyebrow">Learning Data Stream</p>
+          <h2>學・練・作・測・證</h2>
+          <p>整個平台的核心視覺語言固定在五個節點：從課程理解，到模擬訓練、專案實作、AI 測評與能力存證。</p>
+        </div>
+        <div class="learning-flow" id="learningFlow"></div>
+      </section>
+
+      <section class="section-block light-section">
+        <div class="section-intro">
+          <p class="eyebrow">Three Modes</p>
+          <h2>公開展示、學生任務、教師復核三種模式</h2>
+          <p>同一套視覺系統下，外層有科技展廳感，內層保持教學平台和操作控制台的穩定感。</p>
+        </div>
+        <div class="mode-grid" id="platformModes"></div>
+      </section>
+
+      <section class="section-block module-page dashboard-page" id="dashboard">
+        <div class="section-intro">
+          <p class="eyebrow">Student Mode · Dashboard</p>
+          <h2 id="studentGreeting"></h2>
+          <p>登入後首頁不是普通 LMS 課程列表，而是個人任務控制台，讓學生一眼知道現在做到哪裡。</p>
+        </div>
+        <div class="metric-grid hero-metrics" id="studentStats"></div>
+        <div class="dashboard-layout">
+          <article class="mission-current panel" id="currentMission"></article>
+          <article class="panel">
+            <div class="section-head">
+              <h3>Learning Path</h3>
+              <span class="pill">任務路線圖</span>
+            </div>
+            <div class="learning-path" id="learningPath"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block module-page" id="missions">
+        <div class="section-intro">
+          <p class="eyebrow">Mission Pack</p>
+          <h2>12 個任務包</h2>
+          <p>Mission Pack 是最小教學單元，每張卡片都對應成果、狀態與學練作測證流程。</p>
+        </div>
+        <div class="mission-grid" id="missionGrid"></div>
+      </section>
+
+      <section class="section-block module-page compact-section" id="learn">
         <div class="section-intro">
           <p class="eyebrow">Learn · 學</p>
           <h2>課程影片與下載說明</h2>
-          <p>學習 F450 組裝、鳳凰模擬器、證照學科、AI 應用、3D 列印與 GitHub 成果存證。</p>
+          <p>保留 F450、鳳凰模擬器、證照、AI、3D 列印與 GitHub 的學習入口。</p>
         </div>
         <div class="resource-grid" id="learningResources"></div>
       </section>
 
-      <section class="section-block module-page" id="practice">
+      <section class="section-block light-section compact-section" id="practice">
         <div class="section-intro">
           <p class="eyebrow">Practice · 練</p>
           <h2>模擬器與考照練習</h2>
-          <p>鳳凰模擬器需先聯繫後台管理員線下取得安裝包；練習部分包含飛行模擬、證照模擬與題庫刷題。</p>
+          <p>鳳凰模擬器需聯繫後台管理員線下取得安裝包；練習重點是飛行模擬、考照模擬與題庫刷題。</p>
         </div>
         <div class="practice-list" id="practiceResources"></div>
       </section>
 
-      <section class="section-block module-page" id="build">
+      <section class="section-block module-page compact-section" id="build">
         <div class="section-intro">
-          <p class="eyebrow">Build · 做</p>
-          <h2>F450 Pixhawk 實作與 AI 問答</h2>
-          <p>1.0 先做 Pixhawk 2.4.8 版本。實作時可上傳照片或 30 秒影片，由預留的 RAG 知識庫與 GPT 語音入口輔助排錯。</p>
+          <p class="eyebrow">Build · 作</p>
+          <h2>F450 Pixhawk 實作與 AI 助教</h2>
+          <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，由預留的 RAG 知識庫與 GPT 語音入口輔助排錯。</p>
         </div>
         <div class="build-layout">
           <div class="panel">
@@ -84,7 +133,7 @@
           </div>
           <div class="panel">
             <div class="section-head">
-              <h3>AI 教官問答</h3>
+              <h3>AI 助教問答</h3>
               <span class="pill pending">RAG + GPT 語音預留</span>
             </div>
             <textarea id="assistantQuestion" rows="5" placeholder="例如：槳葉方向看不懂，飛控主板該朝哪裡？"></textarea>
@@ -98,60 +147,64 @@
                 <input type="file" accept="video/*" />
               </label>
             </div>
-            <button class="primary-action button" id="assistantButton">詢問 AI 教官</button>
+            <button class="primary-action button" id="assistantButton">詢問 AI 助教</button>
             <div class="result" id="assistantResult"></div>
           </div>
         </div>
       </section>
 
-      <section class="section-block module-page" id="assess">
+      <section class="section-block module-page inspection-page" id="inspection">
         <div class="section-intro">
-          <p class="eyebrow">Assess · 測</p>
-          <h2>AI 組裝檢測與四面懸停評分</h2>
-          <p>完成組裝後上傳照片或 30 秒影片。1.0 先用模擬結果展示流程，後續接入 YOLOv8 判斷槳葉、零件位置與懸停表現。</p>
+          <p class="eyebrow">AI Inspection Center · 測</p>
+          <h2>鷹眼 AI 檢測中心</h2>
+          <p>這是網站科技感最強的頁面：左側上傳，中間呈現 AI 檢測畫面，右側輸出 PASS / WARNING / FAIL 與教師復核狀態。</p>
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
-        <div class="assess-layout">
-          <div class="panel">
-            <h3>組裝照片 / 影片上傳</h3>
+        <div class="inspection-layout">
+          <div class="panel upload-panel">
+            <h3>F450 組裝檢測</h3>
             <label class="dropzone">
               <input type="file" id="propellerInput" accept="image/*" />
-              <span>選擇組裝照片</span>
-              <small>建議使用俯視圖，讓四片槳葉、機頭方向、飛控與電池位置清楚可見。</small>
+              <span>上傳組裝照片</span>
+              <small>建議俯視圖，讓槳葉、機頭、飛控、GPS 與電池位置清楚可見。</small>
             </label>
             <button class="primary-action button" id="propellerButton">執行組裝檢測</button>
           </div>
-          <div class="panel">
-            <div class="section-head">
-              <h3>組裝檢測結果</h3>
-              <span class="pill pending">YOLOv8 placeholder</span>
-            </div>
+          <div class="panel result-panel">
+            <h3>組裝檢測結果</h3>
             <div class="result" id="propellerResult"></div>
           </div>
-          <div class="panel">
-            <h3>四面懸停影片</h3>
+          <div class="panel upload-panel">
+            <h3>四面懸停檢測</h3>
             <label class="dropzone">
               <input type="file" id="hoverInput" accept="video/*" />
-              <span>選擇 30 秒懸停影片</span>
+              <span>上傳 30 秒影片</span>
               <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
             </label>
             <button class="primary-action button" id="hoverButton">執行懸停評分</button>
           </div>
-          <div class="panel">
-            <div class="section-head">
-              <h3>懸停評分結果</h3>
-              <span class="pill pending">AI 初評 + 老師複核</span>
-            </div>
+          <div class="panel result-panel">
+            <h3>飛行分析儀表板</h3>
             <div class="result" id="hoverResult"></div>
           </div>
         </div>
+      </section>
+
+      <section class="section-block light-section" id="teacher">
+        <div class="section-intro">
+          <p class="eyebrow">Teacher Mode · Review Center</p>
+          <h2>教師復核中心</h2>
+          <p>教師端不做探索式介面，直接呈現今日提交、待復核、AI 警告與需要處理的學生隊列。</p>
+        </div>
+        <div class="metric-grid hero-metrics" id="teacherStats"></div>
+        <div class="teacher-queue" id="teacherQueue"></div>
       </section>
 
       <section class="section-block module-page" id="certify">
         <div class="section-intro">
           <p class="eyebrow">Certify · 證</p>
           <h2>GitHub 成果存證</h2>
-          <p>把學習、組裝、檢測與報告整理成可追蹤的 GitHub 成果，作為能力證明。</p>
+          <p>作品頁是能力檔案館，把學習、組裝、AI 測評、教師評語與反思整理成可追蹤成果。</p>
         </div>
         <div class="cert-grid" id="certificationChecklist"></div>
       </section>

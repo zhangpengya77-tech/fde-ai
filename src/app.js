@@ -1,52 +1,125 @@
+(() => {
 const {
   hero,
+  designSystem,
   moduleSections,
+  platformModes,
+  missionPacks,
+  learningPath,
+  studentDashboard,
   learningTracks,
   practiceResources,
   buildWorkflow,
   assessmentWorkflows,
+  teacherDashboard,
   certificationChecklist,
   simulateBuildAssistant,
   simulatePropellerAssessment,
   simulateHoverAssessment
 } = window.FdePlatform;
 
-const moduleNav = document.querySelector('#moduleNav');
-const heroHeadline = document.querySelector('#heroHeadline');
-const heroSummary = document.querySelector('#heroSummary');
-const learningResourcesEl = document.querySelector('#learningResources');
-const practiceResourcesEl = document.querySelector('#practiceResources');
-const buildStagesEl = document.querySelector('#buildStages');
-const assistantQuestion = document.querySelector('#assistantQuestion');
-const assistantButton = document.querySelector('#assistantButton');
-const assistantResult = document.querySelector('#assistantResult');
-const propellerInput = document.querySelector('#propellerInput');
-const propellerButton = document.querySelector('#propellerButton');
-const propellerResult = document.querySelector('#propellerResult');
-const hoverInput = document.querySelector('#hoverInput');
-const hoverButton = document.querySelector('#hoverButton');
-const hoverResult = document.querySelector('#hoverResult');
-const assessmentWorkflowsEl = document.querySelector('#assessmentWorkflows');
-const certificationChecklistEl = document.querySelector('#certificationChecklist');
+const $ = (selector) => document.querySelector(selector);
 
 function statusClass(status) {
-  return String(status).toLowerCase().replaceAll('_', '-');
+  return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
 }
 
 function renderNavigation() {
-  moduleNav.innerHTML = moduleSections
+  $('#moduleNav').innerHTML = moduleSections
     .map((section) => `<a href="#${section.key}"><span>${section.label}</span>${section.title}</a>`)
     .join('');
 }
 
 function renderHero() {
-  heroHeadline.textContent = hero.headline;
-  heroSummary.textContent = hero.summary;
-  document.querySelector('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
+  $('#heroHeadline').textContent = hero.headline;
+  $('#heroSummary').textContent = hero.summary;
+  $('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
+  $('#heroActions').innerHTML = hero.actions
+    .map((action) => `<a class="${action.kind}-action" href="${action.target}">${action.label}</a>`)
+    .join('');
+  $('#designMotion').innerHTML = designSystem.motion.map((motion) => `<span>${motion}</span>`).join('');
+}
+
+function renderDataFlow() {
+  const flow = [
+    ['學', 'SOP / AI 助教'],
+    ['練', '模擬器 / Mission Planner'],
+    ['作', 'F450 / AI / 3D'],
+    ['測', '鷹眼 AI 檢測'],
+    ['證', '作品 / 能力紀錄']
+  ];
+  $('#learningFlow').innerHTML = flow
+    .map(([label, detail]) => `<div class="flow-node"><strong>${label}</strong><span>${detail}</span></div>`)
+    .join('');
+}
+
+function renderModes() {
+  $('#platformModes').innerHTML = platformModes
+    .map(
+      (mode) => `
+        <article class="mode-card">
+          <span class="tag">${mode.title}</span>
+          <p>${mode.description}</p>
+          <div class="mini-nav">${mode.nav.map((item) => `<span>${item}</span>`).join('')}</div>
+        </article>
+      `
+    )
+    .join('');
+}
+
+function renderStudentDashboard() {
+  $('#studentGreeting').textContent = studentDashboard.greeting;
+  $('#studentStats').innerHTML = studentDashboard.stats
+    .map((stat) => `<div class="metric-card"><span>${stat.label}</span><strong>${stat.value}</strong></div>`)
+    .join('');
+  $('#currentMission').innerHTML = `
+    <div class="mission-current-head">
+      <span class="tag">${studentDashboard.currentMission.code}</span>
+      <h3>${studentDashboard.currentMission.title}</h3>
+    </div>
+    <p>${studentDashboard.currentMission.description}</p>
+    <div class="progress-rail">
+      ${studentDashboard.currentMission.progress
+        .map((step) => `<span class="${step.state}">${step.label}</span>`)
+        .join('')}
+    </div>
+    <a class="primary-action" href="#inspection">${studentDashboard.currentMission.action}</a>
+  `;
+}
+
+function renderLearningPath() {
+  $('#learningPath').innerHTML = learningPath
+    .map(
+      (node) => `
+        <div class="path-node ${node.state}">
+          <span>${node.icon}</span>
+          <strong>${node.title}</strong>
+        </div>
+      `
+    )
+    .join('');
+}
+
+function renderMissions() {
+  $('#missionGrid').innerHTML = missionPacks
+    .map(
+      (mission) => `
+        <article class="mission-card ${statusClass(mission.status)}">
+          <div class="section-head">
+            <span class="mission-code">${mission.code}</span>
+            <span class="status ${statusClass(mission.status)}">${mission.status}</span>
+          </div>
+          <h3>${mission.title}</h3>
+          <p>${mission.focus}</p>
+          <small>核心成果：${mission.outcome}</small>
+        </article>
+      `
+    )
+    .join('');
 }
 
 function renderLearningResources() {
-  learningResourcesEl.innerHTML = learningTracks
+  $('#learningResources').innerHTML = learningTracks
     .map(
       (track) => `
         <article class="track-card">
@@ -75,7 +148,7 @@ function renderLearningResources() {
 }
 
 function renderPracticeResources() {
-  practiceResourcesEl.innerHTML = practiceResources
+  $('#practiceResources').innerHTML = practiceResources
     .map(
       (resource) => `
         <article class="practice-card">
@@ -85,7 +158,7 @@ function renderPracticeResources() {
             <p>${resource.description}</p>
           </div>
           <ol>${resource.steps.map((step) => `<li>${step}</li>`).join('')}</ol>
-          <a href="${resource.url}" target="_blank" rel="noreferrer">下載 / 查看</a>
+          <a href="${resource.url}" target="_blank" rel="noreferrer">開始練習</a>
         </article>
       `
     )
@@ -93,13 +166,28 @@ function renderPracticeResources() {
 }
 
 function renderBuildWorkflow() {
-  document.querySelector('#buildMeta').innerHTML = `
+  $('#buildMeta').innerHTML = `
     <span>版本 ${buildWorkflow.version}</span>
     <span>${buildWorkflow.controller}</span>
     <span>${buildWorkflow.interactionMode}</span>
   `;
-  buildStagesEl.innerHTML = buildWorkflow.stages
+  $('#buildStages').innerHTML = buildWorkflow.stages
     .map((stage, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span>${stage}</li>`)
+    .join('');
+}
+
+function renderAssessmentWorkflows() {
+  $('#assessmentWorkflows').innerHTML = assessmentWorkflows
+    .map(
+      (workflow) => `
+        <article class="workflow-card">
+          <span class="tag">${workflow.engine}</span>
+          <h3>${workflow.title}</h3>
+          <p>可上傳：${workflow.acceptedEvidence.join(' / ')}</p>
+          <ul>${workflow.checks.map((check) => `<li>${check}</li>`).join('')}</ul>
+        </article>
+      `
+    )
     .join('');
 }
 
@@ -114,61 +202,64 @@ function renderAssistantResult(result) {
   `;
 }
 
-function renderPropellerResult(result) {
+function renderAssemblyResult(result) {
   return `
-    <article class="result-card">
-      <div class="section-head">
-        <div>
+    <article class="result-card inspection-result">
+      <div class="scan-preview">
+        <div class="scan-line"></div>
+        <span>F450 TOP VIEW</span>
+      </div>
+      <div>
+        <div class="section-head">
           <span class="tag">${result.engine}</span>
-          <h3>${result.fileName}</h3>
+          <span class="status ${statusClass(result.status)}">${result.status}</span>
         </div>
-        <span class="status ${statusClass(result.status)}">${result.status}</span>
+        <h3>${result.fileName}</h3>
+        <p>${result.summary}</p>
+        <div class="score-row"><strong>${result.score}</strong><span>AI 初判分數</span><em>${result.teacherStatus}</em></div>
+        <div class="check-grid">
+          ${result.checklist.map((item) => `<div><span>${item.label}</span><strong class="${statusClass(item.result)}">${item.result}</strong></div>`).join('')}
+        </div>
       </div>
-      <p>${result.summary}</p>
-      <div class="detection-grid">
-        ${result.detections
-          .map(
-            (detection) => `
-              <div>
-                <strong>${detection.position}</strong>
-                <span>${detection.className}</span>
-                <small>confidence ${Math.round(detection.confidence * 100)}%</small>
-                <em class="${statusClass(detection.result)}">${detection.result}</em>
-              </div>
-            `
-          )
-          .join('')}
-      </div>
-      <small>${result.nextStep}</small>
     </article>
   `;
 }
 
 function renderHoverResult(result) {
   return `
-    <article class="result-card">
-      <div class="section-head">
-        <div>
-          <span class="tag">${result.engine}</span>
-          <h3>${result.fileName}</h3>
-        </div>
-        <span class="status pass">${result.score} 分</span>
+    <article class="result-card inspection-result">
+      <div class="trajectory">
+        <span></span>
+        <i></i>
       </div>
-      <p>${result.summary}</p>
-      <small>${result.teacherReview}</small>
+      <div>
+        <div class="section-head">
+          <span class="tag">${result.engine}</span>
+          <span class="status pass">${result.score} 分</span>
+        </div>
+        <h3>${result.fileName}</h3>
+        <p>${result.summary}</p>
+        <div class="metric-grid">
+          ${result.metrics.map((metric) => `<div><span>${metric.label}</span><strong>${metric.value}</strong></div>`).join('')}
+        </div>
+        <small>${result.teacherReview}</small>
+      </div>
     </article>
   `;
 }
 
-function renderAssessmentWorkflows() {
-  assessmentWorkflowsEl.innerHTML = assessmentWorkflows
+function renderTeacherDashboard() {
+  $('#teacherStats').innerHTML = teacherDashboard.stats
+    .map((stat) => `<div class="metric-card"><span>${stat.label}</span><strong>${stat.value}</strong></div>`)
+    .join('');
+  $('#teacherQueue').innerHTML = teacherDashboard.reviewQueue
     .map(
-      (workflow) => `
-        <article class="workflow-card">
-          <span class="tag">${workflow.engine}</span>
-          <h3>${workflow.title}</h3>
-          <p>可上傳：${workflow.acceptedEvidence.join(' / ')}</p>
-          <ul>${workflow.checks.map((check) => `<li>${check}</li>`).join('')}</ul>
+      (item) => `
+        <article class="queue-row">
+          <div><strong>${item.student}</strong><span>${item.mission}</span></div>
+          <span class="status ${statusClass(item.aiResult)}">${item.aiResult}</span>
+          <p>${item.reason}</p>
+          <a href="#inspection">${item.action}</a>
         </article>
       `
     )
@@ -176,7 +267,7 @@ function renderAssessmentWorkflows() {
 }
 
 function renderCertificationChecklist() {
-  certificationChecklistEl.innerHTML = certificationChecklist
+  $('#certificationChecklist').innerHTML = certificationChecklist
     .map(
       (item) => `
         <article class="cert-card">
@@ -189,24 +280,34 @@ function renderCertificationChecklist() {
     .join('');
 }
 
-assistantButton.addEventListener('click', () => {
-  assistantResult.innerHTML = renderAssistantResult(simulateBuildAssistant(assistantQuestion.value));
-});
+function bindActions() {
+  $('#assistantButton').addEventListener('click', () => {
+    $('#assistantResult').innerHTML = renderAssistantResult(simulateBuildAssistant($('#assistantQuestion').value));
+  });
 
-propellerButton.addEventListener('click', () => {
-  const fileName = propellerInput.files[0]?.name || 'demo-propeller-check.jpg';
-  propellerResult.innerHTML = renderPropellerResult(simulatePropellerAssessment(fileName));
-});
+  $('#propellerButton').addEventListener('click', () => {
+    const fileName = $('#propellerInput').files[0]?.name || 'demo-f450-check.jpg';
+    $('#propellerResult').innerHTML = renderAssemblyResult(simulatePropellerAssessment(fileName));
+  });
 
-hoverButton.addEventListener('click', () => {
-  const fileName = hoverInput.files[0]?.name || 'demo-hover-test.mp4';
-  hoverResult.innerHTML = renderHoverResult(simulateHoverAssessment(fileName));
-});
+  $('#hoverButton').addEventListener('click', () => {
+    const fileName = $('#hoverInput').files[0]?.name || 'demo-hover-test.mp4';
+    $('#hoverResult').innerHTML = renderHoverResult(simulateHoverAssessment(fileName));
+  });
+}
 
 renderNavigation();
 renderHero();
+renderDataFlow();
+renderModes();
+renderStudentDashboard();
+renderLearningPath();
+renderMissions();
 renderLearningResources();
 renderPracticeResources();
 renderBuildWorkflow();
 renderAssessmentWorkflows();
+renderTeacherDashboard();
 renderCertificationChecklist();
+bindActions();
+})();
