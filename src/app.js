@@ -120,9 +120,10 @@ function renderMissions() {
 
 function renderLearningResources() {
   $('#learningResources').innerHTML = learningTracks
-    .map(
-      (track) => `
-        <article class="track-card">
+    .map((track) => {
+      const hiddenCount = Math.max(0, track.items.length - track.previewCount);
+      return `
+        <article class="track-card" data-track="${track.key}">
           <div class="track-head">
             <span class="tag">${track.key}</span>
             <h3>${track.title}</h3>
@@ -130,20 +131,26 @@ function renderLearningResources() {
           </div>
           <div class="lesson-list">
             ${track.items
-              .map(
-                (item) => `
-                  <a href="${item.url}" target="${item.url.startsWith('#') ? '_self' : '_blank'}" rel="noreferrer">
+              .map((item, index) => {
+                const collapsedClass = index >= track.previewCount ? 'is-extra' : '';
+                return `
+                  <a class="${collapsedClass}" href="${item.url}" target="${item.url.startsWith('#') ? '_self' : '_blank'}" rel="noreferrer">
                     <span>${item.type}</span>
                     <strong>${item.title}</strong>
                     <small>${item.description}</small>
                   </a>
-                `
-              )
+                `;
+              })
               .join('')}
           </div>
+          ${
+            hiddenCount > 0
+              ? `<button class="track-toggle" type="button" data-track-toggle="${track.key}" aria-expanded="false">展開全部 ${track.items.length} 個</button>`
+              : ''
+          }
         </article>
-      `
-    )
+      `;
+    })
     .join('');
 }
 
@@ -281,6 +288,15 @@ function renderCertificationChecklist() {
 }
 
 function bindActions() {
+  document.querySelectorAll('[data-track-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const card = button.closest('.track-card');
+      const expanded = card.classList.toggle('is-expanded');
+      button.setAttribute('aria-expanded', String(expanded));
+      button.textContent = expanded ? '收合' : `展開全部 ${card.querySelectorAll('.lesson-list a').length} 個`;
+    });
+  });
+
   $('#assistantButton').addEventListener('click', () => {
     $('#assistantResult').innerHTML = renderAssistantResult(simulateBuildAssistant($('#assistantQuestion').value));
   });

@@ -9,6 +9,7 @@ import {
   learningPath,
   studentDashboard,
   youtubeVideos,
+  learningTrackPreviewCount,
   learningTracks,
   learningResources,
   practiceResources,
@@ -82,6 +83,7 @@ test('student dashboard shows a current mission and five-stage progress', () => 
 });
 
 test('learn section groups the MVP curriculum and all provided YouTube videos', () => {
+  assert.equal(learningTrackPreviewCount, 2);
   assert.equal(youtubeVideos.length, 34);
   assert.equal(new Set(youtubeVideos.map((video) => video.url)).size, 34);
   assert.deepEqual(learningTracks.map((track) => track.key), [
@@ -95,6 +97,8 @@ test('learn section groups the MVP curriculum and all provided YouTube videos', 
   assert.ok(learningTracks.find((track) => track.key === 'f450').items.some((item) => item.title.includes('DJI NAZA')));
   assert.ok(learningTracks.find((track) => track.key === 'f450').items.some((item) => item.title.includes('Pixhawk 2.4.8')));
   assert.equal(learningTracks.find((track) => track.key === 'printing3d').items.length, 16);
+  assert.ok(learningTracks.every((track) => track.previewCount === learningTrackPreviewCount));
+  assert.ok(learningTracks.filter((track) => track.items.length > learningTrackPreviewCount).length >= 5);
   assert.ok(learningResources.some((resource) => resource.type === 'youtube' && resource.url.includes('youtu.be')));
   assert.ok(learningResources.some((resource) => resource.title.includes('GitHub')));
 });

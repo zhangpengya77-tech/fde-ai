@@ -149,6 +149,8 @@ export const youtubeVideos = providedYoutubeUrls.map((url, index) => ({
   url
 }));
 
+export const learningTrackPreviewCount = 2;
+
 const videoRange = (start, end, titlePrefix) =>
   youtubeVideos.slice(start - 1, end).map((video, index) => ({
     ...video,
@@ -159,6 +161,7 @@ export const learningTracks = [
   {
     key: 'f450',
     title: 'F450 組裝與飛控課程',
+    previewCount: learningTrackPreviewCount,
     summary: '先看 DJI NAZA 與 Pixhawk 2.4.8 的飛控介紹、組裝、調參與安全檢查。',
     items: [
       { type: 'course', title: 'DJI NAZA 飛控介紹、組裝與調參', description: '作為飛控概念與線路配置的對照學習。', url: providedYoutubeUrls[0] },
@@ -169,6 +172,7 @@ export const learningTracks = [
   {
     key: 'phoenix',
     title: '鳳凰模擬器學習',
+    previewCount: learningTrackPreviewCount,
     summary: '學習鳳凰模擬器使用方式；軟體下載需聯繫後台管理員線下取得。',
     items: [
       ...videoRange(9, 11, '鳳凰模擬器影片'),
@@ -178,6 +182,7 @@ export const learningTracks = [
   {
     key: 'license',
     title: '無人機證照學科',
+    previewCount: learningTrackPreviewCount,
     summary: '學習證照考取內容，並連到台灣地區無人機基本操作證學科題庫。',
     items: [
       ...videoRange(12, 14, '證照課程影片'),
@@ -187,18 +192,21 @@ export const learningTracks = [
   {
     key: 'ai',
     title: 'AI 應用學習',
+    previewCount: learningTrackPreviewCount,
     summary: '學習 Codex、YOLO 目標檢測、資料集標註與訓練流程。',
     items: videoRange(15, 18, 'AI 應用影片')
   },
   {
     key: 'printing3d',
     title: '3D 列印課程',
+    previewCount: learningTrackPreviewCount,
     summary: '放入第 1 集到第 16 集，作為無人機零件與輔具製作基礎。',
     items: videoRange(19, 34, '3D 列印第')
   },
   {
     key: 'github',
     title: 'GitHub 成果存證',
+    previewCount: learningTrackPreviewCount,
     summary: '學會建立私人倉庫、上傳成果、整理學習紀錄與版本歷程。',
     items: [
       {
