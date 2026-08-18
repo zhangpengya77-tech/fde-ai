@@ -403,6 +403,31 @@ main {
   background: rgba(15, 32, 51, 0.94);
   text-align: center;
   box-shadow: var(--shadow);
+  animation: node-breathe 5.8s ease-in-out infinite;
+}
+
+.flow-node:nth-child(2) {
+  animation-delay: 0.35s;
+}
+
+.flow-node:nth-child(3) {
+  animation-delay: 0.7s;
+}
+
+.flow-node:nth-child(4) {
+  animation-delay: 1.05s;
+}
+
+.flow-node:nth-child(5) {
+  animation-delay: 1.4s;
+}
+
+.flow-node::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(0, 194, 255, 0.08);
+  pointer-events: none;
 }
 
 .flow-node strong {
@@ -418,6 +443,10 @@ main {
 .flow-node span {
   margin-top: 12px;
   color: var(--muted);
+}
+
+.flow-node:hover strong {
+  box-shadow: 0 0 22px rgba(0, 194, 255, 0.24);
 }
 
 .light-section {
@@ -454,6 +483,10 @@ main {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.inspection-page .workflow-grid {
+  margin-bottom: 32px;
 }
 
 .resource-grid {
@@ -503,6 +536,20 @@ main {
 .mission-card h3,
 .mode-card h3 {
   margin: 14px 0 10px;
+}
+
+.practice-card h3 {
+  color: #ffffff;
+}
+
+.practice-card .tag {
+  border-color: rgba(221, 243, 255, 0.42);
+  color: #ffffff;
+  background: rgba(221, 243, 255, 0.06);
+}
+
+.practice-card ol {
+  color: #d8edf8;
 }
 
 .track-card p,
@@ -965,6 +1012,20 @@ textarea {
   50% {
     opacity: 1;
     transform: scaleX(1);
+  }
+}
+
+@keyframes node-breathe {
+  0%,
+  100% {
+    border-color: rgba(0, 194, 255, 0.22);
+    box-shadow: var(--shadow);
+    transform: translateY(0);
+  }
+  50% {
+    border-color: rgba(0, 194, 255, 0.52);
+    box-shadow: 0 0 26px rgba(0, 194, 255, 0.12);
+    transform: translateY(-2px);
   }
 }
 

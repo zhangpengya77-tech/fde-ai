@@ -42,6 +42,7 @@ test('defines the requested visual system and motion limits', () => {
   assert.equal(designSystem.palette.primaryBlue, '#168BFF');
   assert.equal(designSystem.palette.cyan, '#00C2FF');
   assert.equal(designSystem.motion.length, 6);
+  assert.ok(designSystem.motion.includes('學練作測證節點呼吸與進度流光'));
   assert.ok(designSystem.motion.includes('AI 檢測掃描線'));
   assert.ok(designSystem.avoid.includes('過度霓虹'));
 });
