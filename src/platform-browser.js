@@ -35,6 +35,73 @@ const providedYoutubeUrls = [
   'https://youtu.be/iqasSBlnyZg?si=U3iOdMhmZC4-ivUQ'
 ];
 
+const providedYoutubeTitles = [
+  '多旋翼F450&px2.4.8飛控&mp地面站設置說明',
+  'MP地面站軟體基礎介紹1',
+  '多旋翼F450&dji naza組裝步驟',
+  '多旋翼F450&djinaza調參軟體介紹',
+  'dji naza 地面站調參軟體介紹',
+  'F450无人机 AT9SPRO遥控器调试设置教程',
+  '手把手教你-小白速通github入門到進階教學',
+  '手把手教你搭建個人知識庫',
+  '手把手教你ai零基礎入門名詞解釋（一次到位黑話解答）',
+  '手把手教你-小白10分鐘速通codex做網頁',
+  'yolov8目標檢測自建數據集標注工具及視頻抽幀圖片標注方法',
+  'yolo目標檢測模型訓練入門1',
+  'yolo目標檢測入門模型訓練2',
+  '無人機充電器介紹',
+  '無人機模擬訓練鳳凰模擬器遙控器設置及場地介紹',
+  '台湾無人機專業基本級術科考試真人演示',
+  'Fusion 360 教程（持续更新中） p01 1  Fusion 360 简介',
+  '02 2  安装 Fusion 360',
+  'fusion360 03 3  用户界面介绍',
+  'Fusion360 04 4  直线与草图尺寸',
+  'Fusion 360 05 5  矩形与圆',
+  'Fusion 360 06 6  圆弧、槽、圆角、点',
+  'Fusion 360 07 7  约束',
+  'Fusion 360 08 8  草图练习1',
+  'Fusion 360 09 9  草图练习2',
+  '13 13  实体命令 拉伸',
+  'Fusion 360  11 11  草图练习4 环形阵列与多边形',
+  'Fusion 360 12 12  草图练习5 进阶',
+  'Fusion 360 14 14  实体命令 旋转',
+  'Fusion 360 15 15  实体命令 扫掠',
+  'Fusion 360  16 16  构造基准面',
+  'Fusion 360   17  实体命令 放样、抽壳、圆角',
+  'Fusion 36018 18  实体练习1 牟合方盖',
+  '無人機Mp地面站設定飛行計劃講解'
+];
+
+function classifyLearningSource(title = '') {
+  const normalized = title.toLowerCase();
+  if (normalized.includes('dji') || normalized.includes('naza') || normalized.includes('fusion') || normalized.includes('鳳凰')) {
+    return '閉源/專有';
+  }
+
+  if (
+    normalized.includes('pixhawk') ||
+    normalized.includes('px2.4.8') ||
+    normalized.includes('mp地面站') ||
+    normalized.includes('mission planner') ||
+    normalized.includes('github') ||
+    normalized.includes('yolo') ||
+    normalized.includes('codex') ||
+    normalized.includes('知識庫') ||
+    normalized.includes('ai')
+  ) {
+    return '開源生態';
+  }
+
+  return '通用工具';
+}
+
+function withVideoDescription(video, description) {
+  return {
+    ...video,
+    description
+  };
+}
+
 const hero = {
   name: 'fde-ai',
   headline: 'FDE-AI 無人載具學習平台',
@@ -145,18 +212,16 @@ const studentDashboard = {
 
 const youtubeVideos = providedYoutubeUrls.map((url, index) => ({
   type: 'youtube',
-  title: `課程影片 ${String(index + 1).padStart(2, '0')}`,
-  description: '已放入學習模組，後續可再替換成正式影片標題與單元說明。',
+  title: providedYoutubeTitles[index],
+  description: 'YouTube 讀取標題後放入學習模組，點擊可開啟原影片。',
+  sourceType: classifyLearningSource(providedYoutubeTitles[index]),
+  author: 'FDE-Ai無人載具實驗室',
   url
 }));
 
 const learningTrackPreviewCount = 2;
 
-const videoRange = (start, end, titlePrefix) =>
-  youtubeVideos.slice(start - 1, end).map((video, index) => ({
-    ...video,
-    title: `${titlePrefix} ${String(index + 1).padStart(2, '0')}`
-  }));
+const videoRange = (start, end) => youtubeVideos.slice(start - 1, end);
 
 const learningTracks = [
   {
@@ -165,9 +230,13 @@ const learningTracks = [
     previewCount: learningTrackPreviewCount,
     summary: '先看 DJI NAZA 與 Pixhawk 2.4.8 的飛控介紹、組裝、調參與安全檢查。',
     items: [
-      { type: 'course', title: 'DJI NAZA 飛控介紹、組裝與調參', description: '作為飛控概念與線路配置的對照學習。', url: providedYoutubeUrls[0] },
-      { type: 'course', title: 'Pixhawk 2.4.8 飛控介紹、組裝與調參', description: '1.0 實作階段以 Pixhawk 2.4.8 為主。', url: providedYoutubeUrls[1] },
-      ...videoRange(3, 8, 'F450 補充影片')
+      withVideoDescription(youtubeVideos[0], 'Pixhawk 2.4.8、MP 地面站與 F450 設置，屬於開源飛控生態。'),
+      withVideoDescription(youtubeVideos[2], 'DJI NAZA 版本 F450 組裝流程，屬於閉源 / 專有飛控系統。'),
+      withVideoDescription(youtubeVideos[3], 'DJI NAZA 調參軟體與設定流程，作為閉源飛控對照。'),
+      withVideoDescription(youtubeVideos[4], 'DJI NAZA 地面站調參軟體介紹。'),
+      withVideoDescription(youtubeVideos[5], 'AT9S PRO 遙控器調試設定。'),
+      withVideoDescription(youtubeVideos[13], '電池與充電器安全基礎。'),
+      withVideoDescription(youtubeVideos[33], 'Mission Planner 飛行計劃設定。')
     ]
   },
   {
@@ -176,8 +245,8 @@ const learningTracks = [
     previewCount: learningTrackPreviewCount,
     summary: '學習鳳凰模擬器使用方式；軟體下載需聯繫後台管理員線下取得。',
     items: [
-      ...videoRange(9, 11, '鳳凰模擬器影片'),
-      { type: 'offline-download', title: '鳳凰模擬器下載說明', description: '此軟體不在網站直接下載，請聯繫後台管理員線下提供安裝包。', url: '#practice' }
+      withVideoDescription(youtubeVideos[14], '鳳凰模擬器遙控器設定、場地介紹與練習入口。'),
+      { type: 'offline-download', title: '鳳凰模擬器下載說明', description: '此軟體不在網站直接下載，請聯繫後台管理員線下提供安裝包。', sourceType: '閉源/專有', url: 'https://www.flugsimulatoren.ch/' }
     ]
   },
   {
@@ -186,8 +255,8 @@ const learningTracks = [
     previewCount: learningTrackPreviewCount,
     summary: '學習證照考取內容，並連到台灣地區無人機基本操作證學科題庫。',
     items: [
-      ...videoRange(12, 14, '證照課程影片'),
-      { type: 'question-bank', title: '台灣無人機學科題庫入口', description: '用於刷題與準備基礎操作證學科考試。', url: 'https://www.caa.gov.tw/' }
+      withVideoDescription(youtubeVideos[15], '台灣無人機專業基本級術科真人演示。'),
+      { type: 'question-bank', title: '台灣無人機學科題庫入口', description: '用於刷題與準備基礎操作證學科考試。', sourceType: '官方題庫', url: 'https://www.caa.gov.tw/Article.aspx?a=3833' }
     ]
   },
   {
@@ -195,14 +264,21 @@ const learningTracks = [
     title: 'AI 應用學習',
     previewCount: learningTrackPreviewCount,
     summary: '學習 Codex、YOLO 目標檢測、資料集標註與訓練流程。',
-    items: videoRange(15, 18, 'AI 應用影片')
+    items: [
+      withVideoDescription(youtubeVideos[7], '個人知識庫與 RAG 概念。'),
+      withVideoDescription(youtubeVideos[8], 'AI 基礎名詞與應用概念。'),
+      withVideoDescription(youtubeVideos[9], 'Codex 製作網站入門。'),
+      withVideoDescription(youtubeVideos[10], 'YOLOv8 目標檢測資料集、抽幀與標註流程。'),
+      withVideoDescription(youtubeVideos[11], 'YOLO 目標檢測模型訓練入門 1。'),
+      withVideoDescription(youtubeVideos[12], 'YOLO 目標檢測模型訓練入門 2。')
+    ]
   },
   {
     key: 'printing3d',
     title: '3D 列印課程',
     previewCount: learningTrackPreviewCount,
     summary: '放入第 1 集到第 16 集，作為無人機零件與輔具製作基礎。',
-    items: videoRange(19, 34, '3D 列印第')
+    items: videoRange(17, 32)
   },
   {
     key: 'github',
@@ -210,12 +286,8 @@ const learningTracks = [
     previewCount: learningTrackPreviewCount,
     summary: '學會建立私人倉庫、上傳成果、整理學習紀錄與版本歷程。',
     items: [
-      {
-        type: 'workflow',
-        title: 'GitHub 倉庫使用與成果整理',
-        description: '1.0 先用手動方式提交學習影片截圖、組裝照片、測試結果與心得。',
-        url: 'https://github.com/'
-      }
+      withVideoDescription(youtubeVideos[6], 'GitHub 入門到進階，對應「證」階段的成果存證。'),
+      { type: 'workflow', title: 'GitHub 倉庫使用與成果整理', description: '1.0 先用手動方式提交學習影片截圖、組裝照片、測試結果與心得。', sourceType: '開源生態', url: 'https://github.com/' }
     ]
   }
 ];
@@ -229,21 +301,21 @@ const practiceResources = [
     category: 'phoenix-simulator',
     title: '鳳凰模擬器飛行練習',
     description: '安裝完成後練習起飛、定點懸停、方向控制、降落與四面懸停。',
-    url: '#practice',
-    steps: ['向管理員取得安裝包並完成本地安裝', '完成遙控器或鍵盤控制設定', '每天練習起飛、懸停、轉向與降落', '錄製一次穩定四面懸停作為測評素材']
+    url: 'https://www.flugsimulatoren.ch/',
+    steps: ['向管理員取得安裝包並完成本地安裝', '開啟 Phoenix RC 社群資源確認模型與更新說明', '完成遙控器或鍵盤控制設定', '每天練習起飛、懸停、轉向與降落', '錄製一次穩定四面懸停作為測評素材']
   },
   {
     category: 'license-simulator',
     title: '考照模擬練習',
     description: '用模擬考流程熟悉學科題型、作答節奏與錯題整理。',
-    url: 'https://www.caa.gov.tw/',
+    url: 'https://drone-quiz.tw/',
     steps: ['進入台灣地區無人機學科題庫或模擬考入口', '完成一回合模擬測驗', '記錄錯題類型', '回到學的證照影片補強']
   },
   {
     category: 'question-bank',
     title: '學科題庫刷題',
     description: '針對法規、安全、空域、氣象與操作常識進行反覆練習。',
-    url: 'https://www.caa.gov.tw/',
+    url: 'https://www.caa.gov.tw/Article.aspx?a=3833',
     steps: ['先刷基礎題', '整理錯題', '重刷錯題', '達到穩定通過率後進入測驗']
   }
 ];
@@ -253,7 +325,7 @@ const buildWorkflow = {
   controller: 'Pixhawk 2.4.8',
   interactionMode: 'upload-only',
   evidenceTypes: ['photo', '30-second-video'],
-  assistantPrompt: '請描述你的組裝問題，或上傳照片 / 30 秒影片供 AI 教官判斷。',
+  assistantPrompt: '請描述你的組裝問題，系統會先查詢 E 盤知識包整理出的本地 RAG，再進入大模型 fallback。',
   stages: [
     '零件清點：F450 機架、機臂、馬達、ESC、Pixhawk 2.4.8、GPS 羅盤、接收機、電池與槳葉',
     '機架與機臂組裝：確認紅白機臂方向與機頭標記',
@@ -266,6 +338,72 @@ const buildWorkflow = {
     '上傳照片或 30 秒影片：由 1.0 模擬 AI 教官給出排錯建議'
   ]
 };
+
+const ragKnowledgeBase = [
+  {
+    id: 'f450-assembly',
+    title: 'F450安裝視頻',
+    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\F450安裝視頻.txt',
+    keywords: ['f450', 's450', '組裝', '安装', 'esc', '電機', '马达', '機臂', '飛控', 'gps', 'led', '接收機', '電源模組', 'pixhawk'],
+    content:
+      'F450 組裝先焊接 ESC 與 XT60 電源線，紅線接正極、黑線接負極。馬達用螺絲固定在四個機臂，注意螺絲長度不要頂到線圈。紅色機臂作為機頭方向，飛控需貼在上蓋板中心，飛控箭頭指向機頭；GPS 箭頭也要指向機頭，LED 建議放在機尾便於觀察狀態。接收機、電源模組、GPS、LED 與 M1-M4 電機線要依接口整理接好。'
+  },
+  {
+    id: 'mission-planner-sim',
+    title: 'mp地面站航線規劃模擬飛行說明',
+    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\mp地面站航線規劃模擬飛行說明.txt',
+    keywords: ['mission planner', 'mp', '地面站', '航線', '航点', '模擬', '仿真', 'takeoff', 'rtl', '返航', '高度', 'waypoint'],
+    content:
+      'Mission Planner 可用模擬器先練習航線規劃。基本流程是選擇多旋翼模型，進入飛行計劃頁面，用航點建立任務；完整任務通常包含 Takeoff 起飛、Waypoint 航點與 RTL 返航。常用相對高度，避免誤選海拔高度。航線寫入後可清除畫面再讀取航點，確認任務已寫入；執行 Mission Start 後可觀察高度、地速、航點距離與返航。'
+  },
+  {
+    id: 'battery-charger',
+    title: '無人機充電器使用說明',
+    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\無人機充電器使用說明.txt',
+    keywords: ['電池', '电池', '充電', '充电', 'lipo', 'lhv', '6s', '2s', 'xt60', 'xt30', '平衡頭', '通道', '電壓'],
+    content:
+      '充電器可充 2S 到 6S 電池。先接主電源頭與平衡頭，平衡頭有防呆設計但仍要確認方向。選擇正確通道 CH1 或 CH2，確認每片電芯電壓顯示正常；LiPo 通常選 4.2V，LHV 需選對電池類型。充電電流越小越保護電池，充電時人不要離開，需持續觀察電池是否發熱。通道一和通道二的主線與平衡線不能插錯。'
+  },
+  {
+    id: 'soldering-tools',
+    title: '無人機焊接工具',
+    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\無人機焊接工具.txt',
+    keywords: ['焊接', '焊点', '電烙鐵', '烙铁', '焊錫', '助焊劑', '萬用表', '短路', '扎帶', '3m', '螺絲刀'],
+    content:
+      '組裝與維修常用 M3、M2 內六角和小十字螺絲刀。電烙鐵建議選穩定可靠的焊台或便攜式 C 口烙鐵，搭配合適焊錫與助焊劑。剪線鉗、醋酸膠帶、3M 雙面膠與尼龍扎帶都常用。萬用表可檢查短路與供電異常，例如設備不亮時先量供電線是否有電壓。'
+  }
+];
+
+function tokenize(text = '') {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^\p{Script=Han}a-z0-9.]+/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function searchKnowledgeBase(question = '', limit = 2) {
+  const normalizedQuestion = String(question).toLowerCase();
+  const terms = tokenize(question);
+  if (terms.length === 0 && normalizedQuestion.trim().length === 0) {
+    return [];
+  }
+
+  return ragKnowledgeBase
+    .map((entry) => {
+      const haystack = `${entry.title} ${entry.keywords.join(' ')} ${entry.content}`.toLowerCase();
+      const termScore = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+      const keywordScore = entry.keywords.reduce(
+        (total, keyword) => total + (normalizedQuestion.includes(keyword.toLowerCase()) ? 2 : 0),
+        0
+      );
+      const score = termScore + keywordScore;
+      return { ...entry, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
 
 const assessmentWorkflows = [
   {
@@ -323,11 +461,30 @@ function calculateProgress(completed, total) {
 
 function simulateBuildAssistant(question = '') {
   const topic = question.trim() || 'Pixhawk 2.4.8 組裝問題';
+  const sources = searchKnowledgeBase(topic);
+
+  if (sources.length > 0) {
+    return {
+      mode: 'rag-gpt-voice-placeholder',
+      sourceStatus: 'local-rag',
+      topic,
+      answer: `RAG 知識庫已優先命中本地資料：${sources.map((source) => source.title).join('、')}。${sources[0].content}`,
+      sources: sources.map((source) => ({
+        title: source.title,
+        sourcePath: source.sourcePath,
+        score: source.score
+      })),
+      voiceStatus: 'GPT 語音回答介面已預留，目前先用文字回覆；2.0 再接入即時語音與攝像頭糾錯。'
+    };
+  }
+
   return {
     mode: 'rag-gpt-voice-placeholder',
+    sourceStatus: 'large-model-fallback',
     topic,
     answer:
-      'RAG 知識庫尚未接入。1.0 示範回答：請先確認 Pixhawk 箭頭朝向機頭，再檢查 GPS 羅盤、電源模組、接收機接線、馬達旋轉方向與 CW / CCW 槳葉是否和組裝規則一致。',
+      '本地 RAG 知識庫沒有找到足夠相近的內容。1.0 先保留大模型 fallback 入口；正式接入 API 後，系統會把你的問題連同本地檢索上下文送到大模型回答。',
+    sources: [],
     voiceStatus: 'GPT 語音回答介面已預留，目前先用文字回覆；2.0 再接入即時語音與攝像頭糾錯。'
   };
 }
@@ -375,5 +532,5 @@ function simulateHoverAssessment(fileName = 'hover.mp4') {
   };
 }
 
-window.FdePlatform = { hero, designSystem, moduleSections, platformModes, missionPacks, learningPath, studentDashboard, youtubeVideos, learningTrackPreviewCount, learningTracks, learningResources, practiceResources, buildWorkflow, assessmentWorkflows, teacherDashboard, certificationChecklist, calculateProgress, simulateBuildAssistant, simulatePropellerAssessment, simulateHoverAssessment };
+window.FdePlatform = { hero, designSystem, moduleSections, platformModes, missionPacks, learningPath, studentDashboard, youtubeVideos, learningTrackPreviewCount, learningTracks, learningResources, practiceResources, buildWorkflow, ragKnowledgeBase, assessmentWorkflows, teacherDashboard, certificationChecklist, calculateProgress, searchKnowledgeBase, simulateBuildAssistant, simulatePropellerAssessment, simulateHoverAssessment };
 

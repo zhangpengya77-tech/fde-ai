@@ -14,9 +14,11 @@ import {
   learningResources,
   practiceResources,
   buildWorkflow,
+  ragKnowledgeBase,
   assessmentWorkflows,
   teacherDashboard,
   certificationChecklist,
+  searchKnowledgeBase,
   simulateBuildAssistant,
   simulatePropellerAssessment,
   simulateHoverAssessment,
@@ -98,6 +100,10 @@ test('learn section groups the MVP curriculum and all provided YouTube videos', 
   assert.equal(learningTrackPreviewCount, 2);
   assert.equal(youtubeVideos.length, 34);
   assert.equal(new Set(youtubeVideos.map((video) => video.url)).size, 34);
+  assert.equal(youtubeVideos[0].title, '多旋翼F450&px2.4.8飛控&mp地面站設置說明');
+  assert.equal(youtubeVideos[0].sourceType, '開源生態');
+  assert.equal(youtubeVideos[2].title, '多旋翼F450&dji naza組裝步驟');
+  assert.equal(youtubeVideos[2].sourceType, '閉源/專有');
   assert.deepEqual(learningTracks.map((track) => track.key), [
     'f450',
     'phoenix',
@@ -106,11 +112,11 @@ test('learn section groups the MVP curriculum and all provided YouTube videos', 
     'printing3d',
     'github'
   ]);
-  assert.ok(learningTracks.find((track) => track.key === 'f450').items.some((item) => item.title.includes('DJI NAZA')));
-  assert.ok(learningTracks.find((track) => track.key === 'f450').items.some((item) => item.title.includes('Pixhawk 2.4.8')));
+  assert.ok(learningTracks.find((track) => track.key === 'f450').items.some((item) => item.title.toLowerCase().includes('dji naza')));
+  assert.ok(learningTracks.find((track) => track.key === 'f450').items.some((item) => item.title.includes('px2.4.8')));
   assert.equal(learningTracks.find((track) => track.key === 'printing3d').items.length, 16);
   assert.ok(learningTracks.every((track) => track.previewCount === learningTrackPreviewCount));
-  assert.ok(learningTracks.filter((track) => track.items.length > learningTrackPreviewCount).length >= 5);
+  assert.ok(learningTracks.filter((track) => track.items.length > learningTrackPreviewCount).length >= 3);
   assert.ok(learningResources.some((resource) => resource.type === 'youtube' && resource.url.includes('youtu.be')));
   assert.ok(learningResources.some((resource) => resource.title.includes('GitHub')));
 });
@@ -119,6 +125,9 @@ test('practice section focuses on Phoenix simulator and license practice', () =>
   assert.ok(practiceResources.some((resource) => resource.category === 'phoenix-simulator'));
   assert.ok(practiceResources.some((resource) => resource.category === 'license-simulator'));
   assert.ok(practiceResources.some((resource) => resource.category === 'question-bank'));
+  assert.ok(practiceResources.every((resource) => resource.url.startsWith('https://')));
+  assert.equal(practiceResources.find((resource) => resource.category === 'license-simulator').url, 'https://drone-quiz.tw/');
+  assert.equal(practiceResources.find((resource) => resource.category === 'question-bank').url, 'https://www.caa.gov.tw/Article.aspx?a=3833');
   assert.ok(practiceResources.some((resource) => resource.steps.length >= 3));
 });
 
@@ -133,10 +142,21 @@ test('build workflow is a v1 upload-only Pixhawk 2.4.8 assembly flow', () => {
 });
 
 test('build assistant returns a RAG and GPT voice placeholder answer', () => {
-  const result = simulateBuildAssistant('槳葉方向看不懂');
+  assert.ok(ragKnowledgeBase.length >= 4);
+  assert.ok(ragKnowledgeBase.some((entry) => entry.sourcePath.includes('E:\\F450素材')));
+
+  const localHits = searchKnowledgeBase('電池怎麼充電');
+  assert.equal(localHits[0].title, '無人機充電器使用說明');
+
+  const result = simulateBuildAssistant('電池怎麼充電');
   assert.equal(result.mode, 'rag-gpt-voice-placeholder');
+  assert.equal(result.sourceStatus, 'local-rag');
+  assert.ok(result.sources.some((source) => source.title === '無人機充電器使用說明'));
   assert.match(result.answer, /RAG|知識庫/);
   assert.match(result.voiceStatus, /預留|尚未/);
+
+  const fallback = simulateBuildAssistant('完全不相關的太空電梯問題');
+  assert.equal(fallback.sourceStatus, 'large-model-fallback');
 });
 
 test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {

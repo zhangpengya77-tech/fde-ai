@@ -820,6 +820,16 @@ main {
   color: var(--green);
 }
 
+.local-rag {
+  border-color: rgba(53, 230, 168, 0.55);
+  color: var(--green);
+}
+
+.large-model-fallback {
+  border-color: rgba(245, 184, 75, 0.55);
+  color: var(--yellow);
+}
+
 .fail {
   border-color: rgba(255, 92, 115, 0.55);
   color: var(--red);
@@ -923,6 +933,19 @@ textarea {
   border: 1px solid var(--line);
   background: rgba(8, 24, 39, 0.92);
   padding: 16px;
+}
+
+.source-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.source-list small {
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 194, 255, 0.18);
+  background: rgba(0, 194, 255, 0.05);
+  overflow-wrap: anywhere;
 }
 
 .inspection-result {

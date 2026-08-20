@@ -141,7 +141,7 @@ function renderLearningResources() {
                 const collapsedClass = index >= track.previewCount ? 'is-extra' : '';
                 return `
                   <a class="${collapsedClass}" href="${item.url}" target="${item.url.startsWith('#') ? '_self' : '_blank'}" rel="noreferrer">
-                    <span>${item.type}</span>
+                    <span>${item.sourceType || item.type}</span>
                     <strong>${item.title}</strong>
                     <small>${item.description}</small>
                   </a>
@@ -207,9 +207,17 @@ function renderAssessmentWorkflows() {
 function renderAssistantResult(result) {
   return `
     <article class="result-card">
-      <span class="tag">${result.mode}</span>
+      <div class="section-head">
+        <span class="tag">${result.mode}</span>
+        <span class="status ${statusClass(result.sourceStatus)}">${result.sourceStatus}</span>
+      </div>
       <h3>${result.topic}</h3>
       <p>${result.answer}</p>
+      ${
+        result.sources.length > 0
+          ? `<div class="source-list">${result.sources.map((source) => `<small>${source.title} · ${source.sourcePath}</small>`).join('')}</div>`
+          : ''
+      }
       <small>${result.voiceStatus}</small>
     </article>
   `;
