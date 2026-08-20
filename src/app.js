@@ -19,6 +19,7 @@ const {
 } = window.FdePlatform;
 
 const $ = (selector) => document.querySelector(selector);
+const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
@@ -246,6 +247,33 @@ function renderAssemblyResult(result) {
   `;
 }
 
+function renderYoloAssemblyResult(result) {
+  return `
+    <article class="result-card inspection-result">
+      <div class="scan-preview yolo-preview">
+        ${result.annotatedImage ? `<img src="${result.annotatedImage}" alt="YOLOv8 檢測結果" />` : '<div class="scan-line"></div><span>YOLO RESULT</span>'}
+      </div>
+      <div>
+        <div class="section-head">
+          <span class="tag">${result.engine}</span>
+          <span class="status ${statusClass(result.status)}">${result.status}</span>
+        </div>
+        <h3>${result.fileName}</h3>
+        <p>${result.summary}</p>
+        <div class="score-row"><strong>${result.score}</strong><span>AI 初判分數</span><em>${result.teacherStatus}</em></div>
+        <div class="check-grid">
+          ${result.checklist
+            .map((item) => `<div><span>${item.label}</span><strong class="${statusClass(item.result)}">${item.result}</strong><small>${item.detail || ''}</small></div>`)
+            .join('')}
+        </div>
+        <div class="detection-list">
+          ${result.detections.map((item) => `<small>${item.label} · ${(item.confidence * 100).toFixed(1)}%</small>`).join('')}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
 function renderHoverResult(result) {
   return `
     <article class="result-card inspection-result">
@@ -267,6 +295,29 @@ function renderHoverResult(result) {
       </div>
     </article>
   `;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(reader.result));
+    reader.addEventListener('error', () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function runLocalYoloDetection(file) {
+  const imageData = await fileToDataUrl(file);
+  const response = await fetch(localYoloEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName: file.name, imageData, conf: 0.25 })
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || '本機 YOLO 服務沒有回應');
+  }
+  return payload.result;
 }
 
 function renderTeacherDashboard() {
@@ -315,9 +366,27 @@ function bindActions() {
     $('#assistantResult').innerHTML = renderAssistantResult(simulateBuildAssistant($('#assistantQuestion').value));
   });
 
-  $('#propellerButton').addEventListener('click', () => {
-    const fileName = $('#propellerInput').files[0]?.name || 'demo-f450-check.jpg';
-    $('#propellerResult').innerHTML = renderAssemblyResult(simulatePropellerAssessment(fileName));
+  $('#propellerButton').addEventListener('click', async () => {
+    const file = $('#propellerInput').files[0];
+    if (!file) {
+      $('#propellerResult').innerHTML = renderAssemblyResult(simulatePropellerAssessment('demo-f450-check.jpg'));
+      return;
+    }
+
+    $('#propellerResult').innerHTML = '<article class="result-card"><p>正在連接本機 YOLOv8 模型並執行檢測...</p></article>';
+    try {
+      const result = await runLocalYoloDetection(file);
+      $('#propellerResult').innerHTML = renderYoloAssemblyResult(result);
+    } catch (error) {
+      $('#propellerResult').innerHTML = `
+        ${renderAssemblyResult(simulatePropellerAssessment(file.name))}
+        <article class="result-card local-service-note">
+          <h3>本機模型尚未連線</h3>
+          <p>請先啟動 YOLO 偵測服務；目前畫面先顯示 MVP 模擬結果。</p>
+          <small>${error.message}</small>
+        </article>
+      `;
+    }
   });
 
   $('#hoverButton').addEventListener('click', () => {

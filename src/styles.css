@@ -974,6 +974,18 @@ textarea {
   font-weight: 900;
 }
 
+.yolo-preview {
+  align-content: stretch;
+  padding: 0;
+}
+
+.yolo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #06111d;
+}
+
 .scan-line {
   position: absolute;
   inset: 0;
@@ -1032,6 +1044,20 @@ textarea {
   padding: 12px;
   background: rgba(19, 43, 68, 0.68);
   border: 1px solid var(--line);
+}
+
+.detection-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.detection-list small,
+.local-service-note small {
+  padding: 7px 9px;
+  border: 1px solid rgba(0, 194, 255, 0.18);
+  background: rgba(0, 194, 255, 0.05);
 }
 
 .teacher-queue {

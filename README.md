@@ -24,6 +24,16 @@ fde-ai 是一個無需登入的無人機 AI 教學網站，第一階段先完成
 index.html
 ```
 
+## 測：本機 YOLOv8 檢測服務
+
+1. 先確認模型在：
+   `E:\FDE_AI_F450_Dataset 無人機影像資料集專案\05_Model_Training 訓練結果\fde_f450_parts_v1\weights\best.pt`
+2. 在網站資料夾執行：
+   `npm run yolo:serve`
+3. 打開 `index.html`，到「測」上傳 F450 組裝照片，按「執行組裝檢測」。
+
+目前第一版模型使用 49 張已標註圖片訓練，可偵測馬達、機臂、飛控與 GPS/指南針等現有標註類別。若要判斷 CW/CCW 槳葉方向，需要下一版資料集中新增槳葉方向標註。
+
 ## 測試
 
 ```powershell
@@ -34,6 +44,6 @@ node --test tests/platform.test.js
 
 - RAG 知識庫：替換 `simulateBuildAssistant()`。
 - GPT 語音回答：接入語音輸出服務後更新「做」板塊。
-- YOLOv8 組裝檢測：替換 `simulatePropellerAssessment()`。
+- YOLOv8 組裝檢測：已新增 `api/yolo_server.py`，網站會優先呼叫本機模型，連不上時才顯示模擬結果。
 - YOLOv8 四面懸停評分：替換 `simulateHoverAssessment()`。
 - GitHub 存證：可加入自動產生報告與提交指引。

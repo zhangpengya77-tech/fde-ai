@@ -5,6 +5,7 @@
   "description": "FDE-AI drone instructor website v1",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/platform.test.js"
+    "test": "node --test tests/platform.test.js",
+    "yolo:serve": "python api/yolo_server.py"
   }
 }
