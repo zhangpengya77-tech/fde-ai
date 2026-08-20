@@ -85,6 +85,7 @@ body::before {
   color: var(--cyan);
   font-weight: 900;
   box-shadow: 0 0 22px rgba(0, 194, 255, 0.22);
+  animation: mark-glow 5.6s ease-in-out infinite;
 }
 
 .brand strong,
@@ -117,9 +118,11 @@ p {
   border: 1px solid transparent;
   color: var(--text);
   text-decoration: none;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .nav a:hover {
+  transform: translateX(3px);
   border-color: var(--line);
   background: rgba(22, 139, 255, 0.1);
 }
@@ -146,6 +149,17 @@ p {
   color: var(--cyan);
   font-size: 12px;
   font-weight: 800;
+  transition: box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.nav a:hover span,
+.track-card:hover .tag,
+.workflow-card:hover .tag,
+.mission-card:hover .mission-code,
+.mode-card:hover .tag,
+.panel:hover .pill {
+  box-shadow: 0 0 18px rgba(0, 194, 255, 0.2);
+  background: rgba(0, 194, 255, 0.06);
 }
 
 .sidebar-foot {
@@ -182,6 +196,7 @@ main {
   font-size: clamp(38px, 6vw, 76px);
   line-height: 1.04;
   letter-spacing: 0;
+  animation: text-glow 6.4s ease-in-out infinite;
 }
 
 .section-intro h2 {
@@ -200,6 +215,7 @@ main {
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
+  animation: signal-text 4.8s ease-in-out infinite;
 }
 
 .hero-actions,
@@ -512,20 +528,82 @@ main {
 .mode-card,
 .metric-card,
 .queue-row {
+  position: relative;
   border: 1px solid var(--line);
   background: rgba(15, 32, 51, 0.9);
   padding: 20px;
+  overflow: hidden;
+  animation: card-enter 0.72s ease both;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.track-card::before,
+.workflow-card::before,
+.practice-card::before,
+.panel::before,
+.cert-card::before,
+.mission-card::before,
+.mode-card::before,
+.metric-card::before,
+.queue-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 0%, rgba(0, 194, 255, 0.13) 48%, transparent 70%);
+  opacity: 0;
+  transform: translateX(-70%);
+  transition: opacity 0.18s ease;
 }
 
 .track-card:hover,
 .workflow-card:hover,
 .mission-card:hover,
 .mode-card:hover,
-.cert-card:hover {
+.cert-card:hover,
+.practice-card:hover,
+.panel:hover,
+.metric-card:hover,
+.queue-row:hover {
   transform: translateY(-4px);
   border-color: var(--line-strong);
   box-shadow: 0 0 24px rgba(0, 194, 255, 0.13);
+}
+
+.track-card:hover::before,
+.workflow-card:hover::before,
+.practice-card:hover::before,
+.panel:hover::before,
+.cert-card:hover::before,
+.mission-card:hover::before,
+.mode-card:hover::before,
+.metric-card:hover::before,
+.queue-row:hover::before {
+  opacity: 1;
+  animation: card-sheen 1s ease;
+}
+
+.track-card:nth-child(2n),
+.workflow-card:nth-child(2n),
+.practice-card:nth-child(2n),
+.panel:nth-child(2n),
+.cert-card:nth-child(2n),
+.mission-card:nth-child(2n),
+.mode-card:nth-child(2n),
+.metric-card:nth-child(2n),
+.queue-row:nth-child(2n) {
+  animation-delay: 0.08s;
+}
+
+.track-card:nth-child(3n),
+.workflow-card:nth-child(3n),
+.practice-card:nth-child(3n),
+.cert-card:nth-child(3n),
+.mission-card:nth-child(3n),
+.mode-card:nth-child(3n),
+.metric-card:nth-child(3n),
+.queue-row:nth-child(3n) {
+  animation-delay: 0.16s;
 }
 
 .track-card h3,
@@ -536,6 +614,7 @@ main {
 .mission-card h3,
 .mode-card h3 {
   margin: 14px 0 10px;
+  animation: soft-title 7.2s ease-in-out infinite;
 }
 
 .practice-card h3 {
@@ -972,6 +1051,66 @@ textarea {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-sheen {
+  from {
+    transform: translateX(-70%);
+  }
+  to {
+    transform: translateX(70%);
+  }
+}
+
+@keyframes text-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 0 rgba(0, 194, 255, 0);
+  }
+  50% {
+    text-shadow: 0 0 18px rgba(0, 194, 255, 0.22);
+  }
+}
+
+@keyframes signal-text {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes soft-title {
+  0%,
+  100% {
+    color: inherit;
+  }
+  50% {
+    color: #ffffff;
+  }
+}
+
+@keyframes mark-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 18px rgba(0, 194, 255, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(0, 194, 255, 0.34);
   }
 }
 

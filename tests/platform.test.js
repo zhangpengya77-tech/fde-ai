@@ -25,6 +25,7 @@ import {
 
 test('defines the five core control-center pages in order', () => {
   assert.deepEqual(moduleSections.map((section) => section.key), ['home', 'dashboard', 'missions', 'inspection', 'teacher']);
+  assert.deepEqual(moduleSections.map((section) => section.label), ['學', '練', '作', '測', '證']);
   assert.deepEqual(moduleSections.map((section) => section.title), ['科技展廳', '學生任務控制台', 'Mission Pack', '鷹眼 AI 檢測中心', '教師復核中心']);
 });
 
@@ -34,6 +35,7 @@ test('defines a boot hero for an AI vehicle learning control center', () => {
   assert.match(hero.summary, /學・練・作・測・證/);
   assert.deepEqual(hero.systems, ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統']);
   assert.deepEqual(hero.actions.map((action) => action.label), ['進入學習平台', '觀看系統 Demo']);
+  assert.equal(hero.showMotionStrip, false);
 });
 
 test('defines the requested visual system and motion limits', () => {
@@ -42,6 +44,7 @@ test('defines the requested visual system and motion limits', () => {
   assert.equal(designSystem.palette.primaryBlue, '#168BFF');
   assert.equal(designSystem.palette.cyan, '#00C2FF');
   assert.equal(designSystem.motion.length, 6);
+  assert.ok(designSystem.motion.includes('文字光暈與卡片浮起'));
   assert.ok(designSystem.motion.includes('學練作測證節點呼吸與進度流光'));
   assert.ok(designSystem.motion.includes('AI 檢測掃描線'));
   assert.ok(designSystem.avoid.includes('過度霓虹'));

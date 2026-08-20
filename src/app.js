@@ -37,7 +37,13 @@ function renderHero() {
   $('#heroActions').innerHTML = hero.actions
     .map((action) => `<a class="${action.kind}-action" href="${action.target}">${action.label}</a>`)
     .join('');
-  $('#designMotion').innerHTML = designSystem.motion.map((motion) => `<span>${motion}</span>`).join('');
+
+  const motionStrip = $('#designMotion');
+  if (motionStrip) {
+    motionStrip.hidden = hero.showMotionStrip === false;
+    motionStrip.innerHTML =
+      hero.showMotionStrip === false ? '' : designSystem.motion.map((motion) => `<span>${motion}</span>`).join('');
+  }
 }
 
 function renderDataFlow() {

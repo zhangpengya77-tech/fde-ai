@@ -41,6 +41,7 @@ const hero = {
   summary: 'AI 雙師教學｜學・練・作・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
   systems: ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統'],
   status: 'v1.0 MVP frontend',
+  showMotionStrip: false,
   actions: [
     { label: '進入學習平台', target: '#dashboard', kind: 'primary' },
     { label: '觀看系統 Demo', target: '#inspection', kind: 'secondary' }
@@ -60,16 +61,16 @@ const designSystem = {
     warning: '#F5B84B',
     danger: '#FF5C73'
   },
-  motion: ['頁面淡入', '卡片 hover 浮起 3-5px', '藍色邊框輕微發光', '學練作測證節點呼吸與進度流光', 'AI 檢測掃描線', '數字計分遞增'],
+  motion: ['頁面淡入', '文字光暈與卡片浮起', '藍色邊框輕微發光', '學練作測證節點呼吸與進度流光', 'AI 檢測掃描線', '數字計分遞增'],
   avoid: ['過度霓虹', '複雜 3D', '遊戲化卡通', '大量閃爍', '影片背景堆疊']
 };
 
 const moduleSections = [
-  { key: 'home', label: '展', title: '科技展廳', summary: '第一屏建立 AI 無人載具系統感。' },
-  { key: 'dashboard', label: '控', title: '學生任務控制台', summary: '顯示目前任務、進度、待檢測與作品成果。' },
-  { key: 'missions', label: '任', title: 'Mission Pack', summary: '以 12 個任務包取代普通課程目錄。' },
+  { key: 'home', label: '學', title: '科技展廳', summary: '第一屏建立 AI 無人載具系統感。' },
+  { key: 'dashboard', label: '練', title: '學生任務控制台', summary: '顯示目前任務、進度、待檢測與作品成果。' },
+  { key: 'missions', label: '作', title: 'Mission Pack', summary: '以 12 個任務包取代普通課程目錄。' },
   { key: 'inspection', label: '測', title: '鷹眼 AI 檢測中心', summary: '組裝檢測、四面懸停與 AI 初判儀表板。' },
-  { key: 'teacher', label: '師', title: '教師復核中心', summary: '高資訊密度呈現待辦、AI 異常與班級狀態。' }
+  { key: 'teacher', label: '證', title: '教師復核中心', summary: '高資訊密度呈現待辦、AI 異常與班級狀態。' }
 ];
 
 const platformModes = [
