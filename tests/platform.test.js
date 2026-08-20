@@ -23,10 +23,17 @@ import {
   calculateProgress
 } from '../src/platform.js';
 
-test('defines the five core control-center pages in order', () => {
-  assert.deepEqual(moduleSections.map((section) => section.key), ['home', 'dashboard', 'missions', 'inspection', 'teacher']);
+test('defines the five main sidebar modules as learn practice build assess certify', () => {
+  assert.deepEqual(moduleSections.map((section) => section.key), ['learn', 'practice', 'build', 'inspection', 'certify']);
   assert.deepEqual(moduleSections.map((section) => section.label), ['學', '練', '作', '測', '證']);
-  assert.deepEqual(moduleSections.map((section) => section.title), ['科技展廳', '學生任務控制台', 'Mission Pack', '鷹眼 AI 檢測中心', '教師復核中心']);
+  assert.deepEqual(moduleSections.map((section) => section.title), [
+    '課程影片與下載說明',
+    '模擬器與考照練習',
+    'F450 組裝與 AI 助教',
+    '目標檢測與考試題庫',
+    'GitHub 成果存證'
+  ]);
+  assert.match(moduleSections.find((section) => section.label === '測').summary, /槳葉|馬達|電池|四面懸停/);
 });
 
 test('defines a boot hero for an AI vehicle learning control center', () => {
@@ -35,6 +42,7 @@ test('defines a boot hero for an AI vehicle learning control center', () => {
   assert.match(hero.summary, /學・練・作・測・證/);
   assert.deepEqual(hero.systems, ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統']);
   assert.deepEqual(hero.actions.map((action) => action.label), ['進入學習平台', '觀看系統 Demo']);
+  assert.deepEqual(hero.actions.map((action) => action.target), ['#learn', '#inspection']);
   assert.equal(hero.showMotionStrip, false);
 });
 
@@ -140,11 +148,15 @@ test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {
   assert.ok(result.detections.some((detection) => detection.className === 'ccw_propeller'));
 });
 
-test('assess section includes assembly detection and four-side hover scoring', () => {
-  assert.deepEqual(assessmentWorkflows.map((workflow) => workflow.key), ['assembly-detection', 'hover-scoring']);
+test('assess section includes component detection, four-side hover scoring, and exam bank', () => {
+  assert.deepEqual(assessmentWorkflows.map((workflow) => workflow.key), ['assembly-detection', 'hover-scoring', 'hover-question-bank']);
   assert.ok(assessmentWorkflows[0].acceptedEvidence.includes('photo'));
   assert.ok(assessmentWorkflows[0].acceptedEvidence.includes('30-second-video'));
+  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('槳葉')));
+  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('馬達')));
+  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('電池')));
   assert.ok(assessmentWorkflows[1].title.includes('四面懸停'));
+  assert.ok(assessmentWorkflows[2].title.includes('考試題庫'));
 
   const result = simulateHoverAssessment('hover.mp4');
   assert.equal(result.engine, 'YOLOv8 hover scoring placeholder');

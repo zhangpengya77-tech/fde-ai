@@ -43,7 +43,7 @@ export const hero = {
   status: 'v1.0 MVP frontend',
   showMotionStrip: false,
   actions: [
-    { label: '進入學習平台', target: '#dashboard', kind: 'primary' },
+    { label: '進入學習平台', target: '#learn', kind: 'primary' },
     { label: '觀看系統 Demo', target: '#inspection', kind: 'secondary' }
   ]
 };
@@ -66,11 +66,11 @@ export const designSystem = {
 };
 
 export const moduleSections = [
-  { key: 'home', label: '學', title: '科技展廳', summary: '第一屏建立 AI 無人載具系統感。' },
-  { key: 'dashboard', label: '練', title: '學生任務控制台', summary: '顯示目前任務、進度、待檢測與作品成果。' },
-  { key: 'missions', label: '作', title: 'Mission Pack', summary: '以 12 個任務包取代普通課程目錄。' },
-  { key: 'inspection', label: '測', title: '鷹眼 AI 檢測中心', summary: '組裝檢測、四面懸停與 AI 初判儀表板。' },
-  { key: 'teacher', label: '證', title: '教師復核中心', summary: '高資訊密度呈現待辦、AI 異常與班級狀態。' }
+  { key: 'learn', label: '學', title: '課程影片與下載說明', summary: 'F450、模擬器、證照、AI、3D 列印與 GitHub 的課程影片入口。' },
+  { key: 'practice', label: '練', title: '模擬器與考照練習', summary: '鳳凰模擬器、考照模擬與學科題庫刷題練習。' },
+  { key: 'build', label: '作', title: 'F450 組裝與 AI 助教', summary: 'Pixhawk 2.4.8 版本 F450 組裝、調參、照片 / 30 秒影片上傳與 RAG 助教。' },
+  { key: 'inspection', label: '測', title: '目標檢測與考試題庫', summary: '檢測槳葉、馬達、電池等組裝狀態，並保留四面懸停考試題庫與 AI 評分入口。' },
+  { key: 'certify', label: '證', title: 'GitHub 成果存證', summary: '把學習過程、組裝照片、AI 測評結果與作品整理到 GitHub。' }
 ];
 
 export const platformModes = [
@@ -273,7 +273,7 @@ export const assessmentWorkflows = [
     title: 'F450 組裝 AI 檢測',
     engine: 'YOLOv8 placeholder',
     acceptedEvidence: ['photo', '30-second-video'],
-    checks: ['槳葉 CW / CCW 是否安裝正確', '馬達與機臂位置是否合理', '飛控方向、GPS 羅盤與電池位置是否需要人工複查']
+    checks: ['槳葉 CW / CCW 是否安裝正確', '馬達與機臂位置是否合理', '電池固定與重心是否需要人工複查', '飛控方向與 GPS 羅盤位置是否合理']
   },
   {
     key: 'hover-scoring',
@@ -281,6 +281,13 @@ export const assessmentWorkflows = [
     engine: 'YOLOv8 hover scoring placeholder',
     acceptedEvidence: ['30-second-video'],
     checks: ['機頭朝前懸停', '機頭朝右懸停', '機頭朝後懸停', '機頭朝左懸停', '線下老師完成最終評分']
+  },
+  {
+    key: 'hover-question-bank',
+    title: '四面懸停考試題庫',
+    engine: 'exam-bank placeholder',
+    acceptedEvidence: ['practice-record'],
+    checks: ['四面懸停考試流程', '起飛與降落安全檢查', '方向辨識題', '常見扣分原因', '教師線下複核重點']
   }
 ];
 
