@@ -29,6 +29,8 @@ index.html
 1. 先確認模型在：
    `E:\FDE_AI_F450_Dataset 無人機影像資料集專案\05_Model_Training 訓練結果\fde_f450_parts_v1\weights\best.pt`
 2. 在網站資料夾執行：
+   `python api\yolo_server.py`
+   如果你的電腦有 npm，也可以用：
    `npm run yolo:serve`
 3. 打開 `index.html`，到「測」上傳 F450 組裝照片，按「執行組裝檢測」。
 
