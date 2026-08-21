@@ -28,13 +28,16 @@ index.html
 
 1. 先確認模型在：
    `E:\FDE_AI_F450_Dataset 無人機影像資料集專案\05_Model_Training 訓練結果\fde_f450_parts_v1\weights\best.pt`
+   四面懸停基準模型在：
+   `E:\四面懸停\hover_model_v1\hover_model.json`
 2. 在網站資料夾執行：
    `python api\yolo_server.py`
    如果你的電腦有 npm，也可以用：
    `npm run yolo:serve`
-3. 打開 `index.html`，到「測」上傳 F450 組裝照片，按「執行組裝檢測」。
+3. 打開 `index.html`，到「測」上傳 F450 組裝照片或四面懸停影片，按對應檢測按鈕。
 
 目前第一版模型使用 49 張已標註圖片訓練，可偵測馬達、機臂、飛控與 GPS/指南針等現有標註類別。若要判斷 CW/CCW 槳葉方向，需要下一版資料集中新增槳葉方向標註。
+四面懸停第一版模型使用 `E:\四面懸停` 的 67 段影片建立穩定度基準，其中 55 段可用；目前輸出漂移距離、越界比例、穩定時間、方向完成度、姿態晃動與 AI 初評分數。
 
 ## 測試
 

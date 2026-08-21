@@ -20,6 +20,7 @@ const {
 
 const $ = (selector) => document.querySelector(selector);
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
+const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
@@ -320,6 +321,20 @@ async function runLocalYoloDetection(file) {
   return payload.result;
 }
 
+async function runLocalHoverScoring(file) {
+  const videoData = await fileToDataUrl(file);
+  const response = await fetch(localHoverEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName: file.name, videoData })
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || '本機四面懸停模型沒有回應');
+  }
+  return payload.result;
+}
+
 function renderTeacherDashboard() {
   $('#teacherStats').innerHTML = teacherDashboard.stats
     .map((stat) => `<div class="metric-card"><span>${stat.label}</span><strong>${stat.value}</strong></div>`)
@@ -389,9 +404,27 @@ function bindActions() {
     }
   });
 
-  $('#hoverButton').addEventListener('click', () => {
-    const fileName = $('#hoverInput').files[0]?.name || 'demo-hover-test.mp4';
-    $('#hoverResult').innerHTML = renderHoverResult(simulateHoverAssessment(fileName));
+  $('#hoverButton').addEventListener('click', async () => {
+    const file = $('#hoverInput').files[0];
+    if (!file) {
+      $('#hoverResult').innerHTML = renderHoverResult(simulateHoverAssessment('demo-hover-test.mp4'));
+      return;
+    }
+
+    $('#hoverResult').innerHTML = '<article class="result-card"><p>正在連接本機四面懸停模型並執行評分...</p></article>';
+    try {
+      const result = await runLocalHoverScoring(file);
+      $('#hoverResult').innerHTML = renderHoverResult(result);
+    } catch (error) {
+      $('#hoverResult').innerHTML = `
+        ${renderHoverResult(simulateHoverAssessment(file.name))}
+        <article class="result-card local-service-note">
+          <h3>本機四面懸停模型尚未連線</h3>
+          <p>請先啟動本機 AI 服務；目前畫面先顯示 MVP 模擬結果。</p>
+          <small>${error.message}</small>
+        </article>
+      `;
+    }
   });
 }
 
