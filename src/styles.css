@@ -933,6 +933,7 @@ textarea {
   border: 1px solid var(--line);
   background: rgba(8, 24, 39, 0.92);
   padding: 16px;
+  min-width: 0;
 }
 
 .source-list {
@@ -950,8 +951,11 @@ textarea {
 
 .inspection-result {
   display: grid;
-  grid-template-columns: minmax(180px, 0.75fr) 1fr;
+  grid-template-columns: minmax(320px, 1.15fr) minmax(280px, 0.85fr);
   gap: 16px;
+  align-items: stretch;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .scan-preview,
@@ -976,14 +980,76 @@ textarea {
 
 .yolo-preview {
   align-content: stretch;
+  min-height: 520px;
   padding: 0;
+  resize: both;
+  cursor: grab;
+  touch-action: none;
+}
+
+.yolo-preview.is-dragging {
+  cursor: grabbing;
+}
+
+.pan-canvas {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
 
 .yolo-preview img {
-  width: 100%;
-  height: 100%;
+  max-width: 92%;
+  max-height: 92%;
   object-fit: contain;
   background: #06111d;
+  transform-origin: center;
+  user-select: none;
+  will-change: transform;
+}
+
+.viewport-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(0, 194, 255, 0.2);
+  background: rgba(5, 17, 29, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.viewport-toolbar button {
+  border: 1px solid rgba(0, 194, 255, 0.28);
+  background: rgba(0, 194, 255, 0.08);
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.viewport-toolbar button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.inspection-detail-panel {
+  min-width: 0;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 8px;
+}
+
+.result-file-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: clamp(20px, 2.2vw, 32px);
+  line-height: 1.18;
 }
 
 .scan-line {
@@ -1048,9 +1114,13 @@ textarea {
 
 .detection-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 14px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  overscroll-behavior-x: contain;
 }
 
 .detection-list small,
@@ -1058,6 +1128,7 @@ textarea {
   padding: 7px 9px;
   border: 1px solid rgba(0, 194, 255, 0.18);
   background: rgba(0, 194, 255, 0.05);
+  white-space: nowrap;
 }
 
 .teacher-queue {
@@ -1273,6 +1344,19 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .inspection-result {
+    overflow: visible;
+  }
+
+  .yolo-preview {
+    min-height: 390px;
+    resize: vertical;
+  }
+
+  .inspection-detail-panel {
+    max-height: 420px;
+  }
+
   .mission-grid,
   .mode-grid,
   .resource-grid,
@@ -1320,5 +1404,15 @@ textarea {
 
   .score-row {
     grid-template-columns: 1fr;
+  }
+
+  .viewport-toolbar {
+    left: 10px;
+    right: 10px;
+    justify-content: center;
+  }
+
+  .yolo-preview {
+    min-height: 330px;
   }
 }

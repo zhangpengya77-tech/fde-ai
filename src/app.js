@@ -26,6 +26,15 @@ function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function renderNavigation() {
   $('#moduleNav').innerHTML = moduleSections
     .map((section) => `<a href="#${section.key}"><span>${section.label}</span>${section.title}</a>`)
@@ -249,30 +258,114 @@ function renderAssemblyResult(result) {
 }
 
 function renderYoloAssemblyResult(result) {
+  const fileName = escapeHtml(result.fileName || '未命名檢測檔案');
+  const checklist = Array.isArray(result.checklist) ? result.checklist : [];
+  const detections = Array.isArray(result.detections) ? result.detections : [];
   return `
     <article class="result-card inspection-result">
-      <div class="scan-preview yolo-preview">
-        ${result.annotatedImage ? `<img src="${result.annotatedImage}" alt="YOLOv8 檢測結果" />` : '<div class="scan-line"></div><span>YOLO RESULT</span>'}
+      <div class="scan-preview yolo-preview" data-pan-zoom>
+        ${
+          result.annotatedImage
+            ? `
+              <div class="viewport-toolbar" aria-label="檢測圖片操作">
+                <button type="button" data-zoom-out>縮小</button>
+                <button type="button" data-zoom-reset>重置</button>
+                <button type="button" data-zoom-in>放大</button>
+              </div>
+              <div class="pan-canvas">
+                <img src="${result.annotatedImage}" alt="YOLOv8 檢測結果" draggable="false" data-pan-image />
+              </div>
+            `
+            : '<div class="scan-line"></div><span>YOLO RESULT</span>'
+        }
       </div>
-      <div>
+      <div class="inspection-detail-panel">
         <div class="section-head">
-          <span class="tag">${result.engine}</span>
+          <span class="tag">${escapeHtml(result.engine)}</span>
           <span class="status ${statusClass(result.status)}">${result.status}</span>
         </div>
-        <h3>${result.fileName}</h3>
-        <p>${result.summary}</p>
+        <h3 class="result-file-name" title="${fileName}">${fileName}</h3>
+        <p>${escapeHtml(result.summary)}</p>
         <div class="score-row"><strong>${result.score}</strong><span>AI 初判分數</span><em>${result.teacherStatus}</em></div>
         <div class="check-grid">
-          ${result.checklist
-            .map((item) => `<div><span>${item.label}</span><strong class="${statusClass(item.result)}">${item.result}</strong><small>${item.detail || ''}</small></div>`)
+          ${checklist
+            .map(
+              (item) =>
+                `<div><span>${escapeHtml(item.label)}</span><strong class="${statusClass(item.result)}">${escapeHtml(item.result)}</strong><small>${escapeHtml(item.detail || '')}</small></div>`
+            )
             .join('')}
         </div>
         <div class="detection-list">
-          ${result.detections.map((item) => `<small>${item.label} · ${(item.confidence * 100).toFixed(1)}%</small>`).join('')}
+          ${detections
+            .map((item) => {
+              const confidence = Number.isFinite(item.confidence) ? `${(item.confidence * 100).toFixed(1)}%` : '待確認';
+              return `<small>${escapeHtml(item.label)} · ${confidence}</small>`;
+            })
+            .join('')}
         </div>
       </div>
     </article>
   `;
+}
+
+function bindPanZoom(scope = document) {
+  scope.querySelectorAll('[data-pan-zoom]').forEach((viewer) => {
+    const image = viewer.querySelector('[data-pan-image]');
+    if (!image || viewer.dataset.panZoomReady === 'true') return;
+
+    viewer.dataset.panZoomReady = 'true';
+    const state = { x: 0, y: 0, scale: 1, dragging: false, startX: 0, startY: 0 };
+    const applyTransform = () => {
+      image.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+    };
+    const zoom = (delta) => {
+      state.scale = Math.min(4, Math.max(0.5, Number((state.scale + delta).toFixed(2))));
+      applyTransform();
+    };
+    const reset = () => {
+      state.x = 0;
+      state.y = 0;
+      state.scale = 1;
+      applyTransform();
+    };
+
+    viewer.querySelector('[data-zoom-in]')?.addEventListener('click', () => zoom(0.2));
+    viewer.querySelector('[data-zoom-out]')?.addEventListener('click', () => zoom(-0.2));
+    viewer.querySelector('[data-zoom-reset]')?.addEventListener('click', reset);
+    viewer.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        zoom(event.deltaY < 0 ? 0.12 : -0.12);
+      },
+      { passive: false }
+    );
+    viewer.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
+      state.dragging = true;
+      state.startX = event.clientX - state.x;
+      state.startY = event.clientY - state.y;
+      viewer.classList.add('is-dragging');
+      viewer.setPointerCapture(event.pointerId);
+    });
+    viewer.addEventListener('pointermove', (event) => {
+      if (!state.dragging) return;
+      state.x = event.clientX - state.startX;
+      state.y = event.clientY - state.startY;
+      applyTransform();
+    });
+    viewer.addEventListener('pointerup', (event) => {
+      state.dragging = false;
+      viewer.classList.remove('is-dragging');
+      viewer.releasePointerCapture(event.pointerId);
+    });
+    viewer.addEventListener('pointercancel', () => {
+      state.dragging = false;
+      viewer.classList.remove('is-dragging');
+    });
+    image.addEventListener('load', reset);
+    applyTransform();
+  });
 }
 
 function renderHoverResult(result) {
@@ -392,6 +485,7 @@ function bindActions() {
     try {
       const result = await runLocalYoloDetection(file);
       $('#propellerResult').innerHTML = renderYoloAssemblyResult(result);
+      bindPanZoom($('#propellerResult'));
     } catch (error) {
       $('#propellerResult').innerHTML = `
         ${renderAssemblyResult(simulatePropellerAssessment(file.name))}
