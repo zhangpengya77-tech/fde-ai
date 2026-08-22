@@ -18,11 +18,13 @@ from hover_model import analyze_video
 
 DEFAULT_MODEL = (
     r"E:\FDE_AI_F450_Dataset 無人機影像資料集專案"
-    r"\05_Model_Training 訓練結果\fde_f450_parts_v1\weights\best.pt"
+    r"\05_Model_Training 訓練結果\fde_f450_parts_v2_cw_ccw_full\weights\best.pt"
 )
 DEFAULT_HOVER_MODEL = r"E:\四面懸停\hover_model_v1\hover_model.json"
 
 CLASS_ZH = {
+    "cw_propeller": "CW 正槳",
+    "ccw_propeller": "CCW 反槳",
     "flight_controller": "飛控",
     "motor": "馬達",
     "esc": "電調",
@@ -105,6 +107,8 @@ class Detector:
         score = round(min(100, 45 + avg_conf * 35 + (20 if required_pass else 8)))
         status = "PASS" if required_pass and score >= 75 else "WARNING"
         checklist = [
+            {"label": "CW 正槳", "result": "PASS" if counts.get("cw_propeller", 0) >= 2 else "WARNING", "detail": f"偵測到 {counts.get('cw_propeller', 0)} 個"},
+            {"label": "CCW 反槳", "result": "PASS" if counts.get("ccw_propeller", 0) >= 2 else "WARNING", "detail": f"偵測到 {counts.get('ccw_propeller', 0)} 個"},
             {"label": "馬達", "result": "PASS" if counts.get("motor", 0) >= 4 else "WARNING", "detail": f"偵測到 {counts.get('motor', 0)} 個"},
             {"label": "機臂", "result": "PASS" if counts.get("frame_arm", 0) >= 4 else "WARNING", "detail": f"偵測到 {counts.get('frame_arm', 0)} 個"},
             {"label": "飛控", "result": "PASS" if counts.get("flight_controller", 0) >= 1 else "WARNING", "detail": f"偵測到 {counts.get('flight_controller', 0)} 個"},
@@ -112,7 +116,8 @@ class Detector:
         ]
         summary = (
             f"{file_name} 已完成本機 YOLOv8 檢測：偵測到 {len(detections)} 個目標。"
-            "目前模型只訓練了現有標註中的零件，尚未包含 CW/CCW 槳葉方向。"
+            "目前模型已包含 CW/CCW 槳葉、馬達、機臂、飛控與 GPS/指南針等類別；"
+            "方向是否安裝正確仍建議由老師依機身朝向複核。"
         )
         return status, score, checklist, summary
 
