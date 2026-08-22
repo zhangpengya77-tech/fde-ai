@@ -262,24 +262,8 @@ function renderYoloAssemblyResult(result) {
   const checklist = Array.isArray(result.checklist) ? result.checklist : [];
   const detections = Array.isArray(result.detections) ? result.detections : [];
   return `
-    <article class="result-card inspection-result">
-      <div class="scan-preview yolo-preview" data-pan-zoom>
-        ${
-          result.annotatedImage
-            ? `
-              <div class="viewport-toolbar" aria-label="檢測圖片操作">
-                <button type="button" data-zoom-out>縮小</button>
-                <button type="button" data-zoom-reset>重置</button>
-                <button type="button" data-zoom-in>放大</button>
-              </div>
-              <div class="pan-canvas">
-                <img src="${result.annotatedImage}" alt="YOLOv8 檢測結果" draggable="false" data-pan-image />
-              </div>
-            `
-            : '<div class="scan-line"></div><span>YOLO RESULT</span>'
-        }
-      </div>
-      <div class="inspection-detail-panel">
+    <article class="result-card inspection-result yolo-result">
+      <div class="inspection-summary-panel">
         <div class="section-head">
           <span class="tag">${escapeHtml(result.engine)}</span>
           <span class="status ${statusClass(result.status)}">${result.status}</span>
@@ -304,68 +288,11 @@ function renderYoloAssemblyResult(result) {
             .join('')}
         </div>
       </div>
+      <div class="scan-preview yolo-preview inspection-visual-panel">
+        ${result.annotatedImage ? `<img src="${result.annotatedImage}" alt="YOLOv8 檢測結果" />` : '<div class="scan-line"></div><span>YOLO RESULT</span>'}
+      </div>
     </article>
   `;
-}
-
-function bindPanZoom(scope = document) {
-  scope.querySelectorAll('[data-pan-zoom]').forEach((viewer) => {
-    const image = viewer.querySelector('[data-pan-image]');
-    if (!image || viewer.dataset.panZoomReady === 'true') return;
-
-    viewer.dataset.panZoomReady = 'true';
-    const state = { x: 0, y: 0, scale: 1, dragging: false, startX: 0, startY: 0 };
-    const applyTransform = () => {
-      image.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
-    };
-    const zoom = (delta) => {
-      state.scale = Math.min(4, Math.max(0.5, Number((state.scale + delta).toFixed(2))));
-      applyTransform();
-    };
-    const reset = () => {
-      state.x = 0;
-      state.y = 0;
-      state.scale = 1;
-      applyTransform();
-    };
-
-    viewer.querySelector('[data-zoom-in]')?.addEventListener('click', () => zoom(0.2));
-    viewer.querySelector('[data-zoom-out]')?.addEventListener('click', () => zoom(-0.2));
-    viewer.querySelector('[data-zoom-reset]')?.addEventListener('click', reset);
-    viewer.addEventListener(
-      'wheel',
-      (event) => {
-        event.preventDefault();
-        zoom(event.deltaY < 0 ? 0.12 : -0.12);
-      },
-      { passive: false }
-    );
-    viewer.addEventListener('pointerdown', (event) => {
-      if (event.target.closest('button')) return;
-      state.dragging = true;
-      state.startX = event.clientX - state.x;
-      state.startY = event.clientY - state.y;
-      viewer.classList.add('is-dragging');
-      viewer.setPointerCapture(event.pointerId);
-    });
-    viewer.addEventListener('pointermove', (event) => {
-      if (!state.dragging) return;
-      state.x = event.clientX - state.startX;
-      state.y = event.clientY - state.startY;
-      applyTransform();
-    });
-    viewer.addEventListener('pointerup', (event) => {
-      state.dragging = false;
-      viewer.classList.remove('is-dragging');
-      viewer.releasePointerCapture(event.pointerId);
-    });
-    viewer.addEventListener('pointercancel', () => {
-      state.dragging = false;
-      viewer.classList.remove('is-dragging');
-    });
-    image.addEventListener('load', reset);
-    applyTransform();
-  });
 }
 
 function renderHoverResult(result) {
@@ -485,7 +412,6 @@ function bindActions() {
     try {
       const result = await runLocalYoloDetection(file);
       $('#propellerResult').innerHTML = renderYoloAssemblyResult(result);
-      bindPanZoom($('#propellerResult'));
     } catch (error) {
       $('#propellerResult').innerHTML = `
         ${renderAssemblyResult(simulatePropellerAssessment(file.name))}

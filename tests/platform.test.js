@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   hero,
   designSystem,
@@ -166,6 +167,18 @@ test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {
   assert.equal(result.detections.length, 4);
   assert.ok(result.detections.some((detection) => detection.className === 'cw_propeller'));
   assert.ok(result.detections.some((detection) => detection.className === 'ccw_propeller'));
+});
+
+test('YOLO result layout exposes text results in a horizontal readable panel', () => {
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+
+  assert.match(app, /class="inspection-summary-panel"/);
+  assert.match(app, /class="[^"]*inspection-visual-panel[^"]*"/);
+  assert.match(css, /\.inspection-result\s*{[^}]*grid-template-columns:\s*1fr/s);
+  assert.match(css, /\.inspection-summary-panel\s*{[^}]*overflow-x:\s*auto/s);
+  assert.match(css, /\.check-grid[^{]*{[^}]*grid-auto-flow:\s*column/s);
+  assert.doesNotMatch(app, /viewport-toolbar|data-pan-zoom|bindPanZoom/);
 });
 
 test('assess section includes component detection, four-side hover scoring, and exam bank', () => {
