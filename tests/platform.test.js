@@ -165,12 +165,16 @@ test('build assistant returns a RAG and GPT voice placeholder answer', () => {
 });
 
 test('voice assistant is configured for zh-TW click-to-start RAG-first flow', () => {
+  const browserData = readFileSync(new URL('../src/platform-browser.js', import.meta.url), 'utf8');
+
   assert.equal(voiceAssistant.locale, 'zh-TW');
   assert.equal(voiceAssistant.interactionMode, 'click-start-click-stop');
   assert.equal(voiceAssistant.ragFirst, true);
   assert.equal(voiceAssistant.knowledgeBaseDir, 'E:\\FDE_AI_Voice_RAG\\knowledge_base');
   assert.deepEqual(voiceAssistant.controls.map((control) => control.label), ['開始語音提問', '停止']);
   assert.match(voiceAssistant.safetyInstruction, /老師確認|停機檢查|台灣繁中/);
+  assert.match(browserData, /const voiceAssistant/);
+  assert.match(browserData, /voiceAssistant/);
 });
 
 test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {

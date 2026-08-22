@@ -107,6 +107,11 @@ const hero = {
   headline: 'FDE-AI 無人載具學習平台',
   summary: 'AI 雙師教學｜學・練・作・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
   systems: ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統'],
+  systemStatus: [
+    { label: 'YOLO v2', state: '本機模型', detail: '已預設接入 F450 零件與 CW/CCW 槳葉檢測流程。' },
+    { label: '四面懸停', state: '評分入口', detail: '先使用上傳影片與模擬評分，後續接入正式飛行檢測模型。' },
+    { label: 'RAG 知識庫', state: '預留接入', detail: '作的階段優先查詢 E 盤教材，再補接大模型回答。' }
+  ],
   status: 'v1.0 MVP frontend',
   showMotionStrip: false,
   actions: [
@@ -133,11 +138,41 @@ const designSystem = {
 };
 
 const moduleSections = [
-  { key: 'learn', label: '學', title: '課程影片與下載說明', summary: 'F450、模擬器、證照、AI、3D 列印與 GitHub 的課程影片入口。' },
-  { key: 'practice', label: '練', title: '模擬器與考照練習', summary: '鳳凰模擬器、考照模擬與學科題庫刷題練習。' },
-  { key: 'build', label: '作', title: 'F450 組裝與 AI 助教', summary: 'Pixhawk 2.4.8 版本 F450 組裝、調參、照片 / 30 秒影片上傳與 RAG 助教。' },
-  { key: 'inspection', label: '測', title: '目標檢測與考試題庫', summary: '檢測槳葉、馬達、電池等組裝狀態，並保留四面懸停考試題庫與 AI 評分入口。' },
-  { key: 'certify', label: '證', title: 'GitHub 成果存證', summary: '把學習過程、組裝照片、AI 測評結果與作品整理到 GitHub。' }
+  {
+    key: 'learn',
+    label: '學',
+    title: '課程影片與下載說明',
+    summary: 'F450、模擬器、證照、AI、3D 列印與 GitHub 的課程影片入口。',
+    goal: '先看懂課程影片、下載方式與工具用途，知道每個任務要學什麼。'
+  },
+  {
+    key: 'practice',
+    label: '練',
+    title: '模擬器與考照練習',
+    summary: '鳳凰模擬器、考照模擬與學科題庫刷題練習。',
+    goal: '把鳳凰模擬器、證照題庫與術科動作先練熟，再進入實機操作。'
+  },
+  {
+    key: 'build',
+    label: '作',
+    title: 'F450 組裝與 AI 助教',
+    summary: 'Pixhawk 2.4.8 版本 F450 組裝、調參、照片 / 30 秒影片上傳與 RAG 助教。',
+    goal: '依照 Pixhawk 2.4.8 流程完成 F450 組裝，遇到問題可上傳照片詢問 AI 助教。'
+  },
+  {
+    key: 'inspection',
+    label: '測',
+    title: '目標檢測與考試題庫',
+    summary: '檢測槳葉、馬達、電池等組裝狀態，並保留四面懸停考試題庫與 AI 評分入口。',
+    goal: '上傳照片或影片，檢查槳葉、馬達、電池與四面懸停表現，產生可複核結果。'
+  },
+  {
+    key: 'certify',
+    label: '證',
+    title: 'GitHub 成果存證',
+    summary: '把學習過程、組裝照片、AI 測評結果與作品整理到 GitHub。',
+    goal: '把學習紀錄、檢測截圖、影片與作品整理成 GitHub 倉庫，形成能力證據。'
+  }
 ];
 
 const platformModes = [
@@ -339,6 +374,28 @@ const buildWorkflow = {
   ]
 };
 
+const voiceAssistant = {
+  locale: 'zh-TW',
+  interactionMode: 'click-start-click-stop',
+  ragFirst: true,
+  knowledgeBaseDir: 'E:\\FDE_AI_Voice_RAG\\knowledge_base',
+  endpoint: 'http://127.0.0.1:8765/api/voice/ask',
+  healthEndpoint: 'http://127.0.0.1:8765/api/voice/health',
+  controls: [
+    { label: '開始語音提問', action: 'start' },
+    { label: '停止', action: 'stop' }
+  ],
+  statuses: {
+    idle: '待命：按一下開始語音提問',
+    listening: '正在聽你說話，完成後按停止',
+    searching: '正在先查 RAG 知識庫',
+    answering: '正在產生台灣繁中回答',
+    unsupported: '這個瀏覽器不支援語音辨識，請改用文字輸入'
+  },
+  safetyInstruction:
+    '請使用台灣繁中回答；涉及槳葉、電池、通電、解鎖或實飛時，提醒學生停機檢查並請老師確認。'
+};
+
 const ragKnowledgeBase = [
   {
     id: 'f450-assembly',
@@ -532,5 +589,4 @@ function simulateHoverAssessment(fileName = 'hover.mp4') {
   };
 }
 
-window.FdePlatform = { hero, designSystem, moduleSections, platformModes, missionPacks, learningPath, studentDashboard, youtubeVideos, learningTrackPreviewCount, learningTracks, learningResources, practiceResources, buildWorkflow, ragKnowledgeBase, assessmentWorkflows, teacherDashboard, certificationChecklist, calculateProgress, searchKnowledgeBase, simulateBuildAssistant, simulatePropellerAssessment, simulateHoverAssessment };
-
+window.FdePlatform = { hero, designSystem, moduleSections, platformModes, missionPacks, learningPath, studentDashboard, youtubeVideos, learningTrackPreviewCount, learningTracks, learningResources, practiceResources, buildWorkflow, voiceAssistant, ragKnowledgeBase, assessmentWorkflows, teacherDashboard, certificationChecklist, calculateProgress, searchKnowledgeBase, simulateBuildAssistant, simulatePropellerAssessment, simulateHoverAssessment };
