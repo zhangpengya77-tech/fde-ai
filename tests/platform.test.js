@@ -29,6 +29,7 @@ import {
 test('defines the five main sidebar modules as learn practice build assess certify', () => {
   assert.deepEqual(moduleSections.map((section) => section.key), ['learn', 'practice', 'build', 'inspection', 'certify']);
   assert.deepEqual(moduleSections.map((section) => section.label), ['學', '練', '作', '測', '證']);
+  assert.ok(moduleSections.every((section) => section.goal && section.goal.length > 8));
   assert.deepEqual(moduleSections.map((section) => section.title), [
     '課程影片與下載說明',
     '模擬器與考照練習',
@@ -44,6 +45,8 @@ test('defines a boot hero for an AI vehicle learning control center', () => {
   assert.equal(hero.headline, 'FDE-AI 無人載具學習平台');
   assert.match(hero.summary, /學・練・作・測・證/);
   assert.deepEqual(hero.systems, ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統']);
+  assert.deepEqual(hero.systemStatus.map((item) => item.label), ['YOLO v2', '四面懸停', 'RAG 知識庫']);
+  assert.ok(hero.systemStatus.find((item) => item.label === 'YOLO v2').detail.includes('CW/CCW'));
   assert.deepEqual(hero.actions.map((action) => action.label), ['進入學習平台', '觀看系統 Demo']);
   assert.deepEqual(hero.actions.map((action) => action.target), ['#learn', '#inspection']);
   assert.equal(hero.showMotionStrip, false);
@@ -174,9 +177,14 @@ test('YOLO result layout exposes text results in a horizontal readable panel', (
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
   assert.match(app, /class="inspection-summary-panel"/);
+  assert.match(app, /class="service-status-panel"/);
+  assert.match(app, /class="stage-guide"/);
+  assert.match(app, /CW 正槳|CCW 反槳/);
   assert.match(app, /class="[^"]*inspection-visual-panel[^"]*"/);
   assert.match(css, /\.inspection-result\s*{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.inspection-summary-panel\s*{[^}]*overflow-x:\s*auto/s);
+  assert.match(css, /\.result-file-name\s*{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(css, /\.service-status-panel/s);
   assert.match(css, /\.check-grid[^{]*{[^}]*grid-auto-flow:\s*column/s);
   assert.doesNotMatch(app, /viewport-toolbar|data-pan-zoom|bindPanZoom/);
 });

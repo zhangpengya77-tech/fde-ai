@@ -44,7 +44,22 @@ function renderNavigation() {
 function renderHero() {
   $('#heroHeadline').textContent = hero.headline;
   $('#heroSummary').textContent = hero.summary;
-  $('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
+  $('#heroSystems').innerHTML = `
+    ${hero.systems.map((system) => `<span>${system}</span>`).join('')}
+    <div class="service-status-panel">
+      ${hero.systemStatus
+        .map(
+          (item) => `
+            <div>
+              <span>${item.label}</span>
+              <strong>${item.state}</strong>
+              <small>${item.detail}</small>
+            </div>
+          `
+        )
+        .join('')}
+    </div>
+  `;
   $('#heroActions').innerHTML = hero.actions
     .map((action) => `<a class="${action.kind}-action" href="${action.target}">${action.label}</a>`)
     .join('');
@@ -68,6 +83,24 @@ function renderDataFlow() {
   $('#learningFlow').innerHTML = flow
     .map(([label, detail]) => `<div class="flow-node"><strong>${label}</strong><span>${detail}</span></div>`)
     .join('');
+}
+
+function renderStageGuides() {
+  moduleSections.forEach((section) => {
+    const intro = document.querySelector(`#${section.key} .section-intro`);
+    if (!intro || intro.querySelector('.stage-guide')) return;
+
+    intro.insertAdjacentHTML(
+      'beforeend',
+      `
+        <div class="stage-guide">
+          <span>${section.label}</span>
+          <strong>${section.title}</strong>
+          <p>${section.goal}</p>
+        </div>
+      `
+    );
+  });
 }
 
 function renderModes() {
@@ -268,8 +301,24 @@ function renderYoloAssemblyResult(result) {
           <span class="tag">${escapeHtml(result.engine)}</span>
           <span class="status ${statusClass(result.status)}">${result.status}</span>
         </div>
+        <div class="service-status-panel compact">
+          <div>
+            <span>YOLO v2 local</span>
+            <strong>本機模型</strong>
+            <small>CW 正槳 / CCW 反槳：先由 AI 辨識，再依機頭方向人工複核。</small>
+          </div>
+          <div>
+            <span>結果閱讀</span>
+            <strong>橫向資訊列</strong>
+            <small>長檔名、零件清單與信心度可左右滑動查看，不會擠成一團。</small>
+          </div>
+        </div>
         <h3 class="result-file-name" title="${fileName}">${fileName}</h3>
         <p>${escapeHtml(result.summary)}</p>
+        <div class="inspection-hints">
+          <small>目前模型重點：槳葉、馬達、機臂與主機板等可見零件。</small>
+          <small>判定提醒：CW / CCW 只代表槳葉類型，是否裝對位置仍要搭配 F450 機頭方向確認。</small>
+        </div>
         <div class="score-row"><strong>${result.score}</strong><span>AI 初判分數</span><em>${result.teacherStatus}</em></div>
         <div class="check-grid">
           ${checklist
@@ -451,6 +500,7 @@ function bindActions() {
 renderNavigation();
 renderHero();
 renderDataFlow();
+renderStageGuides();
 renderModes();
 renderStudentDashboard();
 renderLearningPath();

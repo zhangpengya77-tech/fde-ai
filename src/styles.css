@@ -248,6 +248,59 @@ main {
   font-weight: 800;
 }
 
+.service-status-panel {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 4px;
+}
+
+.service-status-panel div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(0, 194, 255, 0.28);
+  background: rgba(0, 194, 255, 0.055);
+  box-shadow: 0 0 20px rgba(0, 194, 255, 0.08);
+}
+
+.service-status-panel span {
+  width: fit-content;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-color: rgba(0, 194, 255, 0.36);
+  color: var(--cyan);
+  background: rgba(0, 194, 255, 0.05);
+}
+
+.service-status-panel strong,
+.service-status-panel small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.service-status-panel strong {
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.service-status-panel small {
+  color: #b9d6e8;
+  line-height: 1.55;
+}
+
+.service-status-panel.compact {
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  margin: 12px 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  overscroll-behavior-x: contain;
+}
+
 .primary-action,
 .secondary-action,
 .lesson-list a,
@@ -488,6 +541,43 @@ main {
 
 .section-intro {
   margin-bottom: 30px;
+}
+
+.stage-guide {
+  display: grid;
+  grid-template-columns: 46px minmax(150px, 220px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  max-width: 980px;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid rgba(0, 194, 255, 0.28);
+  background: rgba(0, 194, 255, 0.055);
+  box-shadow: 0 0 22px rgba(0, 194, 255, 0.08);
+}
+
+.stage-guide span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 20px;
+  font-weight: 900;
+  animation: mark-glow 5.2s ease-in-out infinite;
+}
+
+.stage-guide strong {
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.stage-guide p {
+  margin: 0;
+  max-width: none;
+  color: #b9d6e8;
+  overflow-wrap: anywhere;
 }
 
 .mode-grid,
@@ -1013,6 +1103,22 @@ textarea {
   line-height: 1.18;
 }
 
+.inspection-hints {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.inspection-hints small {
+  display: block;
+  padding: 9px 10px;
+  border: 1px solid rgba(0, 194, 255, 0.18);
+  background: rgba(0, 194, 255, 0.045);
+  color: #cce8f7;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 .scan-line {
   position: absolute;
   inset: 0;
@@ -1308,12 +1414,21 @@ textarea {
   .build-layout,
   .inspection-layout,
   .practice-card,
-  .inspection-result {
+  .inspection-result,
+  .stage-guide {
     grid-template-columns: 1fr;
   }
 
   .inspection-result {
     overflow: visible;
+  }
+
+  .service-status-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .service-status-panel.compact {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
   }
 
   .yolo-preview {
@@ -1366,6 +1481,12 @@ textarea {
 
   .score-row {
     grid-template-columns: 1fr;
+  }
+
+  .service-status-panel.compact,
+  .check-grid,
+  .detection-list {
+    margin-right: -2px;
   }
 
   .yolo-preview {
