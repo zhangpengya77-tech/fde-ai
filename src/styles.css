@@ -1010,6 +1010,43 @@ textarea {
   align-content: center;
 }
 
+.voice-assistant-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(0, 194, 255, 0.28);
+  background: rgba(0, 194, 255, 0.055);
+}
+
+.voice-assistant-panel > div:first-child {
+  display: grid;
+  gap: 7px;
+}
+
+.voice-assistant-panel strong {
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.voice-assistant-panel small,
+.voice-assistant-panel p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.voice-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.voice-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .dropzone span,
 .upload-row span {
   font-weight: 900;
@@ -1467,6 +1504,7 @@ textarea {
   .learning-flow,
   .learning-path,
   .upload-row,
+  .voice-controls,
   .mini-nav {
     grid-template-columns: 1fr;
   }

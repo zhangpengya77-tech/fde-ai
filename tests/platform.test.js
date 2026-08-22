@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   hero,
   designSystem,
@@ -15,6 +15,7 @@ import {
   learningResources,
   practiceResources,
   buildWorkflow,
+  voiceAssistant,
   ragKnowledgeBase,
   assessmentWorkflows,
   teacherDashboard,
@@ -163,6 +164,15 @@ test('build assistant returns a RAG and GPT voice placeholder answer', () => {
   assert.equal(fallback.sourceStatus, 'large-model-fallback');
 });
 
+test('voice assistant is configured for zh-TW click-to-start RAG-first flow', () => {
+  assert.equal(voiceAssistant.locale, 'zh-TW');
+  assert.equal(voiceAssistant.interactionMode, 'click-start-click-stop');
+  assert.equal(voiceAssistant.ragFirst, true);
+  assert.equal(voiceAssistant.knowledgeBaseDir, 'E:\\FDE_AI_Voice_RAG\\knowledge_base');
+  assert.deepEqual(voiceAssistant.controls.map((control) => control.label), ['開始語音提問', '停止']);
+  assert.match(voiceAssistant.safetyInstruction, /老師確認|停機檢查|台灣繁中/);
+});
+
 test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {
   const result = simulatePropellerAssessment('propeller-check.jpg');
   assert.equal(result.type, 'propeller-photo');
@@ -187,6 +197,24 @@ test('YOLO result layout exposes text results in a horizontal readable panel', (
   assert.match(css, /\.service-status-panel/s);
   assert.match(css, /\.check-grid[^{]*{[^}]*grid-auto-flow:\s*column/s);
   assert.doesNotMatch(app, /viewport-toolbar|data-pan-zoom|bindPanZoom/);
+});
+
+test('voice assistant UI and backend routes are present without exposing API keys', () => {
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const server = readFileSync(new URL('../api/yolo_server.py', import.meta.url), 'utf8');
+  const gitignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
+
+  assert.match(html, /voiceAssistantPanel/);
+  assert.match(app, /voiceStartButton/);
+  assert.match(app, /voiceStopButton/);
+  assert.match(app, /runVoiceAssistantQuestion/);
+  assert.match(server, /\/api\/voice\/health/);
+  assert.match(server, /\/api\/voice\/ask/);
+  assert.match(server, /search_voice_knowledge_base/);
+  assert.match(gitignore, /^\.env$/m);
+  assert.ok(existsSync(new URL('../.env.example', import.meta.url)));
+  assert.doesNotMatch(app + html, /OPENAI_API_KEY\s*=/);
 });
 
 test('assess section includes component detection, four-side hover scoring, and exam bank', () => {

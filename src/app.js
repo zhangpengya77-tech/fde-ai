@@ -10,6 +10,7 @@ const {
   learningTracks,
   practiceResources,
   buildWorkflow,
+  voiceAssistant,
   assessmentWorkflows,
   teacherDashboard,
   certificationChecklist,
@@ -21,6 +22,9 @@ const {
 const $ = (selector) => document.querySelector(selector);
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
 const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
+const localVoiceEndpoint = voiceAssistant.endpoint;
+let voiceRecognition = null;
+let voiceTranscript = '';
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
@@ -227,10 +231,16 @@ function renderBuildWorkflow() {
     <span>版本 ${buildWorkflow.version}</span>
     <span>${buildWorkflow.controller}</span>
     <span>${buildWorkflow.interactionMode}</span>
+    <span>${voiceAssistant.locale}</span>
   `;
   $('#buildStages').innerHTML = buildWorkflow.stages
     .map((stage, index) => `<li><span>${String(index + 1).padStart(2, '0')}</span>${stage}</li>`)
     .join('');
+}
+
+function renderVoiceAssistantPanel() {
+  const status = $('#voiceStatus');
+  if (status) status.textContent = voiceAssistant.statuses.idle;
 }
 
 function renderAssessmentWorkflows() {
@@ -265,6 +275,55 @@ function renderAssistantResult(result) {
       <small>${result.voiceStatus}</small>
     </article>
   `;
+}
+
+function speakVoiceAnswer(text) {
+  if (!('speechSynthesis' in window) || !text) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = voiceAssistant.locale;
+  utterance.rate = 0.95;
+  window.speechSynthesis.speak(utterance);
+}
+
+async function runVoiceAssistantQuestion(question) {
+  const response = await fetch(localVoiceEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, locale: voiceAssistant.locale })
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || '語音助教服務沒有回應');
+  }
+  return payload.result;
+}
+
+async function askAssistantFromText(question) {
+  const topic = question.trim();
+  if (!topic) return;
+
+  $('#voiceStatus').textContent = voiceAssistant.statuses.searching;
+  $('#assistantResult').innerHTML = '<article class="result-card"><p>正在先查 RAG 知識庫，再準備台灣繁中回答...</p></article>';
+  try {
+    const result = await runVoiceAssistantQuestion(topic);
+    $('#voiceStatus').textContent = voiceAssistant.statuses.answering;
+    $('#assistantResult').innerHTML = renderAssistantResult(result);
+    speakVoiceAnswer(result.answer);
+    $('#voiceStatus').textContent = voiceAssistant.statuses.idle;
+  } catch (error) {
+    const fallback = simulateBuildAssistant(topic);
+    $('#assistantResult').innerHTML = `
+      ${renderAssistantResult(fallback)}
+      <article class="result-card local-service-note">
+        <h3>本機語音助教尚未連線</h3>
+        <p>目前先用前端 MVP 模擬回答。請確認本機 API 服務已啟動，且 .env 已設定 OPENAI_API_KEY。</p>
+        <small>${error.message}</small>
+      </article>
+    `;
+    speakVoiceAnswer(fallback.answer);
+    $('#voiceStatus').textContent = '本機語音助教未連線，已顯示 MVP 模擬回答';
+  }
 }
 
 function renderAssemblyResult(result) {
@@ -447,7 +506,48 @@ function bindActions() {
   });
 
   $('#assistantButton').addEventListener('click', () => {
-    $('#assistantResult').innerHTML = renderAssistantResult(simulateBuildAssistant($('#assistantQuestion').value));
+    askAssistantFromText($('#assistantQuestion').value);
+  });
+
+  $('#voiceStartButton').addEventListener('click', () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      $('#voiceStatus').textContent = voiceAssistant.statuses.unsupported;
+      return;
+    }
+
+    voiceTranscript = '';
+    voiceRecognition = new SpeechRecognition();
+    voiceRecognition.lang = voiceAssistant.locale;
+    voiceRecognition.interimResults = true;
+    voiceRecognition.continuous = true;
+
+    voiceRecognition.addEventListener('result', (event) => {
+      voiceTranscript = Array.from(event.results)
+        .map((result) => result[0].transcript)
+        .join('');
+      $('#assistantQuestion').value = voiceTranscript;
+    });
+
+    voiceRecognition.addEventListener('end', () => {
+      $('#voiceStartButton').disabled = false;
+      $('#voiceStopButton').disabled = true;
+    });
+
+    voiceRecognition.start();
+    $('#voiceStartButton').disabled = true;
+    $('#voiceStopButton').disabled = false;
+    $('#voiceStatus').textContent = voiceAssistant.statuses.listening;
+  });
+
+  $('#voiceStopButton').addEventListener('click', () => {
+    if (voiceRecognition) {
+      voiceRecognition.stop();
+      voiceRecognition = null;
+    }
+    $('#voiceStartButton').disabled = false;
+    $('#voiceStopButton').disabled = true;
+    askAssistantFromText($('#assistantQuestion').value || voiceTranscript);
   });
 
   $('#propellerButton').addEventListener('click', async () => {
@@ -508,6 +608,7 @@ renderMissions();
 renderLearningResources();
 renderPracticeResources();
 renderBuildWorkflow();
+renderVoiceAssistantPanel();
 renderAssessmentWorkflows();
 renderTeacherDashboard();
 renderCertificationChecklist();

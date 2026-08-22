@@ -374,6 +374,28 @@ export const buildWorkflow = {
   ]
 };
 
+export const voiceAssistant = {
+  locale: 'zh-TW',
+  interactionMode: 'click-start-click-stop',
+  ragFirst: true,
+  knowledgeBaseDir: 'E:\\FDE_AI_Voice_RAG\\knowledge_base',
+  endpoint: 'http://127.0.0.1:8765/api/voice/ask',
+  healthEndpoint: 'http://127.0.0.1:8765/api/voice/health',
+  controls: [
+    { label: '開始語音提問', action: 'start' },
+    { label: '停止', action: 'stop' }
+  ],
+  statuses: {
+    idle: '待命：按一下開始語音提問',
+    listening: '正在聽你說話，完成後按停止',
+    searching: '正在先查 RAG 知識庫',
+    answering: '正在產生台灣繁中回答',
+    unsupported: '這個瀏覽器不支援語音辨識，請改用文字輸入'
+  },
+  safetyInstruction:
+    '請使用台灣繁中回答；涉及槳葉、電池、通電、解鎖或實飛時，提醒學生停機檢查並請老師確認。'
+};
+
 export const ragKnowledgeBase = [
   {
     id: 'f450-assembly',

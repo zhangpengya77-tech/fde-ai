@@ -136,6 +136,18 @@
               <span class="pill pending">RAG + GPT 語音預留</span>
             </div>
             <textarea id="assistantQuestion" rows="5" placeholder="例如：槳葉方向看不懂，飛控主板該朝哪裡？"></textarea>
+            <div class="voice-assistant-panel" id="voiceAssistantPanel">
+              <div>
+                <span class="tag">zh-TW Voice RAG</span>
+                <strong>台灣繁中語音助教</strong>
+                <small>按一下開始、按一下停止；系統會先查 E 盤 RAG 知識庫，再產生回答。</small>
+              </div>
+              <div class="voice-controls">
+                <button class="secondary-action" id="voiceStartButton" type="button">開始語音提問</button>
+                <button class="secondary-action" id="voiceStopButton" type="button" disabled>停止</button>
+              </div>
+              <p id="voiceStatus">待命：按一下開始語音提問</p>
+            </div>
             <div class="upload-row">
               <label>
                 <span>照片</span>
