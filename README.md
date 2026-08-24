@@ -24,6 +24,26 @@ fde-ai 是一個無需登入的無人機 AI 教學網站，第一階段先完成
 index.html
 ```
 
+## 免費上線：Streamlit Community Cloud
+
+本專案已提供 `streamlit_app.py`，可透過 Streamlit Community Cloud 從 GitHub 免費部署成公開網址。
+
+部署步驟：
+
+1. 登入 GitHub，確認可以看到此倉庫。
+2. 打開 [Streamlit Community Cloud](https://share.streamlit.io/)。
+3. 使用 GitHub 帳號登入 Streamlit。
+4. 點選 `New app`。
+5. Repository 選擇 `Elijahieee/fde-ai`。
+6. Branch 選擇 `main`。
+7. Main file path 填入 `streamlit_app.py`。
+8. 按 `Deploy`。
+9. 若倉庫是私人倉庫，部署完成後到 App settings 的 Sharing，把 `Who can view this app` 改成公開，其他人才能不用登入觀看。
+
+部署完成後，Streamlit 會產生一個公開網址，其他人可直接打開觀看網站展示版。
+
+注意：Streamlit 免費上線版目前主要用於展示 `學・練・作・測・證` 網站內容。本機 YOLOv8、RAG 知識庫、語音助教與 E 盤資料夾不會自動上傳到 Streamlit 雲端；這些功能仍需在本機服務啟動，或後續再拆成雲端後端服務。
+
 ## 測：本機 YOLOv8 檢測服務
 
 1. 先確認模型在：

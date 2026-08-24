@@ -221,6 +221,26 @@ test('voice assistant UI and backend routes are present without exposing API key
   assert.doesNotMatch(app + html, /OPENAI_API_KEY\s*=/);
 });
 
+test('Streamlit deployment entry wraps the static website without backend secrets', () => {
+  const streamlitAppUrl = new URL('../streamlit_app.py', import.meta.url);
+  const requirementsUrl = new URL('../requirements.txt', import.meta.url);
+
+  assert.ok(existsSync(streamlitAppUrl));
+  assert.ok(existsSync(requirementsUrl));
+
+  const streamlitApp = readFileSync(streamlitAppUrl, 'utf8');
+  const requirements = readFileSync(requirementsUrl, 'utf8');
+
+  assert.match(streamlitApp, /streamlit\.components\.v1/);
+  assert.match(streamlitApp, /components\.html/);
+  assert.match(streamlitApp, /index\.html/);
+  assert.match(streamlitApp, /src\/styles\.css/);
+  assert.match(streamlitApp, /src\/platform-browser\.js/);
+  assert.match(streamlitApp, /src\/app\.js/);
+  assert.match(requirements, /^streamlit\b/m);
+  assert.doesNotMatch(streamlitApp + requirements, /OPENAI_API_KEY\s*=/);
+});
+
 test('assess section includes component detection, four-side hover scoring, and exam bank', () => {
   assert.deepEqual(assessmentWorkflows.map((workflow) => workflow.key), ['assembly-detection', 'hover-scoring', 'hover-question-bank']);
   assert.ok(assessmentWorkflows[0].acceptedEvidence.includes('photo'));
