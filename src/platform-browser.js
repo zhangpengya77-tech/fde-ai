@@ -469,28 +469,38 @@ const cohorts = [
     showcaseVideos: [
       {
         phase: '01',
+        title: '2026FDE-Ai無人載具人才孵化平台在職培訓01期',
+        url: 'https://www.youtube.com/shorts/r6O-z1nxFfo'
+      },
+      {
+        phase: '02',
         title: '2026FDE-Ai無人載具人才孵化在職培訓日誌',
         url: 'https://www.youtube.com/watch?v=G0M6rd3t9-4'
       },
       {
-        phase: '02',
+        phase: '03',
         title: '2026FDE-Ai無人載具人才孵化3d列印測繪小組日誌',
         url: 'https://www.youtube.com/watch?v=Nsv7kD52MnA'
       },
       {
-        phase: '03',
+        phase: '04',
         title: '結業啦！期待同學們前程似錦！',
         url: 'https://www.youtube.com/watch?v=YPpK_uQJTMg'
       },
       {
-        phase: '04',
+        phase: '05',
         title: '2026FDE_Ai無人載具在職培訓04期',
         url: 'https://www.youtube.com/watch?v=BVVj1zM4lU8'
       },
       {
-        phase: '05',
+        phase: '06',
         title: '2026FDE-Ai無人載具人才孵化在職培訓05期',
         url: 'https://www.youtube.com/watch?v=gW5HTVLLKJY'
+      },
+      {
+        phase: '職前',
+        title: '2026風電無人機巡檢ai應用職前教育（嘉義）',
+        url: 'https://www.youtube.com/watch?v=oXK6lE6KFmI'
       }
     ],
     githubUrl: 'https://github.com/Elijahieee/fde-ai',

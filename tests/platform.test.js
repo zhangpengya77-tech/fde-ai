@@ -122,18 +122,21 @@ test('defines static alumni cohorts without requiring login or database features
   assert.ok(cohorts.every((cohort) => !('studentAccounts' in cohort)));
 });
 
-test('cohort showcase publishes the five 2026 FDE-AI training videos', () => {
+test('cohort showcase publishes the 2026 FDE-AI training and pre-employment videos', () => {
   const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   const firstCohort = cohorts[0];
 
-  assert.equal(firstCohort.showcaseVideos.length, 5);
+  assert.equal(firstCohort.showcaseVideos.length, 7);
   assert.deepEqual(
     firstCohort.showcaseVideos.map((video) => video.phase),
-    ['01', '02', '03', '04', '05']
+    ['01', '02', '03', '04', '05', '06', '職前']
   );
-  assert.ok(firstCohort.showcaseVideos.every((video) => video.title.includes('FDE') || video.title.includes('結業')));
-  assert.ok(firstCohort.showcaseVideos.every((video) => video.url.startsWith('https://www.youtube.com/watch?v=')));
+  assert.equal(firstCohort.showcaseVideos[0].title, '2026FDE-Ai無人載具人才孵化平台在職培訓01期');
+  assert.equal(firstCohort.showcaseVideos[0].url, 'https://www.youtube.com/shorts/r6O-z1nxFfo');
+  assert.ok(firstCohort.showcaseVideos.some((video) => video.title.includes('職前教育')));
+  assert.ok(firstCohort.showcaseVideos.some((video) => video.url.endsWith('oXK6lE6KFmI')));
+  assert.ok(firstCohort.showcaseVideos.every((video) => video.url.startsWith('https://www.youtube.com/')));
   assert.match(app, /showcaseVideos/);
   assert.match(app, /class="cohort-video-grid"/);
   assert.match(css, /\.cohort-video-grid/);
