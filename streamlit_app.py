@@ -53,4 +53,4 @@ page = inline_asset(page, "src/styles.css", "style")
 page = inline_asset(page, "src/platform-browser.js", "script")
 page = inline_asset(page, "src/app.js", "script")
 
-components.html(page, height=9800, scrolling=False)
+components.html(page, height=900, scrolling=True)
