@@ -604,6 +604,282 @@ main {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.mission-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.mission-stage-map {
+  display: grid;
+  gap: 16px;
+}
+
+.mission-stage-card,
+.task-detail-card,
+.cohort-card {
+  position: relative;
+  border: 1px solid var(--line);
+  background: rgba(15, 32, 51, 0.9);
+  padding: 18px;
+  overflow: hidden;
+  animation: card-enter 0.72s ease both;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mission-stage-card:hover,
+.task-detail-card:hover,
+.cohort-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 24px rgba(0, 194, 255, 0.13);
+}
+
+.stage-head {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.stage-head h3,
+.task-detail-head h3,
+.cohort-card h3 {
+  margin: 0;
+  color: #ffffff;
+}
+
+.stage-head p,
+.task-detail-head p,
+.cohort-card p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.stage-task-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.task-select {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.task-select strong {
+  font-size: 16px;
+  color: #ffffff;
+  line-height: 1.35;
+}
+
+.task-select small,
+.task-select .difficulty {
+  display: block;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.task-select.is-selected {
+  border-color: var(--cyan);
+  box-shadow: 0 0 24px rgba(0, 194, 255, 0.2);
+  background: rgba(0, 194, 255, 0.08);
+}
+
+.workflow-mini {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.workflow-mini i {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(0, 194, 255, 0.38);
+  color: var(--cyan);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  animation: node-breathe 6.2s ease-in-out infinite;
+}
+
+.task-detail-panel {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+}
+
+.task-detail-card {
+  display: grid;
+  gap: 16px;
+}
+
+.task-detail-head {
+  display: grid;
+  gap: 14px;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-meta span {
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 194, 255, 0.22);
+  background: rgba(0, 194, 255, 0.045);
+  color: #cce8f7;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.task-progress {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.task-progress strong {
+  color: var(--cyan);
+  font-size: 24px;
+}
+
+.task-progress span {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  box-shadow: 0 0 18px rgba(0, 194, 255, 0.2);
+}
+
+.task-workflow {
+  display: grid;
+  gap: 10px;
+  max-height: min(64vh, 760px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.workflow-step-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(0, 194, 255, 0.22);
+  background: rgba(7, 17, 31, 0.58);
+}
+
+.workflow-step-card.is-done {
+  border-color: rgba(53, 230, 168, 0.48);
+  background: rgba(53, 230, 168, 0.05);
+}
+
+.workflow-step-head {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.workflow-step-head > span {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-weight: 900;
+  animation: mark-glow 5.2s ease-in-out infinite;
+}
+
+.workflow-step-head strong,
+.workflow-step-head small {
+  display: block;
+}
+
+.workflow-step-head strong {
+  color: #ffffff;
+}
+
+.workflow-step-card p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.workflow-step-card ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.progress-toggle {
+  display: inline-grid;
+  cursor: pointer;
+}
+
+.progress-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.progress-toggle i {
+  min-width: 54px;
+  padding: 7px 9px;
+  border: 1px solid rgba(0, 194, 255, 0.38);
+  color: var(--cyan);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.progress-toggle input:checked + i {
+  border-color: rgba(53, 230, 168, 0.58);
+  color: var(--green);
+  background: rgba(53, 230, 168, 0.06);
+}
+
+.cohort-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cohort-task-strip,
+.cohort-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cohort-task-strip span {
+  padding: 7px 9px;
+  border: 1px solid rgba(0, 194, 255, 0.28);
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cohort-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  text-decoration: none;
+  font-weight: 900;
+}
+
 .hero-metrics {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 18px;
@@ -1452,8 +1728,13 @@ textarea {
   .inspection-layout,
   .practice-card,
   .inspection-result,
+  .mission-map-layout,
   .stage-guide {
     grid-template-columns: 1fr;
+  }
+
+  .task-detail-panel {
+    position: static;
   }
 
   .inspection-result {
@@ -1473,6 +1754,7 @@ textarea {
   }
 
   .mission-grid,
+  .stage-task-list,
   .mode-grid,
   .resource-grid,
   .workflow-grid,
@@ -1496,10 +1778,12 @@ textarea {
   }
 
   .mission-grid,
+  .stage-task-list,
   .mode-grid,
   .resource-grid,
   .workflow-grid,
   .cert-grid,
+  .cohort-grid,
   .hero-metrics,
   .learning-flow,
   .learning-path,

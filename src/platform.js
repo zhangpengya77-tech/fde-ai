@@ -196,19 +196,279 @@ export const platformModes = [
   }
 ];
 
-export const missionPacks = [
-  { code: 'M01', title: '無人機安全與基礎認知', outcome: '飛行安全任務單', focus: '建立安全與系統認知', status: '已完成' },
-  { code: 'M02', title: '足球無人機模擬訓練', outcome: '基礎操控成績', focus: '低門檻、人人可練', status: '已完成' },
-  { code: 'M03', title: '足球無人機實機挑戰', outcome: '團隊競賽成果', focus: '安全實飛與團隊合作', status: '已完成' },
-  { code: 'M04', title: '無人機證照模擬訓練', outcome: '四面懸停／八字／起降模擬紀錄', focus: '銜接術科能力', status: '進行中' },
-  { code: 'M05', title: 'F450 開源無人機工程組裝', outcome: '完整 F450 教學機', focus: '工程結構、飛控與感測整合', status: '進行中' },
-  { code: 'M06', title: 'AI 檢測考核 A｜F450 組裝', outcome: '組裝 AI 檢測報告', focus: '測工程實作正確性', status: 'AI 檢測中' },
-  { code: 'M07', title: 'Mission Planner 自主航線', outcome: '自主航線任務報告', focus: '用任務規劃取代初期複雜程式碼', status: '未開始' },
-  { code: 'M08', title: 'AI 視覺目標檢測', outcome: '小型資料集＋AI 模型', focus: '建立資料與 AI 應用能力', status: '未開始' },
-  { code: 'M09', title: '3D 掃描與空拍建模', outcome: '3D 場景／物件模型', focus: '數位建模與空間資料應用', status: '未開始' },
-  { code: 'M10', title: 'AI 檢測考核 B｜四面懸停', outcome: '飛行 AI 評量報告', focus: '測飛行穩定度與標準動作', status: '教師復核' },
-  { code: 'M11', title: '數位轉型＋3D 列印', outcome: 'Q 版形象／無人機配件', focus: '數位設計到實體製造', status: '未開始' },
-  { code: 'M12', title: '智慧城市＋AI 影音＋搜救應用', outcome: '整合專題影片／報告', focus: '綜合應用與成果展示', status: '未開始' }
+export const workflowSteps = [
+  { key: 'learn', label: '學', title: '課程理解' },
+  { key: 'practice', label: '練', title: '模擬練習' },
+  { key: 'build', label: '作', title: '專案實作' },
+  { key: 'assess', label: '測', title: 'AI 測評' },
+  { key: 'certify', label: '證', title: '成果存證' }
+];
+
+export const missionStages = [
+  {
+    id: 'explore',
+    title: '探索者 Explore',
+    subtitle: '建立安全感與操控直覺',
+    description: '從無人載具安全、模擬飛行到第一次 AI 測評，適合零基礎入門。',
+    badge: 'Stage 1'
+  },
+  {
+    id: 'build',
+    title: '工程者 Build',
+    subtitle: '完成 F450 工程系統',
+    description: '把 F450、Pixhawk、Mission Planner 與工程檢查串成可實作的教學任務。',
+    badge: 'Stage 2'
+  },
+  {
+    id: 'ai',
+    title: 'AI Engineer',
+    subtitle: '建立資料與模型能力',
+    description: '從標註、YOLO 目標檢測到 3D 與 AI 視覺應用，形成資料驅動能力。',
+    badge: 'Stage 3'
+  },
+  {
+    id: 'project',
+    title: 'Project Engineer',
+    subtitle: '完成行業與綜合專題',
+    description: '以行業任務、飛行數據診斷與 Capstone 專題整合前面能力。',
+    badge: 'Stage 4'
+  }
+];
+
+const makeSection = (title, description, checklist = [], resources = []) => ({
+  title,
+  description,
+  checklist,
+  resources
+});
+
+export const missionTasks = [
+  {
+    id: 'M01',
+    stage: 'explore',
+    order: 1,
+    title: '無人載具初體驗與安全',
+    subtitle: '先建立安全規範、機體構成與基本飛行觀念',
+    description: '讓新手知道無人機不是玩具，而是一套需要安全流程、空域意識與責任的系統。',
+    difficulty: 'beginner',
+    estimatedHours: 1.5,
+    suitableFor: ['兒童', '零基礎', '高中', '高職'],
+    status: 'recommended',
+    learn: makeSection('學習', '觀看安全、空域、電池與基礎構造內容。', ['認識飛行安全距離', '理解槳葉與電池風險', '知道何時必須停機找老師']),
+    practice: makeSection('練習', '用口頭問答和圖片辨識方式練習風險判斷。', ['辨識禁飛情境', '完成起飛前檢查口訣']),
+    build: makeSection('實作', '完成一份無人載具安全檢查表。', ['填寫飛行前檢查表', '確認場地與人員安全']),
+    assess: makeSection('測評', '用題庫或教師口試確認安全觀念。', ['安全題庫通過', '老師確認可進入模擬訓練']),
+    certify: makeSection('存證', '保存安全任務單與第一次學習紀錄。', ['上傳安全檢查表', '整理學習照片'])
+  },
+  {
+    id: 'M02',
+    stage: 'explore',
+    order: 2,
+    title: '模擬飛行訓練',
+    subtitle: '使用鳳凰模擬器建立起飛、懸停與降落手感',
+    description: '把真機飛行前的高風險動作放到模擬器中反覆練習，降低實飛門檻。',
+    difficulty: 'beginner',
+    estimatedHours: 2,
+    suitableFor: ['兒童', '零基礎', '高中', '高職'],
+    status: 'recommended',
+    learn: makeSection('學習', '理解鳳凰模擬器下載、安裝與遙控器設定方式。', ['聯繫管理員取得安裝包', '看懂模擬器場地與模型設定']),
+    practice: makeSection('練習', '練習起飛、定點懸停、方向修正與降落。', ['完成 5 次穩定起飛', '完成 30 秒定點懸停', '完成安全降落']),
+    build: makeSection('實作', '建立自己的模擬訓練紀錄。', ['記錄每日練習時間', '記錄最容易失誤的方向']),
+    assess: makeSection('測評', '提交一段模擬器練習影片，由老師或 AI 入口初步評分。', ['影片清楚', '動作完整', '可看見控制過程']),
+    certify: makeSection('存證', '保存模擬器練習截圖、影片與反思。', ['上傳練習影片', '寫下修正策略'])
+  },
+  {
+    id: 'M03',
+    stage: 'explore',
+    order: 3,
+    title: '飛行挑戰與 AI 測評',
+    subtitle: '完成基礎飛行挑戰並理解 AI 評分結果',
+    description: '把練習轉成可觀察的任務成果，開始理解 AI 如何協助教師做初判。',
+    difficulty: 'beginner',
+    estimatedHours: 2,
+    suitableFor: ['兒童', '高中', '高職'],
+    status: 'available',
+    learn: makeSection('學習', '學習飛行挑戰規則與 AI 測評指標。', ['理解穩定度', '理解越界與方向控制']),
+    practice: makeSection('練習', '用模擬器或安全小型機練習指定路線。', ['完成直線飛行', '完成定點懸停', '完成轉向']),
+    build: makeSection('實作', '錄製一次完整飛行挑戰。', ['確認鏡頭穩定', '完整拍到任務區域']),
+    assess: makeSection('AI 測評', '用影片上傳入口做初步穩定度與任務完成度判斷。', ['AI 初評分數', '教師人工確認']),
+    certify: makeSection('成果認證', '保存挑戰影片與修正紀錄。', ['上傳影片', '整理失誤與改善'])
+  },
+  {
+    id: 'M04',
+    stage: 'build',
+    order: 4,
+    title: 'F450 工程組裝',
+    subtitle: '從零完成一台 F450 開源四軸無人機',
+    description: '完成機架、馬達、ESC、電源系統、電池與 CW / CCW 螺旋槳的基礎工程組裝。',
+    difficulty: 'intermediate',
+    estimatedHours: 3,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'in-progress',
+    learn: makeSection('學習', '認識 F450 結構、馬達、ESC、電池與 CW / CCW 螺旋槳。', ['看懂機頭方向', '知道紅白機臂用途', '理解正反槳差異']),
+    practice: makeSection('練習', '用圖片判斷 CW / CCW 與正反面。', ['辨識 CW 與 CCW', '判斷槳葉正反面', '認識四個馬達位置']),
+    build: makeSection('實作', '完成 F450 機架、馬達、ESC、電源與槳葉安裝。', ['完成機架組裝', '安裝四顆馬達', '安裝 ESC', '完成電源連接', '安裝四個螺旋槳']),
+    assess: makeSection('AI 測評', '上傳 F450 照片，由 YOLO 模型識別 CW / CCW、馬達、機臂與電池，再由規則引擎判斷是否需人工複核。', ['檢查槳葉', '檢查馬達', '檢查電池固定', '教師複核']),
+    certify: makeSection('成果認證', '保存組裝照片、AI 檢測結果和最後完成成果。', ['上傳組裝照片', '保存 AI 報告', '整理 GitHub README'])
+  },
+  {
+    id: 'M05',
+    stage: 'build',
+    order: 5,
+    title: 'Pixhawk 飛控與接線',
+    subtitle: '完成 Pixhawk 2.4.8 固定、接線與基礎校準',
+    description: '把 F450 工程機接入 Pixhawk 2.4.8，完成飛控方向、GPS 羅盤、接收機與電源模組設定。',
+    difficulty: 'intermediate',
+    estimatedHours: 3,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'available',
+    learn: makeSection('學習', '理解 Pixhawk 2.4.8 方向、接口與 Mission Planner 基礎。', ['飛控箭頭朝機頭', '理解 M1-M4', '理解 GPS 羅盤方向']),
+    practice: makeSection('練習', '用接線圖練習辨識接口與常見錯誤。', ['辨識接收機接口', '辨識電源模組', '辨識 GPS 方向']),
+    build: makeSection('實作', '完成飛控固定、接線、供電與拆槳馬達測試。', ['固定飛控', '接好 GPS', '接好接收機', '拆槳測試馬達']),
+    assess: makeSection('AI 測評', '上傳接線照片，先做可見零件與方向提示，最終由老師確認。', ['照片清楚', '接口可辨識', '老師複核']),
+    certify: makeSection('成果認證', '保存接線圖、照片與校準紀錄。', ['提交接線照片', '提交校準截圖'])
+  },
+  {
+    id: 'M06',
+    stage: 'build',
+    order: 6,
+    title: 'Mission Planner 航線任務',
+    subtitle: '用地面站完成自主航線規劃與任務檢查',
+    description: '學習 Mission Planner 的航點、起飛、返航與模擬任務流程。',
+    difficulty: 'intermediate',
+    estimatedHours: 2.5,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'available',
+    learn: makeSection('學習', '學習 Mission Planner 介面、航點與基本飛行計畫。', ['認識 Takeoff', '認識 Waypoint', '認識 RTL']),
+    practice: makeSection('練習', '在模擬環境中建立航線並檢查高度、速度與返航。', ['建立 3 個航點', '確認高度', '確認返航']),
+    build: makeSection('實作', '完成一份可讀取與可重複執行的航線任務。', ['寫入航點', '讀回確認', '保存任務檔']),
+    assess: makeSection('測評', '提交航線截圖與任務說明，由老師確認安全性。', ['航線清楚', '高度合理', '避開風險區']),
+    certify: makeSection('存證', '把航線設定截圖與任務說明放入 GitHub。', ['上傳截圖', '上傳任務說明'])
+  },
+  {
+    id: 'M07',
+    stage: 'ai',
+    order: 7,
+    title: 'AI 目標檢測',
+    subtitle: '建立 YOLO 資料集、標註流程與初版模型',
+    description: '把 F450 照片轉成可訓練資料，學會標註、切分資料集、訓練與讀懂結果。',
+    difficulty: 'intermediate',
+    estimatedHours: 4,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'available',
+    learn: makeSection('學習', '學習 YOLO、標註工具與資料集結構。', ['理解 images/labels', '理解 data.yaml', '理解 train/val']),
+    practice: makeSection('練習', '用少量圖片練習框選槳葉、馬達、機臂與電池。', ['完成 50 張標註', '檢查類別一致', '匯出 YOLO 格式']),
+    build: makeSection('實作', '訓練第一版 F450 零件偵測模型。', ['整理資料集', '啟動訓練', '保存 best.pt']),
+    assess: makeSection('模型評估', '查看 precision、recall、mAP 與錯誤案例。', ['檢查混淆類別', '整理漏標案例']),
+    certify: makeSection('存證', '提交 dataset、labels、模型結果與 README。', ['上傳資料集摘要', '上傳訓練結果'])
+  },
+  {
+    id: 'M08',
+    stage: 'ai',
+    order: 8,
+    title: '3D 數位工程',
+    subtitle: '用 Fusion 360 / 3D 列印建立工程建模能力',
+    description: '把 3D 課程和無人機零件、輔具或展示模型連起來。',
+    difficulty: 'intermediate',
+    estimatedHours: 4,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'optional',
+    learn: makeSection('學習', '觀看 Fusion 360 與 3D 列印基礎影片。', ['理解草圖', '理解拉伸', '理解列印限制']),
+    practice: makeSection('練習', '完成簡單零件草圖與尺寸標註。', ['畫出矩形/圓', '加上約束', '完成尺寸']),
+    build: makeSection('實作', '設計一個無人機相關配件或展示件。', ['建立模型', '輸出檔案', '準備列印']),
+    assess: makeSection('測評', '檢查尺寸、結構與列印可行性。', ['尺寸合理', '結構可用', '老師確認']),
+    certify: makeSection('存證', '保存 3D 模型截圖、檔案與列印照片。', ['上傳模型', '上傳成品照'])
+  },
+  {
+    id: 'M09',
+    stage: 'ai',
+    order: 9,
+    title: 'AI 視覺無人機應用',
+    subtitle: '把目標檢測能力放進無人機場景任務',
+    description: '使用影像辨識與簡單規則，理解 AI 如何輔助巡檢、搜救或教學評分。',
+    difficulty: 'advanced',
+    estimatedHours: 4,
+    suitableFor: ['高職', '大學', '成人'],
+    status: 'optional',
+    learn: makeSection('學習', '理解 AI 視覺任務、資料偏差與人工複核。', ['理解置信度', '理解誤判', '理解人工複核']),
+    practice: makeSection('練習', '用不同角度圖片測試模型表現。', ['測正上方', '測側上方 45 度', '整理錯誤案例']),
+    build: makeSection('實作', '建立一個 AI 視覺任務 Demo。', ['選擇任務', '整理輸入', '顯示結果']),
+    assess: makeSection('測評', '比較模型在不同角度與光線下的表現。', ['記錄通過率', '記錄誤判']),
+    certify: makeSection('存證', '保存 Demo、截圖、錯誤案例與改進建議。', ['上傳 Demo', '上傳報告'])
+  },
+  {
+    id: 'M10',
+    stage: 'project',
+    order: 10,
+    title: '行業應用任務',
+    subtitle: '把無人機能力轉成巡檢、農業、搜救或城市案例',
+    description: '讓學生選擇一個真實場景，拆成需求、資料、任務流程與成果展示。',
+    difficulty: 'advanced',
+    estimatedHours: 3,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'optional',
+    learn: makeSection('學習', '理解行業需求與無人機任務邊界。', ['選擇應用場景', '理解安全與合規']),
+    practice: makeSection('練習', '練習把場景拆成任務流程。', ['寫出任務目的', '列出需要資料']),
+    build: makeSection('實作', '完成一份行業任務企劃。', ['任務流程', '資料需求', '評估方法']),
+    assess: makeSection('測評', '由老師檢查任務是否合理、可行、安全。', ['可行性', '安全性', '成果可展示']),
+    certify: makeSection('存證', '將企劃與展示素材放到 GitHub。', ['上傳企劃', '上傳展示圖'])
+  },
+  {
+    id: 'M11',
+    stage: 'project',
+    order: 11,
+    title: '飛行數據/黑匣子診斷',
+    subtitle: '用飛控紀錄理解飛行狀態與錯誤原因',
+    description: '從飛行日誌或黑匣子資料中找出異常，建立工程診斷思維。',
+    difficulty: 'advanced',
+    estimatedHours: 3,
+    suitableFor: ['高職', '大學', '成人'],
+    status: 'optional',
+    learn: makeSection('學習', '認識飛行日誌、GPS、姿態與電源資料。', ['理解基本欄位', '理解異常訊號']),
+    practice: makeSection('練習', '讀取範例日誌並找出可疑區段。', ['查看高度', '查看電壓', '查看姿態']),
+    build: makeSection('實作', '完成一份飛行異常診斷報告。', ['描述現象', '提出原因', '提出改進']),
+    assess: makeSection('測評', '老師檢查診斷邏輯與證據是否一致。', ['證據清楚', '推論合理']),
+    certify: makeSection('存證', '保存日誌截圖、分析表與報告。', ['上傳報告', '上傳圖表'])
+  },
+  {
+    id: 'M12',
+    stage: 'project',
+    order: 12,
+    title: 'Capstone 綜合工程項目',
+    subtitle: '整合飛行、工程、AI、3D 與成果發表',
+    description: '完成一個可展示、可說明、可存證的 FDE-AI 綜合專題。',
+    difficulty: 'advanced',
+    estimatedHours: 6,
+    suitableFor: ['高中', '高職', '大學', '成人'],
+    status: 'optional',
+    learn: makeSection('學習', '回顧前面任務，確認專題方向與成果格式。', ['選題', '訂目標', '確認成果規格']),
+    practice: makeSection('練習', '練習簡報、Demo 與測試流程。', ['排練簡報', '測試 Demo']),
+    build: makeSection('實作', '完成專題作品、展示影片與報告。', ['完成作品', '拍攝展示', '整理報告']),
+    assess: makeSection('測評', '由 AI 初評與教師複核共同完成專題評估。', ['技術完成度', '展示清楚度', '安全與反思']),
+    certify: makeSection('成果認證', '把程式、資料、模型、報告與影片整理成 GitHub Portfolio。', ['上傳 README', '上傳 code/data/models/report/media', '提交 Demo 影片'])
+  }
+];
+
+export const missionPacks = missionTasks.map((task) => ({
+  code: task.id,
+  title: task.title,
+  outcome: task.certify.title,
+  focus: task.subtitle,
+  status: task.status
+}));
+
+export const cohorts = [
+  {
+    id: 'cohort-001',
+    name: 'FDE-AI 第一期',
+    year: 2026,
+    location: '台中',
+    description: '第一期先以安全、模擬器、F450 工程、Mission Planner 與 AI 目標檢測建立 1.0 教學樣板。',
+    learnedTasks: ['M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07'],
+    youtubePlaylistUrl: 'https://www.youtube.com/',
+    githubUrl: 'https://github.com/Elijahieee/fde-ai',
+    coverImage: ''
+  }
 ];
 
 export const learningPath = [

@@ -17,7 +17,7 @@
       </a>
       <nav class="nav" id="moduleNav" aria-label="Main navigation"></nav>
       <div class="sidebar-foot">
-        <span>v1.0 MVP</span>
+        <span>v1.1 MVP</span>
         <small>AI 雙師教學系統</small>
       </div>
     </aside>
@@ -90,11 +90,14 @@
 
       <section class="section-block module-page" id="missions">
         <div class="section-intro">
-          <p class="eyebrow">Mission Pack</p>
-          <h2>12 個任務包</h2>
-          <p>Mission Pack 是最小教學單元，每張卡片都對應成果、狀態與學練作測證流程。</p>
+          <p class="eyebrow">Mission Map · v1.1</p>
+          <h2>四階段 × 12 任務成長地圖</h2>
+          <p>12 個任務是學習地圖；學・練・作・測・證是每個任務內部固定使用的完成流程。</p>
         </div>
-        <div class="mission-grid" id="missionGrid"></div>
+        <div class="mission-map-layout">
+          <div class="mission-stage-map" id="missionStageMap"></div>
+          <div class="task-detail-panel" id="taskDetailPanel"></div>
+        </div>
       </section>
 
       <section class="section-block module-page compact-section" id="learn">
@@ -209,6 +212,15 @@
         </div>
         <div class="metric-grid hero-metrics" id="teacherStats"></div>
         <div class="teacher-queue" id="teacherQueue"></div>
+      </section>
+
+      <section class="section-block module-page compact-section" id="cohorts">
+        <div class="section-intro">
+          <p class="eyebrow">Alumni & Projects</p>
+          <h2>歷屆學員成果</h2>
+          <p>1.1 先用靜態資料展示期別、完成任務、YouTube 成果與 GitHub 倉庫，不做學員登入與資料庫。</p>
+        </div>
+        <div class="cohort-grid" id="cohortGrid"></div>
       </section>
 
       <section class="section-block module-page" id="certify">

@@ -6,7 +6,11 @@ import {
   designSystem,
   moduleSections,
   platformModes,
+  workflowSteps,
+  missionStages,
+  missionTasks,
   missionPacks,
+  cohorts,
   learningPath,
   studentDashboard,
   youtubeVideos,
@@ -71,12 +75,51 @@ test('defines public, student, and teacher modes with distinct navigation', () =
   assert.ok(platformModes.find((mode) => mode.key === 'teacher').nav.includes('待復核'));
 });
 
-test('defines twelve Mission Pack cards from the course outline', () => {
+test('defines a four-stage mission map with twelve data-driven tasks', () => {
+  assert.deepEqual(missionStages.map((stage) => stage.id), ['explore', 'build', 'ai', 'project']);
+  assert.deepEqual(missionStages.map((stage) => stage.title), ['探索者 Explore', '工程者 Build', 'AI Engineer', 'Project Engineer']);
+  assert.deepEqual(workflowSteps.map((step) => step.key), ['learn', 'practice', 'build', 'assess', 'certify']);
+  assert.deepEqual(workflowSteps.map((step) => step.label), ['學', '練', '作', '測', '證']);
+
+  assert.equal(missionTasks.length, 12);
+  assert.deepEqual(missionTasks.map((task) => task.id), ['M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07', 'M08', 'M09', 'M10', 'M11', 'M12']);
+  assert.deepEqual(
+    missionStages.map((stage) => missionTasks.filter((task) => task.stage === stage.id).length),
+    [3, 3, 3, 3]
+  );
+
+  for (const task of missionTasks) {
+    assert.ok(task.title);
+    assert.ok(task.subtitle);
+    assert.ok(task.description);
+    assert.ok(['beginner', 'intermediate', 'advanced'].includes(task.difficulty));
+    assert.ok(task.suitableFor.length > 0);
+    for (const step of workflowSteps) {
+      assert.ok(task[step.key], `${task.id} missing ${step.key}`);
+      assert.ok(task[step.key].title);
+      assert.ok(task[step.key].description);
+    }
+  }
+
+  const m04 = missionTasks.find((task) => task.id === 'M04');
+  assert.equal(m04.title, 'F450 工程組裝');
+  assert.match(m04.assess.description, /YOLO|CW|CCW/);
+});
+
+test('mission packs remain compatible while deriving from the new task map', () => {
   assert.equal(missionPacks.length, 12);
   assert.equal(missionPacks[0].code, 'M01');
-  assert.equal(missionPacks[11].title, '智慧城市＋AI 影音＋搜救應用');
-  assert.equal(missionPacks.find((mission) => mission.code === 'M06').title, 'AI 檢測考核 A｜F450 組裝');
-  assert.equal(missionPacks.find((mission) => mission.code === 'M10').status, '教師復核');
+  assert.equal(missionPacks[11].title, 'Capstone 綜合工程項目');
+  assert.equal(missionPacks.find((mission) => mission.code === 'M06').title, 'Mission Planner 航線任務');
+  assert.equal(missionPacks.find((mission) => mission.code === 'M10').status, 'optional');
+});
+
+test('defines static alumni cohorts without requiring login or database features', () => {
+  assert.ok(cohorts.length >= 1);
+  assert.equal(cohorts[0].id, 'cohort-001');
+  assert.ok(cohorts[0].learnedTasks.includes('M04'));
+  assert.ok(cohorts[0].githubUrl.startsWith('https://github.com/'));
+  assert.ok(cohorts.every((cohort) => !('studentAccounts' in cohort)));
 });
 
 test('defines a learning path from soccer drone to integrated projects', () => {
@@ -239,6 +282,22 @@ test('Streamlit deployment entry wraps the static website without backend secret
   assert.match(streamlitApp, /src\/app\.js/);
   assert.match(requirements, /^streamlit\b/m);
   assert.doesNotMatch(streamlitApp + requirements, /OPENAI_API_KEY\s*=/);
+});
+
+test('HTML app renders the mission map, task detail workflow, and alumni sections', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const browserData = readFileSync(new URL('../src/platform-browser.js', import.meta.url), 'utf8');
+
+  assert.match(html, /missionStageMap/);
+  assert.match(html, /taskDetailPanel/);
+  assert.match(html, /cohortGrid/);
+  assert.match(app, /renderMissionMap/);
+  assert.match(app, /renderTaskDetail/);
+  assert.match(app, /localStorage/);
+  assert.match(browserData, /missionStages/);
+  assert.match(browserData, /missionTasks/);
+  assert.match(browserData, /cohorts/);
 });
 
 test('assess section includes component detection, four-side hover scoring, and exam bank', () => {

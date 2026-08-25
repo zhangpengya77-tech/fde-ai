@@ -4,7 +4,11 @@ const {
   designSystem,
   moduleSections,
   platformModes,
+  workflowSteps,
+  missionStages,
+  missionTasks,
   missionPacks,
+  cohorts,
   learningPath,
   studentDashboard,
   learningTracks,
@@ -25,6 +29,7 @@ const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const localVoiceEndpoint = voiceAssistant.endpoint;
 let voiceRecognition = null;
 let voiceTranscript = '';
+let selectedTaskId = 'M04';
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
@@ -40,7 +45,13 @@ function escapeHtml(value) {
 }
 
 function renderNavigation() {
-  $('#moduleNav').innerHTML = moduleSections
+  const primaryNav = [
+    { key: 'missions', label: '任', title: '12 任務地圖' },
+    ...moduleSections,
+    { key: 'cohorts', label: '展', title: '歷屆學員成果' },
+    { key: 'teacher', label: '師', title: '教師復核中心' }
+  ];
+  $('#moduleNav').innerHTML = primaryNav
     .map((section) => `<a href="#${section.key}"><span>${section.label}</span>${section.title}</a>`)
     .join('');
 }
@@ -154,18 +165,154 @@ function renderLearningPath() {
     .join('');
 }
 
-function renderMissions() {
-  $('#missionGrid').innerHTML = missionPacks
+function renderMissionMap() {
+  const map = $('#missionStageMap');
+  if (!map) return;
+
+  map.innerHTML = missionStages
     .map(
-      (mission) => `
-        <article class="mission-card ${statusClass(mission.status)}">
-          <div class="section-head">
-            <span class="mission-code">${mission.code}</span>
-            <span class="status ${statusClass(mission.status)}">${mission.status}</span>
+      (stage) => `
+        <article class="mission-stage-card ${stage.id}">
+          <div class="stage-head">
+            <span class="tag">${stage.badge}</span>
+            <h3>${stage.title}</h3>
+            <p>${stage.description}</p>
           </div>
-          <h3>${mission.title}</h3>
-          <p>${mission.focus}</p>
-          <small>核心成果：${mission.outcome}</small>
+          <div class="stage-task-list">
+            ${missionTasks
+              .filter((task) => task.stage === stage.id)
+              .map(
+                (task) => `
+                  <button class="mission-card task-select ${task.id === selectedTaskId ? 'is-selected' : ''}" type="button" data-task-id="${task.id}">
+                    <div class="section-head">
+                      <span class="mission-code">${task.id}</span>
+                      <span class="status ${statusClass(task.status)}">${task.status}</span>
+                    </div>
+                    <strong>${task.title}</strong>
+                    <small>${task.subtitle}</small>
+                    <span class="difficulty">${task.difficulty} · ${task.estimatedHours || '?'}h</span>
+                    <span class="workflow-mini">${workflowSteps.map((step) => `<i>${step.label}</i>`).join('')}</span>
+                  </button>
+                `
+              )
+              .join('')}
+          </div>
+        </article>
+      `
+    )
+    .join('');
+
+  renderTaskDetail(selectedTaskId);
+}
+
+function getTaskProgress(taskId) {
+  try {
+    return workflowSteps.reduce((progress, step) => {
+      progress[step.key] = localStorage.getItem(`fde-ai:v1.1:${taskId}:${step.key}`) === 'done';
+      return progress;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function setTaskProgress(taskId, stepKey, checked) {
+  try {
+    const key = `fde-ai:v1.1:${taskId}:${stepKey}`;
+    if (checked) {
+      localStorage.setItem(key, 'done');
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Local file mode can restrict storage in some browsers; the UI still works without persistence.
+  }
+}
+
+function renderSectionList(items = []) {
+  if (!items.length) return '';
+  return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function renderTaskDetail(taskId) {
+  const task = missionTasks.find((item) => item.id === taskId) || missionTasks[0];
+  const panel = $('#taskDetailPanel');
+  if (!panel || !task) return;
+
+  selectedTaskId = task.id;
+  const progress = getTaskProgress(task.id);
+  const completed = workflowSteps.filter((step) => progress[step.key]).length;
+  const percentage = Math.round((completed / workflowSteps.length) * 100);
+
+  panel.innerHTML = `
+    <article class="task-detail-card">
+      <div class="task-detail-head">
+        <div>
+          <span class="tag">${task.id} · ${missionStages.find((stage) => stage.id === task.stage)?.title || task.stage}</span>
+          <h3>${task.title}</h3>
+          <p>${task.description}</p>
+        </div>
+        <div class="task-meta">
+          <span>${task.difficulty}</span>
+          <span>${task.estimatedHours || '?'} 小時</span>
+          <span>${task.suitableFor.join(' / ')}</span>
+        </div>
+      </div>
+      <div class="task-progress">
+        <strong>${percentage}%</strong>
+        <span style="width: ${percentage}%"></span>
+      </div>
+      <div class="task-workflow">
+        ${workflowSteps
+          .map((step) => {
+            const section = task[step.key];
+            const done = progress[step.key];
+            return `
+              <section class="workflow-step-card ${done ? 'is-done' : ''}">
+                <div class="workflow-step-head">
+                  <span>${step.label}</span>
+                  <div>
+                    <strong>${section.title}</strong>
+                    <small>${step.title}</small>
+                  </div>
+                  <label class="progress-toggle">
+                    <input type="checkbox" data-progress-task="${task.id}" data-progress-step="${step.key}" ${done ? 'checked' : ''} />
+                    <i>${done ? '完成' : '標記'}</i>
+                  </label>
+                </div>
+                <p>${section.description}</p>
+                ${renderSectionList(section.checklist)}
+              </section>
+            `;
+          })
+          .join('')}
+      </div>
+    </article>
+  `;
+
+  document.querySelectorAll('[data-task-id]').forEach((button) => {
+    button.classList.toggle('is-selected', button.dataset.taskId === task.id);
+  });
+}
+
+function renderCohorts() {
+  const grid = $('#cohortGrid');
+  if (!grid) return;
+
+  grid.innerHTML = cohorts
+    .map(
+      (cohort) => `
+        <article class="cohort-card">
+          <span class="tag">${cohort.year} · ${cohort.location || 'FDE-AI'}</span>
+          <h3>${cohort.name}</h3>
+          <p>${cohort.description}</p>
+          <div class="cohort-task-strip">
+            ${cohort.learnedTasks.map((taskId) => `<span>${taskId}</span>`).join('')}
+          </div>
+          <div class="cohort-actions">
+            <a href="${cohort.youtubePlaylistUrl}" target="_blank" rel="noreferrer">YouTube 成果</a>
+            <a href="${cohort.githubUrl}" target="_blank" rel="noreferrer">GitHub 倉庫</a>
+          </div>
         </article>
       `
     )
@@ -496,6 +643,20 @@ function renderCertificationChecklist() {
 }
 
 function bindActions() {
+  document.querySelectorAll('[data-task-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedTaskId = button.dataset.taskId;
+      renderTaskDetail(selectedTaskId);
+    });
+  });
+
+  document.addEventListener('change', (event) => {
+    const input = event.target;
+    if (!input.matches('[data-progress-task][data-progress-step]')) return;
+    setTaskProgress(input.dataset.progressTask, input.dataset.progressStep, input.checked);
+    renderTaskDetail(input.dataset.progressTask);
+  });
+
   document.querySelectorAll('[data-track-toggle]').forEach((button) => {
     button.addEventListener('click', () => {
       const card = button.closest('.track-card');
@@ -604,7 +765,8 @@ renderStageGuides();
 renderModes();
 renderStudentDashboard();
 renderLearningPath();
-renderMissions();
+renderMissionMap();
+renderCohorts();
 renderLearningResources();
 renderPracticeResources();
 renderBuildWorkflow();
