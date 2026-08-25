@@ -19,10 +19,38 @@ def inline_asset(html: str, path: str, tag: str) -> str:
 
 st.set_page_config(page_title="FDE-AI 無人載具學習控制中心", layout="wide")
 
+st.markdown(
+    """
+    <style>
+      .stApp {
+        background: #07111f;
+      }
+
+      .block-container {
+        max-width: none;
+        padding: 0;
+      }
+
+      header,
+      footer,
+      [data-testid="stToolbar"],
+      [data-testid="stDecoration"],
+      [data-testid="stStatusWidget"] {
+        display: none;
+      }
+
+      iframe {
+        display: block;
+        width: 100%;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 page = (ROOT / "index.html").read_text(encoding="utf-8")
 page = inline_asset(page, "src/styles.css", "style")
 page = inline_asset(page, "src/platform-browser.js", "script")
 page = inline_asset(page, "src/app.js", "script")
 
-components.html(page, height=3600, scrolling=True)
-
+components.html(page, height=9800, scrolling=False)
