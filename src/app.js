@@ -300,22 +300,42 @@ function renderCohorts() {
   if (!grid) return;
 
   grid.innerHTML = cohorts
-    .map(
-      (cohort) => `
+    .map((cohort) => {
+      const showcaseVideos = Array.isArray(cohort.showcaseVideos) ? cohort.showcaseVideos : [];
+      return `
         <article class="cohort-card">
           <span class="tag">${cohort.year} · ${cohort.location || 'FDE-AI'}</span>
-          <h3>${cohort.name}</h3>
-          <p>${cohort.description}</p>
+          <h3>${escapeHtml(cohort.name)}</h3>
+          <p>${escapeHtml(cohort.description)}</p>
           <div class="cohort-task-strip">
-            ${cohort.learnedTasks.map((taskId) => `<span>${taskId}</span>`).join('')}
+            ${cohort.learnedTasks.map((taskId) => `<span>${escapeHtml(taskId)}</span>`).join('')}
           </div>
+          ${
+            showcaseVideos.length
+              ? `
+                <div class="cohort-video-grid">
+                  ${showcaseVideos
+                    .map(
+                      (video) => `
+                        <a class="cohort-video-card" href="${video.url}" target="_blank" rel="noreferrer">
+                          <span>${escapeHtml(video.phase)}</span>
+                          <strong>${escapeHtml(video.title)}</strong>
+                          <small>觀看影片</small>
+                        </a>
+                      `
+                    )
+                    .join('')}
+                </div>
+              `
+              : ''
+          }
           <div class="cohort-actions">
             <a href="${cohort.youtubePlaylistUrl}" target="_blank" rel="noreferrer">YouTube 成果</a>
             <a href="${cohort.githubUrl}" target="_blank" rel="noreferrer">GitHub 倉庫</a>
           </div>
         </article>
-      `
-    )
+      `;
+    })
     .join('');
 }
 

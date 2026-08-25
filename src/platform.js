@@ -465,7 +465,34 @@ export const cohorts = [
     location: '台中',
     description: '第一期先以安全、模擬器、F450 工程、Mission Planner 與 AI 目標檢測建立 1.0 教學樣板。',
     learnedTasks: ['M01', 'M02', 'M03', 'M04', 'M05', 'M06', 'M07'],
-    youtubePlaylistUrl: 'https://www.youtube.com/',
+    youtubePlaylistUrl: 'https://www.youtube.com/channel/UCqKMXztPAsc2K6crQlKxzLg',
+    showcaseVideos: [
+      {
+        phase: '01',
+        title: '2026FDE-Ai無人載具人才孵化在職培訓日誌',
+        url: 'https://www.youtube.com/watch?v=G0M6rd3t9-4'
+      },
+      {
+        phase: '02',
+        title: '2026FDE-Ai無人載具人才孵化3d列印測繪小組日誌',
+        url: 'https://www.youtube.com/watch?v=Nsv7kD52MnA'
+      },
+      {
+        phase: '03',
+        title: '結業啦！期待同學們前程似錦！',
+        url: 'https://www.youtube.com/watch?v=YPpK_uQJTMg'
+      },
+      {
+        phase: '04',
+        title: '2026FDE_Ai無人載具在職培訓04期',
+        url: 'https://www.youtube.com/watch?v=BVVj1zM4lU8'
+      },
+      {
+        phase: '05',
+        title: '2026FDE-Ai無人載具人才孵化在職培訓05期',
+        url: 'https://www.youtube.com/watch?v=gW5HTVLLKJY'
+      }
+    ],
     githubUrl: 'https://github.com/Elijahieee/fde-ai',
     coverImage: ''
   }

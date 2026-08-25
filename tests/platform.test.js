@@ -122,6 +122,23 @@ test('defines static alumni cohorts without requiring login or database features
   assert.ok(cohorts.every((cohort) => !('studentAccounts' in cohort)));
 });
 
+test('cohort showcase publishes the five 2026 FDE-AI training videos', () => {
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const firstCohort = cohorts[0];
+
+  assert.equal(firstCohort.showcaseVideos.length, 5);
+  assert.deepEqual(
+    firstCohort.showcaseVideos.map((video) => video.phase),
+    ['01', '02', '03', '04', '05']
+  );
+  assert.ok(firstCohort.showcaseVideos.every((video) => video.title.includes('FDE') || video.title.includes('結業')));
+  assert.ok(firstCohort.showcaseVideos.every((video) => video.url.startsWith('https://www.youtube.com/watch?v=')));
+  assert.match(app, /showcaseVideos/);
+  assert.match(app, /class="cohort-video-grid"/);
+  assert.match(css, /\.cohort-video-grid/);
+});
+
 test('defines a learning path from soccer drone to integrated projects', () => {
   assert.deepEqual(learningPath.map((node) => node.title), [
     '足球無人機',
