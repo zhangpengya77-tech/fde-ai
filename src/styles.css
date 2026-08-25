@@ -27,6 +27,10 @@ html {
   scroll-behavior: smooth;
 }
 
+section[id] {
+  scroll-margin-top: 18px;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -53,6 +57,11 @@ body::before {
   animation: page-scan 10s linear infinite;
   opacity: 0.5;
   z-index: 1;
+}
+
+.mobile-demo-nav,
+.mobile-demo-panel {
+  display: none;
 }
 
 .sidebar {
@@ -177,7 +186,7 @@ main {
 }
 
 .section-block {
-  min-height: 100vh;
+  min-height: auto;
   padding: 72px clamp(24px, 5vw, 78px);
   animation: fade-in 0.6s ease both;
 }
@@ -187,6 +196,7 @@ main {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 520px);
   gap: 46px;
   align-items: center;
+  min-height: 760px;
 }
 
 .hero-copy h1,
@@ -1814,6 +1824,294 @@ textarea {
   .learning-flow,
   .learning-path {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  body::before {
+    opacity: 0.28;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-demo-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(7, 17, 31, 0.96);
+    backdrop-filter: blur(16px);
+  }
+
+  .mobile-demo-nav strong {
+    color: #ffffff;
+    font-size: 16px;
+  }
+
+  .mobile-demo-nav div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .mobile-demo-nav a {
+    display: grid;
+    place-items: center;
+    min-height: 46px;
+    padding: 8px 10px;
+    border: 1px solid rgba(0, 194, 255, 0.34);
+    color: var(--cyan);
+    font-size: 15px;
+    font-weight: 900;
+    text-align: center;
+    text-decoration: none;
+    background: rgba(0, 194, 255, 0.055);
+    overflow-wrap: anywhere;
+  }
+
+  section[id] {
+    scroll-margin-top: 142px;
+  }
+
+  main {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .section-block {
+    min-height: auto;
+    padding: 40px 14px;
+  }
+
+  .hero {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-top: 32px;
+  }
+
+  .hero-copy h1,
+  .section-intro h2 {
+    font-size: clamp(30px, 11vw, 44px);
+    line-height: 1.12;
+  }
+
+  .section-intro h2 {
+    font-size: clamp(26px, 9vw, 38px);
+  }
+
+  .hero-copy p,
+  .section-intro p,
+  p,
+  li,
+  small {
+    font-size: 16px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+  }
+
+  .hero-actions,
+  .hero-systems,
+  .meta-row,
+  .motion-strip,
+  .task-meta {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .primary-action,
+  .secondary-action,
+  .lesson-list a,
+  .practice-card a,
+  .teacher-queue a {
+    width: 100%;
+    min-height: 50px;
+    padding: 0 14px;
+  }
+
+  .mobile-demo-panel {
+    display: block;
+    background: linear-gradient(180deg, rgba(0, 194, 255, 0.05), rgba(7, 17, 31, 0));
+  }
+
+  .mobile-demo-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .mobile-demo-grid a {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(0, 194, 255, 0.32);
+    background: rgba(15, 32, 51, 0.88);
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .mobile-demo-grid span {
+    color: var(--cyan);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .mobile-demo-grid strong {
+    color: #ffffff;
+    font-size: 20px;
+  }
+
+  .mobile-demo-grid small {
+    color: var(--muted);
+  }
+
+  .drone-stage {
+    min-height: 300px;
+  }
+
+  .drone {
+    transform: scale(0.82);
+  }
+
+  .boot-lines {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .mode-grid,
+  .resource-grid,
+  .workflow-grid,
+  .cert-grid,
+  .mission-grid,
+  .metric-grid,
+  .mission-map-layout,
+  .stage-task-list,
+  .dashboard-layout,
+  .build-layout,
+  .inspection-layout,
+  .learning-flow,
+  .learning-path,
+  .cohort-grid,
+  .upload-row,
+  .voice-controls,
+  .service-status-panel,
+  .service-status-panel.compact,
+  .check-grid,
+  .detection-list,
+  .score-row,
+  .practice-card,
+  .queue-row {
+    grid-template-columns: 1fr;
+  }
+
+  .light-section {
+    padding-top: 42px;
+    padding-bottom: 42px;
+  }
+
+  .light-section .section-intro p,
+  .light-section p,
+  .light-section small {
+    color: #3b5168;
+  }
+
+  .learning-flow::before {
+    left: 24px;
+    right: auto;
+    top: 8%;
+    bottom: 8%;
+    width: 2px;
+    height: auto;
+    background: linear-gradient(180deg, transparent, var(--cyan), transparent);
+  }
+
+  .flow-card,
+  .panel,
+  .mission-stage-card,
+  .task-detail-card,
+  .cohort-card,
+  .workflow-card,
+  .mode-card,
+  .metric-card,
+  .result-card {
+    max-width: 100%;
+    padding: 16px;
+    overflow-wrap: anywhere;
+  }
+
+  .task-detail-panel {
+    position: static;
+  }
+
+  .task-workflow {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .workflow-step-head,
+  .task-progress,
+  .stage-list li,
+  .cohort-video-card,
+  .result-main,
+  .score-card {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-card {
+    align-items: stretch;
+  }
+
+  .inspection-page .workflow-grid {
+    margin-bottom: 20px;
+  }
+
+  .result-grid,
+  .confidence-list,
+  .assessment-grid {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  img,
+  video,
+  canvas,
+  iframe {
+    max-width: 100%;
+  }
+
+  #teacher {
+    display: none;
+  }
+
+  .platform-modes-section,
+  .dashboard-page,
+  .teacher-queue,
+  .long-form,
+  .desktop-only {
+    display: none;
   }
 }
 
