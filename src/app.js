@@ -56,6 +56,13 @@ function renderNavigation() {
     .join('');
 }
 
+function scrollToSection(target) {
+  const sectionId = String(target || '').replace('#', '');
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function renderHero() {
   $('#heroHeadline').textContent = hero.headline;
   $('#heroSummary').textContent = hero.summary;
@@ -663,6 +670,13 @@ function renderCertificationChecklist() {
 }
 
 function bindActions() {
+  document.querySelectorAll('a[href^="#"]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      scrollToSection(link.getAttribute('href'));
+    });
+  });
+
   document.querySelectorAll('[data-task-id]').forEach((button) => {
     button.addEventListener('click', () => {
       selectedTaskId = button.dataset.taskId;
