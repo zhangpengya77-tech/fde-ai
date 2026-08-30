@@ -72,7 +72,7 @@
         <div class="mobile-demo-grid">
           <a href="#missions"><span>01</span><strong>四階段 12 任務</strong><small>Explore / Build / AI / Project</small></a>
           <a href="#learn"><span>02</span><strong>學練作測證</strong><small>每個任務都用同一套流程完成</small></a>
-          <a href="#build"><span>03</span><strong>AI 雙師助教</strong><small>先查 RAG 知識庫，再接大模型回答</small></a>
+          <a href="#build"><span>03</span><strong>AI 雙師助教</strong><small>只查本機 RAG 教材知識庫</small></a>
           <a href="#inspection"><span>04</span><strong>AI 檢測 Demo</strong><small>組裝檢測與四面懸停評分入口</small></a>
           <a href="#cohorts"><span>05</span><strong>YouTube 成果</strong><small>展示歷屆學員影片與作品</small></a>
           <a href="#certify"><span>06</span><strong>GitHub 存證</strong><small>把作品整理成可驗證能力紀錄</small></a>
@@ -150,7 +150,7 @@
         <div class="section-intro">
           <p class="eyebrow">Build · 作</p>
           <h2>F450 Pixhawk 實作與 AI 助教</h2>
-          <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，由預留的 RAG 知識庫與 GPT 語音入口輔助排錯。</p>
+          <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教只查 E 盤本機 RAG 教材協助排錯。</p>
         </div>
         <div class="build-layout">
           <div class="panel">
@@ -164,18 +164,19 @@
           <div class="panel">
             <div class="section-head">
               <h3>AI 助教問答</h3>
-              <span class="pill pending">RAG + GPT 語音預留</span>
+              <span class="pill pending">RAG-only 本機教材</span>
             </div>
             <textarea id="assistantQuestion" rows="5" placeholder="例如：槳葉方向看不懂，飛控主板該朝哪裡？"></textarea>
             <div class="voice-assistant-panel" id="voiceAssistantPanel">
               <div>
-                <span class="tag">zh-TW Voice RAG</span>
-                <strong>台灣繁中語音助教</strong>
-                <small>按一下開始、按一下停止；系統會先查 E 盤 RAG 知識庫，再產生回答。</small>
+                <span class="tag">zh-TW Local RAG</span>
+                <strong>台灣繁中本機教材助教</strong>
+                <small>按一下開始、按一下停止；系統只查 E 盤 RAG 知識庫，不連 OpenAI API。</small>
               </div>
               <div class="voice-controls">
                 <button class="secondary-action" id="voiceStartButton" type="button">開始語音提問</button>
                 <button class="secondary-action" id="voiceStopButton" type="button" disabled>停止</button>
+                <button class="secondary-action" id="voicePauseButton" type="button" disabled>暫停播報</button>
               </div>
               <p id="voiceStatus">待命：按一下開始語音提問</p>
             </div>

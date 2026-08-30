@@ -1252,7 +1252,7 @@ main {
   color: var(--green);
 }
 
-.large-model-fallback {
+.knowledge-missing {
   border-color: rgba(245, 184, 75, 0.55);
   color: var(--yellow);
 }

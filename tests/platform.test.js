@@ -209,7 +209,7 @@ test('build workflow is a v1 upload-only Pixhawk 2.4.8 assembly flow', () => {
   assert.ok(buildWorkflow.stages.some((stage) => stage.includes('電池')));
 });
 
-test('build assistant returns a RAG and GPT voice placeholder answer', () => {
+test('build assistant returns a local RAG-only answer', () => {
   assert.ok(ragKnowledgeBase.length >= 4);
   assert.ok(ragKnowledgeBase.some((entry) => entry.sourcePath.includes('E:\\F450素材')));
 
@@ -217,14 +217,15 @@ test('build assistant returns a RAG and GPT voice placeholder answer', () => {
   assert.equal(localHits[0].title, '無人機充電器使用說明');
 
   const result = simulateBuildAssistant('電池怎麼充電');
-  assert.equal(result.mode, 'rag-gpt-voice-placeholder');
+  assert.equal(result.mode, 'local-rag-only');
   assert.equal(result.sourceStatus, 'local-rag');
   assert.ok(result.sources.some((source) => source.title === '無人機充電器使用說明'));
   assert.match(result.answer, /RAG|知識庫/);
-  assert.match(result.voiceStatus, /預留|尚未/);
+  assert.match(result.voiceStatus, /RAG-only|本機/);
 
   const fallback = simulateBuildAssistant('完全不相關的太空電梯問題');
-  assert.equal(fallback.sourceStatus, 'large-model-fallback');
+  assert.equal(fallback.mode, 'local-rag-only');
+  assert.equal(fallback.sourceStatus, 'knowledge-missing');
 });
 
 test('voice assistant is configured for zh-TW click-to-start RAG-first flow', () => {
@@ -266,22 +267,36 @@ test('YOLO result layout exposes text results in a horizontal readable panel', (
   assert.doesNotMatch(app, /viewport-toolbar|data-pan-zoom|bindPanZoom/);
 });
 
-test('voice assistant UI and backend routes are present without exposing API keys', () => {
+test('voice assistant UI and backend routes use local RAG without OpenAI API keys', () => {
   const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const server = readFileSync(new URL('../api/yolo_server.py', import.meta.url), 'utf8');
   const gitignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
+  const envExample = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
 
   assert.match(html, /voiceAssistantPanel/);
   assert.match(app, /voiceStartButton/);
   assert.match(app, /voiceStopButton/);
   assert.match(app, /runVoiceAssistantQuestion/);
+  assert.match(html + app + server, /RAG-only|local-rag-only|本機 RAG/);
   assert.match(server, /\/api\/voice\/health/);
   assert.match(server, /\/api\/voice\/ask/);
   assert.match(server, /search_voice_knowledge_base/);
+  assert.doesNotMatch(server, /api\.openai\.com|_ask_openai|urllib\.request|FDE_VOICE_MODEL/);
   assert.match(gitignore, /^\.env$/m);
   assert.ok(existsSync(new URL('../.env.example', import.meta.url)));
-  assert.doesNotMatch(app + html, /OPENAI_API_KEY\s*=/);
+  assert.doesNotMatch(app + html + server + envExample, /OPENAI_API_KEY\s*=/);
+});
+
+test('voice assistant exposes a pause and resume control for answer playback', () => {
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /id="voicePauseButton"/);
+  assert.match(html, /暫停播報/);
+  assert.match(app, /toggleVoicePlayback/);
+  assert.match(app, /speechSynthesis\.pause/);
+  assert.match(app, /speechSynthesis\.resume/);
 });
 
 test('Streamlit deployment entry wraps the static website without backend secrets', () => {

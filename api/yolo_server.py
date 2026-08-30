@@ -5,8 +5,6 @@ import base64
 import json
 import os
 import tempfile
-import urllib.error
-import urllib.request
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -24,12 +22,75 @@ DEFAULT_MODEL = (
 )
 DEFAULT_HOVER_MODEL = r"E:\四面懸停\hover_model_v1\hover_model.json"
 DEFAULT_VOICE_RAG_DIR = r"E:\FDE_AI_Voice_RAG\knowledge_base"
-DEFAULT_VOICE_MODEL = "gpt-5-mini"
 VOICE_SYSTEM_INSTRUCTION = (
     "你是 FDE-AI 的 F450 組裝語音助教。請使用台灣繁中回答，語氣清楚、簡短、適合學生。"
-    "回答前必須優先依據提供的 RAG 知識庫內容；如果資料不足，要明確說需要老師確認。"
+    "回答必須只依據本機 RAG 知識庫內容；如果資料不足，要明確說需要補充教材或請老師確認。"
     "涉及槳葉、馬達、電池、通電、解鎖或實飛時，提醒學生先停機檢查並請老師確認。"
 )
+
+VOICE_RAG_KEYWORDS = [
+    "f450",
+    "pixhawk",
+    "mission planner",
+    "cw",
+    "ccw",
+    "ai",
+    "yolo",
+    "裝機",
+    "組裝",
+    "安全",
+    "檢查",
+    "清單",
+    "通電",
+    "解鎖",
+    "起飛",
+    "翻機",
+    "漂移",
+    "槳葉",
+    "正槳",
+    "反槳",
+    "裝反",
+    "馬達",
+    "轉向",
+    "序號",
+    "接線",
+    "飛控",
+    "電調",
+    "電源模組",
+    "接收機",
+    "gps",
+    "指南針",
+    "羅盤",
+    "電池",
+    "充電",
+    "充電器",
+    "校正",
+    "加速度計",
+    "遙控器",
+    "飛行模式",
+    "failsafe",
+    "航線",
+    "航點",
+    "返航",
+    "測試",
+    "複核",
+    "warning",
+]
+
+VOICE_RAG_QUERY_EXPANSIONS = {
+    "裝機前": ["組裝", "檢查", "安全", "通電"],
+    "裝反": ["槳葉", "cw", "ccw", "翻機", "馬達"],
+    "會怎樣": ["常見問題", "排錯"],
+    "怎麼接線": ["接線", "飛控", "電源模組", "接收機"],
+    "充電": ["電池", "充電器", "平衡頭", "電壓"],
+    "起飛會翻": ["起飛", "翻機", "槳葉", "馬達", "飛控", "機架類型"],
+    "通電前": ["通電", "檢查", "安全", "電池", "電源模組"],
+    "檢查清單": ["檢查", "清單", "通電"],
+    "不能先裝槳": ["槳葉", "拆下", "馬達測試", "安全"],
+    "先裝槳測試": ["槳葉", "拆下", "馬達測試", "安全"],
+    "ai 檢測": ["ai", "yolo", "檢測", "warning", "人工確認"],
+    "AI 檢測": ["ai", "yolo", "檢測", "warning", "人工確認"],
+}
 
 CLASS_ZH = {
     "cw_propeller": "CW 正槳",
@@ -173,9 +234,8 @@ class HoverScorer:
 
 
 class VoiceAssistant:
-    def __init__(self, rag_dir: str, model: str):
+    def __init__(self, rag_dir: str):
         self.rag_dir = Path(rag_dir)
-        self.model = model
         self.locale = os.environ.get("FDE_VOICE_LOCALE", "zh-TW")
 
     def health(self) -> dict:
@@ -185,8 +245,7 @@ class VoiceAssistant:
             "ragFirst": True,
             "ragDir": str(self.rag_dir),
             "ragDirExists": self.rag_dir.exists(),
-            "model": self.model,
-            "hasApiKey": bool(os.environ.get("OPENAI_API_KEY")),
+            "mode": "local-rag-only",
         }
 
     def ask(self, question: str) -> dict:
@@ -195,31 +254,25 @@ class VoiceAssistant:
             raise ValueError("缺少問題內容")
 
         sources = search_voice_knowledge_base(topic, self.rag_dir)
-        context = "\n\n".join(f"[{source['title']}]\n{source['content']}" for source in sources)
-        api_key = os.environ.get("OPENAI_API_KEY")
 
-        if api_key:
-            answer = self._ask_openai(api_key, topic, context)
-            source_status = "local-rag" if sources else "large-model-fallback"
-            voice_status = "已用台灣繁中產生回答；前端會使用瀏覽器語音唸出。"
-        elif sources:
+        if sources:
             answer = (
                 f"我先查到本機 RAG 知識庫：{sources[0]['title']}。"
                 f"{sources[0]['content']} "
                 "這是 AI 初步整理，涉及通電、槳葉或實飛前仍請老師確認。"
             )
             source_status = "local-rag"
-            voice_status = "尚未設定 OPENAI_API_KEY；已先用 RAG 內容回答。"
+            voice_status = "RAG-only 模式：已用本機教材回答，前端可用瀏覽器語音唸出。"
         else:
             answer = (
-                "目前沒有在 E 盤 RAG 知識庫找到足夠資料，且尚未設定 OPENAI_API_KEY。"
-                "請先把教材文字放進 knowledge_base，或設定 API Key 後再詢問。"
+                "目前沒有在 E 盤 RAG 知識庫找到足夠資料。"
+                "請把相關教材文字放進 knowledge_base，或請老師補充這一題的教材內容。"
             )
-            source_status = "needs-config"
-            voice_status = "尚未連接大模型。"
+            source_status = "knowledge-missing"
+            voice_status = "RAG-only 模式：沒有連接 OpenAI API。"
 
         return {
-            "mode": "voice-rag-openai",
+            "mode": "local-rag-only",
             "sourceStatus": source_status,
             "topic": topic,
             "answer": answer,
@@ -230,53 +283,23 @@ class VoiceAssistant:
             "voiceStatus": voice_status,
         }
 
-    def _ask_openai(self, api_key: str, question: str, context: str) -> str:
-        if context:
-            user_input = f"RAG 知識庫內容：\n{context}\n\n學生問題：{question}"
-        else:
-            user_input = f"RAG 知識庫沒有命中。學生問題：{question}"
-
-        payload = {
-            "model": self.model,
-            "input": [
-                {"role": "system", "content": VOICE_SYSTEM_INSTRUCTION},
-                {"role": "user", "content": user_input},
-            ],
-        }
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(
-            "https://api.openai.com/v1/responses",
-            data=data,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=40) as response:
-                result = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"OpenAI API 回應錯誤：{exc.code} {detail}") from exc
-
-        output_text = result.get("output_text")
-        if output_text:
-            return output_text
-
-        fragments = []
-        for item in result.get("output", []):
-            for content in item.get("content", []):
-                if content.get("type") in {"output_text", "text"} and content.get("text"):
-                    fragments.append(content["text"])
-        return "\n".join(fragments).strip() or "大模型已回應，但沒有取得可顯示文字。"
-
 
 def tokenize_text(value: str) -> list[str]:
     normalized = value.lower()
     for symbol in [",", "，", "。", "？", "?", "：", ":", "、", "/", "\\", "\n", "\r", "\t"]:
         normalized = normalized.replace(symbol, " ")
-    return [term for term in normalized.split(" ") if len(term.strip()) >= 2]
+    terms = [term for term in normalized.split(" ") if len(term.strip()) >= 2]
+    compact = normalized.replace(" ", "")
+
+    for keyword in VOICE_RAG_KEYWORDS:
+        if keyword.lower().replace(" ", "") in compact:
+            terms.append(keyword.lower())
+
+    for phrase, expanded_terms in VOICE_RAG_QUERY_EXPANSIONS.items():
+        if phrase.lower().replace(" ", "") in compact:
+            terms.extend(term.lower() for term in expanded_terms)
+
+    return list(dict.fromkeys(terms))
 
 
 def search_voice_knowledge_base(question: str, rag_dir: Path, limit: int = 3) -> list[dict]:
@@ -440,12 +463,11 @@ def main():
     parser.add_argument("--model", default=os.environ.get("FDE_AI_YOLO_MODEL", DEFAULT_MODEL))
     parser.add_argument("--hover-model", default=os.environ.get("FDE_AI_HOVER_MODEL", DEFAULT_HOVER_MODEL))
     parser.add_argument("--voice-rag-dir", default=os.environ.get("FDE_VOICE_RAG_DIR", DEFAULT_VOICE_RAG_DIR))
-    parser.add_argument("--voice-model", default=os.environ.get("FDE_VOICE_MODEL", DEFAULT_VOICE_MODEL))
     args = parser.parse_args()
 
     detector = Detector(args.model)
     hover_scorer = HoverScorer(args.hover_model)
-    voice_assistant = VoiceAssistant(args.voice_rag_dir, args.voice_model)
+    voice_assistant = VoiceAssistant(args.voice_rag_dir)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(detector, hover_scorer, voice_assistant))
     print(f"FDE-AI local AI server running at http://{args.host}:{args.port}")
     print(f"Parts model: {detector.model_path}")

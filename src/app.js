@@ -29,6 +29,7 @@ const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const localVoiceEndpoint = voiceAssistant.endpoint;
 let voiceRecognition = null;
 let voiceTranscript = '';
+let isVoicePlaybackPaused = false;
 let selectedTaskId = 'M04';
 
 function statusClass(status) {
@@ -454,10 +455,48 @@ function renderAssistantResult(result) {
 function speakVoiceAnswer(text) {
   if (!('speechSynthesis' in window) || !text) return;
   window.speechSynthesis.cancel();
+  isVoicePlaybackPaused = false;
+  const pauseButton = $('#voicePauseButton');
+  if (pauseButton) {
+    pauseButton.disabled = false;
+    pauseButton.textContent = '暫停播報';
+  }
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = voiceAssistant.locale;
   utterance.rate = 0.95;
+  utterance.addEventListener('end', resetVoicePlaybackControl);
+  utterance.addEventListener('error', resetVoicePlaybackControl);
   window.speechSynthesis.speak(utterance);
+}
+
+function resetVoicePlaybackControl() {
+  isVoicePlaybackPaused = false;
+  const pauseButton = $('#voicePauseButton');
+  if (!pauseButton) return;
+  pauseButton.disabled = true;
+  pauseButton.textContent = '暫停播報';
+}
+
+function toggleVoicePlayback() {
+  if (!('speechSynthesis' in window) || !window.speechSynthesis.speaking) {
+    resetVoicePlaybackControl();
+    return;
+  }
+
+  const pauseButton = $('#voicePauseButton');
+  if (!pauseButton) return;
+
+  if (isVoicePlaybackPaused) {
+    window.speechSynthesis.resume();
+    isVoicePlaybackPaused = false;
+    pauseButton.textContent = '暫停播報';
+    $('#voiceStatus').textContent = voiceAssistant.statuses.idle;
+  } else {
+    window.speechSynthesis.pause();
+    isVoicePlaybackPaused = true;
+    pauseButton.textContent = '繼續播報';
+    $('#voiceStatus').textContent = '語音播報已暫停';
+  }
 }
 
 async function runVoiceAssistantQuestion(question) {
@@ -478,7 +517,7 @@ async function askAssistantFromText(question) {
   if (!topic) return;
 
   $('#voiceStatus').textContent = voiceAssistant.statuses.searching;
-  $('#assistantResult').innerHTML = '<article class="result-card"><p>正在先查 RAG 知識庫，再準備台灣繁中回答...</p></article>';
+  $('#assistantResult').innerHTML = '<article class="result-card"><p>正在查詢 E 盤本機 RAG 教材...</p></article>';
   try {
     const result = await runVoiceAssistantQuestion(topic);
     $('#voiceStatus').textContent = voiceAssistant.statuses.answering;
@@ -490,13 +529,13 @@ async function askAssistantFromText(question) {
     $('#assistantResult').innerHTML = `
       ${renderAssistantResult(fallback)}
       <article class="result-card local-service-note">
-        <h3>本機語音助教尚未連線</h3>
-        <p>目前先用前端 MVP 模擬回答。請確認本機 API 服務已啟動，且 .env 已設定 OPENAI_API_KEY。</p>
+        <h3>本機 RAG 助教服務尚未連線</h3>
+        <p>目前先用前端內建教材做示範回答。請確認本機 API 服務已啟動，且 E 盤 knowledge_base 已放入教材文字。</p>
         <small>${error.message}</small>
       </article>
     `;
     speakVoiceAnswer(fallback.answer);
-    $('#voiceStatus').textContent = '本機語音助教未連線，已顯示 MVP 模擬回答';
+    $('#voiceStatus').textContent = '本機 RAG 助教未連線，已顯示前端示範回答';
   }
 }
 
@@ -743,6 +782,10 @@ function bindActions() {
     $('#voiceStartButton').disabled = false;
     $('#voiceStopButton').disabled = true;
     askAssistantFromText($('#assistantQuestion').value || voiceTranscript);
+  });
+
+  $('#voicePauseButton').addEventListener('click', () => {
+    toggleVoicePlayback();
   });
 
   $('#propellerButton').addEventListener('click', async () => {

@@ -110,7 +110,7 @@ export const hero = {
   systemStatus: [
     { label: 'YOLO v2', state: '本機模型', detail: '已預設接入 F450 零件與 CW/CCW 槳葉檢測流程。' },
     { label: '四面懸停', state: '評分入口', detail: '先使用上傳影片與模擬評分，後續接入正式飛行檢測模型。' },
-    { label: 'RAG 知識庫', state: '預留接入', detail: '作的階段優先查詢 E 盤教材，再補接大模型回答。' }
+    { label: 'RAG 知識庫', state: '本機教材', detail: '作的階段只查詢 E 盤教材，不連接 OpenAI API。' }
   ],
   status: 'v1.0 MVP frontend',
   showMotionStrip: false,
@@ -657,7 +657,7 @@ export const buildWorkflow = {
   controller: 'Pixhawk 2.4.8',
   interactionMode: 'upload-only',
   evidenceTypes: ['photo', '30-second-video'],
-  assistantPrompt: '請描述你的組裝問題，系統會先查詢 E 盤知識包整理出的本地 RAG，再進入大模型 fallback。',
+  assistantPrompt: '請描述你的組裝問題，系統會查詢 E 盤知識包整理出的本地 RAG；沒有教材命中時會提示補充資料。',
   stages: [
     '零件清點：F450 機架、機臂、馬達、ESC、Pixhawk 2.4.8、GPS 羅盤、接收機、電池與槳葉',
     '機架與機臂組裝：確認紅白機臂方向與機頭標記',
@@ -819,7 +819,7 @@ export function simulateBuildAssistant(question = '') {
 
   if (sources.length > 0) {
     return {
-      mode: 'rag-gpt-voice-placeholder',
+      mode: 'local-rag-only',
       sourceStatus: 'local-rag',
       topic,
       answer: `RAG 知識庫已優先命中本地資料：${sources.map((source) => source.title).join('、')}。${sources[0].content}`,
@@ -828,18 +828,18 @@ export function simulateBuildAssistant(question = '') {
         sourcePath: source.sourcePath,
         score: source.score
       })),
-      voiceStatus: 'GPT 語音回答介面已預留，目前先用文字回覆；2.0 再接入即時語音與攝像頭糾錯。'
+      voiceStatus: '本機 RAG 教材已命中；前端可用瀏覽器語音唸出回答。'
     };
   }
 
   return {
-    mode: 'rag-gpt-voice-placeholder',
-    sourceStatus: 'large-model-fallback',
+    mode: 'local-rag-only',
+    sourceStatus: 'knowledge-missing',
     topic,
     answer:
-      '本地 RAG 知識庫沒有找到足夠相近的內容。1.0 先保留大模型 fallback 入口；正式接入 API 後，系統會把你的問題連同本地檢索上下文送到大模型回答。',
+      '本地 RAG 知識庫沒有找到足夠相近的內容。請把相關教材文字放進 E:\\FDE_AI_Voice_RAG\\knowledge_base，或補充對應的 .txt / .md 檔案後再詢問。',
     sources: [],
-    voiceStatus: 'GPT 語音回答介面已預留，目前先用文字回覆；2.0 再接入即時語音與攝像頭糾錯。'
+    voiceStatus: '目前為 RAG-only 模式，沒有連接 OpenAI API。'
   };
 }
 
