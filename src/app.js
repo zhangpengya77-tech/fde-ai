@@ -62,6 +62,7 @@ function scrollToSection(target) {
   const section = document.getElementById(sectionId);
   if (!section) return;
 
+  document.body.classList.toggle('inspection-view', sectionId === 'inspection');
   document.body.classList.toggle('home-view', sectionId === 'home');
   if (sectionId === 'home') {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -73,6 +74,7 @@ function scrollToSection(target) {
 
 function syncViewFromLocation() {
   const sectionId = window.location.hash.replace('#', '');
+  document.body.classList.toggle('inspection-view', sectionId === 'inspection');
   if (!sectionId || sectionId === 'home') {
     document.body.classList.add('home-view');
     return;

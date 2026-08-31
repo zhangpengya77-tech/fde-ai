@@ -393,6 +393,15 @@ test('F450 inspection page gives the propeller result enough width for M1-M4 car
   assert.match(css, /\.motor-check dd\s*{[^}]*white-space:\s*nowrap/s);
 });
 
+test('inspection view isolates the detection center from unrelated sections', () => {
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+
+  assert.match(app, /inspection-view/);
+  assert.match(app, /syncViewFromLocation/);
+  assert.match(css, /body\.inspection-view\s+main\s+>\s+\.section-block:not\(#inspection\)/);
+});
+
 test('teacher dashboard emphasizes review efficiency and AI warnings', () => {
   assert.equal(teacherDashboard.stats.find((stat) => stat.label === '待復核').value, 7);
   assert.ok(teacherDashboard.reviewQueue.some((item) => item.aiResult === 'FAIL'));

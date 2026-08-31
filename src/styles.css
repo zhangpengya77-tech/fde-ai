@@ -191,6 +191,15 @@ main {
   animation: fade-in 0.6s ease both;
 }
 
+/* Keep the inspection center focused when it is opened as its own page view. */
+body.inspection-view main > .section-block:not(#inspection) {
+  display: none;
+}
+
+body.inspection-view main {
+  min-height: 100vh;
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 520px);
