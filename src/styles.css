@@ -1714,6 +1714,15 @@ textarea {
 
 .propeller-result-panel {
   grid-column: 1 / -1;
+  overflow: visible;
+}
+
+.propeller-result-panel .inspection-summary-panel {
+  overflow-x: visible;
+}
+
+.propeller-result-panel .motor-check {
+  min-width: 0;
 }
 
 .detection-list {

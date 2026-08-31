@@ -384,6 +384,8 @@ test('F450 inspection page gives the propeller result enough width for M1-M4 car
   assert.match(html, /class="panel result-panel propeller-result-panel"/);
   assert.match(css, /\.inspection-layout\s*{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(css, /\.propeller-result-panel\s*{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+  assert.match(css, /\.propeller-result-panel\s*{[^}]*overflow:\s*visible/s);
+  assert.match(css, /\.propeller-result-panel\s+\.inspection-summary-panel\s*{[^}]*overflow-x:\s*visible/s);
   assert.match(css, /\.motor-check dd\s*{[^}]*white-space:\s*nowrap/s);
 });
 
