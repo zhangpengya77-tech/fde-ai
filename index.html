@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FDE-AI | 無人載具學習控制中心</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body class="home-view">
+    <aside class="sidebar">
+      <a class="brand" href="#home" aria-label="FDE-AI home">
+        <span class="brand-mark">FDE</span>
+        <span>
+          <strong>FDE-AI</strong>
+          <small>Learning Control Center</small>
+        </span>
+      </a>
+      <nav class="nav" id="moduleNav" aria-label="Main navigation"></nav>
+      <div class="sidebar-foot">
+        <span>v1.1 MVP</span>
+        <small>AI 雙師教學系統</small>
+      </div>
+    </aside>
+
+    <nav class="mobile-demo-nav" aria-label="Mobile demo navigation">
+      <strong>FDE-AI 手機展示</strong>
+      <div>
+        <a href="#home">首頁</a>
+        <a href="#missions">12 任務</a>
+        <a href="#learn">學練作測證</a>
+        <a href="#build">AI 雙師</a>
+        <a href="#inspection">AI 檢測</a>
+        <a href="#cohorts">成果 / 聯絡</a>
+      </div>
+    </nav>
+
+    <main>
+      <section class="hero section-block" id="home">
+        <div class="hero-copy">
+          <p class="eyebrow">System Boot · AI Vehicle Lab</p>
+          <h1 id="heroHeadline"></h1>
+          <p id="heroSummary"></p>
+          <div class="hero-systems" id="heroSystems"></div>
+          <div class="hero-actions" id="heroActions"></div>
+        </div>
+        <div class="drone-stage" aria-label="transparent blue F450 wireframe animation">
+          <div class="grid-plane"></div>
+          <div class="scan-ring"></div>
+          <div class="drone">
+            <span class="arm arm-a"></span>
+            <span class="arm arm-b"></span>
+            <span class="body-core"></span>
+            <span class="rotor r1"></span>
+            <span class="rotor r2"></span>
+            <span class="rotor r3"></span>
+            <span class="rotor r4"></span>
+          </div>
+          <div class="boot-lines">
+            <span>MISSION PACK ONLINE</span>
+            <span>AI INSPECTION READY</span>
+            <span>TEACHER REVIEW CHANNEL</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="mobile-demo-panel section-block" id="mobile-demo">
+        <div class="section-intro">
+          <p class="eyebrow">Mobile Demo Mode</p>
+          <h2>三分鐘看懂 FDE-AI</h2>
+          <p>手機展示優先呈現首頁、四階段 12 任務、學練作測證、AI 雙師、AI 檢測 Demo 與成果聯絡入口。</p>
+        </div>
+        <div class="mobile-demo-grid">
+          <a href="#missions"><span>01</span><strong>四階段 12 任務</strong><small>Explore / Build / AI / Project</small></a>
+          <a href="#learn"><span>02</span><strong>學練作測證</strong><small>每個任務都用同一套流程完成</small></a>
+          <a href="#build"><span>03</span><strong>AI 雙師助教</strong><small>只查本機 RAG 教材知識庫</small></a>
+          <a href="#inspection"><span>04</span><strong>AI 檢測 Demo</strong><small>組裝檢測與四面懸停評分入口</small></a>
+          <a href="#cohorts"><span>05</span><strong>YouTube 成果</strong><small>展示歷屆學員影片與作品</small></a>
+          <a href="#certify"><span>06</span><strong>GitHub 存證</strong><small>把作品整理成可驗證能力紀錄</small></a>
+        </div>
+      </section>
+
+      <section class="section-block flow-section">
+        <div class="section-intro">
+          <p class="eyebrow">Learning Data Stream</p>
+          <h2>學・練・作・測・證</h2>
+          <p>整個平台的核心視覺語言固定在五個節點：從課程理解，到模擬訓練、專案實作、AI 測評與能力存證。</p>
+        </div>
+        <div class="learning-flow" id="learningFlow"></div>
+      </section>
+
+      <section class="section-block light-section platform-modes-section">
+        <div class="section-intro">
+          <p class="eyebrow">Three Modes</p>
+          <h2>公開展示、學生任務、教師復核三種模式</h2>
+          <p>同一套視覺系統下，外層有科技展廳感，內層保持教學平台和操作控制台的穩定感。</p>
+        </div>
+        <div class="mode-grid" id="platformModes"></div>
+      </section>
+
+      <section class="section-block module-page dashboard-page" id="dashboard">
+        <div class="section-intro">
+          <p class="eyebrow">Student Mode · Dashboard</p>
+          <h2 id="studentGreeting"></h2>
+          <p>登入後首頁不是普通 LMS 課程列表，而是個人任務控制台，讓學生一眼知道現在做到哪裡。</p>
+        </div>
+        <div class="metric-grid hero-metrics" id="studentStats"></div>
+        <div class="dashboard-layout">
+          <article class="mission-current panel" id="currentMission"></article>
+          <article class="panel">
+            <div class="section-head">
+              <h3>Learning Path</h3>
+              <span class="pill">任務路線圖</span>
+            </div>
+            <div class="learning-path" id="learningPath"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block module-page" id="missions">
+        <div class="section-intro">
+          <p class="eyebrow">Mission Map · v1.1</p>
+          <h2>四階段 × 12 任務成長地圖</h2>
+          <p>12 個任務是學習地圖；學・練・作・測・證是每個任務內部固定使用的完成流程。</p>
+        </div>
+        <div class="mission-map-layout">
+          <div class="mission-stage-map" id="missionStageMap"></div>
+          <div class="task-detail-panel" id="taskDetailPanel"></div>
+        </div>
+      </section>
+
+      <section class="section-block module-page compact-section" id="learn">
+        <div class="section-intro">
+          <p class="eyebrow">Learn · 學</p>
+          <h2>課程影片與下載說明</h2>
+          <p>保留 F450、鳳凰模擬器、證照、AI、3D 列印與 GitHub 的學習入口。</p>
+        </div>
+        <div class="resource-grid" id="learningResources"></div>
+      </section>
+
+      <section class="section-block light-section compact-section" id="practice">
+        <div class="section-intro">
+          <p class="eyebrow">Practice · 練</p>
+          <h2>模擬器與考照練習</h2>
+          <p>鳳凰模擬器需聯繫後台管理員線下取得安裝包；練習重點是飛行模擬、考照模擬與題庫刷題。</p>
+        </div>
+        <div class="practice-list" id="practiceResources"></div>
+      </section>
+
+      <section class="section-block module-page compact-section" id="build">
+        <div class="section-intro">
+          <p class="eyebrow">Build · 作</p>
+          <h2>F450 Pixhawk 實作與 AI 助教</h2>
+          <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教只查 E 盤本機 RAG 教材協助排錯。</p>
+        </div>
+        <div class="build-layout">
+          <div class="panel">
+            <div class="section-head">
+              <h3>組裝流程</h3>
+              <span class="pill">SOP</span>
+            </div>
+            <div class="meta-row" id="buildMeta"></div>
+            <ol class="stage-list" id="buildStages"></ol>
+          </div>
+          <div class="panel">
+            <div class="section-head">
+              <h3>AI 助教問答</h3>
+              <span class="pill pending">RAG-only 本機教材</span>
+            </div>
+            <textarea id="assistantQuestion" rows="5" placeholder="例如：槳葉方向看不懂，飛控主板該朝哪裡？"></textarea>
+            <div class="voice-assistant-panel" id="voiceAssistantPanel">
+              <div>
+                <span class="tag">zh-TW Local RAG</span>
+                <strong>台灣繁中本機教材助教</strong>
+                <small>按一下開始、按一下停止；系統只查 E 盤 RAG 知識庫，不連 OpenAI API。</small>
+              </div>
+              <div class="voice-controls">
+                <button class="secondary-action" id="voiceStartButton" type="button">開始語音提問</button>
+                <button class="secondary-action" id="voiceStopButton" type="button" disabled>停止</button>
+                <button class="secondary-action" id="voicePauseButton" type="button" disabled>暫停播報</button>
+              </div>
+              <p id="voiceStatus">待命：按一下開始語音提問</p>
+            </div>
+            <div class="upload-row">
+              <label>
+                <span>照片</span>
+                <input type="file" accept="image/*" />
+              </label>
+              <label>
+                <span>30 秒影片</span>
+                <input type="file" accept="video/*" />
+              </label>
+            </div>
+            <button class="primary-action button" id="assistantButton">詢問 AI 助教</button>
+            <div class="result" id="assistantResult"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block module-page inspection-page" id="inspection">
+        <div class="section-intro">
+          <p class="eyebrow">AI Inspection Center · 測</p>
+          <h2>鷹眼 AI 檢測中心</h2>
+          <p>本頁只保留兩個檢測入口：F450 槳葉正反及方向檢查、F450 四面懸停檢測。</p>
+        </div>
+        <div class="workflow-grid" id="assessmentWorkflows"></div>
+        <div class="inspection-layout">
+          <div class="panel upload-panel">
+            <h3>F450 槳葉正反及方向檢查</h3>
+            <label class="dropzone">
+              <input type="file" id="propellerInput" accept="image/*" />
+              <span>上傳 F450 俯視照片</span>
+              <small>系統會依 M1、M2、M3、M4 顯示 PASS / NG / CHECK，錯誤項目交由 RAG 知識庫回答。</small>
+            </label>
+            <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
+          </div>
+          <div class="panel upload-panel">
+            <h3>四面懸停檢測</h3>
+            <label class="dropzone">
+              <input type="file" id="hoverInput" accept="video/*" />
+              <span>上傳 30 秒影片</span>
+              <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
+            </label>
+            <button class="primary-action button" id="hoverButton">執行懸停評分</button>
+          </div>
+          <div class="panel result-panel propeller-result-panel">
+            <h3>F450 槳葉檢測結果</h3>
+            <div class="result" id="propellerResult"></div>
+          </div>
+          <div class="panel result-panel">
+            <h3>飛行分析儀表板</h3>
+            <div class="result" id="hoverResult"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block light-section" id="teacher">
+        <div class="section-intro">
+          <p class="eyebrow">Teacher Mode · Review Center</p>
+          <h2>教師復核中心</h2>
+          <p>教師端不做探索式介面，直接呈現今日提交、待復核、AI 警告與需要處理的學生隊列。</p>
+        </div>
+        <div class="metric-grid hero-metrics" id="teacherStats"></div>
+        <div class="teacher-queue" id="teacherQueue"></div>
+      </section>
+
+      <section class="section-block module-page compact-section" id="cohorts">
+        <div class="section-intro">
+          <p class="eyebrow">Alumni & Projects</p>
+          <h2>歷屆學員成果發表</h2>
+          <p>1.1 先用靜態資料展示期別、完成任務、YouTube 成果影片與 GitHub 倉庫，不做學員登入與資料庫。</p>
+        </div>
+        <div class="cohort-grid" id="cohortGrid"></div>
+      </section>
+
+      <section class="section-block module-page" id="certify">
+        <div class="section-intro">
+          <p class="eyebrow">Certify · 證</p>
+          <h2>GitHub 成果存證</h2>
+          <p>作品頁是能力檔案館，把學習、組裝、AI 測評、教師評語與反思整理成可追蹤成果。</p>
+        </div>
+        <div class="cert-grid" id="certificationChecklist"></div>
+      </section>
+    </main>
+
+    <script src="./src/platform-browser.js"></script>
+    <script src="./src/app.js"></script>
+  </body>
+</html>
