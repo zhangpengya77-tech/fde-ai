@@ -264,6 +264,9 @@ test('YOLO result layout exposes M1-M4 pass cards and RAG guidance instead of sc
   assert.match(app, /inspection-final-result/);
   assert.match(app, /data-inspection-assistant/);
   assert.match(app, /appendInspectionKnowledgeAnswer/);
+  assert.match(app, /renderDetectionImage/);
+  assert.match(app, /inputImage/);
+  assert.match(app, /檢測圖片/);
   assert.match(app, /class="stage-guide"/);
   assert.match(app, /M1|M2|M3|M4/);
   assert.match(app, /Expected|Detected|Blade Face|Confidence|PASS|NG|CHECK/);
@@ -277,6 +280,7 @@ test('YOLO result layout exposes M1-M4 pass cards and RAG guidance instead of sc
   assert.match(css, /\.motor-check\.pass/s);
   assert.match(css, /\.motor-check\.ng/s);
   assert.match(css, /\.motor-check\.check/s);
+  assert.match(css, /\.visual-caption/s);
   assert.doesNotMatch(app, /viewport-toolbar|data-pan-zoom|bindPanZoom/);
 });
 

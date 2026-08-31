@@ -660,6 +660,19 @@ async function appendInspectionKnowledgeAnswer(result) {
   }
 }
 
+function renderDetectionImage(result) {
+  const imageSrc = result.annotatedImage || result.inputImage;
+  if (!imageSrc) {
+    return '<div class="scan-line"></div><span>等待 YOLO 檢測圖片</span>';
+  }
+
+  const label = result.annotatedImage ? 'YOLO 標註檢測圖片' : '上傳檢測圖片';
+  return `
+    <img src="${imageSrc}" alt="${label}" />
+    <span class="visual-caption">檢測圖片</span>
+  `;
+}
+
 function renderPropellerInspectionResult(result, includeVisual = false) {
   const fileName = escapeHtml(result.fileName || '未命名檢測檔案');
   const detections = Array.isArray(result.detections) ? result.detections : [];
@@ -698,7 +711,7 @@ function renderPropellerInspectionResult(result, includeVisual = false) {
         </div>
       </div>
       <div class="scan-preview yolo-preview inspection-visual-panel">
-        ${result.annotatedImage ? `<img src="${result.annotatedImage}" alt="YOLOv8 檢測結果" />` : '<div class="scan-line"></div><span>YOLO RESULT</span>'}
+        ${renderDetectionImage(result)}
       </div>
     </article>
   `;
@@ -755,7 +768,7 @@ async function runLocalYoloDetection(file) {
   if (!response.ok || !payload.ok) {
     throw new Error(payload.error || '本機 YOLO 服務沒有回應');
   }
-  return payload.result;
+  return { ...payload.result, inputImage: imageData };
 }
 
 async function runLocalHoverScoring(file) {
@@ -902,6 +915,11 @@ function bindActions() {
       appendInspectionKnowledgeAnswer(result);
     } catch (error) {
       const result = simulatePropellerAssessment(file.name);
+      try {
+        result.inputImage = await fileToDataUrl(file);
+      } catch {
+        result.inputImage = '';
+      }
       $('#propellerResult').innerHTML = `
         ${renderAssemblyResult(result)}
         <article class="result-card local-service-note">

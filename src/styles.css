@@ -1459,6 +1459,18 @@ textarea {
   display: block;
 }
 
+.visual-caption {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 194, 255, 0.42);
+  background: rgba(7, 17, 31, 0.82);
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .inspection-summary-panel {
   min-width: 0;
   overflow-x: auto;
