@@ -1560,6 +1560,154 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.motor-layout-label {
+  color: var(--cyan);
+  font-weight: 900;
+  margin: 14px 0 8px;
+  text-align: center;
+}
+
+.motor-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.motor-check {
+  display: grid;
+  gap: 9px;
+  min-height: 170px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(19, 43, 68, 0.68);
+  overflow-wrap: anywhere;
+}
+
+.motor-check.pass {
+  border-color: rgba(44, 255, 176, 0.42);
+  background: rgba(44, 255, 176, 0.08);
+}
+
+.motor-check.ng {
+  border-color: rgba(255, 88, 88, 0.55);
+  background: rgba(255, 88, 88, 0.09);
+}
+
+.motor-check.check {
+  border-color: rgba(255, 211, 105, 0.55);
+  background: rgba(255, 211, 105, 0.09);
+}
+
+.motor-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.motor-check-head strong {
+  color: #e6f6ff;
+  font-size: 26px;
+}
+
+.motor-check-head span {
+  color: var(--cyan);
+  font-weight: 900;
+}
+
+.motor-check.ng .motor-check-head span {
+  color: #ff7777;
+}
+
+.motor-check.check .motor-check-head span {
+  color: var(--yellow);
+}
+
+.motor-check dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.motor-check dl div {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.motor-check dt,
+.motor-check dd {
+  margin: 0;
+}
+
+.motor-check dt {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.motor-check dd {
+  color: #e6f6ff;
+  font-weight: 800;
+}
+
+.motor-check p {
+  margin: 0;
+  color: #ffb0b0;
+  font-weight: 800;
+}
+
+.inspection-final-result {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(7, 17, 31, 0.7);
+}
+
+.inspection-final-result span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.inspection-final-result strong {
+  color: var(--cyan);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.inspection-final-result.pass strong {
+  color: var(--green);
+}
+
+.inspection-final-result.ng strong {
+  color: #ff7777;
+}
+
+.inspection-final-result.check strong {
+  color: var(--yellow);
+}
+
+.inspection-final-result p,
+.inspection-final-result small {
+  margin: 0;
+}
+
+.inspection-assistant {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.inspection-assistant .result-card {
+  margin: 0;
+}
+
 .detection-list {
   display: flex;
   flex-wrap: nowrap;

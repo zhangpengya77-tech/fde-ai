@@ -105,6 +105,25 @@ CLASS_ZH = {
     "power_module": "電源模組",
 }
 
+EXPECTED_PROPELLER_BY_POSITION = {
+    "M1": "ccw_propeller",
+    "M2": "ccw_propeller",
+    "M3": "cw_propeller",
+    "M4": "cw_propeller",
+}
+
+MOTOR_POSITIONS = {
+    "M3": "左前",
+    "M1": "右前",
+    "M2": "左後",
+    "M4": "右後",
+}
+
+PROPELLER_DIRECTIONS = {
+    "cw_propeller": "CW",
+    "ccw_propeller": "CCW",
+}
+
 
 def load_env_file():
     for env_path in (Path.cwd() / ".env", Path.cwd().parent / ".env"):
@@ -140,11 +159,12 @@ class Detector:
                     "label": CLASS_ZH.get(class_name, class_name),
                     "confidence": round(float(box.conf[0]), 3),
                     "box": [round(x1), round(y1), round(x2), round(y2)],
+                    "center": [round((x1 + x2) / 2), round((y1 + y2) / 2)],
                 }
             )
 
         counts = Counter(item["className"] for item in detections)
-        status, score, checklist, summary = self._summarize(file_name, detections, counts)
+        status, score, checklist, summary, motor_checks = self._summarize(file_name, detections, counts, result.orig_shape)
 
         return {
             "engine": "YOLOv8 local",
@@ -157,6 +177,7 @@ class Detector:
             "detections": detections,
             "counts": dict(counts),
             "checklist": checklist,
+            "motorChecks": motor_checks,
             "annotatedImage": self._encode_plot(result),
         }
 
@@ -175,19 +196,23 @@ class Detector:
         return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
 
     @staticmethod
-    def _summarize(file_name: str, detections: list[dict], counts: Counter) -> tuple[str, int, list[dict], str]:
+    def _summarize(file_name: str, detections: list[dict], counts: Counter, image_shape) -> tuple[str, int, list[dict], str, list[dict]]:
+        motor_checks = Detector._evaluate_motor_checks(detections, image_shape)
+
         if not detections:
             return (
-                "FAIL",
+                "CHECK",
                 0,
-                [{"label": "目標檢測", "result": "FAIL", "detail": "沒有偵測到已訓練零件"}],
+                [{"label": "目標檢測", "result": "CHECK", "detail": "沒有偵測到已訓練零件"}],
                 f"{file_name} 沒有偵測到 F450 零件，請換一張更清楚的俯視照片。",
+                motor_checks,
             )
 
         avg_conf = sum(item["confidence"] for item in detections) / len(detections)
-        required_pass = counts.get("motor", 0) >= 4 and counts.get("frame_arm", 0) >= 4
-        score = round(min(100, 45 + avg_conf * 35 + (20 if required_pass else 8)))
-        status = "PASS" if required_pass and score >= 75 else "WARNING"
+        all_pass = all(item["result"] == "PASS" for item in motor_checks)
+        has_ng = any(item["result"] == "NG" for item in motor_checks)
+        score = round(min(100, 45 + avg_conf * 35 + (20 if all_pass else 8)))
+        status = "PASS" if all_pass else "NG" if has_ng else "CHECK"
         checklist = [
             {"label": "CW 正槳", "result": "PASS" if counts.get("cw_propeller", 0) >= 2 else "WARNING", "detail": f"偵測到 {counts.get('cw_propeller', 0)} 個"},
             {"label": "CCW 反槳", "result": "PASS" if counts.get("ccw_propeller", 0) >= 2 else "WARNING", "detail": f"偵測到 {counts.get('ccw_propeller', 0)} 個"},
@@ -198,10 +223,69 @@ class Detector:
         ]
         summary = (
             f"{file_name} 已完成本機 YOLOv8 檢測：偵測到 {len(detections)} 個目標。"
-            "目前模型已包含 CW/CCW 槳葉、馬達、機臂、飛控與 GPS/指南針等類別；"
-            "方向是否安裝正確仍建議由老師依機身朝向複核。"
+            "系統已依 F450 機頭方向比對 M1、M2、M3、M4 的 CW/CCW 槳葉規則；"
+            "若正反面資料不足，Blade Face 會顯示 CHECK。"
         )
-        return status, score, checklist, summary
+        return status, score, checklist, summary, motor_checks
+
+    @staticmethod
+    def _evaluate_motor_checks(detections: list[dict], image_shape) -> list[dict]:
+        height, width = image_shape[:2] if image_shape else (1, 1)
+        propeller_detections = [
+            item for item in detections if item.get("className") in PROPELLER_DIRECTIONS
+        ]
+        best_by_motor: dict[str, dict] = {}
+
+        for item in propeller_detections:
+            center_x, center_y = item.get("center", [0, 0])
+            is_left = center_x < width / 2
+            is_front = center_y < height / 2
+            motor = "M3" if is_left and is_front else "M1" if is_front else "M2" if is_left else "M4"
+            current = best_by_motor.get(motor)
+            if current is None or item.get("confidence", 0) > current.get("confidence", 0):
+                best_by_motor[motor] = item
+
+        checks = []
+        for motor in ("M3", "M1", "M2", "M4"):
+            expected_class = EXPECTED_PROPELLER_BY_POSITION[motor]
+            detected = best_by_motor.get(motor)
+            if detected is None:
+                checks.append(
+                    {
+                        "motor": motor,
+                        "position": MOTOR_POSITIONS[motor],
+                        "detectedClass": None,
+                        "detectedDirection": "CHECK",
+                        "expectedClass": expected_class,
+                        "expectedDirection": PROPELLER_DIRECTIONS[expected_class],
+                        "bladeFace": "CHECK",
+                        "confidence": None,
+                        "errorCode": "NOT_DETECTED",
+                        "result": "CHECK",
+                    }
+                )
+                continue
+
+            detected_class = detected["className"]
+            confidence = detected.get("confidence")
+            direction_ok = detected_class == expected_class
+            uncertain = confidence is None or confidence < 0.55
+            checks.append(
+                {
+                    "motor": motor,
+                    "position": MOTOR_POSITIONS[motor],
+                    "detectedClass": detected_class,
+                    "detectedDirection": PROPELLER_DIRECTIONS.get(detected_class, "CHECK"),
+                    "expectedClass": expected_class,
+                    "expectedDirection": PROPELLER_DIRECTIONS[expected_class],
+                    "bladeFace": "CHECK",
+                    "confidence": confidence,
+                    "errorCode": "UNCERTAIN" if uncertain else "PASS" if direction_ok else "DIRECTION_ERROR",
+                    "result": "CHECK" if uncertain else "PASS" if direction_ok else "NG",
+                }
+            )
+
+        return checks
 
 
 class HoverScorer:

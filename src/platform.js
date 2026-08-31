@@ -848,15 +848,65 @@ export function simulatePropellerAssessment(fileName = 'propeller-check.jpg') {
     type: 'propeller-photo',
     engine: 'YOLOv8 placeholder',
     fileName,
-    status: 'NEEDS_RECHECK',
+    status: 'NG',
     score: 82,
     teacherStatus: '待復核',
-    summary: '模擬檢測完成：四個槳葉均已識別，其中前右槳葉方向需要人工確認；飛控方向與電池固定建議再拍一張俯視圖。',
+    summary: '模擬檢測完成：系統已依 F450 機頭方向比對 M1-M4 槳葉位置，錯誤項目會送入本機 RAG 知識庫產生修正建議。',
     detections: [
-      { position: 'front-left', className: 'ccw_propeller', confidence: 0.91, result: 'PASS' },
-      { position: 'front-right', className: 'cw_propeller', confidence: 0.62, result: 'NEEDS_RECHECK' },
-      { position: 'rear-left', className: 'cw_propeller', confidence: 0.88, result: 'PASS' },
-      { position: 'rear-right', className: 'ccw_propeller', confidence: 0.9, result: 'PASS' }
+      { position: 'front-left', motor: 'M3', className: 'cw_propeller', confidence: 0.91, result: 'PASS' },
+      { position: 'front-right', motor: 'M1', className: 'cw_propeller', confidence: 0.82, result: 'NG' },
+      { position: 'rear-left', motor: 'M2', className: 'ccw_propeller', confidence: 0.88, result: 'PASS' },
+      { position: 'rear-right', motor: 'M4', className: 'ccw_propeller', confidence: 0.9, result: 'NG' }
+    ],
+    motorChecks: [
+      {
+        motor: 'M3',
+        position: '左前',
+        detectedClass: 'cw_propeller',
+        detectedDirection: 'CW',
+        expectedClass: 'cw_propeller',
+        expectedDirection: 'CW',
+        bladeFace: 'CHECK',
+        confidence: 0.91,
+        errorCode: 'PASS',
+        result: 'PASS'
+      },
+      {
+        motor: 'M1',
+        position: '右前',
+        detectedClass: 'cw_propeller',
+        detectedDirection: 'CW',
+        expectedClass: 'ccw_propeller',
+        expectedDirection: 'CCW',
+        bladeFace: 'CHECK',
+        confidence: 0.82,
+        errorCode: 'DIRECTION_ERROR',
+        result: 'NG'
+      },
+      {
+        motor: 'M2',
+        position: '左後',
+        detectedClass: 'ccw_propeller',
+        detectedDirection: 'CCW',
+        expectedClass: 'ccw_propeller',
+        expectedDirection: 'CCW',
+        bladeFace: 'CHECK',
+        confidence: 0.88,
+        errorCode: 'PASS',
+        result: 'PASS'
+      },
+      {
+        motor: 'M4',
+        position: '右後',
+        detectedClass: 'ccw_propeller',
+        detectedDirection: 'CCW',
+        expectedClass: 'cw_propeller',
+        expectedDirection: 'CW',
+        bladeFace: 'CHECK',
+        confidence: 0.9,
+        errorCode: 'DIRECTION_ERROR',
+        result: 'NG'
+      }
     ],
     checklist: [
       { label: '正反槳', result: 'PASS' },

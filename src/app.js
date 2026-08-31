@@ -557,74 +557,144 @@ async function askAssistantFromText(question) {
   }
 }
 
-function renderAssemblyResult(result) {
+function formatConfidence(value) {
+  return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : 'CHECK';
+}
+
+function propellerFinalResult(result) {
+  const motorChecks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
+  if (!motorChecks.length) {
+    return {
+      status: 'CHECK',
+      title: '部分槳葉需要人工確認',
+      detail: '目前沒有完整 M1-M4 槳葉資料，請重新拍攝俯視照片後再檢測。'
+    };
+  }
+
+  const failed = motorChecks.filter((item) => item.result === 'NG');
+  const uncertain = motorChecks.filter((item) => item.result === 'CHECK');
+  if (failed.length) {
+    return {
+      status: 'NG',
+      title: '發現 F450 槳葉安裝異常',
+      detail: failed.map((item) => `${item.motor}: Detected ${item.detectedDirection}, Expected ${item.expectedDirection}`).join('；')
+    };
+  }
+  if (uncertain.length) {
+    return {
+      status: 'CHECK',
+      title: '部分槳葉需要人工確認',
+      detail: uncertain.map((item) => `${item.motor}: ${item.errorCode}`).join('；')
+    };
+  }
+  return {
+    status: 'PASS',
+    title: 'F450 槳葉安裝檢測通過',
+    detail: 'M1、M2、M3、M4 均符合目前規則。'
+  };
+}
+
+function renderMotorChecks(result) {
+  const checks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
+  if (!checks.length) {
+    return '<div class="motor-check-grid"><article class="motor-check check"><strong>M1-M4</strong><span>CHECK</span><small>尚未取得完整槳葉位置資料</small></article></div>';
+  }
+
   return `
-    <article class="result-card inspection-result">
-      <div class="scan-preview">
-        <div class="scan-line"></div>
-        <span>F450 TOP VIEW</span>
-      </div>
-      <div>
-        <div class="section-head">
-          <span class="tag">${result.engine}</span>
-          <span class="status ${statusClass(result.status)}">${result.status}</span>
-        </div>
-        <h3>${result.fileName}</h3>
-        <p>${result.summary}</p>
-        <div class="score-row"><strong>${result.score}</strong><span>AI 初判分數</span><em>${result.teacherStatus}</em></div>
-        <div class="check-grid">
-          ${result.checklist.map((item) => `<div><span>${item.label}</span><strong class="${statusClass(item.result)}">${item.result}</strong></div>`).join('')}
-        </div>
-      </div>
-    </article>
+    <div class="motor-layout-label">FRONT ↑</div>
+    <div class="motor-check-grid">
+      ${checks
+        .map(
+          (item) => `
+            <article class="motor-check ${statusClass(item.result)}">
+              <div class="motor-check-head">
+                <strong>${escapeHtml(item.motor)}</strong>
+                <span>${escapeHtml(item.result)}</span>
+              </div>
+              <small>${escapeHtml(item.position || '位置待確認')}</small>
+              <dl>
+                <div><dt>Detected</dt><dd>${escapeHtml(item.detectedDirection || 'CHECK')}</dd></div>
+                <div><dt>Expected</dt><dd>${escapeHtml(item.expectedDirection || 'CHECK')}</dd></div>
+                <div><dt>Blade Face</dt><dd>${escapeHtml(item.bladeFace || 'CHECK')}</dd></div>
+                <div><dt>Confidence</dt><dd>${formatConfidence(item.confidence)}</dd></div>
+              </dl>
+              ${item.result === 'NG' ? `<p>Correct: ${escapeHtml(item.expectedDirection)}</p>` : ''}
+            </article>
+          `
+        )
+        .join('')}
+    </div>
   `;
 }
 
-function renderYoloAssemblyResult(result) {
+function inspectionQuestion(result) {
+  const checks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
+  const failed = checks.filter((item) => item.result !== 'PASS');
+  if (!failed.length) {
+    return 'F450 M1 M2 M3 M4 槳葉檢測全部 PASS。請依 FDE 知識庫用三行內確認結果。';
+  }
+
+  const context = failed
+    .map((item) => `${item.motor} ${item.result} ${item.errorCode}: Detected ${item.detectedDirection}, Expected ${item.expectedDirection}, Blade Face ${item.bladeFace}`)
+    .join('；');
+  const keywords = failed.map((item) => `${item.motor} ${item.expectedDirection} ${item.detectedDirection}`).join(' ');
+  return `F450 槳葉檢測修正建議。${context}。檢索關鍵詞：F450 槳葉方向 CW CCW ${keywords}。請優先依 FDE 知識庫回答，資料不足就明確說知識庫依據不足。`;
+}
+
+async function appendInspectionKnowledgeAnswer(result) {
+  const target = document.querySelector('[data-inspection-assistant]');
+  if (!target) return;
+
+  target.innerHTML = '<p>正在查詢 FDE 知識庫並產生 AI 修正建議...</p>';
+  try {
+    const answer = await runVoiceAssistantQuestion(inspectionQuestion(result));
+    target.innerHTML = renderAssistantResult(answer);
+  } catch (error) {
+    target.innerHTML = `
+      <article class="result-card local-service-note">
+        <h3>AI 修正建議</h3>
+        <p>AI 助手暫時無法連接；上方 M1-M4 的 PASS / NG / CHECK 檢測結果仍可使用。</p>
+        <small>${escapeHtml(error.message)}</small>
+      </article>
+    `;
+  }
+}
+
+function renderPropellerInspectionResult(result, includeVisual = false) {
   const fileName = escapeHtml(result.fileName || '未命名檢測檔案');
-  const checklist = Array.isArray(result.checklist) ? result.checklist : [];
   const detections = Array.isArray(result.detections) ? result.detections : [];
+  const finalResult = propellerFinalResult(result);
   return `
     <article class="result-card inspection-result yolo-result">
       <div class="inspection-summary-panel">
         <div class="section-head">
           <span class="tag">${escapeHtml(result.engine)}</span>
-          <span class="status ${statusClass(result.status)}">${result.status}</span>
-        </div>
-        <div class="service-status-panel compact">
-          <div>
-            <span>YOLO v2 local</span>
-            <strong>本機模型</strong>
-            <small>CW 正槳 / CCW 反槳：先由 AI 辨識，再依機頭方向人工複核。</small>
-          </div>
-          <div>
-            <span>結果閱讀</span>
-            <strong>橫向資訊列</strong>
-            <small>長檔名、零件清單與信心度可左右滑動查看，不會擠成一團。</small>
-          </div>
+          <span class="status ${statusClass(finalResult.status)}">${finalResult.status}</span>
         </div>
         <h3 class="result-file-name" title="${fileName}">${fileName}</h3>
         <p>${escapeHtml(result.summary)}</p>
         <div class="inspection-hints">
-          <small>目前模型重點：槳葉、馬達、機臂與主機板等可見零件。</small>
-          <small>判定提醒：CW / CCW 只代表槳葉類型，是否裝對位置仍要搭配 F450 機頭方向確認。</small>
+          <small>M1 = CCW、M2 = CCW、M3 = CW、M4 = CW。</small>
+          <small>Blade Face 若模型沒有可靠正反面資料，會顯示 CHECK，不硬猜。</small>
         </div>
-        <div class="score-row"><strong>${result.score}</strong><span>AI 初判分數</span><em>${result.teacherStatus}</em></div>
-        <div class="check-grid">
-          ${checklist
-            .map(
-              (item) =>
-                `<div><span>${escapeHtml(item.label)}</span><strong class="${statusClass(item.result)}">${escapeHtml(item.result)}</strong><small>${escapeHtml(item.detail || '')}</small></div>`
-            )
-            .join('')}
+        ${renderMotorChecks(result)}
+        <div class="inspection-final-result ${statusClass(finalResult.status)}">
+          <span>FINAL RESULT</span>
+          <strong>${escapeHtml(finalResult.status)}</strong>
+          <p>${escapeHtml(finalResult.title)}</p>
+          <small>${escapeHtml(finalResult.detail)}</small>
         </div>
         <div class="detection-list">
           ${detections
             .map((item) => {
               const confidence = Number.isFinite(item.confidence) ? `${(item.confidence * 100).toFixed(1)}%` : '待確認';
-              return `<small>${escapeHtml(item.label)} · ${confidence}</small>`;
+              return `<small>${escapeHtml(item.motor || item.position || '目標')} · ${escapeHtml(item.label || item.className)} · ${confidence}</small>`;
             })
             .join('')}
+        </div>
+        <div class="inspection-assistant" data-inspection-assistant>
+          <h3>AI 修正建議</h3>
+          <p>等待檢測結果送入 FDE 知識庫。</p>
         </div>
       </div>
       <div class="scan-preview yolo-preview inspection-visual-panel">
@@ -632,6 +702,14 @@ function renderYoloAssemblyResult(result) {
       </div>
     </article>
   `;
+}
+
+function renderAssemblyResult(result) {
+  return renderPropellerInspectionResult(result, false);
+}
+
+function renderYoloAssemblyResult(result) {
+  return renderPropellerInspectionResult(result, true);
 }
 
 function renderHoverResult(result) {
@@ -811,7 +889,9 @@ function bindActions() {
   $('#propellerButton').addEventListener('click', async () => {
     const file = $('#propellerInput').files[0];
     if (!file) {
-      $('#propellerResult').innerHTML = renderAssemblyResult(simulatePropellerAssessment('demo-f450-check.jpg'));
+      const result = simulatePropellerAssessment('demo-f450-check.jpg');
+      $('#propellerResult').innerHTML = renderAssemblyResult(result);
+      appendInspectionKnowledgeAnswer(result);
       return;
     }
 
@@ -819,15 +899,18 @@ function bindActions() {
     try {
       const result = await runLocalYoloDetection(file);
       $('#propellerResult').innerHTML = renderYoloAssemblyResult(result);
+      appendInspectionKnowledgeAnswer(result);
     } catch (error) {
+      const result = simulatePropellerAssessment(file.name);
       $('#propellerResult').innerHTML = `
-        ${renderAssemblyResult(simulatePropellerAssessment(file.name))}
+        ${renderAssemblyResult(result)}
         <article class="result-card local-service-note">
           <h3>本機模型尚未連線</h3>
           <p>請先啟動 YOLO 偵測服務；目前畫面先顯示 MVP 模擬結果。</p>
           <small>${error.message}</small>
         </article>
       `;
+      appendInspectionKnowledgeAnswer(result);
     }
   });
 

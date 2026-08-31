@@ -246,25 +246,49 @@ test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {
   assert.equal(result.type, 'propeller-photo');
   assert.equal(result.engine, 'YOLOv8 placeholder');
   assert.equal(result.detections.length, 4);
+  assert.deepEqual(result.motorChecks.map((check) => check.motor), ['M3', 'M1', 'M2', 'M4']);
+  assert.ok(result.motorChecks.every((check) => ['PASS', 'NG', 'CHECK'].includes(check.result)));
+  assert.ok(result.motorChecks.every((check) => ['CW', 'CCW'].includes(check.expectedDirection)));
+  assert.ok(result.motorChecks.some((check) => check.result === 'NG'));
   assert.ok(result.detections.some((detection) => detection.className === 'cw_propeller'));
   assert.ok(result.detections.some((detection) => detection.className === 'ccw_propeller'));
 });
 
-test('YOLO result layout exposes text results in a horizontal readable panel', () => {
+test('YOLO result layout exposes M1-M4 pass cards and RAG guidance instead of score-first output', () => {
   const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
   assert.match(app, /class="inspection-summary-panel"/);
-  assert.match(app, /class="service-status-panel"/);
+  assert.match(app, /motor-check-grid/);
+  assert.match(app, /inspection-final-result/);
+  assert.match(app, /data-inspection-assistant/);
+  assert.match(app, /appendInspectionKnowledgeAnswer/);
   assert.match(app, /class="stage-guide"/);
-  assert.match(app, /CW 正槳|CCW 反槳/);
+  assert.match(app, /M1|M2|M3|M4/);
+  assert.match(app, /Expected|Detected|Blade Face|Confidence|PASS|NG|CHECK/);
+  assert.match(app, /AI 修正建議|FDE 知識庫|知識庫依據不足/);
   assert.match(app, /class="[^"]*inspection-visual-panel[^"]*"/);
+  assert.doesNotMatch(app, /AI 初判分數/);
   assert.match(css, /\.inspection-result\s*{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.inspection-summary-panel\s*{[^}]*overflow-x:\s*auto/s);
   assert.match(css, /\.result-file-name\s*{[^}]*overflow-wrap:\s*anywhere/s);
-  assert.match(css, /\.service-status-panel/s);
-  assert.match(css, /\.check-grid[^{]*{[^}]*grid-auto-flow:\s*column/s);
+  assert.match(css, /\.motor-check-grid/s);
+  assert.match(css, /\.motor-check\.pass/s);
+  assert.match(css, /\.motor-check\.ng/s);
+  assert.match(css, /\.motor-check\.check/s);
   assert.doesNotMatch(app, /viewport-toolbar|data-pan-zoom|bindPanZoom/);
+});
+
+test('YOLO backend returns motor mapping fields for F450 propeller inspection', () => {
+  const server = readFileSync(new URL('../api/yolo_server.py', import.meta.url), 'utf8');
+
+  assert.match(server, /EXPECTED_PROPELLER_BY_POSITION/);
+  assert.match(server, /motorChecks/);
+  assert.match(server, /DIRECTION_ERROR|NOT_DETECTED|UNCERTAIN/);
+  assert.match(server, /"M1": "ccw_propeller"/);
+  assert.match(server, /"M2": "ccw_propeller"/);
+  assert.match(server, /"M3": "cw_propeller"/);
+  assert.match(server, /"M4": "cw_propeller"/);
 });
 
 test('voice assistant UI and backend routes use local RAG without OpenAI API keys', () => {
