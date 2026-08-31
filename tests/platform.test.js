@@ -399,7 +399,8 @@ test('inspection view isolates the detection center from unrelated sections', ()
 
   assert.match(app, /inspection-view/);
   assert.match(app, /syncViewFromLocation/);
-  assert.match(css, /body\.inspection-view\s+main\s+>\s+\.section-block:not\(#inspection\)/);
+  assert.match(css, /body\.inspection-view\s+main\s+>\s+\.section-block:not\(#inspection\):not\(#teacher\)/);
+  assert.match(css, /body:has\(#inspection:target\)\s+main\s+>\s+\.section-block:not\(#inspection\):not\(#teacher\)/);
 });
 
 test('teacher dashboard emphasizes review efficiency and AI warnings', () => {

@@ -192,11 +192,20 @@ main {
 }
 
 /* Keep the inspection center focused when it is opened as its own page view. */
-body.inspection-view main > .section-block:not(#inspection) {
+body.inspection-view main > .section-block:not(#inspection):not(#teacher) {
+  display: none;
+}
+
+/* The URL target keeps the dedicated view reliable across reloads and cached scripts. */
+body:has(#inspection:target) main > .section-block:not(#inspection):not(#teacher) {
   display: none;
 }
 
 body.inspection-view main {
+  min-height: 100vh;
+}
+
+body:has(#inspection:target) main {
   min-height: 100vh;
 }
 
