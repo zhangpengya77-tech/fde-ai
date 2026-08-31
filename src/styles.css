@@ -1754,8 +1754,20 @@ textarea {
 
 /* Keep the existing homepage structure compact on wide screens. */
 @media (min-width: 1101px) {
+  body.home-view {
+    overflow-y: hidden;
+  }
+
+  body.home-view main > section:not(#home) {
+    display: none;
+  }
+
+  body.home-view main {
+    min-height: 100vh;
+  }
+
   main > #home {
-    min-height: 560px;
+    min-height: calc(100vh - 84px);
     padding-block: 42px;
   }
 

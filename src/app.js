@@ -61,7 +61,25 @@ function scrollToSection(target) {
   const sectionId = String(target || '').replace('#', '');
   const section = document.getElementById(sectionId);
   if (!section) return;
+
+  document.body.classList.toggle('home-view', sectionId === 'home');
+  if (sectionId === 'home') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function syncViewFromLocation() {
+  const sectionId = window.location.hash.replace('#', '');
+  if (!sectionId || sectionId === 'home') {
+    document.body.classList.add('home-view');
+    return;
+  }
+
+  document.body.classList.remove('home-view');
+  requestAnimationFrame(() => scrollToSection(sectionId));
 }
 
 function renderHero() {
@@ -716,6 +734,8 @@ function bindActions() {
     });
   });
 
+  window.addEventListener('hashchange', syncViewFromLocation);
+
   document.querySelectorAll('[data-task-id]').forEach((button) => {
     button.addEventListener('click', () => {
       selectedTaskId = button.dataset.taskId;
@@ -852,4 +872,5 @@ renderAssessmentWorkflows();
 renderTeacherDashboard();
 renderCertificationChecklist();
 bindActions();
+syncViewFromLocation();
 })();
