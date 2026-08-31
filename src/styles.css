@@ -602,7 +602,8 @@ main {
 }
 
 .inspection-page .workflow-grid {
-  margin-bottom: 32px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 28px;
 }
 
 .resource-grid {
@@ -1138,6 +1139,7 @@ main {
 
 .inspection-layout {
   align-items: stretch;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .mission-current {
@@ -1569,7 +1571,7 @@ textarea {
 
 .motor-check-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
   gap: 10px;
   margin: 14px 0;
 }
@@ -1632,8 +1634,8 @@ textarea {
 
 .motor-check dl div {
   display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(86px, 0.72fr) minmax(72px, 1fr);
+  gap: 10px;
   align-items: baseline;
 }
 
@@ -1651,6 +1653,8 @@ textarea {
 .motor-check dd {
   color: #e6f6ff;
   font-weight: 800;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .motor-check p {
@@ -1706,6 +1710,10 @@ textarea {
 
 .inspection-assistant .result-card {
   margin: 0;
+}
+
+.propeller-result-panel {
+  grid-column: 1 / -1;
 }
 
 .detection-list {

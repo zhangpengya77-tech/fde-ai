@@ -39,10 +39,11 @@ test('defines the five main sidebar modules as learn practice build assess certi
     '課程影片與下載說明',
     '模擬器與考照練習',
     'F450 組裝與 AI 助教',
-    '目標檢測與考試題庫',
+    '鷹眼 AI 檢測中心',
     'GitHub 成果存證'
   ]);
-  assert.match(moduleSections.find((section) => section.label === '測').summary, /槳葉|馬達|電池|四面懸停/);
+  assert.match(moduleSections.find((section) => section.label === '測').summary, /F450|槳葉|四面懸停/);
+  assert.doesNotMatch(moduleSections.find((section) => section.label === '測').title, /考試題庫/);
 });
 
 test('defines a boot hero for an AI vehicle learning control center', () => {
@@ -359,20 +360,31 @@ test('HTML app renders the mission map, task detail workflow, and alumni section
   assert.match(browserData, /cohorts/);
 });
 
-test('assess section includes component detection, four-side hover scoring, and exam bank', () => {
-  assert.deepEqual(assessmentWorkflows.map((workflow) => workflow.key), ['assembly-detection', 'hover-scoring', 'hover-question-bank']);
+test('assess section only exposes F450 propeller inspection and four-side hover scoring', () => {
+  assert.deepEqual(assessmentWorkflows.map((workflow) => workflow.key), ['propeller-inspection', 'hover-scoring']);
   assert.ok(assessmentWorkflows[0].acceptedEvidence.includes('photo'));
-  assert.ok(assessmentWorkflows[0].acceptedEvidence.includes('30-second-video'));
   assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('槳葉')));
-  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('馬達')));
-  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('電池')));
+  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('M1')));
+  assert.ok(assessmentWorkflows[0].checks.some((check) => check.includes('M4')));
   assert.ok(assessmentWorkflows[1].title.includes('四面懸停'));
-  assert.ok(assessmentWorkflows[2].title.includes('考試題庫'));
+  assert.ok(assessmentWorkflows.every((workflow) => !workflow.title.includes('考試題庫')));
 
   const result = simulateHoverAssessment('hover.mp4');
   assert.equal(result.engine, 'YOLOv8 hover scoring placeholder');
   assert.equal(result.score, 82);
   assert.match(result.teacherReview, /線下老師/);
+});
+
+test('F450 inspection page gives the propeller result enough width for M1-M4 cards', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+
+  assert.match(html, /鷹眼 AI 檢測中心/);
+  assert.match(html, /F450 槳葉正反及方向檢查/);
+  assert.match(html, /class="panel result-panel propeller-result-panel"/);
+  assert.match(css, /\.inspection-layout\s*{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.propeller-result-panel\s*{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+  assert.match(css, /\.motor-check dd\s*{[^}]*white-space:\s*nowrap/s);
 });
 
 test('teacher dashboard emphasizes review efficiency and AI warnings', () => {

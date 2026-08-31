@@ -162,9 +162,9 @@ export const moduleSections = [
   {
     key: 'inspection',
     label: '測',
-    title: '目標檢測與考試題庫',
-    summary: '檢測槳葉、馬達、電池等組裝狀態，並保留四面懸停考試題庫與 AI 評分入口。',
-    goal: '上傳照片或影片，檢查槳葉、馬達、電池與四面懸停表現，產生可複核結果。'
+    title: '鷹眼 AI 檢測中心',
+    summary: '只保留 F450 槳葉正反及方向檢查、F450 四面懸停檢測兩個入口。',
+    goal: '上傳 F450 照片或四面懸停影片，產生可複核的 PASS / NG / CHECK 結果。'
   },
   {
     key: 'certify',
@@ -761,11 +761,11 @@ export function searchKnowledgeBase(question = '', limit = 2) {
 
 export const assessmentWorkflows = [
   {
-    key: 'assembly-detection',
-    title: 'F450 組裝 AI 檢測',
+    key: 'propeller-inspection',
+    title: 'F450 槳葉正反及方向檢查',
     engine: 'YOLOv8 placeholder',
-    acceptedEvidence: ['photo', '30-second-video'],
-    checks: ['槳葉 CW / CCW 是否安裝正確', '馬達與機臂位置是否合理', '電池固定與重心是否需要人工複查', '飛控方向與 GPS 羅盤位置是否合理']
+    acceptedEvidence: ['photo'],
+    checks: ['槳葉 M1 = CCW', '槳葉 M2 = CCW', '槳葉 M3 = CW', '槳葉 M4 = CW', '錯誤項目交由 RAG 知識庫回答']
   },
   {
     key: 'hover-scoring',
@@ -773,13 +773,6 @@ export const assessmentWorkflows = [
     engine: 'YOLOv8 hover scoring placeholder',
     acceptedEvidence: ['30-second-video'],
     checks: ['機頭朝前懸停', '機頭朝右懸停', '機頭朝後懸停', '機頭朝左懸停', '線下老師完成最終評分']
-  },
-  {
-    key: 'hover-question-bank',
-    title: '四面懸停考試題庫',
-    engine: 'exam-bank placeholder',
-    acceptedEvidence: ['practice-record'],
-    checks: ['四面懸停考試流程', '起飛與降落安全檢查', '方向辨識題', '常見扣分原因', '教師線下複核重點']
   }
 ];
 

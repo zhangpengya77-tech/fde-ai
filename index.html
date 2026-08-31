@@ -200,22 +200,18 @@
         <div class="section-intro">
           <p class="eyebrow">AI Inspection Center · 測</p>
           <h2>鷹眼 AI 檢測中心</h2>
-          <p>這是網站科技感最強的頁面：左側上傳，中間呈現 AI 檢測畫面，右側輸出 PASS / WARNING / FAIL 與教師復核狀態。</p>
+          <p>本頁只保留兩個檢測入口：F450 槳葉正反及方向檢查、F450 四面懸停檢測。</p>
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
         <div class="inspection-layout">
           <div class="panel upload-panel">
-            <h3>F450 組裝檢測</h3>
+            <h3>F450 槳葉正反及方向檢查</h3>
             <label class="dropzone">
               <input type="file" id="propellerInput" accept="image/*" />
-              <span>上傳組裝照片</span>
-              <small>建議俯視圖，讓槳葉、機頭、飛控、GPS 與電池位置清楚可見。</small>
+              <span>上傳 F450 俯視照片</span>
+              <small>系統會依 M1、M2、M3、M4 顯示 PASS / NG / CHECK，錯誤項目交由 RAG 知識庫回答。</small>
             </label>
-            <button class="primary-action button" id="propellerButton">執行組裝檢測</button>
-          </div>
-          <div class="panel result-panel">
-            <h3>組裝檢測結果</h3>
-            <div class="result" id="propellerResult"></div>
+            <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
           </div>
           <div class="panel upload-panel">
             <h3>四面懸停檢測</h3>
@@ -225,6 +221,10 @@
               <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
             </label>
             <button class="primary-action button" id="hoverButton">執行懸停評分</button>
+          </div>
+          <div class="panel result-panel propeller-result-panel">
+            <h3>F450 槳葉檢測結果</h3>
+            <div class="result" id="propellerResult"></div>
           </div>
           <div class="panel result-panel">
             <h3>飛行分析儀表板</h3>
