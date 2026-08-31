@@ -1752,6 +1752,67 @@ textarea {
   }
 }
 
+/* Keep the existing homepage structure compact on wide screens. */
+@media (min-width: 1101px) {
+  main > #home {
+    min-height: 560px;
+    padding-block: 42px;
+  }
+
+  #home .hero-copy h1 {
+    font-size: clamp(34px, 4.6vw, 62px);
+  }
+
+  #home .hero-copy p {
+    line-height: 1.55;
+  }
+
+  #home .hero-actions {
+    margin-top: 18px;
+  }
+
+  #home .hero-systems {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  #mobile-demo,
+  main > .flow-section,
+  main > .platform-modes-section {
+    padding-block: 42px;
+  }
+
+  #mobile-demo .section-intro,
+  main > .flow-section .section-intro,
+  main > .platform-modes-section .section-intro {
+    margin-bottom: 18px;
+  }
+
+  #mobile-demo .mobile-demo-grid {
+    gap: 10px;
+  }
+
+  .learning-flow {
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .flow-node {
+    min-height: 112px;
+    padding: 12px;
+  }
+
+  .flow-node strong {
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+  }
+
+  .flow-node span {
+    margin-top: 8px;
+  }
+}
+
 @media (max-width: 1100px) {
   .sidebar {
     position: sticky;
