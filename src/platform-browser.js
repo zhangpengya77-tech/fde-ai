@@ -841,8 +841,8 @@ function simulatePropellerAssessment(fileName = 'propeller-check.jpg') {
     type: 'propeller-photo',
     engine: 'YOLOv8 placeholder',
     fileName,
-    status: 'NG',
-    score: 82,
+    status: 'ERROR',
+    score: null,
     teacherStatus: '待復核',
     summary: '模擬檢測完成：系統已依 F450 機頭方向比對 M1-M4 槳葉位置，錯誤項目會送入本機 RAG 知識庫產生修正建議。',
     detections: [
@@ -873,8 +873,8 @@ function simulatePropellerAssessment(fileName = 'propeller-check.jpg') {
         expectedDirection: 'CCW',
         bladeFace: 'CHECK',
         confidence: 0.82,
-        errorCode: 'DIRECTION_ERROR',
-        result: 'NG'
+        errorCode: 'WRONG_BLADE_DIRECTION',
+        result: 'ERROR'
       },
       {
         motor: 'M2',
@@ -897,8 +897,8 @@ function simulatePropellerAssessment(fileName = 'propeller-check.jpg') {
         expectedDirection: 'CW',
         bladeFace: 'CHECK',
         confidence: 0.9,
-        errorCode: 'DIRECTION_ERROR',
-        result: 'NG'
+        errorCode: 'WRONG_BLADE_DIRECTION',
+        result: 'ERROR'
       }
     ],
     checklist: [

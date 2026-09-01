@@ -567,24 +567,24 @@ function propellerFinalResult(result) {
   const motorChecks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
   if (!motorChecks.length) {
     return {
-      status: 'CHECK',
+      status: 'UNKNOWN',
       title: '部分槳葉需要人工確認',
       detail: '目前沒有完整 M1-M4 槳葉資料，請重新拍攝俯視照片後再檢測。'
     };
   }
 
-  const failed = motorChecks.filter((item) => item.result === 'NG');
-  const uncertain = motorChecks.filter((item) => item.result === 'CHECK');
+  const failed = motorChecks.filter((item) => item.result === 'ERROR' || item.result === 'NG');
+  const uncertain = motorChecks.filter((item) => item.result === 'UNKNOWN' || item.result === 'CHECK');
   if (failed.length) {
     return {
-      status: 'NG',
+      status: 'ERROR',
       title: '發現 F450 槳葉安裝異常',
       detail: failed.map((item) => `${item.motor}: Detected ${item.detectedDirection}, Expected ${item.expectedDirection}`).join('；')
     };
   }
   if (uncertain.length) {
     return {
-      status: 'CHECK',
+      status: 'UNKNOWN',
       title: '部分槳葉需要人工確認',
       detail: uncertain.map((item) => `${item.motor}: ${item.errorCode}`).join('；')
     };
@@ -599,7 +599,7 @@ function propellerFinalResult(result) {
 function renderMotorChecks(result) {
   const checks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
   if (!checks.length) {
-    return '<div class="motor-check-grid"><article class="motor-check check"><strong>M1-M4</strong><span>CHECK</span><small>尚未取得完整槳葉位置資料</small></article></div>';
+    return '<div class="motor-check-grid"><article class="motor-check unknown"><strong>M1-M4</strong><span>UNKNOWN</span><small>尚未取得完整槳葉位置資料</small></article></div>';
   }
 
   return `
@@ -615,12 +615,11 @@ function renderMotorChecks(result) {
               </div>
               <small>${escapeHtml(item.position || '位置待確認')}</small>
               <dl>
-                <div><dt>Detected</dt><dd>${escapeHtml(item.detectedDirection || 'CHECK')}</dd></div>
-                <div><dt>Expected</dt><dd>${escapeHtml(item.expectedDirection || 'CHECK')}</dd></div>
-                <div><dt>Blade Face</dt><dd>${escapeHtml(item.bladeFace || 'CHECK')}</dd></div>
-                <div><dt>Confidence</dt><dd>${formatConfidence(item.confidence)}</dd></div>
+                <div><dt>檢測方向</dt><dd>${escapeHtml(item.detectedDirection || 'UNKNOWN')}</dd></div>
+                <div><dt>標準方向</dt><dd>${escapeHtml(item.expectedDirection || 'UNKNOWN')}</dd></div>
+                <div><dt>槳葉正反</dt><dd>${escapeHtml(item.bladeFace || '未提供')}</dd></div>
               </dl>
-              ${item.result === 'NG' ? `<p>Correct: ${escapeHtml(item.expectedDirection)}</p>` : ''}
+              ${item.result === 'ERROR' || item.result === 'NG' ? `<p>請修正為 ${escapeHtml(item.expectedDirection || '標準方向')}</p>` : ''}
             </article>
           `
         )
@@ -643,6 +642,39 @@ function inspectionQuestion(result) {
   return `F450 槳葉檢測修正建議。${context}。檢索關鍵詞：F450 槳葉方向 CW CCW ${keywords}。請優先依 FDE 知識庫回答，資料不足就明確說知識庫依據不足。`;
 }
 
+function conciseInspectionAnswer(result, sourceStatus = 'local-rag') {
+  const checks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
+  const errors = checks.filter((item) => item.result === 'ERROR' || item.result === 'NG');
+  const unknown = checks.filter((item) => item.result === 'UNKNOWN' || item.result === 'CHECK');
+  if (sourceStatus === 'knowledge-missing') {
+    return '知識庫依據不足，請老師確認。';
+  }
+  if (!errors.length && !unknown.length && checks.length === 4) {
+    return '檢測結果：M1、M2、M3、M4 全部 PASS。處理：符合 F450 槳葉方向標準，可以進入下一步。';
+  }
+  if (errors.length) {
+    const motors = errors.map((item) => item.motor).join('、');
+    const expected = [...new Set(errors.map((item) => item.expectedDirection).filter(Boolean))].join('、');
+    return `檢測結果：${motors} ERROR。錯誤：槳葉方向不符標準${expected ? `，應為 ${expected}` : ''}。處理：停機後重新安裝，再拍照檢測。`;
+  }
+  const motors = unknown.map((item) => item.motor).join('、') || 'M1-M4';
+  return `檢測結果：${motors} UNKNOWN。原因：模型無法可靠判斷。處理：重新拍攝完整、清楚的俯視照片。`;
+}
+
+function renderInspectionAssistantAnswer(text, sourceStatus) {
+  return `
+    <article class="result-card inspection-answer">
+      <div class="section-head">
+        <span class="tag">IG / RAG</span>
+        <span class="status ${statusClass(sourceStatus)}">${escapeHtml(sourceStatus)}</span>
+      </div>
+      <h3>AI 修正建議</h3>
+      <p>${escapeHtml(text)}</p>
+      <small>優先依本機 FDE 知識庫回答；內容不足時不自行猜測。</small>
+    </article>
+  `;
+}
+
 async function appendInspectionKnowledgeAnswer(result) {
   const target = document.querySelector('[data-inspection-assistant]');
   if (!target) return;
@@ -650,15 +682,19 @@ async function appendInspectionKnowledgeAnswer(result) {
   target.innerHTML = '<p>正在查詢 FDE 知識庫並產生 AI 修正建議...</p>';
   try {
     const answer = await runVoiceAssistantQuestion(inspectionQuestion(result));
-    target.innerHTML = renderAssistantResult(answer);
+    const conciseAnswer = conciseInspectionAnswer(result, answer.sourceStatus);
+    target.innerHTML = renderInspectionAssistantAnswer(conciseAnswer, answer.sourceStatus);
+    speakVoiceAnswer(conciseAnswer);
   } catch (error) {
+    const conciseAnswer = conciseInspectionAnswer(result, 'knowledge-missing');
     target.innerHTML = `
       <article class="result-card local-service-note">
         <h3>AI 修正建議</h3>
-        <p>AI 助手暫時無法連接；上方 M1-M4 的 PASS / NG / CHECK 檢測結果仍可使用。</p>
-        <small>${escapeHtml(error.message)}</small>
+        <p>${escapeHtml(conciseAnswer)}</p>
+        <small>本機 RAG 助手目前未連線，請先確認服務。</small>
       </article>
     `;
+    speakVoiceAnswer(conciseAnswer);
   }
 }
 
@@ -698,14 +734,6 @@ function renderPropellerInspectionResult(result, includeVisual = false) {
           <strong>${escapeHtml(finalResult.status)}</strong>
           <p>${escapeHtml(finalResult.title)}</p>
           <small>${escapeHtml(finalResult.detail)}</small>
-        </div>
-        <div class="detection-list">
-          ${detections
-            .map((item) => {
-              const confidence = Number.isFinite(item.confidence) ? `${(item.confidence * 100).toFixed(1)}%` : '待確認';
-              return `<small>${escapeHtml(item.motor || item.position || '目標')} · ${escapeHtml(item.label || item.className)} · ${confidence}</small>`;
-            })
-            .join('')}
         </div>
         <div class="inspection-assistant" data-inspection-assistant>
           <h3>AI 修正建議</h3>

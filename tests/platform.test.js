@@ -248,9 +248,9 @@ test('propeller assessment simulates YOLOv8 CW and CCW checks', () => {
   assert.equal(result.engine, 'YOLOv8 placeholder');
   assert.equal(result.detections.length, 4);
   assert.deepEqual(result.motorChecks.map((check) => check.motor), ['M3', 'M1', 'M2', 'M4']);
-  assert.ok(result.motorChecks.every((check) => ['PASS', 'NG', 'CHECK'].includes(check.result)));
+  assert.ok(result.motorChecks.every((check) => ['PASS', 'ERROR', 'UNKNOWN'].includes(check.result)));
   assert.ok(result.motorChecks.every((check) => ['CW', 'CCW'].includes(check.expectedDirection)));
-  assert.ok(result.motorChecks.some((check) => check.result === 'NG'));
+  assert.ok(result.motorChecks.some((check) => check.result === 'ERROR'));
   assert.ok(result.detections.some((detection) => detection.className === 'cw_propeller'));
   assert.ok(result.detections.some((detection) => detection.className === 'ccw_propeller'));
 });
@@ -289,7 +289,7 @@ test('YOLO backend returns motor mapping fields for F450 propeller inspection', 
 
   assert.match(server, /EXPECTED_PROPELLER_BY_POSITION/);
   assert.match(server, /motorChecks/);
-  assert.match(server, /DIRECTION_ERROR|NOT_DETECTED|UNCERTAIN/);
+  assert.match(server, /WRONG_BLADE_DIRECTION|OBJECT_NOT_FOUND|LOW_CONFIDENCE/);
   assert.match(server, /"M1": "ccw_propeller"/);
   assert.match(server, /"M2": "ccw_propeller"/);
   assert.match(server, /"M3": "cw_propeller"/);

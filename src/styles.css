@@ -1267,6 +1267,18 @@ body:has(#inspection:target) main {
   color: var(--green);
 }
 
+.error,
+.ng {
+  border-color: rgba(255, 92, 115, 0.55);
+  color: var(--red);
+}
+
+.unknown,
+.check {
+  border-color: rgba(245, 184, 75, 0.55);
+  color: var(--yellow);
+}
+
 .local-rag {
   border-color: rgba(53, 230, 168, 0.55);
   color: var(--green);

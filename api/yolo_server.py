@@ -14,6 +14,7 @@ from PIL import Image
 from ultralytics import YOLO
 
 from hover_model import analyze_video
+from f450_validator import load_rules, validate_motor
 
 
 DEFAULT_MODEL = (
@@ -124,6 +125,8 @@ PROPELLER_DIRECTIONS = {
     "ccw_propeller": "CCW",
 }
 
+F450_RULES = load_rules()
+
 
 def load_env_file():
     for env_path in (Path.cwd() / ".env", Path.cwd().parent / ".env"):
@@ -201,30 +204,26 @@ class Detector:
 
         if not detections:
             return (
-                "CHECK",
-                0,
-                [{"label": "目標檢測", "result": "CHECK", "detail": "沒有偵測到已訓練零件"}],
-                f"{file_name} 沒有偵測到 F450 零件，請換一張更清楚的俯視照片。",
+                "UNKNOWN",
+                None,
+                [{"label": "目標檢測", "result": "UNKNOWN", "detail": "沒有偵測到已訓練零件"}],
+                f"{file_name} 無法可靠判斷，請重新拍攝完整、清楚的俯視照片。",
                 motor_checks,
             )
 
         avg_conf = sum(item["confidence"] for item in detections) / len(detections)
         all_pass = all(item["result"] == "PASS" for item in motor_checks)
-        has_ng = any(item["result"] == "NG" for item in motor_checks)
-        score = round(min(100, 45 + avg_conf * 35 + (20 if all_pass else 8)))
-        status = "PASS" if all_pass else "NG" if has_ng else "CHECK"
+        has_error = any(item["result"] == "ERROR" for item in motor_checks)
+        score = None
+        status = "PASS" if all_pass else "ERROR" if has_error else "UNKNOWN"
         checklist = [
-            {"label": "CW 正槳", "result": "PASS" if counts.get("cw_propeller", 0) >= 2 else "WARNING", "detail": f"偵測到 {counts.get('cw_propeller', 0)} 個"},
-            {"label": "CCW 反槳", "result": "PASS" if counts.get("ccw_propeller", 0) >= 2 else "WARNING", "detail": f"偵測到 {counts.get('ccw_propeller', 0)} 個"},
-            {"label": "馬達", "result": "PASS" if counts.get("motor", 0) >= 4 else "WARNING", "detail": f"偵測到 {counts.get('motor', 0)} 個"},
-            {"label": "機臂", "result": "PASS" if counts.get("frame_arm", 0) >= 4 else "WARNING", "detail": f"偵測到 {counts.get('frame_arm', 0)} 個"},
-            {"label": "飛控", "result": "PASS" if counts.get("flight_controller", 0) >= 1 else "WARNING", "detail": f"偵測到 {counts.get('flight_controller', 0)} 個"},
-            {"label": "GPS/指南針", "result": "PASS" if counts.get("gps_compass", 0) >= 1 else "WARNING", "detail": f"偵測到 {counts.get('gps_compass', 0)} 個"},
+            {"label": "CW 正槳", "result": "PASS" if counts.get("cw_propeller", 0) >= 2 else "UNKNOWN", "detail": f"偵測到 {counts.get('cw_propeller', 0)} 個"},
+            {"label": "CCW 反槳", "result": "PASS" if counts.get("ccw_propeller", 0) >= 2 else "UNKNOWN", "detail": f"偵測到 {counts.get('ccw_propeller', 0)} 個"},
         ]
         summary = (
             f"{file_name} 已完成本機 YOLOv8 檢測：偵測到 {len(detections)} 個目標。"
             "系統已依 F450 機頭方向比對 M1、M2、M3、M4 的 CW/CCW 槳葉規則；"
-            "若正反面資料不足，Blade Face 會顯示 CHECK。"
+            "目前模型未提供正反面類別時，不會強行判定。"
         )
         return status, score, checklist, summary, motor_checks
 
@@ -255,21 +254,20 @@ class Detector:
                         "motor": motor,
                         "position": MOTOR_POSITIONS[motor],
                         "detectedClass": None,
-                        "detectedDirection": "CHECK",
+                        "detectedDirection": None,
                         "expectedClass": expected_class,
                         "expectedDirection": PROPELLER_DIRECTIONS[expected_class],
-                        "bladeFace": "CHECK",
+                        "bladeFace": None,
                         "confidence": None,
-                        "errorCode": "NOT_DETECTED",
-                        "result": "CHECK",
+                        "errorCode": "OBJECT_NOT_FOUND",
+                        "result": "UNKNOWN",
                     }
                 )
                 continue
 
             detected_class = detected["className"]
             confidence = detected.get("confidence")
-            direction_ok = detected_class == expected_class
-            uncertain = confidence is None or confidence < 0.55
+            validation = validate_motor(motor, {"className": detected_class, "confidence": confidence}, F450_RULES)
             checks.append(
                 {
                     "motor": motor,
@@ -278,10 +276,10 @@ class Detector:
                     "detectedDirection": PROPELLER_DIRECTIONS.get(detected_class, "CHECK"),
                     "expectedClass": expected_class,
                     "expectedDirection": PROPELLER_DIRECTIONS[expected_class],
-                    "bladeFace": "CHECK",
+                    "bladeFace": validation["detected"].get("side"),
                     "confidence": confidence,
-                    "errorCode": "UNCERTAIN" if uncertain else "PASS" if direction_ok else "DIRECTION_ERROR",
-                    "result": "CHECK" if uncertain else "PASS" if direction_ok else "NG",
+                    "errorCode": validation["error_code"],
+                    "result": validation["status"],
                 }
             )
 

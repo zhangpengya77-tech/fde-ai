@@ -1,0 +1,9 @@
+{
+  "confidence_threshold": 0.55,
+  "motors": {
+    "M1": { "position": "右前", "blade_direction": "CCW", "blade_side": "FRONT" },
+    "M2": { "position": "左後", "blade_direction": "CCW", "blade_side": "FRONT" },
+    "M3": { "position": "左前", "blade_direction": "CW", "blade_side": "FRONT" },
+    "M4": { "position": "右後", "blade_direction": "CW", "blade_side": "FRONT" }
+  }
+}
