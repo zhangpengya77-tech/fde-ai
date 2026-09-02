@@ -164,7 +164,7 @@ const moduleSections = [
     label: '測',
     title: '鷹眼 AI 檢測中心',
     summary: '只保留 F450 槳葉正反及方向檢查、F450 四面懸停檢測兩個入口。',
-    goal: '上傳 F450 照片或四面懸停影片，產生可複核的 PASS / NG / CHECK 結果。'
+    goal: '上傳 F450 照片或四面懸停影片；槳葉檢查產生可複核的 PASS / ERROR / UNKNOWN 結果。'
   },
   {
     key: 'certify',
