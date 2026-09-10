@@ -31,7 +31,7 @@ const localVoiceEndpoint = voiceAssistant.endpoint;
 let voiceRecognition = null;
 let voiceTranscript = '';
 let isVoicePlaybackPaused = false;
-let selectedTaskId = 'M04';
+let selectedTaskId = null;
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
@@ -229,7 +229,6 @@ function renderMissionMap() {
                     <strong>${task.title}</strong>
                     <small>${task.subtitle}</small>
                     <span class="difficulty">${task.difficulty} · ${task.estimatedHours || '?'}h</span>
-                    <span class="workflow-mini">${workflowSteps.map((step) => `<i>${step.label}</i>`).join('')}</span>
                   </button>
                 `
               )
