@@ -110,28 +110,12 @@ function handleRouteClick(event) {
 function renderHero() {
   $('#heroHeadline').textContent = hero.headline;
   $('#heroSummary').textContent = hero.summary;
-  $('#heroSystems').innerHTML = `
-    ${hero.systems.map((system) => `<span>${system}</span>`).join('')}
-    <div class="service-status-panel">
-      ${hero.systemStatus
-        .map(
-          (item) => `
-            <div>
-              <span>${item.label}</span>
-              <strong>${item.state}</strong>
-              <small>${item.detail}</small>
-            </div>
-          `
-        )
-        .join('')}
-    </div>
-  `;
-  $('#heroActions').innerHTML = hero.actions
-    .map(
-      (action) =>
-        `<a class="${action.kind}-action" href="${router.hrefForTarget(action.target)}">${action.label}</a>`
-    )
-    .join('');
+  $('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
+
+  const primaryAction = hero.actions.find((action) => action.kind === 'primary');
+  $('#heroActions').innerHTML = primaryAction
+    ? `<a class="${primaryAction.kind}-action" href="${router.hrefForTarget(primaryAction.target)}">${primaryAction.label}</a>`
+    : '';
 
   const motionStrip = $('#designMotion');
   if (motionStrip) {
