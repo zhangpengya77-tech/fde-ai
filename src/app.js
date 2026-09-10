@@ -271,7 +271,11 @@ function renderSectionList(items = []) {
   return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
 }
 
-function renderTaskDetail(taskId) {
+function renderTaskDetail() {
+  return;
+}
+
+function renderTaskDetailLegacy(taskId) {
   const task = missionTasks.find((item) => item.id === taskId) || missionTasks[0];
   const panel = $('#taskDetailPanel');
   if (!panel || !task) return;
