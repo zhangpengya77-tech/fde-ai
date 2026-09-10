@@ -24,6 +24,7 @@ const {
 } = window.FdePlatform;
 
 const $ = (selector) => document.querySelector(selector);
+const router = window.FdeRouter;
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
 const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const localVoiceEndpoint = voiceAssistant.endpoint;
@@ -53,35 +54,56 @@ function renderNavigation() {
     { key: 'teacher', label: '師', title: '教師復核中心' }
   ];
   $('#moduleNav').innerHTML = primaryNav
-    .map((section) => `<a href="#${section.key}"><span>${section.label}</span>${section.title}</a>`)
+    .map(
+      (section) =>
+        `<a href="${router.hrefFor(section.key)}" data-route="${section.key}"><span>${section.label}</span>${section.title}</a>`
+    )
     .join('');
 }
 
-function scrollToSection(target) {
-  const sectionId = String(target || '').replace('#', '');
-  const section = document.getElementById(sectionId);
-  if (!section) return;
+function applyRoute(routeKey) {
+  const route = router.definitions.find((item) => item.key === routeKey) || router.definitions[0];
+  document.querySelectorAll('main > .section-block').forEach((section) => {
+    const isActive = section.id === route.sectionId;
+    section.hidden = !isActive;
+    section.setAttribute('aria-hidden', String(!isActive));
+  });
 
-  document.body.classList.toggle('inspection-view', sectionId === 'inspection');
-  document.body.classList.toggle('home-view', sectionId === 'home');
-  if (sectionId === 'home') {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    return;
-  }
+  document.body.classList.toggle('inspection-view', route.key === 'inspection');
+  document.body.classList.toggle('home-view', route.key === 'home');
+  document.body.dataset.route = route.key;
 
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('#moduleNav a, .mobile-demo-nav a').forEach((link) => {
+    const linkRoute = router.routeFromHref(link.getAttribute('href'));
+    if (linkRoute === route.key) {
+      link.setAttribute('aria-current', 'page');
+    } else {
+      link.removeAttribute('aria-current');
+    }
+  });
+}
+
+function navigateToRoute(routeKey) {
+  const route = router.definitions.find((item) => item.key === routeKey);
+  if (!route) return;
+
+  window.history.pushState({ route: route.key }, '', router.hrefFor(route.key));
+  applyRoute(route.key);
 }
 
 function syncViewFromLocation() {
-  const sectionId = window.location.hash.replace('#', '');
-  document.body.classList.toggle('inspection-view', sectionId === 'inspection');
-  if (!sectionId || sectionId === 'home') {
-    document.body.classList.add('home-view');
-    return;
-  }
+  applyRoute(router.routeFromLocation(window.location));
+}
 
-  document.body.classList.remove('home-view');
-  requestAnimationFrame(() => scrollToSection(sectionId));
+function handleRouteClick(event) {
+  const link = event.target.closest('a');
+  if (!link || (link.target && link.target !== '_self')) return;
+
+  const routeKey = router.routeFromHref(link.getAttribute('href'));
+  if (!routeKey) return;
+
+  event.preventDefault();
+  navigateToRoute(routeKey);
 }
 
 function renderHero() {
@@ -104,7 +126,10 @@ function renderHero() {
     </div>
   `;
   $('#heroActions').innerHTML = hero.actions
-    .map((action) => `<a class="${action.kind}-action" href="${action.target}">${action.label}</a>`)
+    .map(
+      (action) =>
+        `<a class="${action.kind}-action" href="${router.hrefForTarget(action.target)}">${action.label}</a>`
+    )
     .join('');
 
   const motionStrip = $('#designMotion');
@@ -176,7 +201,7 @@ function renderStudentDashboard() {
         .map((step) => `<span class="${step.state}">${step.label}</span>`)
         .join('')}
     </div>
-    <a class="primary-action" href="#inspection">${studentDashboard.currentMission.action}</a>
+    <a class="primary-action" href="${router.hrefFor('inspection')}">${studentDashboard.currentMission.action}</a>
   `;
 }
 
@@ -798,7 +823,7 @@ function renderTeacherDashboard() {
           <div><strong>${item.student}</strong><span>${item.mission}</span></div>
           <span class="status ${statusClass(item.aiResult)}">${item.aiResult}</span>
           <p>${item.reason}</p>
-          <a href="#inspection">${item.action}</a>
+          <a href="${router.hrefFor('inspection')}">${item.action}</a>
         </article>
       `
     )
@@ -820,14 +845,8 @@ function renderCertificationChecklist() {
 }
 
 function bindActions() {
-  document.querySelectorAll('a[href^="#"]').forEach((link) => {
-    link.addEventListener('click', (event) => {
-      event.preventDefault();
-      scrollToSection(link.getAttribute('href'));
-    });
-  });
-
-  window.addEventListener('hashchange', syncViewFromLocation);
+  document.addEventListener('click', handleRouteClick);
+  window.addEventListener('popstate', syncViewFromLocation);
 
   document.querySelectorAll('[data-task-id]').forEach((button) => {
     button.addEventListener('click', () => {
