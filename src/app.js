@@ -66,6 +66,7 @@ function applyRoute(routeKey) {
   document.querySelectorAll('main > .section-block').forEach((section) => {
     const isActive = section.id === route.sectionId;
     section.hidden = !isActive;
+    section.style.display = isActive ? '' : 'none';
     section.setAttribute('aria-hidden', String(!isActive));
   });
 
@@ -74,7 +75,7 @@ function applyRoute(routeKey) {
   document.body.dataset.route = route.key;
 
   document.querySelectorAll('#moduleNav a, .mobile-demo-nav a').forEach((link) => {
-    const linkRoute = router.routeFromHref(link.getAttribute('href'));
+    const linkRoute = link.dataset.route || router.routeFromHref(link.getAttribute('href'));
     if (linkRoute === route.key) {
       link.setAttribute('aria-current', 'page');
     } else {
@@ -99,7 +100,7 @@ function handleRouteClick(event) {
   const link = event.target.closest('a');
   if (!link || (link.target && link.target !== '_self')) return;
 
-  const routeKey = router.routeFromHref(link.getAttribute('href'));
+  const routeKey = link.dataset.route || router.routeFromHref(link.getAttribute('href'));
   if (!routeKey) return;
 
   event.preventDefault();
