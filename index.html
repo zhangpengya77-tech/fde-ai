@@ -149,7 +149,7 @@
         <div class="section-intro">
           <p class="eyebrow">Build · 作</p>
           <h2>F450 Pixhawk 實作與 AI 助教</h2>
-          <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教只查 E 盤本機 RAG 教材協助排錯。</p>
+          <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教透過 F450 RAG 知識庫協助排錯。</p>
         </div>
         <div class="build-layout">
           <div class="panel">
@@ -163,14 +163,14 @@
           <div class="panel">
             <div class="section-head">
               <h3>AI 助教問答</h3>
-              <span class="pill pending">RAG-only 本機教材</span>
+              <span class="pill pending">F450 RAG V1 API</span>
             </div>
             <textarea id="assistantQuestion" rows="5" placeholder="例如：槳葉方向看不懂，飛控主板該朝哪裡？"></textarea>
             <div class="voice-assistant-panel" id="voiceAssistantPanel">
               <div>
-                <span class="tag">zh-TW Local RAG</span>
-                <strong>台灣繁中本機教材助教</strong>
-                <small>按一下開始、按一下停止；系統只查 E 盤 RAG 知識庫，不連 OpenAI API。</small>
+                <span class="tag">F450 RAG V1</span>
+                <strong>台灣繁中 F450 AI 助教</strong>
+                <small>回答依目前啟用的 F450 V1 知識庫；未取得可靠回答時會提示稍後再試。</small>
               </div>
               <div class="voice-controls">
                 <button class="secondary-action" id="voiceStartButton" type="button">開始語音提問</button>
@@ -262,7 +262,9 @@
     </main>
 
     <script src="./src/router.js?v=1.1-missions"></script>
-    <script src="./src/platform-browser.js?v=1.1-missions"></script>
-    <script src="./src/app.js?v=1.1-missions"></script>
+    <script src="./src/platform-browser.js?v=1.2-rag-api"></script>
+    <script src="./src/rag-config.js?v=1.2-rag-api"></script>
+    <script src="./src/rag-client.js?v=1.2-rag-api"></script>
+    <script src="./src/app.js?v=1.2-rag-api"></script>
   </body>
 </html>

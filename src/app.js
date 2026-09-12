@@ -28,6 +28,8 @@ const router = window.FdeRouter;
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
 const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const localVoiceEndpoint = voiceAssistant.endpoint;
+const ragConfig = window.FdeRagConfig || {};
+const ragClient = window.FdeRagClient?.createRagClient(ragConfig);
 let voiceRecognition = null;
 let voiceTranscript = '';
 let isVoicePlaybackPaused = false;
@@ -485,6 +487,17 @@ function renderAssistantResult(result) {
   `;
 }
 
+function renderF450RagResult(result) {
+  const sourceLabel = ragClient.sourceLabel(result.source_type);
+  return `
+    <article class="result-card">
+      <div class="section-head"><span class="tag">F450 AI 助教</span><span class="tag">${escapeHtml(sourceLabel)}</span></div>
+      <h3>回答</h3>
+      <p>${escapeHtml(result.answer)}</p>
+    </article>
+  `;
+}
+
 function speakVoiceAnswer(text) {
   if (!('speechSynthesis' in window) || !text) return;
   window.speechSynthesis.cancel();
@@ -550,25 +563,40 @@ async function askAssistantFromText(question) {
   if (!topic) return;
 
   $('#voiceStatus').textContent = voiceAssistant.statuses.searching;
-  $('#assistantResult').innerHTML = '<article class="result-card"><p>正在查詢 E 盤本機 RAG 教材...</p></article>';
+  $('#assistantResult').innerHTML = '<article class="result-card"><p>正在查詢 F450 RAG 知識庫...</p></article>';
+
+  if (ragConfig.FDE_RAG_V1_ENABLED) {
+    try {
+      const result = await ragClient.askRag(topic);
+      $('#voiceStatus').textContent = voiceAssistant.statuses.answering;
+      $('#assistantResult').innerHTML = renderF450RagResult(result);
+      speakVoiceAnswer(result.answer);
+      $('#voiceStatus').textContent = voiceAssistant.statuses.idle;
+    } catch {
+      const message = 'AI 助教知識庫暫時無法連接，請稍後再試。';
+      $('#assistantResult').innerHTML = `<article class="result-card local-service-note"><p>${message}</p></article>`;
+      $('#voiceStatus').textContent = message;
+    }
+    return;
+  }
+
   try {
     const result = await runVoiceAssistantQuestion(topic);
     $('#voiceStatus').textContent = voiceAssistant.statuses.answering;
     $('#assistantResult').innerHTML = renderAssistantResult(result);
     speakVoiceAnswer(result.answer);
     $('#voiceStatus').textContent = voiceAssistant.statuses.idle;
-  } catch (error) {
+  } catch {
     const fallback = simulateBuildAssistant(topic);
     $('#assistantResult').innerHTML = `
       ${renderAssistantResult(fallback)}
       <article class="result-card local-service-note">
-        <h3>本機 RAG 助教服務尚未連線</h3>
-        <p>目前先用前端內建教材做示範回答。請確認本機 API 服務已啟動，且 E 盤 knowledge_base 已放入教材文字。</p>
-        <small>${error.message}</small>
+        <h3>舊版本機助教服務尚未連線</h3>
+        <p>請確認舊版本機 AI 助教服務已啟動。</p>
       </article>
     `;
     speakVoiceAnswer(fallback.answer);
-    $('#voiceStatus').textContent = '本機 RAG 助教未連線，已顯示前端示範回答';
+    $('#voiceStatus').textContent = fallback.voiceStatus;
   }
 }
 

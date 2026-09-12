@@ -657,7 +657,7 @@ export const buildWorkflow = {
   controller: 'Pixhawk 2.4.8',
   interactionMode: 'upload-only',
   evidenceTypes: ['photo', '30-second-video'],
-  assistantPrompt: '請描述你的組裝問題，系統會查詢 E 盤知識包整理出的本地 RAG；沒有教材命中時會提示補充資料。',
+  assistantPrompt: '請描述你的組裝問題，系統會透過 F450 RAG API 查詢目前啟用的教材；資料不足時會提示補充資料。',
   stages: [
     '零件清點：F450 機架、機臂、馬達、ESC、Pixhawk 2.4.8、GPS 羅盤、接收機、電池與槳葉',
     '機架與機臂組裝：確認紅白機臂方向與機頭標記',
@@ -675,7 +675,6 @@ export const voiceAssistant = {
   locale: 'zh-TW',
   interactionMode: 'click-start-click-stop',
   ragFirst: true,
-  knowledgeBaseDir: 'E:\\FDE_AI_Voice_RAG\\knowledge_base',
   endpoint: 'http://127.0.0.1:8765/api/voice/ask',
   healthEndpoint: 'http://127.0.0.1:8765/api/voice/health',
   controls: [
@@ -697,7 +696,6 @@ export const ragKnowledgeBase = [
   {
     id: 'f450-assembly',
     title: 'F450安裝視頻',
-    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\F450安裝視頻.txt',
     keywords: ['f450', 's450', '組裝', '安装', 'esc', '電機', '马达', '機臂', '飛控', 'gps', 'led', '接收機', '電源模組', 'pixhawk'],
     content:
       'F450 組裝先焊接 ESC 與 XT60 電源線，紅線接正極、黑線接負極。馬達用螺絲固定在四個機臂，注意螺絲長度不要頂到線圈。紅色機臂作為機頭方向，飛控需貼在上蓋板中心，飛控箭頭指向機頭；GPS 箭頭也要指向機頭，LED 建議放在機尾便於觀察狀態。接收機、電源模組、GPS、LED 與 M1-M4 電機線要依接口整理接好。'
@@ -705,7 +703,6 @@ export const ragKnowledgeBase = [
   {
     id: 'mission-planner-sim',
     title: 'mp地面站航線規劃模擬飛行說明',
-    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\mp地面站航線規劃模擬飛行說明.txt',
     keywords: ['mission planner', 'mp', '地面站', '航線', '航点', '模擬', '仿真', 'takeoff', 'rtl', '返航', '高度', 'waypoint'],
     content:
       'Mission Planner 可用模擬器先練習航線規劃。基本流程是選擇多旋翼模型，進入飛行計劃頁面，用航點建立任務；完整任務通常包含 Takeoff 起飛、Waypoint 航點與 RTL 返航。常用相對高度，避免誤選海拔高度。航線寫入後可清除畫面再讀取航點，確認任務已寫入；執行 Mission Start 後可觀察高度、地速、航點距離與返航。'
@@ -713,7 +710,6 @@ export const ragKnowledgeBase = [
   {
     id: 'battery-charger',
     title: '無人機充電器使用說明',
-    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\無人機充電器使用說明.txt',
     keywords: ['電池', '电池', '充電', '充电', 'lipo', 'lhv', '6s', '2s', 'xt60', 'xt30', '平衡頭', '通道', '電壓'],
     content:
       '充電器可充 2S 到 6S 電池。先接主電源頭與平衡頭，平衡頭有防呆設計但仍要確認方向。選擇正確通道 CH1 或 CH2，確認每片電芯電壓顯示正常；LiPo 通常選 4.2V，LHV 需選對電池類型。充電電流越小越保護電池，充電時人不要離開，需持續觀察電池是否發熱。通道一和通道二的主線與平衡線不能插錯。'
@@ -721,7 +717,6 @@ export const ragKnowledgeBase = [
   {
     id: 'soldering-tools',
     title: '無人機焊接工具',
-    sourcePath: 'E:\\F450素材\\视频转文字系统\\TXT\\無人機焊接工具.txt',
     keywords: ['焊接', '焊点', '電烙鐵', '烙铁', '焊錫', '助焊劑', '萬用表', '短路', '扎帶', '3m', '螺絲刀'],
     content:
       '組裝與維修常用 M3、M2 內六角和小十字螺絲刀。電烙鐵建議選穩定可靠的焊台或便攜式 C 口烙鐵，搭配合適焊錫與助焊劑。剪線鉗、醋酸膠帶、3M 雙面膠與尼龍扎帶都常用。萬用表可檢查短路與供電異常，例如設備不亮時先量供電線是否有電壓。'
@@ -816,11 +811,7 @@ export function simulateBuildAssistant(question = '') {
       sourceStatus: 'local-rag',
       topic,
       answer: `RAG 知識庫已優先命中本地資料：${sources.map((source) => source.title).join('、')}。${sources[0].content}`,
-      sources: sources.map((source) => ({
-        title: source.title,
-        sourcePath: source.sourcePath,
-        score: source.score
-      })),
+      sources: [],
       voiceStatus: '本機 RAG 教材已命中；前端可用瀏覽器語音唸出回答。'
     };
   }
@@ -830,7 +821,7 @@ export function simulateBuildAssistant(question = '') {
     sourceStatus: 'knowledge-missing',
     topic,
     answer:
-      '本地 RAG 知識庫沒有找到足夠相近的內容。請把相關教材文字放進 E:\\FDE_AI_Voice_RAG\\knowledge_base，或補充對應的 .txt / .md 檔案後再詢問。',
+      '目前沒有找到足夠相近的教材內容，請換個問法或補充問題細節後再詢問。',
     sources: [],
     voiceStatus: '目前為 RAG-only 模式，沒有連接 OpenAI API。'
   };
