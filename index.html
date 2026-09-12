@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FDE-AI | 無人載具學習控制中心</title>
-    <link rel="stylesheet" href="./src/styles.css?v=1.1-missions" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.2-fde-column" />
   </head>
   <body class="home-view">
     <aside class="sidebar">
@@ -133,7 +133,27 @@
           <h2>課程影片與下載說明</h2>
           <p>保留 F450、鳳凰模擬器、證照、AI、3D 列印與 GitHub 的學習入口。</p>
         </div>
+        <a class="fde-column-entry" href="./fde" data-route="fde-column">
+          <span class="tag">FDE 專欄</span>
+          <strong>FDE-AI 無人載具實驗室</strong>
+          <small>查看無人機、AI 與工程實作影片</small>
+        </a>
         <div class="resource-grid" id="learningResources"></div>
+      </section>
+
+      <section class="section-block module-page compact-section fde-column-page" id="fde-column">
+        <a class="fde-column-back" href="./courses" data-route="learn">返回「學」</a>
+        <div class="section-intro">
+          <p class="eyebrow">FDE Column · FDE 專欄</p>
+          <h2>FDE-AI 無人載具實驗室</h2>
+          <p>從無人機操作、F450 組裝、AI 視覺辨識，到 RAG 知識庫與產業應用的實作學習紀錄。</p>
+        </div>
+        <div class="fde-column-toolbar">
+          <div class="fde-video-filters" id="fdeVideoFilters" role="group" aria-label="影片分類篩選"></div>
+          <div id="fdePlaylistAction"></div>
+        </div>
+        <div class="fde-playlist-player" id="fdePlaylistPlayer" hidden></div>
+        <div class="fde-video-grid" id="fdeVideoGrid"></div>
       </section>
 
       <section class="section-block light-section compact-section" id="practice">
@@ -261,12 +281,14 @@
       </section>
     </main>
 
-    <script src="./src/router.js?v=1.1-missions"></script>
+    <script src="./src/router.js?v=1.2-fde-column"></script>
     <script src="./src/platform-browser.js?v=1.2-rag-api"></script>
+    <script src="./src/data/fdeVideos.js?v=1.2-fde-column"></script>
+    <script src="./src/fde-column.js?v=1.2-fde-column"></script>
     <script>
       document.write('<script src="./src/rag-config.js?v=' + Date.now() + '"><\/script>');
     </script>
     <script src="./src/rag-client.js?v=1.2-eagle-rag"></script>
-    <script src="./src/app.js?v=1.2-eagle-rag"></script>
+    <script src="./src/app.js?v=1.2-eagle-rag&fde=1.2-fde-column"></script>
   </body>
 </html>

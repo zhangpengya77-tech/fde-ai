@@ -25,6 +25,8 @@ const {
 
 const $ = (selector) => document.querySelector(selector);
 const router = window.FdeRouter;
+const fdeVideoData = window.FdeVideoData || {};
+const fdeColumn = window.FdeColumn || {};
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
 const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const localVoiceEndpoint = voiceAssistant.endpoint;
@@ -35,6 +37,15 @@ let voiceRecognition = null;
 let voiceTranscript = '';
 let isVoicePlaybackPaused = false;
 let selectedTaskId = null;
+let activeFdeVideoFilter = 'all';
+const defaultPageTitle = document.title;
+const defaultMetaContent = {
+  description: document.head.querySelector('meta[name="description"]')?.getAttribute('content') ?? null,
+  ogTitle: document.head.querySelector('meta[property="og:title"]')?.getAttribute('content') ?? null,
+  ogDescription: document.head.querySelector('meta[property="og:description"]')?.getAttribute('content') ?? null,
+  ogType: document.head.querySelector('meta[property="og:type"]')?.getAttribute('content') ?? null,
+  ogUrl: document.head.querySelector('meta[property="og:url"]')?.getAttribute('content') ?? null
+};
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
@@ -74,17 +85,57 @@ function applyRoute(routeKey) {
   });
 
   document.body.classList.toggle('inspection-view', route.key === 'inspection');
+  document.body.classList.toggle('fde-column-view', route.key === 'fde-column');
   document.body.classList.toggle('home-view', route.key === 'home');
   document.body.dataset.route = route.key;
+  updatePageMetadata(route.key);
 
   document.querySelectorAll('#moduleNav a, .mobile-demo-nav a').forEach((link) => {
     const linkRoute = link.dataset.route || router.routeFromHref(link.getAttribute('href'));
-    if (linkRoute === route.key) {
+    const activeRoute = route.key === 'fde-column' ? 'learn' : route.key;
+    if (linkRoute === activeRoute) {
       link.setAttribute('aria-current', 'page');
     } else {
       link.removeAttribute('aria-current');
     }
   });
+}
+
+function setMetaContent(attribute, key, value, fallback) {
+  const selector = `meta[${attribute}="${key}"]`;
+  let element = document.head.querySelector(selector);
+  const content = value ?? fallback;
+  if (content === null) {
+    element?.remove();
+    return;
+  }
+  if (!element) {
+    element = document.createElement('meta');
+    element.setAttribute(attribute, key);
+    document.head.append(element);
+  }
+  element.setAttribute('content', content);
+}
+
+function updatePageMetadata(routeKey) {
+  if (routeKey === 'fde-column') {
+    const title = 'FDE-AI 無人載具實驗室｜無人機 × AI 實作教學';
+    const description = 'FDE-AI 無人載具實驗室，分享無人機、F450、YOLO 目標檢測、RAG 知識庫、飛控與產業應用實作。';
+    document.title = title;
+    setMetaContent('name', 'description', description, null);
+    setMetaContent('property', 'og:title', title, null);
+    setMetaContent('property', 'og:description', description, null);
+    setMetaContent('property', 'og:type', 'website', null);
+    setMetaContent('property', 'og:url', new URL(router.hrefFor('fde-column'), window.location.href).href, null);
+    return;
+  }
+
+  document.title = defaultPageTitle;
+  setMetaContent('name', 'description', null, defaultMetaContent.description);
+  setMetaContent('property', 'og:title', null, defaultMetaContent.ogTitle);
+  setMetaContent('property', 'og:description', null, defaultMetaContent.ogDescription);
+  setMetaContent('property', 'og:type', null, defaultMetaContent.ogType);
+  setMetaContent('property', 'og:url', null, defaultMetaContent.ogUrl);
 }
 
 function navigateToRoute(routeKey) {
@@ -417,6 +468,55 @@ function renderLearningResources() {
       `;
     })
     .join('');
+}
+
+function renderFdeColumn() {
+  if (!fdeColumn.renderFilters || !fdeColumn.renderVideoGrid) return;
+  $('#fdeVideoFilters').innerHTML = fdeColumn.renderFilters(activeFdeVideoFilter);
+  $('#fdeVideoGrid').innerHTML = fdeColumn.renderVideoGrid(activeFdeVideoFilter);
+
+  const playlistId = String(fdeVideoData.YOUTUBE_PLAYLIST_ID || '');
+  $('#fdePlaylistAction').innerHTML = /^[A-Za-z0-9_-]+$/.test(playlistId)
+    ? `<button class="secondary-action" type="button" data-play-playlist="${escapeHtml(playlistId)}">播放 FDE-AI 專欄播放清單</button>`
+    : '';
+}
+
+function handleFdeColumnClick(event) {
+  const filterButton = event.target.closest('[data-fde-filter]');
+  if (filterButton) {
+    activeFdeVideoFilter = filterButton.dataset.fdeFilter;
+    $('#fdeVideoFilters').innerHTML = fdeColumn.renderFilters(activeFdeVideoFilter);
+    $('#fdeVideoGrid').innerHTML = fdeColumn.renderVideoGrid(activeFdeVideoFilter);
+    $('#fdePlaylistPlayer').innerHTML = '';
+    $('#fdePlaylistPlayer').hidden = true;
+    return;
+  }
+
+  const playButton = event.target.closest('[data-play-video]');
+  if (playButton) {
+    const videoId = playButton.dataset.playVideo;
+    const playerMarkup = fdeColumn.renderVideoPlayer(videoId);
+    if (!playerMarkup) return;
+
+    $('#fdePlaylistPlayer').innerHTML = '';
+    $('#fdePlaylistPlayer').hidden = true;
+    $('#fdeVideoGrid').innerHTML = fdeColumn.renderVideoGrid(activeFdeVideoFilter);
+    const currentButton = Array.from(document.querySelectorAll('#fdeVideoGrid [data-play-video]'))
+      .find((button) => button.dataset.playVideo === videoId);
+    const videoMedia = currentButton?.closest('.fde-video-card').querySelector('.fde-video-media');
+    if (videoMedia) videoMedia.innerHTML = playerMarkup;
+    return;
+  }
+
+  const playlistButton = event.target.closest('[data-play-playlist]');
+  if (playlistButton) {
+    const playerMarkup = fdeColumn.renderPlaylistPlayer(playlistButton.dataset.playPlaylist);
+    if (!playerMarkup) return;
+
+    $('#fdeVideoGrid').innerHTML = fdeColumn.renderVideoGrid(activeFdeVideoFilter);
+    $('#fdePlaylistPlayer').innerHTML = playerMarkup;
+    $('#fdePlaylistPlayer').hidden = false;
+  }
 }
 
 function renderPracticeResources() {
@@ -881,6 +981,7 @@ function renderCertificationChecklist() {
 
 function bindActions() {
   document.addEventListener('click', handleRouteClick);
+  document.addEventListener('click', handleFdeColumnClick);
   window.addEventListener('popstate', syncViewFromLocation);
 
   document.querySelectorAll('[data-task-id]').forEach((button) => {
@@ -1022,6 +1123,7 @@ renderLearningPath();
 renderMissionMap();
 renderCohorts();
 renderLearningResources();
+renderFdeColumn();
 renderPracticeResources();
 renderBuildWorkflow();
 renderVoiceAssistantPanel();
