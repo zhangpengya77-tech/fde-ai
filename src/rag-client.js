@@ -121,9 +121,57 @@
     };
   }
 
+  function inspectionQuestion(context = {}) {
+    const status = String(context.status || 'CHECK').toUpperCase() === 'NG' ? 'NG' : 'CHECK';
+    const errors = Array.isArray(context.errors) ? context.errors : [];
+    const details = errors.map((item) => {
+      const motor = String(item.motor || '位置未確認');
+      const result = String(item.status || status).toUpperCase();
+      const detected = item.detected == null || item.detected === '' ? '' : `檢測 ${String(item.detected)}`;
+      const expected = item.expected == null || item.expected === '' ? '' : `標準 ${String(item.expected)}`;
+      const face = item.blade_face == null || item.blade_face === '' ? '' : `正反面 ${String(item.blade_face)}`;
+      return [motor, result, detected, expected, face].filter(Boolean).join(' ');
+    });
+    const summary = details.length ? details.join('；') : 'M1-M4 關鍵檢測資料不足，實際方向未確認';
+    return `F450 槳葉方向 CW CCW 安裝檢查（${status}）：${summary}。請優先依 F450 知識庫提供 1-2 句修正建議；資料不足時不要推測具體電機方向或安裝參數。`;
+  }
+
+  function inspectionSummary(context = {}) {
+    const errors = Array.isArray(context.errors) ? context.errors : [];
+    return errors.map((item) => {
+      const motor = String(item.motor || '位置未確認');
+      const status = String(item.status || context.status || 'CHECK').toUpperCase();
+      const detected = item.detected == null || item.detected === '' ? '' : String(item.detected);
+      const expected = item.expected == null || item.expected === '' ? '' : String(item.expected);
+      const detection = status === 'NG' && detected ? `檢測 ${detected}` : '檢測方向未能確認';
+      const standard = expected ? `標準 ${expected}` : '標準方向待確認';
+      return `${motor} ${detection}，${standard}`;
+    }).join('；');
+  }
+
+  function createF450AssistantService(ragClient) {
+    if (!ragClient || typeof ragClient.askRag !== 'function') {
+      throw new TypeError('A unified F450 RAG client is required');
+    }
+
+    return {
+      askF450Assistant(question, context, source = 'student_chat') {
+        if (source === 'eagle_detection') {
+          const status = String(context?.status || '').toUpperCase();
+          if (status === 'PASS') return Promise.resolve({ skipped: true });
+          return ragClient.askRag(inspectionQuestion(context)).then((result) => {
+            const summary = inspectionSummary(context);
+            return summary ? { ...result, answer: `檢測結果：${summary}。${result.answer}` } : result;
+          });
+        }
+        return ragClient.askRag(question);
+      }
+    };
+  }
+
   function sourceLabel(sourceType) {
     return sourceLabels[sourceType] || sourceLabels.refuse;
   }
 
-  return { createRagClient, sourceLabel };
+  return { createRagClient, createF450AssistantService, sourceLabel };
 });
