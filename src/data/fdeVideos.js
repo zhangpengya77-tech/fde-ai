@@ -39,11 +39,12 @@
     },
     {
       id: 'enterprise-rag-knowledge-base',
-      title: '企業 RAG 知識庫搭建解析',
+      title: '企業 RAG 知識庫搭建解析（FDE-AI）',
       description: '介紹如何整理專業資料，建立可檢索、可追溯的 AI 知識庫。',
-      category: 'rag',
+      category: 'fde',
       tags: ['FDE-AI', 'RAG', '知識庫'],
-      youtubeUrl: ''
+      youtubeUrl: 'https://youtu.be/ajWnFJSM_BU?si=aU3E3hNoRwgIZl2E',
+      videoId: 'ajWnFJSM_BU'
     },
     {
       id: 'ai-yolo-visual-detection',
