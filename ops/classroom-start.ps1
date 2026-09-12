@@ -163,8 +163,10 @@ if ($urlMatches[0].Value -ne $newSetting) {
   Invoke-CheckedGit $projectRoot @('fetch', 'origin', 'gh-pages')
 }
 
-$remoteConfig = & git -C $projectRoot show 'origin/gh-pages:src/rag-config.js'
-if ($LASTEXITCODE -ne 0 -or $remoteConfig -notmatch [regex]::Escape($newSetting)) {
+$remoteConfigLines = & git -C $projectRoot show 'origin/gh-pages:src/rag-config.js'
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the gh-pages RAG configuration.' }
+$remoteConfig = $remoteConfigLines -join "`n"
+if (-not $remoteConfig.Contains($newSetting)) {
   throw 'The gh-pages branch does not contain the current public RAG URL.'
 }
 Write-Output 'GitHub Pages branch configuration = OK'
