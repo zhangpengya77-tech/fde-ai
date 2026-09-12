@@ -3,6 +3,7 @@
     { key: 'home', sectionId: 'home', path: '' },
     { key: 'missions', sectionId: 'missions', path: 'tasks' },
     { key: 'learn', sectionId: 'learn', path: 'courses' },
+    { key: 'fde-column', sectionId: 'fde-column', path: 'fde' },
     { key: 'practice', sectionId: 'practice', path: 'simulator' },
     { key: 'build', sectionId: 'build', path: 'f450' },
     { key: 'inspection', sectionId: 'inspection', path: 'eagle' },
