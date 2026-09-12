@@ -42,3 +42,21 @@ test('FDE-AI column includes the provided enterprise RAG video', () => {
   assert.equal(video.videoId, 'ajWnFJSM_BU');
   assert.equal(video.category, 'fde');
 });
+
+test('FDE column includes only verified videos tagged with an FDE-Ai title suffix', () => {
+  const { FDE_VIDEOS } = require(dataPath);
+  const { getYoutubeVideoId } = require(path.join(__dirname, 'fde-column.js'));
+  const expectedVideoIds = [
+    'ajWnFJSM_BU', 'dWkH5YVi3gY', 'N0fW9Q9sWMU', 'F9RLymjxsVo',
+    'U3VhDWSoLUE', 'omPgcb1PFRM', '9ZeOb67IN5s', 'qo1f1FZn0Qo', 'iqasSBlnyZg'
+  ];
+  const linkedVideos = FDE_VIDEOS.filter(({ youtubeUrl }) => youtubeUrl);
+  const videoIds = linkedVideos.map(({ videoId }) => videoId);
+
+  assert.equal(linkedVideos.length, expectedVideoIds.length);
+  assert.deepEqual([...videoIds].sort(), [...expectedVideoIds].sort());
+  assert.equal(new Set(videoIds).size, videoIds.length);
+  assert.ok(linkedVideos.every(({ tags, title, youtubeUrl, videoId }) =>
+    tags.includes('FDE-AI') && /[（(]FDE-Ai[)）]$/i.test(title) && getYoutubeVideoId(youtubeUrl) === videoId
+  ));
+});

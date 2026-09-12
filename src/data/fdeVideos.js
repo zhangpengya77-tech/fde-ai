@@ -101,6 +101,78 @@
       category: 'tutorial',
       tags: ['FDE-AI', '教學', '無人機'],
       youtubeUrl: ''
+    },
+    {
+      id: 'youtube-dWkH5YVi3gY',
+      title: 'F450&px2.4.8飛控&mp地面站設置（FDE-Ai）',
+      description: 'F450、Pixhawk PX2.4.8 與 Mission Planner 地面站設定。',
+      category: 'f450',
+      tags: ['FDE-AI', 'F450', 'Pixhawk', 'Mission Planner', '飛控'],
+      youtubeUrl: 'https://youtu.be/dWkH5YVi3gY',
+      videoId: 'dWkH5YVi3gY'
+    },
+    {
+      id: 'youtube-N0fW9Q9sWMU',
+      title: 'MP地面站軟體基礎介紹（FDE-Ai）',
+      description: 'Mission Planner 地面站軟體基礎操作。',
+      category: 'flight-control',
+      tags: ['FDE-AI', 'Mission Planner', '飛控'],
+      youtubeUrl: 'https://youtu.be/N0fW9Q9sWMU',
+      videoId: 'N0fW9Q9sWMU'
+    },
+    {
+      id: 'youtube-F9RLymjxsVo',
+      title: 'F450&dji naza組裝步驟（FDE-Ai）',
+      description: 'F450 與 DJI Naza 組裝步驟示範。',
+      category: 'f450',
+      tags: ['FDE-AI', 'F450', 'DJI Naza', '組裝'],
+      youtubeUrl: 'https://youtu.be/F9RLymjxsVo',
+      videoId: 'F9RLymjxsVo'
+    },
+    {
+      id: 'youtube-U3VhDWSoLUE',
+      title: 'F450&djinaza調參軟體介紹（FDE-Ai）',
+      description: 'F450 與 DJI Naza 調參軟體介紹。',
+      category: 'f450',
+      tags: ['FDE-AI', 'F450', 'DJI Naza', '飛控'],
+      youtubeUrl: 'https://youtu.be/U3VhDWSoLUE',
+      videoId: 'U3VhDWSoLUE'
+    },
+    {
+      id: 'youtube-omPgcb1PFRM',
+      title: 'F450無人機&樂迪AT9S遥控器（FDE-Ai）',
+      description: 'F450 無人機搭配 AT9S 遙控器的設定內容。',
+      category: 'f450',
+      tags: ['FDE-AI', 'F450', '遙控器', 'AT9S'],
+      youtubeUrl: 'https://youtu.be/omPgcb1PFRM',
+      videoId: 'omPgcb1PFRM'
+    },
+    {
+      id: 'youtube-9ZeOb67IN5s',
+      title: '無人機充電器介紹（FDE-Ai）',
+      description: '無人機充電器介紹。',
+      category: 'tutorial',
+      tags: ['FDE-AI', '無人機', '充電器', '教學'],
+      youtubeUrl: 'https://youtu.be/9ZeOb67IN5s',
+      videoId: '9ZeOb67IN5s'
+    },
+    {
+      id: 'youtube-qo1f1FZn0Qo',
+      title: '無人機訓練鳳凰模擬器遙控器設置（FDE-Ai）',
+      description: '鳳凰模擬器遙控器設定與訓練場地介紹。',
+      category: 'tutorial',
+      tags: ['FDE-AI', '無人機', '模擬器', '遙控器'],
+      youtubeUrl: 'https://youtu.be/qo1f1FZn0Qo',
+      videoId: 'qo1f1FZn0Qo'
+    },
+    {
+      id: 'youtube-iqasSBlnyZg',
+      title: '無人機Mp地面站設定飛行計劃（FDE-Ai）',
+      description: 'Mission Planner 無人機地面站飛行計劃設定講解。',
+      category: 'flight-control',
+      tags: ['FDE-AI', '無人機', 'Mission Planner', '飛行計劃'],
+      youtubeUrl: 'https://youtu.be/iqasSBlnyZg',
+      videoId: 'iqasSBlnyZg'
     }
   ];
 
