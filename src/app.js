@@ -30,6 +30,7 @@ const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const localVoiceEndpoint = voiceAssistant.endpoint;
 const ragConfig = window.FdeRagConfig || {};
 const ragClient = window.FdeRagClient?.createRagClient(ragConfig);
+const assistantService = ragClient && window.FdeRagClient?.createF450AssistantService(ragClient);
 let voiceRecognition = null;
 let voiceTranscript = '';
 let isVoicePlaybackPaused = false;
@@ -568,7 +569,7 @@ async function askAssistantFromText(question) {
   if (ragConfig.FDE_RAG_V1_ENABLED) {
     let result;
     try {
-      result = await ragClient.askRag(topic);
+      result = await assistantService.askF450Assistant(topic, null, 'student_chat');
     } catch {
       const message = 'AI 助教知識庫暫時無法連接，請稍後再試。';
       $('#assistantResult').innerHTML = `<article class="result-card local-service-note"><p>${message}</p></article>`;
@@ -680,34 +681,42 @@ function renderMotorChecks(result) {
   `;
 }
 
-function inspectionQuestion(result) {
+function inspectionAssistantContext(result) {
   const checks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
-  const failed = checks.filter((item) => item.result !== 'PASS');
-  if (!failed.length) {
-    return 'F450 M1 M2 M3 M4 槳葉檢測全部 PASS。請依 FDE 知識庫用三行內確認結果。';
-  }
-
-  const context = failed
-    .map((item) => `${item.motor} ${item.result} ${item.errorCode}: Detected ${item.detectedDirection}, Expected ${item.expectedDirection}, Blade Face ${item.bladeFace}`)
-    .join('；');
-  const keywords = failed.map((item) => `${item.motor} ${item.expectedDirection} ${item.detectedDirection}`).join(' ');
-  return `F450 槳葉檢測修正建議。${context}。檢索關鍵詞：F450 槳葉方向 CW CCW ${keywords}。請優先依 FDE 知識庫回答，資料不足就明確說知識庫依據不足。`;
+  const status = propellerFinalResult(result).status;
+  return {
+    task: 'f450_propeller_check',
+    status,
+    errors: checks.filter((item) => item.result !== 'PASS').map((item) => ({
+      motor: item.motor,
+      status: item.result,
+      error_code: item.errorCode,
+      detected: item.detectedDirection,
+      expected: item.expectedDirection,
+      blade_face: item.bladeFace
+    }))
+  };
 }
 
 async function appendInspectionKnowledgeAnswer(result) {
   const target = document.querySelector('[data-inspection-assistant]');
   if (!target) return;
 
+  const finalResult = propellerFinalResult(result);
+  if (finalResult.status === 'PASS') {
+    target.innerHTML = '<h3>AI 修正建議</h3><p>檢測通過，無需修正建議。</p>';
+    return;
+  }
+
   target.innerHTML = '<p>正在查詢 FDE 知識庫並產生 AI 修正建議...</p>';
   try {
-    const answer = await runVoiceAssistantQuestion(inspectionQuestion(result));
-    target.innerHTML = renderAssistantResult(answer);
-  } catch (error) {
+    const answer = await assistantService.askF450Assistant('', inspectionAssistantContext(result), 'eagle_detection');
+    target.innerHTML = renderF450RagResult(answer);
+  } catch {
     target.innerHTML = `
       <article class="result-card local-service-note">
         <h3>AI 修正建議</h3>
         <p>AI 助手暫時無法連接；上方 M1-M4 的 PASS / NG / CHECK 檢測結果仍可使用。</p>
-        <small>${escapeHtml(error.message)}</small>
       </article>
     `;
   }
