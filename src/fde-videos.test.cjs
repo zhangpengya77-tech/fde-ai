@@ -34,6 +34,7 @@ test('FDE column metadata defines supported categories and editable playlist set
 
 test('FDE-AI column includes the provided enterprise RAG video', () => {
   const { FDE_VIDEOS } = require(dataPath);
+  const { filterVideos } = require(path.join(__dirname, 'fde-column.js'));
   const video = FDE_VIDEOS.find(({ id }) => id === 'enterprise-rag-knowledge-base');
 
   assert.ok(video);
@@ -41,6 +42,7 @@ test('FDE-AI column includes the provided enterprise RAG video', () => {
   assert.equal(video.youtubeUrl, 'https://youtu.be/ajWnFJSM_BU?si=aU3E3hNoRwgIZl2E');
   assert.equal(video.videoId, 'ajWnFJSM_BU');
   assert.equal(video.category, 'fde');
+  assert.deepEqual(filterVideos('rag').map(({ id }) => id), ['enterprise-rag-knowledge-base']);
 });
 
 test('FDE column includes only verified videos tagged with an FDE-Ai title suffix', () => {
