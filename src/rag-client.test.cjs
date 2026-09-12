@@ -153,9 +153,9 @@ test('frontend JavaScript contains no local absolute drive paths', () => {
   }
 });
 
-test('keeps LOCAL RAG enabled and configures a public HTTPS API address', () => {
+test('keeps LOCAL RAG enabled without pinning an expiring public tunnel URL in source', () => {
   const config = readFileSync(path.join(__dirname, 'rag-config.js'), 'utf8');
   assert.match(config, /FDE_RAG_V1_ENABLED:\s*true/);
   assert.match(config, /RAG_API_BASE_URL:\s*'http:\/\/127\.0\.0\.1:8770'/);
-  assert.match(config, /PUBLIC_RAG_API_URL:\s*'https:\/\/[a-z0-9.-]+\.trycloudflare\.com'/);
+  assert.match(config, /PUBLIC_RAG_API_URL:\s*''/);
 });
