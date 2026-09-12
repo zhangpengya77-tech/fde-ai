@@ -31,3 +31,14 @@ test('FDE column metadata defines supported categories and editable playlist set
     Object.hasOwn(FDE_VIDEO_CATEGORIES, video.category) && typeof video.youtubeUrl === 'string'
   ));
 });
+
+test('FDE-AI column includes the provided enterprise RAG video', () => {
+  const { FDE_VIDEOS } = require(dataPath);
+  const video = FDE_VIDEOS.find(({ id }) => id === 'enterprise-rag-knowledge-base');
+
+  assert.ok(video);
+  assert.equal(video.title, '企業 RAG 知識庫搭建解析（FDE-AI）');
+  assert.equal(video.youtubeUrl, 'https://youtu.be/ajWnFJSM_BU?si=aU3E3hNoRwgIZl2E');
+  assert.equal(video.videoId, 'ajWnFJSM_BU');
+  assert.equal(video.category, 'fde');
+});
