@@ -162,7 +162,7 @@ if ($urlMatches[0].Value -ne $newSetting) {
 }
 
 $publicAsk = "$publicUrl/api/rag/ask"
-$body = @{ question = 'F450 的槳葉正反桨怎么区分？' } | ConvertTo-Json -Compress
+$body = @{ question = 'F450 propeller CW CCW difference?' } | ConvertTo-Json -Compress
 $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 $answer = Invoke-RestMethod -Uri $publicAsk -Method Post -ContentType 'text/plain; charset=utf-8' -Body $bodyBytes -TimeoutSec 20
 if (-not $answer.answer -or $answer.version -ne 'f450_v1') { throw 'The public RAG ask test returned an unexpected response.' }
