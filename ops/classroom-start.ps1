@@ -163,24 +163,36 @@ if ($urlMatches[0].Value -ne $newSetting) {
   Invoke-CheckedGit $projectRoot @('fetch', 'origin', 'gh-pages')
 }
 
+$remoteConfig = & git -C $projectRoot show 'origin/gh-pages:src/rag-config.js'
+if ($LASTEXITCODE -ne 0 -or $remoteConfig -notmatch [regex]::Escape($newSetting)) {
+  throw 'The gh-pages branch does not contain the current public RAG URL.'
+}
+Write-Output 'GitHub Pages branch configuration = OK'
+
 $publicAsk = "$publicUrl/api/rag/ask"
 $body = @{ question = 'F450 propeller CW CCW difference?' } | ConvertTo-Json -Compress
 $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+Write-Output 'Testing public RAG API...'
 $answer = Invoke-RestMethod -Uri $publicAsk -Method Post -ContentType 'text/plain; charset=utf-8' -Body $bodyBytes -TimeoutSec 20
 if (-not $answer.answer -or $answer.version -ne 'f450_v1') { throw 'The public RAG ask test returned an unexpected response.' }
+Write-Output 'Public RAG API = OK'
 
 $pagesReady = $false
 for ($i = 0; $i -lt 24 -and -not $pagesReady; $i++) {
   try {
     $publicConfigUrl = 'https://zhangpengya77-tech.github.io/fde-ai/src/rag-config.js?check=' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + $i
-    $pageResponse = Invoke-WebRequest -Uri $publicConfigUrl -TimeoutSec 20
-    $pagesReady = $pageResponse.StatusCode -eq 200 -and $pageResponse.Content -match [regex]::Escape($newSetting)
+    $pageResponse = Invoke-WebRequest -UseBasicParsing -Uri $publicConfigUrl -TimeoutSec 5
+    $pagesReady = $pageResponse.StatusCode -eq 200 -and ([string]$pageResponse.Content).Contains($newSetting)
   } catch {
     $pagesReady = $false
   }
-  if (-not $pagesReady) { Start-Sleep -Seconds 5 }
+  if (-not $pagesReady) {
+    Write-Output "Waiting for GitHub Pages propagation ($($i + 1)/24)..."
+    Start-Sleep -Seconds 5
+  }
 }
 if (-not $pagesReady) { throw 'GitHub Pages has not published the current tunnel URL within two minutes.' }
+Write-Output 'GitHub Pages public configuration = OK'
 
 Save-State
 
