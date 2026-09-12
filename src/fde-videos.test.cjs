@@ -24,7 +24,7 @@ test('FDE column metadata defines supported categories and editable playlist set
     'all', 'ai', 'yolo', 'rag', 'f450', 'flight-control', 'inspection', 'industry'
   ]);
   assert.equal(YOUTUBE_PLAYLIST_ID, '');
-  assert.ok(FDE_VIDEOS.length >= 6);
+  assert.equal(FDE_VIDEOS.length, 9);
   assert.equal(new Set(FDE_VIDEOS.map(({ id }) => id)).size, FDE_VIDEOS.length);
   assert.ok(FDE_VIDEOS.every((video) =>
     video.id && video.title && video.description && video.tags.length > 0 &&
@@ -53,6 +53,7 @@ test('FDE column includes only verified videos tagged with an FDE-Ai title suffi
   const linkedVideos = FDE_VIDEOS.filter(({ youtubeUrl }) => youtubeUrl);
   const videoIds = linkedVideos.map(({ videoId }) => videoId);
 
+  assert.equal(linkedVideos.length, FDE_VIDEOS.length);
   assert.equal(linkedVideos.length, expectedVideoIds.length);
   assert.deepEqual([...videoIds].sort(), [...expectedVideoIds].sort());
   assert.equal(new Set(videoIds).size, videoIds.length);
