@@ -7,9 +7,10 @@
   }
 })(globalThis, function createFdeRagClient() {
   const sourceLabels = {
-    rag: 'F450 知識庫',
-    common_knowledge: '根據常識補充',
-    refuse: '此問題超出目前 F450 AI 助教知識範圍'
+    rag: 'F450 知识库',
+    rag_plus_llm: 'F450 知识库 + AI 补充',
+    common_knowledge: 'AI 常识补充',
+    refuse: 'F450 AI 助教'
   };
 
   function isLoopback(hostname) {
@@ -34,7 +35,14 @@
     const local = normalizeBase(config.RAG_API_BASE_URL, 'local', pageLocation);
     const publicApi = normalizeBase(config.PUBLIC_RAG_API_URL, 'public', pageLocation);
     const mode = config.RAG_API_MODE || 'auto';
-    const endpoints = mode === 'local' ? [local] : mode === 'public' ? [publicApi] : [local, publicApi];
+    const localPage = pageLocation && isLoopback(pageLocation.hostname);
+    const endpoints = mode === 'local'
+      ? [local]
+      : mode === 'public'
+        ? [publicApi]
+        : localPage
+          ? [local, publicApi]
+          : [publicApi];
     const seen = new Set();
 
     return endpoints.filter(Boolean).filter(({ base }) => {

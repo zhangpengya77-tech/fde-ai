@@ -488,7 +488,7 @@ function renderAssistantResult(result) {
 }
 
 function renderF450RagResult(result) {
-  const sourceLabel = ragClient.sourceLabel(result.source_type);
+  const sourceLabel = window.FdeRagClient.sourceLabel(result.source_type);
   return `
     <article class="result-card">
       <div class="section-head"><span class="tag">F450 AI 助教</span><span class="tag">${escapeHtml(sourceLabel)}</span></div>
@@ -566,17 +566,27 @@ async function askAssistantFromText(question) {
   $('#assistantResult').innerHTML = '<article class="result-card"><p>正在查詢 F450 RAG 知識庫...</p></article>';
 
   if (ragConfig.FDE_RAG_V1_ENABLED) {
+    let result;
     try {
-      const result = await ragClient.askRag(topic);
-      $('#voiceStatus').textContent = voiceAssistant.statuses.answering;
-      $('#assistantResult').innerHTML = renderF450RagResult(result);
-      speakVoiceAnswer(result.answer);
-      $('#voiceStatus').textContent = voiceAssistant.statuses.idle;
+      result = await ragClient.askRag(topic);
     } catch {
       const message = 'AI 助教知識庫暫時無法連接，請稍後再試。';
       $('#assistantResult').innerHTML = `<article class="result-card local-service-note"><p>${message}</p></article>`;
       $('#voiceStatus').textContent = message;
+      return;
     }
+
+    $('#voiceStatus').textContent = voiceAssistant.statuses.answering;
+    $('#assistantResult').innerHTML = renderF450RagResult(result);
+    let speechUnavailable = false;
+    try {
+      speakVoiceAnswer(result.answer);
+    } catch {
+      speechUnavailable = true;
+    }
+    $('#voiceStatus').textContent = speechUnavailable
+      ? '回答已取得，語音播報暫不可用。'
+      : voiceAssistant.statuses.idle;
     return;
   }
 

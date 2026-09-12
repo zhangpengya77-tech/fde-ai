@@ -4,7 +4,7 @@
     RAG_API_MODE: 'auto',
     RAG_API_BASE_URL: 'http://127.0.0.1:8770',
     // GitHub Pages requires a real HTTPS API URL here for non-local visitors.
-    PUBLIC_RAG_API_URL: '',
+    PUBLIC_RAG_API_URL: 'https://graph-worldwide-wide-sur.trycloudflare.com',
     RAG_API_TIMEOUT_MS: 20000
   });
 })(window);

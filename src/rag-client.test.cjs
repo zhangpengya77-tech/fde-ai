@@ -31,7 +31,20 @@ test('posts only the question to the local F450 RAG API and returns the public r
   assert.deepEqual(result, { answer: 'CW 是順時針槳。', source_type: 'rag', version: 'f450_v1' });
 });
 
-test('falls back from the local API to the configured public HTTPS API', async () => {
+test('preserves the original question so the RAG service can normalize it without losing the transcript', async () => {
+  const { createRagClient } = loadClient();
+  let requestBody;
+  const client = createRagClient({ RAG_API_MODE: 'local', RAG_API_BASE_URL: 'http://127.0.0.1:8770' }, async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return okResponse({ answer: '先看槳葉標示和弧面。', source_type: 'rag', version: 'f450_v1' });
+  }, { protocol: 'http:', hostname: 'localhost' });
+
+  await client.askRag('f450的講業正反面如何區分');
+
+  assert.deepEqual(requestBody, { question: 'f450的講業正反面如何區分' });
+});
+
+test('uses only the public HTTPS API from a non-local page', async () => {
   const { createRagClient } = loadClient();
   const calls = [];
   const client = createRagClient({
@@ -46,12 +59,11 @@ test('falls back from the local API to the configured public HTTPS API', async (
 
   const result = await client.askRag('F450 問題');
 
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1], 'https://rag.example.test/api/rag/ask');
+  assert.deepEqual(calls, ['https://rag.example.test/api/rag/ask']);
   assert.equal(result.source_type, 'rag');
 });
 
-test('never calls an insecure public API from an HTTPS page', async () => {
+test('does not fall back to a local HTTP API from a non-local HTTPS page', async () => {
   const { createRagClient } = loadClient();
   const calls = [];
   const client = createRagClient({
@@ -64,7 +76,7 @@ test('never calls an insecure public API from an HTTPS page', async () => {
   }, { protocol: 'https:', hostname: 'zhangpengya77-tech.github.io' });
 
   await assert.rejects(client.askRag('F450 問題'), { code: 'RAG_API_UNAVAILABLE' });
-  assert.deepEqual(calls, ['http://127.0.0.1:8770/api/rag/ask']);
+  assert.deepEqual(calls, []);
 });
 
 test('times out an unresponsive API request', async () => {
@@ -98,11 +110,12 @@ test('rejects HTTP errors, malformed JSON, and empty answers', async (context) =
   }
 });
 
-test('maps the three API source types to short student-facing labels', () => {
+test('maps all API source types to short student-facing labels', () => {
   const { sourceLabel } = loadClient();
-  assert.equal(sourceLabel('rag'), 'F450 知識庫');
-  assert.equal(sourceLabel('common_knowledge'), '根據常識補充');
-  assert.equal(sourceLabel('refuse'), '此問題超出目前 F450 AI 助教知識範圍');
+  assert.equal(sourceLabel('rag'), 'F450 知识库');
+  assert.equal(sourceLabel('rag_plus_llm'), 'F450 知识库 + AI 补充');
+  assert.equal(sourceLabel('common_knowledge'), 'AI 常识补充');
+  assert.equal(sourceLabel('refuse'), 'F450 AI 助教');
 });
 
 test('connects only the F450 assistant to the unified client and keeps Eagle on the legacy route', () => {
@@ -120,6 +133,12 @@ test('connects only the F450 assistant to the unified client and keeps Eagle on 
   assert.ok(fallbackHtml.indexOf('rag-client.js') < fallbackHtml.indexOf('app.js?v=1.2-rag-api'));
 });
 
+test('renders the RAG source label through the exported client helper', () => {
+  const app = readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  assert.match(app, /window\.FdeRagClient\.sourceLabel\(result\.source_type\)/);
+  assert.doesNotMatch(app, /ragClient\.sourceLabel\(result\.source_type\)/);
+});
+
 test('frontend JavaScript contains no local absolute drive paths', () => {
   const files = ['platform.js', 'platform-browser.js', 'app.js', 'rag-client.js', 'rag-config.js'];
   for (const file of files) {
@@ -132,9 +151,9 @@ test('frontend JavaScript contains no local absolute drive paths', () => {
   }
 });
 
-test('keeps LOCAL RAG enabled and leaves the public API address unconfigured', () => {
+test('keeps LOCAL RAG enabled and configures a public HTTPS API address', () => {
   const config = readFileSync(path.join(__dirname, 'rag-config.js'), 'utf8');
   assert.match(config, /FDE_RAG_V1_ENABLED:\s*true/);
   assert.match(config, /RAG_API_BASE_URL:\s*'http:\/\/127\.0\.0\.1:8770'/);
-  assert.match(config, /PUBLIC_RAG_API_URL:\s*''/);
+  assert.match(config, /PUBLIC_RAG_API_URL:\s*'https:\/\/[a-z0-9.-]+\.trycloudflare\.com'/);
 });
