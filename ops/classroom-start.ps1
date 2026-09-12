@@ -122,8 +122,10 @@ if (-not $publicUrl) {
     foreach ($logPath in @($tunnelOut, $tunnelErr)) {
       if (Test-Path $logPath) {
         $text = Get-Content -Raw $logPath -ErrorAction SilentlyContinue
-        $match = [regex]::Match($text, 'https://[a-z0-9-]+\.trycloudflare\.com')
-        if ($match.Success) { $publicUrl = $match.Value; break }
+        if (-not [string]::IsNullOrEmpty($text)) {
+          $match = [regex]::Match($text, 'https://[a-z0-9-]+\.trycloudflare\.com')
+          if ($match.Success) { $publicUrl = $match.Value; break }
+        }
       }
     }
     if (-not $publicUrl) { Start-Sleep -Seconds 1 }
