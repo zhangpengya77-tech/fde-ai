@@ -263,7 +263,9 @@
 
     <script src="./src/router.js?v=1.1-missions"></script>
     <script src="./src/platform-browser.js?v=1.2-rag-api"></script>
-    <script src="./src/rag-config.js?v=1.2-rag-api"></script>
+    <script>
+      document.write('<script src="./src/rag-config.js?v=' + Date.now() + '"><\/script>');
+    </script>
     <script src="./src/rag-client.js?v=1.2-rag-api"></script>
     <script src="./src/app.js?v=1.2-rag-api"></script>
   </body>
