@@ -127,9 +127,11 @@ test('connects only the F450 assistant to the unified client and keeps Eagle on 
   assert.match(app, /runVoiceAssistantQuestion\(topic\)/);
   assert.match(app, /runVoiceAssistantQuestion\(inspectionQuestion\(result\)\)/);
   assert.ok(html.indexOf('rag-config.js') < html.indexOf('rag-client.js'));
+  assert.match(html, /document\.write\([\s\S]*rag-config\.js[\s\S]*Date\.now\(\)/);
   assert.ok(html.indexOf('rag-client.js') < html.indexOf('app.js?v=1.2-rag-api'));
   assert.doesNotMatch(html, /f450-rag\.js/);
   assert.ok(fallbackHtml.indexOf('rag-config.js') < fallbackHtml.indexOf('rag-client.js'));
+  assert.match(fallbackHtml, /document\.write\([\s\S]*rag-config\.js[\s\S]*Date\.now\(\)/);
   assert.ok(fallbackHtml.indexOf('rag-client.js') < fallbackHtml.indexOf('app.js?v=1.2-rag-api'));
 });
 
