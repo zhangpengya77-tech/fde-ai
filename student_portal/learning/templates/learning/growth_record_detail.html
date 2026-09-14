@@ -60,8 +60,7 @@
 </section>
 <section class="section-block growth-review-placeholder">
   <h2>教師複核結果</h2>
-  {% if submission.status == 'approved' or submission.status == 'rejected' or submission.status == 'needs_revision' %}<p>{{ submission.get_status_display }}</p>{% else %}<p class="muted">尚未完成教師複核；教師複核介面將在 v1.5B-3 開放。</p>{% endif %}
-  <h3>教師評語</h3><p class="muted">尚無教師評語。</p>
+  {% if latest_review %}<p><strong>{{ latest_review.get_review_status_display }}</strong>{% if latest_review.score != None %} · {{ latest_review.score }} 分{% endif %} · {{ latest_review.reviewed_at|date:'Y-m-d H:i' }}</p><h3>教師評語</h3><p>{{ latest_review.teacher_note|default:'教師未填寫評語。'|linebreaksbr }}</p>{% else %}<p class="muted">尚未完成教師複核。</p><h3>教師評語</h3><p class="muted">尚無教師評語。</p>{% endif %}
 </section>
 <script src="{% static 'learning/growth-upload.js' %}" defer></script>
 {% endblock %}

@@ -18,7 +18,7 @@ from django.contrib.auth.views import (
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -28,6 +28,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import (
     EvidenceForm,
+    GrowthRecordReviewForm,
     GrowthRecordForm,
     PhaseProgressForm,
     StudentLoginForm,
@@ -43,6 +44,7 @@ from .models import (
     EmailVerificationCode,
     Enrollment,
     Evidence,
+    GrowthRecordReview,
     GrowthRecordSubmission,
     PhaseProgress,
     StudentProfile,
@@ -64,7 +66,7 @@ def home(request):
     if request.user.is_authenticated:
         if request.user.is_staff:
             return redirect("learning:teacher_dashboard")
-        return redirect("learning:platform")
+        return redirect("learning:student_dashboard")
     next_url = request.GET.get("next", "")
     if not url_has_allowed_host_and_scheme(
         next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
@@ -434,6 +436,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
         GrowthRecordSubmission.Status.IN_PROGRESS,
         GrowthRecordSubmission.Status.NEEDS_REVISION,
     }
+    latest_review = submission.reviews.select_related("reviewer").first()
     form = None
     if request.method == "POST":
         if not editable:
@@ -520,6 +523,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "form": form,
             "editable": editable,
             "is_summary": submission.definition.slot_id == "R08",
+            "latest_review": latest_review,
         },
     )
 
@@ -677,7 +681,7 @@ def teacher_dashboard(request):
     rows = []
     valid_statuses = {value for value, _ in StudentTaskProgress.Status.choices}
     for profile in profiles:
-        enrollments = profile.enrollments.filter(active=True, cohort_id__in=cohorts).select_related("cohort")
+        enrollments = profile.enrollments.filter(active=True, cohort_id__in=cohorts).select_related("cohort", "group")
         if cohort_id:
             enrollments = enrollments.filter(cohort_id=cohort_id)
         visible_enrollments = list(enrollments)
@@ -694,6 +698,15 @@ def teacher_dashboard(request):
                     "submitted_count": 0,
                     "incomplete_count": 0,
                     "skipped_count": 0,
+                    "group": None,
+                    "growth_submitted_count": 0,
+                    "growth_reviewed_count": 0,
+                    "growth_pending_count": 0,
+                    "growth_record_count": 0,
+                    "last_activity": max(
+                        (value for value in (profile.user.last_login, profile.created_at) if value),
+                        default=None,
+                    ),
                 }
             )
             continue
@@ -705,16 +718,56 @@ def teacher_dashboard(request):
             items = list(by_task.values())
             if status_filter in valid_statuses and not any(item.status == status_filter for item in items):
                 continue
+            growth_records = ensure_growth_submissions(enrollment)
+            submitted_growth_statuses = {
+                GrowthRecordSubmission.Status.SUBMITTED,
+                GrowthRecordSubmission.Status.NEEDS_REVISION,
+                GrowthRecordSubmission.Status.APPROVED,
+                GrowthRecordSubmission.Status.REJECTED,
+            }
+            reviewed_growth_statuses = {
+                GrowthRecordSubmission.Status.NEEDS_REVISION,
+                GrowthRecordSubmission.Status.APPROVED,
+                GrowthRecordSubmission.Status.REJECTED,
+            }
+            latest_task_activity = enrollment.task_progress.aggregate(latest=Max("updated_at"))["latest"]
+            latest_phase_activity = enrollment.phase_progress.aggregate(latest=Max("updated_at"))["latest"]
+            latest_evidence_activity = Evidence.objects.filter(
+                Q(progress__enrollment=enrollment) | Q(growth_submission__enrollment=enrollment)
+            ).aggregate(latest=Max("created_at"))["latest"]
+            last_activity = max(
+                (
+                    value
+                    for value in (
+                        profile.user.last_login,
+                        enrollment.joined_at,
+                        latest_task_activity,
+                        latest_phase_activity,
+                        latest_evidence_activity,
+                        *(record.updated_at for record in growth_records),
+                    )
+                    if value
+                ),
+                default=None,
+            )
             rows.append(
                 {
                     "enrollment": enrollment,
                     "student": profile,
                     "email_masked": mask_email(profile.email),
+                    "group": enrollment.group,
                     "reviewed_count": sum(item.status == StudentTaskProgress.Status.REVIEWED for item in items),
                     "total_count": len(items),
                     "submitted_count": sum(item.status == StudentTaskProgress.Status.SUBMITTED for item in items),
                     "incomplete_count": sum(item.status == StudentTaskProgress.Status.INCOMPLETE for item in items),
                     "skipped_count": sum(item.status == StudentTaskProgress.Status.SKIPPED for item in items),
+                    "growth_submitted_count": sum(record.status in submitted_growth_statuses for record in growth_records),
+                    "growth_reviewed_count": sum(record.status in reviewed_growth_statuses for record in growth_records),
+                    "growth_pending_count": sum(
+                        record.status == GrowthRecordSubmission.Status.SUBMITTED for record in growth_records
+                    ),
+                    "growth_record_count": len(growth_records),
+                    "last_activity": last_activity,
                 }
             )
     return render(
@@ -749,11 +802,62 @@ def teacher_student_detail(request, enrollment_id):
         .select_related("task")
         .prefetch_related("evidence", "review_events__teacher")
     )
+    seeded_growth_records = ensure_growth_submissions(enrollment)
+    growth_records = list(
+        GrowthRecordSubmission.objects.filter(pk__in=[item.pk for item in seeded_growth_records])
+        .select_related("definition")
+        .prefetch_related("evidence", "reviews__reviewer")
+    )
+    for record in growth_records:
+        review_history = list(record.reviews.all())
+        record.latest_review = review_history[0] if review_history else None
     return render(
         request,
         "learning/teacher_student_detail.html",
-        {"profile": enrollment.student, "enrollment": enrollment, "email_masked": mask_email(enrollment.student.email), "progress": progress, "phases": ordered_phase_progress(enrollment)},
+        {
+            "profile": enrollment.student,
+            "enrollment": enrollment,
+            "email_masked": mask_email(enrollment.student.email),
+            "progress": progress,
+            "phases": ordered_phase_progress(enrollment),
+            "growth_records": growth_records,
+        },
     )
+
+
+@teacher_required
+@require_POST
+def review_growth_record(request, submission_id):
+    submission = get_object_or_404(
+        GrowthRecordSubmission.objects.filter(
+            enrollment__cohort__in=teacher_cohorts(request.user)
+        ).select_related("enrollment"),
+        pk=submission_id,
+    )
+    if submission.status != GrowthRecordSubmission.Status.SUBMITTED:
+        messages.error(request, "只能複核已提交的成長記錄。")
+        return redirect("learning:teacher_student_detail", enrollment_id=submission.enrollment_id)
+
+    form = GrowthRecordReviewForm(request.POST)
+    if form.is_valid():
+        review_status = form.cleaned_data["review_status"]
+        score = form.cleaned_data["score"]
+        teacher_note = form.cleaned_data["teacher_note"].strip()
+        with transaction.atomic():
+            GrowthRecordReview.objects.create(
+                submission=submission,
+                reviewer=request.user,
+                review_status=review_status,
+                score=score,
+                teacher_note=teacher_note,
+            )
+            submission.status = review_status
+            submission.teacher_final_score = score
+            submission.save(update_fields=["status", "teacher_final_score", "updated_at"])
+        messages.success(request, "成長記錄複核已保存。")
+    else:
+        messages.error(request, "複核資料無效，未保存變更。")
+    return redirect("learning:teacher_student_detail", enrollment_id=submission.enrollment_id)
 
 
 @teacher_required

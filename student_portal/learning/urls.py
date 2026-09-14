@@ -34,6 +34,7 @@ urlpatterns = [
     path("student/courses/<int:enrollment_id>/phases/<str:phase>/", views.update_phase, name="update_phase"),
     path("teacher/", views.teacher_dashboard, name="teacher_dashboard"),
     path("teacher/enrollments/<int:enrollment_id>/", views.teacher_student_detail, name="teacher_student_detail"),
+    path("teacher/growth-reviews/<int:submission_id>/", views.review_growth_record, name="growth_review"),
     path("teacher/reviews/<int:progress_id>/", views.review_task, name="review_task"),
     path("teacher/evidence/<uuid:evidence_id>/candidate/", views.promote_candidate, name="promote_candidate"),
 ]

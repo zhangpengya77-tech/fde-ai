@@ -3,12 +3,15 @@ from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
 from django.core.exceptions import ValidationError
 
 
 MAX_GROWTH_IMAGE_BYTES = 15 * 1024 * 1024
 MAX_GROWTH_IMAGE_PIXELS = 40_000_000
 GROWTH_IMAGE_MAX_EDGE = 1600
+
+register_heif_opener()
 
 
 def process_growth_image(upload):
@@ -22,8 +25,8 @@ def process_growth_image(upload):
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(upload) as original:
-                if original.format not in {"JPEG", "PNG", "WEBP"}:
-                    raise ValidationError("圖片格式無效，請上傳 JPG、PNG 或 WEBP 圖片。")
+                if original.format not in {"JPEG", "PNG", "WEBP", "HEIF"}:
+                    raise ValidationError("圖片格式無效，請上傳 JPG、PNG、WEBP 或 HEIC 圖片。")
                 if original.width * original.height > MAX_GROWTH_IMAGE_PIXELS:
                     raise ValidationError("圖片解析度過高，請選擇較小的照片。")
                 original_format = original.format
@@ -49,7 +52,7 @@ def process_growth_image(upload):
     except ValidationError:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning, OSError, ValueError) as exc:
-        raise ValidationError("圖片格式無效，請上傳 JPG、PNG 或 WEBP 圖片。") from exc
+        raise ValidationError("圖片格式無效，請上傳 JPG、PNG、WEBP 或 HEIC 圖片。") from exc
 
     stem = Path(upload.name).stem[:72] or "growth-photo"
     image_bytes = output.getvalue()

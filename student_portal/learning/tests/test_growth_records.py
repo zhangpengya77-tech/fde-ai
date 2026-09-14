@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PIL import Image
+from pillow_heif import register_heif_opener
 from django.apps import apps
 from django.db import IntegrityError, transaction
 from django.core.management import call_command, get_commands
@@ -24,6 +25,13 @@ def make_image(name="proof.png", size=(2000, 1000), orientation=None, image_form
         image.save(output, format=image_format, exif=exif)
     else:
         image.save(output, format=image_format)
+    return output.getvalue()
+
+
+def make_heic_image():
+    register_heif_opener()
+    output = BytesIO()
+    Image.new("RGB", (120, 80), color="teal").save(output, format="HEIF")
     return output.getvalue()
 
 
@@ -170,6 +178,25 @@ class GrowthRecordFoundationTests(TestCase):
             evidence.upload.close()
             response = self.client.get(f"/student/courses/{self.enrollment.pk}/growth/R01/")
             self.assertContains(response, "課堂刷題紀錄")
+
+    def test_iphone_heic_photo_is_converted_to_standard_jpeg(self):
+        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):
+            response = self.client.post(
+                f"/student/courses/{self.enrollment.pk}/growth/R01/",
+                {
+                    "action": "save_draft",
+                    "images": [upload_file(make_heic_image(), name="iphone.heic", content_type="image/heic")],
+                },
+            )
+
+            self.assertEqual(response.status_code, 302)
+            evidence = Evidence.objects.get(growth_submission__definition__slot_id="R01")
+            self.assertTrue(evidence.upload.name.endswith(".jpg"))
+            self.assertEqual(evidence.original_metadata["format"], "HEIF")
+            with Image.open(evidence.upload.path) as processed:
+                self.assertEqual(processed.format, "JPEG")
+                self.assertEqual(processed.size, (120, 80))
+            evidence.upload.close()
 
     def test_growth_image_preview_is_private_and_inline_only_for_owner(self):
         with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):

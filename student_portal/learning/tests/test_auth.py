@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from learning.models import EmailVerificationCode, StudentProfile
+from learning.tests.helpers import create_student_account
 
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
@@ -40,6 +41,24 @@ class StudentRegistrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         for label in ("Learn", "Practice", "Build", "Assess", "Certify", "開始學習 / 註冊", "學員登入", "教師登入"):
             self.assertContains(response, label)
+
+    def test_authenticated_student_home_opens_personal_learning_entry(self):
+        profile = create_student_account("home-student@example.com", "Home Student")
+        self.client.force_login(profile.user)
+
+        response = self.client.get(reverse("learning:home"))
+
+        self.assertRedirects(response, reverse("learning:student_dashboard"))
+
+    def test_authenticated_teacher_home_opens_teacher_dashboard(self):
+        teacher = get_user_model().objects.create_user(
+            username="home-teacher", email="home-teacher@example.com", password="Teacher-passphrase-998!", is_staff=True
+        )
+        self.client.force_login(teacher)
+
+        response = self.client.get(reverse("learning:home"))
+
+        self.assertRedirects(response, reverse("learning:teacher_dashboard"))
 
     def test_original_v12_page_and_assets_require_authentication(self):
         page = self.client.get(reverse("learning:platform"))

@@ -7,7 +7,14 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .models import Evidence, PhaseProgress, StudentProfile, StudentTaskProgress, TeacherReviewEvent
+from .models import (
+    Evidence,
+    GrowthRecordReview,
+    PhaseProgress,
+    StudentProfile,
+    StudentTaskProgress,
+    TeacherReviewEvent,
+)
 from .services import issue_activation_code
 
 
@@ -198,3 +205,19 @@ class TeacherReviewForm(forms.Form):
         if cleaned.get("result") == TeacherReviewEvent.Result.SKIPPED and not cleaned.get("note", "").strip():
             self.add_error("note", "記錄跳過時請填寫原因，例如請假。")
         return cleaned
+
+
+class GrowthRecordReviewForm(forms.Form):
+    review_status = forms.ChoiceField(choices=GrowthRecordReview.Status.choices, label="成長記錄複核")
+    score = forms.DecimalField(
+        label="教師評分",
+        required=False,
+        min_value=0,
+        max_value=100,
+        decimal_places=2,
+    )
+    teacher_note = forms.CharField(
+        label="教師評語",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )

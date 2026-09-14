@@ -1,7 +1,12 @@
+from io import BytesIO
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
+from PIL import Image
 
 from learning.models import (
     CandidatePool,
@@ -9,6 +14,9 @@ from learning.models import (
     Cohort,
     Enrollment,
     Evidence,
+    GrowthRecordReview,
+    GrowthRecordSubmission,
+    LearningGroup,
     StudentProfile,
     StudentTaskProgress,
     TaskDefinition,
@@ -62,6 +70,142 @@ class TeacherWorkflowTests(TestCase):
         self.assertEqual(detail.status_code, 404)
         self.assertEqual(review.status_code, 404)
         self.assertFalse(TeacherReviewEvent.objects.filter(progress=self.progress).exists())
+
+    def test_teacher_dashboard_shows_growth_progress_group_and_last_activity(self):
+        self.client.force_login(self.student.user)
+        self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
+        submissions = {
+            item.definition.slot_id: item
+            for item in GrowthRecordSubmission.objects.filter(enrollment=self.enrollment).select_related("definition")
+        }
+        submissions["R01"].status = GrowthRecordSubmission.Status.SUBMITTED
+        submissions["R01"].save(update_fields=["status", "updated_at"])
+        for slot_id, status in (
+            ("R02", GrowthRecordSubmission.Status.APPROVED),
+            ("R03", GrowthRecordSubmission.Status.NEEDS_REVISION),
+        ):
+            submission = submissions[slot_id]
+            submission.status = status
+            submission.save(update_fields=["status", "updated_at"])
+            GrowthRecordReview.objects.create(
+                submission=submission,
+                reviewer=self.teacher,
+                review_status=status,
+                score=88,
+                teacher_note="已複核",
+            )
+        group = LearningGroup.objects.create(cohort=self.cohort, code="C", name="航線規劃組")
+        self.enrollment.group = group
+        self.enrollment.save(update_fields=["group"])
+        self.client.force_login(self.teacher)
+
+        response = self.client.get(reverse("learning:teacher_dashboard"))
+
+        row = next(item for item in response.context["rows"] if item["student"] == self.student)
+        self.assertEqual(row["growth_submitted_count"], 3)
+        self.assertEqual(row["growth_reviewed_count"], 2)
+        self.assertEqual(row["growth_pending_count"], 1)
+        self.assertEqual(row["group"], group)
+        self.assertIsNotNone(row["last_activity"])
+        self.assertEqual(row["email_masked"], "st***@example.com")
+        self.assertContains(response, "3 / 8")
+        self.assertContains(response, "2 / 8")
+        self.assertContains(response, "航線規劃組")
+
+    def test_teacher_can_review_growth_record_and_student_sees_feedback(self):
+        self.client.force_login(self.student.user)
+        self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
+        submission = GrowthRecordSubmission.objects.get(
+            enrollment=self.enrollment, definition__slot_id="R01"
+        )
+        submission.status = GrowthRecordSubmission.Status.SUBMITTED
+        submission.submitted_at = timezone.now()
+        submission.save(update_fields=["status", "submitted_at", "updated_at"])
+        Evidence.objects.create(
+            growth_submission=submission,
+            evidence_type=Evidence.Type.IMAGE,
+            external_url="https://example.test/r01.jpg",
+            description="R01 刷題證據",
+        )
+        self.client.force_login(self.teacher)
+
+        detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(len(detail.context["growth_records"]), 8)
+        for number in range(1, 9):
+            self.assertContains(detail, f"R{number:02d}")
+        self.assertContains(detail, "R01 刷題證據")
+
+        response = self.client.post(
+            reverse("learning:growth_review", args=[submission.pk]),
+            {"review_status": "approved", "score": "91", "teacher_note": "操作紀錄完整"},
+        )
+
+        self.assertRedirects(response, reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, GrowthRecordSubmission.Status.APPROVED)
+        self.assertEqual(str(submission.teacher_final_score), "91.00")
+        review = GrowthRecordReview.objects.get(submission=submission)
+        self.assertEqual(review.reviewer, self.teacher)
+        self.assertEqual(review.teacher_note, "操作紀錄完整")
+
+        self.client.force_login(self.student.user)
+        student_detail = self.client.get(
+            reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R01"])
+        )
+        self.assertContains(student_detail, "操作紀錄完整")
+        self.assertContains(student_detail, "91.00")
+
+    def test_assigned_teacher_can_preview_private_growth_photo(self):
+        self.client.force_login(self.student.user)
+        self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
+        submission = GrowthRecordSubmission.objects.get(
+            enrollment=self.enrollment, definition__slot_id="R01"
+        )
+        image_buffer = BytesIO()
+        Image.new("RGB", (16, 12), color="teal").save(image_buffer, format="JPEG")
+        evidence = Evidence.objects.create(
+            growth_submission=submission,
+            evidence_type=Evidence.Type.IMAGE,
+            upload=SimpleUploadedFile("r01.jpg", image_buffer.getvalue(), content_type="image/jpeg"),
+            description="R01 私有照片",
+        )
+        self.client.force_login(self.teacher)
+
+        detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+        preview = self.client.get(reverse("learning:evidence_download", args=[evidence.pk]) + "?inline=1")
+
+        self.assertContains(detail, "R01 私有照片")
+        self.assertContains(detail, 'alt="R01 學習證據"')
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview["Content-Type"], "image/jpeg")
+        self.assertTrue(preview["Content-Disposition"].startswith("inline;"))
+        preview.close()
+
+    def test_teacher_cannot_review_growth_record_outside_assigned_cohort(self):
+        self.client.force_login(self.student.user)
+        self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
+        submission = GrowthRecordSubmission.objects.get(
+            enrollment=self.enrollment, definition__slot_id="R01"
+        )
+        submission.status = GrowthRecordSubmission.Status.SUBMITTED
+        submission.save(update_fields=["status", "updated_at"])
+        other_cohort = Cohort.objects.create(cohort_id="2026-02", name="其他班級")
+        other_teacher = get_user_model().objects.create_user(
+            username="other-growth-teacher", email="other-growth-teacher@example.com",
+            password="Another-strong-passphrase-913!", is_staff=True
+        )
+        TeacherCohortAccess.objects.create(teacher=other_teacher, cohort=other_cohort)
+        self.client.force_login(other_teacher)
+
+        response = self.client.post(
+            reverse("learning:growth_review", args=[submission.pk]),
+            {"review_status": "approved", "score": "100", "teacher_note": "跨班測試"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(GrowthRecordReview.objects.filter(submission=submission).exists())
 
     def test_teacher_review_persists_status_note_score_and_history(self):
         self.client.force_login(self.teacher)
