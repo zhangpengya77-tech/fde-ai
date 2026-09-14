@@ -16,7 +16,7 @@
     <nav aria-label="主導覽">
       {% if user.is_authenticated %}
         {% if user.is_staff %}<a href="{% url 'learning:platform' %}">學習平台</a><a href="{% url 'learning:teacher_dashboard' %}">教師後台</a>{% if user.is_superuser or perms.learning.add_classcode or perms.learning.change_classcode %}<a href="{% url 'admin:index' %}">管理</a>{% endif %}
-        {% else %}<span class="identity-chip">{{ user.student_profile.public_user_id }} · {{ user.student_profile.nickname }}</span><a href="{% url 'learning:platform' %}">學習平台</a><a href="{% url 'learning:student_dashboard' %}">我的任務</a><a href="{% url 'learning:join_cohort' %}">加入課程</a>{% endif %}
+        {% else %}<span class="identity-chip">{{ user.student_profile.public_user_id }} · {{ user.student_profile.nickname }}</span><a href="{% url 'learning:platform' %}">學習平台</a><a href="{% url 'learning:student_growth_entry' %}">我的學習成長日誌</a><a href="{% url 'learning:join_cohort' %}">加入課程</a>{% endif %}
         <form method="post" action="{% url 'learning:logout' %}" class="inline-form">{% csrf_token %}<button class="link-button" type="submit">登出</button></form>
       {% else %}
         <a href="{% url 'learning:student_login' %}">學員登入</a><a href="{% url 'learning:teacher_login' %}">教師登入</a>

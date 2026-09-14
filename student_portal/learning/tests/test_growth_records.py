@@ -76,6 +76,50 @@ class GrowthRecordFoundationTests(TestCase):
         for number in range(1, 9):
             self.assertContains(response, f"R{number:02d}")
 
+    def test_student_course_page_has_only_the_growth_record_workflow(self):
+        response = self.client.get(
+            reverse("learning:student_course_dashboard", args=[self.enrollment.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.cohort.name)
+        self.assertContains(response, self.profile.public_user_id)
+        self.assertContains(response, self.profile.nickname)
+        self.assertContains(response, self.cohort.cohort_id)
+        self.assertContains(response, "小組：尚未分組")
+        self.assertContains(response, "我的學習成長日誌")
+        self.assertContains(response, "0 / 8")
+        self.assertNotContains(response, "12 項任務")
+        self.assertNotContains(response, "學習階段")
+        self.assertNotContains(response, "T01")
+        self.assertNotContains(response, "我的任務")
+
+    def test_student_course_list_shows_growth_log_as_its_only_learning_entry(self):
+        response = self.client.get(reverse("learning:student_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/student/growth/"')
+        self.assertContains(response, "成長記錄已提交 0 / 8")
+        self.assertContains(response, "我的學習成長日誌")
+        self.assertNotContains(response, "查看任務")
+        self.assertNotContains(response, "任務完成")
+
+    def test_student_growth_nav_goes_directly_to_single_enrollment(self):
+        response = self.client.get(reverse("learning:student_growth_entry"))
+
+        self.assertRedirects(
+            response,
+            reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]),
+        )
+
+    def test_student_growth_nav_returns_to_courses_for_multiple_enrollments(self):
+        other_cohort = Cohort.objects.create(cohort_id="2026-02", name="2026 第二梯")
+        enroll_student(self.profile, other_cohort)
+
+        response = self.client.get(reverse("learning:student_growth_entry"))
+
+        self.assertRedirects(response, reverse("learning:student_dashboard"))
+
     def test_growth_dashboard_counts_needs_revision_as_submitted_and_reviewed(self):
         self.client.get(f"/student/courses/{self.enrollment.pk}/growth/")
         submission_model = apps.get_model("learning", "GrowthRecordSubmission")
@@ -178,6 +222,62 @@ class GrowthRecordFoundationTests(TestCase):
             evidence.upload.close()
             response = self.client.get(f"/student/courses/{self.enrollment.pk}/growth/R01/")
             self.assertContains(response, "課堂刷題紀錄")
+
+    def test_growth_draft_upload_redirects_back_without_404(self):
+        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):
+            response = self.client.post(
+                reverse(
+                    "learning:growth_record_detail",
+                    args=[self.enrollment.pk, "R01"],
+                ),
+                {
+                    "action": "save_draft",
+                    "student_note": "已保存草稿",
+                    "images": [upload_file(make_image(size=(40, 30)))],
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.redirect_chain[-1][0],
+            reverse(
+                "learning:growth_record_detail",
+                args=[self.enrollment.pk, "R01"],
+            ),
+        )
+        self.assertContains(response, "已保存草稿")
+        self.assertContains(response, "已上傳 1 / 5 張圖片")
+
+    def test_growth_submission_redirects_back_without_404(self):
+        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):
+            response = self.client.post(
+                reverse(
+                    "learning:growth_record_detail",
+                    args=[self.enrollment.pk, "R01"],
+                ),
+                {
+                    "action": "submit_review",
+                    "student_note": "提交複核",
+                    "images": [upload_file(make_image(size=(40, 30)))],
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.redirect_chain[-1][0],
+            reverse(
+                "learning:growth_record_detail",
+                args=[self.enrollment.pk, "R01"],
+            ),
+        )
+        self.assertEqual(response.context["submission"].status, "submitted")
+        submission = apps.get_model("learning", "GrowthRecordSubmission").objects.get(
+            enrollment=self.enrollment,
+            definition__slot_id="R01",
+        )
+        self.assertEqual(submission.status, "submitted")
 
     def test_iphone_heic_photo_is_converted_to_standard_jpeg(self):
         with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):

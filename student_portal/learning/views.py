@@ -60,6 +60,17 @@ from .services import issue_activation_code
 
 logger = logging.getLogger(__name__)
 PLATFORM_ROOT = Path(settings.BASE_DIR).parent.resolve()
+GROWTH_SUBMITTED_STATUSES = {
+    GrowthRecordSubmission.Status.SUBMITTED,
+    GrowthRecordSubmission.Status.NEEDS_REVISION,
+    GrowthRecordSubmission.Status.APPROVED,
+    GrowthRecordSubmission.Status.REJECTED,
+}
+GROWTH_REVIEWED_STATUSES = {
+    GrowthRecordSubmission.Status.NEEDS_REVISION,
+    GrowthRecordSubmission.Status.APPROVED,
+    GrowthRecordSubmission.Status.REJECTED,
+}
 
 
 def home(request):
@@ -295,20 +306,32 @@ def mask_email(email):
 @student_required
 def student_dashboard(request):
     profile = request.student_profile
-    enrollments = profile.enrollments.filter(active=True).select_related("cohort")
+    enrollments = profile.enrollments.filter(active=True).select_related("cohort", "group")
     enrollment_rows = []
-    task_count = TaskDefinition.objects.filter(active=True).count()
     for enrollment in enrollments:
+        submissions = ensure_growth_submissions(enrollment)
         enrollment_rows.append(
             {
                 "enrollment": enrollment,
-                "task_count": task_count,
-                "completed_count": enrollment.task_progress.filter(
-                    status=StudentTaskProgress.Status.REVIEWED, task__active=True
-                ).count(),
+                "record_count": len(submissions),
+                "submitted_count": sum(item.status in GROWTH_SUBMITTED_STATUSES for item in submissions),
+                "reviewed_count": sum(item.status in GROWTH_REVIEWED_STATUSES for item in submissions),
             }
         )
     return render(request, "learning/student_dashboard.html", {"profile": profile, "enrollment_rows": enrollment_rows})
+
+
+@student_required
+def student_growth_entry(request):
+    enrollments = list(
+        Enrollment.objects.filter(
+            student=request.student_profile,
+            active=True,
+        ).order_by("pk")[:2]
+    )
+    if len(enrollments) == 1:
+        return redirect("learning:student_growth_dashboard", enrollment_id=enrollments[0].pk)
+    return redirect("learning:student_dashboard")
 
 
 @student_required
@@ -365,10 +388,24 @@ def student_course_dashboard(request, enrollment_id):
     )
     phases = ordered_phase_progress(enrollment)
     reviewed_count = progress.filter(status=StudentTaskProgress.Status.REVIEWED).count()
+    growth_submissions = ensure_growth_submissions(enrollment)
     return render(
         request,
         "learning/student_course_dashboard.html",
-        {"profile": request.student_profile, "enrollment": enrollment, "progress": progress, "phases": phases, "reviewed_count": reviewed_count},
+        {
+            "profile": request.student_profile,
+            "enrollment": enrollment,
+            "progress": progress,
+            "phases": phases,
+            "reviewed_count": reviewed_count,
+            "growth_submitted_count": sum(
+                item.status in GROWTH_SUBMITTED_STATUSES for item in growth_submissions
+            ),
+            "growth_reviewed_count": sum(
+                item.status in GROWTH_REVIEWED_STATUSES for item in growth_submissions
+            ),
+            "growth_record_count": len(growth_submissions),
+        },
     )
 
 
@@ -381,17 +418,6 @@ def student_growth_dashboard(request, enrollment_id):
         active=True,
     )
     submissions = ensure_growth_submissions(enrollment)
-    submitted_statuses = {
-        GrowthRecordSubmission.Status.SUBMITTED,
-        GrowthRecordSubmission.Status.NEEDS_REVISION,
-        GrowthRecordSubmission.Status.APPROVED,
-        GrowthRecordSubmission.Status.REJECTED,
-    }
-    reviewed_statuses = {
-        GrowthRecordSubmission.Status.NEEDS_REVISION,
-        GrowthRecordSubmission.Status.APPROVED,
-        GrowthRecordSubmission.Status.REJECTED,
-    }
     records = [
         {
             "submission": submission,
@@ -406,8 +432,8 @@ def student_growth_dashboard(request, enrollment_id):
             "profile": request.student_profile,
             "enrollment": enrollment,
             "records": records,
-            "submitted_count": sum(item.status in submitted_statuses for item in submissions),
-            "reviewed_count": sum(item.status in reviewed_statuses for item in submissions),
+            "submitted_count": sum(item.status in GROWTH_SUBMITTED_STATUSES for item in submissions),
+            "reviewed_count": sum(item.status in GROWTH_REVIEWED_STATUSES for item in submissions),
             "record_count": len(submissions),
         },
     )

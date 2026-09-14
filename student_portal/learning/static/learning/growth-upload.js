@@ -19,7 +19,7 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
     if (status) status.textContent = "正在上傳並處理照片…";
 
     const request = new XMLHttpRequest();
-    request.open("POST", form.action || window.location.href);
+    request.open("POST", form.getAttribute("action") || window.location.href);
     request.upload.addEventListener("progress", (uploadEvent) => {
       if (!uploadEvent.lengthComputable || !progress) return;
       progress.value = Math.round((uploadEvent.loaded / uploadEvent.total) * 100);

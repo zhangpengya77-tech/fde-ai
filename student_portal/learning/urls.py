@@ -19,6 +19,7 @@ urlpatterns = [
     path("reset/<uidb64>/<token>/", views.StudentPasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("reset/done/", views.StudentPasswordResetCompleteView.as_view(), name="password_reset_complete"),
     path("student/", views.student_dashboard, name="student_dashboard"),
+    path("student/growth/", views.student_growth_entry, name="student_growth_entry"),
     path("courses/join/", views.join_cohort, name="join_cohort"),
     path("student/courses/<int:enrollment_id>/", views.student_course_dashboard, name="student_course_dashboard"),
     path("student/courses/<int:enrollment_id>/growth/", views.student_growth_dashboard, name="student_growth_dashboard"),

@@ -3,7 +3,7 @@
 {% block title %}我的學習成長日誌｜{{ enrollment.cohort.name }}{% endblock %}
 {% block page_styles %}<link rel="stylesheet" href="{% static 'learning/growth-records.css' %}">{% endblock %}
 {% block content %}
-<a class="back-link" href="{% url 'learning:student_course_dashboard' enrollment.pk %}">返回課程任務</a>
+<a class="back-link" href="{% url 'learning:student_course_dashboard' enrollment.pk %}">返回課程</a>
 <section class="page-heading">
   <p class="eyebrow">{{ enrollment.cohort.name }} · {{ profile.public_user_id }}</p>
   <h1>我的學習成長日誌</h1>
