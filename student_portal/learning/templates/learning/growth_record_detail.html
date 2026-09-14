@@ -1,0 +1,67 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}{{ definition.slot_id }}｜{{ definition.title }}{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/growth-records.css' %}">{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">返回我的學習成長日誌</a>
+<section class="page-heading">
+  <p class="eyebrow">{{ definition.slot_id }} · {{ enrollment.cohort_id }} · {{ profile.public_user_id }}</p>
+  <h1>{{ definition.title }}</h1>
+  <p class="muted">{{ profile.nickname }} · {% if enrollment.group %}{{ enrollment.group.name }}{% else %}尚未分組{% endif %}</p>
+  <span class="status status-{{ submission.status }}">{{ submission.get_status_display }}</span>
+</section>
+<section class="section-block growth-instructions">
+  <h2>這次我要完成什麼</h2>
+  <p>{{ definition.description }}</p>
+  <h3>完成要求</h3>
+  <ul class="requirements">{% for item in definition.completion_requirements %}<li>{{ item }}</li>{% empty %}<li>請依教師課堂說明完成。</li>{% endfor %}</ul>
+  <h3>我可以去哪裡學習</h3>
+  <ul class="requirements">{% for resource in definition.learning_resource %}<li>{{ resource }}</li>{% empty %}<li>請向教師確認本項學習資源。</li>{% endfor %}</ul>
+  <h3>不會怎麼辦</h3>
+  <p>先記錄已嘗試的步驟與遇到的問題，再詢問現場教師或使用 FDE-AI 學習平台的相關教學資源。</p>
+  <h3>教師要求我提交什麼</h3>
+  <ul class="requirements">{% for item in definition.evidence_requirement %}<li>{{ item }}</li>{% empty %}<li>請依教師要求提交學習證據。</li>{% endfor %}</ul>
+</section>
+<section class="section-block growth-upload-section">
+  <div class="section-heading"><div><h2>學習證據</h2><p class="muted">已上傳 {{ image_count }} / 5 張圖片</p></div></div>
+  {% if images %}<div class="growth-photo-grid">
+    {% for image in images %}<article class="growth-photo"><a href="{% url 'learning:evidence_download' image.pk %}?inline=1" target="_blank" rel="noopener noreferrer"><img src="{% url 'learning:evidence_download' image.pk %}?inline=1" alt="{{ definition.slot_id }} 學習證據照片" loading="lazy"></a><small>{{ image.created_at|date:'Y-m-d H:i' }}</small>{% if editable %}<form method="post" action="{% url 'learning:growth_evidence_delete' enrollment.pk definition.slot_id image.pk %}" onsubmit="return confirm('確定刪除此照片？');">{% csrf_token %}<button class="small-button" type="submit">刪除照片</button></form>{% endif %}</article>{% endfor %}
+  </div>{% else %}<p class="empty-state">尚未上傳照片。</p>{% endif %}
+  {% if is_summary %}<p class="notice">R08 不複製上傳檔案。請從 R01～R07 選擇 3～5 項代表成果的功能將在 v1.5B-4 開放；目前可先保存學習總結草稿。</p>{% endif %}
+</section>
+<section class="section-block growth-upload-section">
+  <h2>影片上傳</h2>
+  <p class="muted">影片上傳將在 v1.5B-2 開放；本階段可使用照片記錄學習過程。</p>
+</section>
+<section class="section-block growth-upload-section">
+  <h2>檔案與作品連結</h2>
+  <p class="muted">檔案及外部作品連結欄位預留，第一階段先完成手機照片上傳。</p>
+</section>
+<section class="section-block">
+  <h2>學習備註</h2>
+  {% if editable %}
+  <form class="growth-form" data-growth-form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label for="id_student_note">學習備註</label>{{ form.student_note }}{% for error in form.student_note.errors %}<p class="error">{{ error }}</p>{% endfor %}
+    {% if is_summary %}
+      <label for="id_learning_summary">本期學習總結</label>{{ form.learning_summary }}{% for error in form.learning_summary.errors %}<p class="error">{{ error }}</p>{% endfor %}
+    {% else %}
+      <label for="id_images">新增照片（手機可拍照或從相簿選擇）</label>{{ form.images }}{% for error in form.images.errors %}<p class="error">{{ error }}</p>{% endfor %}
+    {% endif %}
+    {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
+    <div class="growth-actions"><button class="button secondary" type="submit" name="action" value="save_draft">保存草稿</button>{% if is_summary %}<button class="button primary" type="button" disabled aria-disabled="true">代表成果選擇完成後提交</button>{% else %}<button class="button primary" type="submit" name="action" value="submit_review">提交教師複核</button>{% endif %}</div>
+    <progress class="growth-upload-progress" data-upload-progress max="100" value="0" hidden></progress>
+    <p class="muted" data-upload-status aria-live="polite"></p>
+  </form>
+  {% else %}
+    <p>{{ submission.student_note|default:'未填寫' }}</p>
+    {% if is_summary %}<h3>本期學習總結</h3><p>{{ submission.learning_summary|default:'未填寫'|linebreaksbr }}</p>{% endif %}
+  {% endif %}
+</section>
+<section class="section-block growth-review-placeholder">
+  <h2>教師複核結果</h2>
+  {% if submission.status == 'approved' or submission.status == 'rejected' or submission.status == 'needs_revision' %}<p>{{ submission.get_status_display }}</p>{% else %}<p class="muted">尚未完成教師複核；教師複核介面將在 v1.5B-3 開放。</p>{% endif %}
+  <h3>教師評語</h3><p class="muted">尚無教師評語。</p>
+</section>
+<script src="{% static 'learning/growth-upload.js' %}" defer></script>
+{% endblock %}

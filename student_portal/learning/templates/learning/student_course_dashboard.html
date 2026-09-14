@@ -3,6 +3,7 @@
 {% block content %}
 <a class="back-link" href="{% url 'learning:student_dashboard' %}">返回我的帳號與課程</a>
 <section class="page-heading"><p class="eyebrow">{{ enrollment.cohort.name }} · {{ profile.public_user_id }}</p><h1>{{ enrollment.cohort.cohort_id }} 學習任務</h1><p class="muted">任務可依課程安排自由進入，不會因前一項未完成而鎖定。</p></section>
+<section class="section-block growth-entry"><div><p class="eyebrow">R01～R08</p><h2>我的學習成長日誌</h2><p class="muted">記錄課堂練習、作品與本期學習歷程。</p></div><a class="button primary" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">打開成長日誌</a></section>
 <section class="section-block"><div class="section-heading"><h2>學習階段</h2><span>{{ reviewed_count }} / {{ progress|length }} 項教師已複核</span></div><div class="phase-grid">
   {% for phase in phases %}<form class="phase-row" method="post" action="{% url 'learning:update_phase' enrollment.pk phase.phase %}">{% csrf_token %}<strong>{{ phase.get_phase_display }}</strong><select name="status" aria-label="{{ phase.get_phase_display }} 狀態"><option value="not_started" {% if phase.status == 'not_started' %}selected{% endif %}>未開始</option><option value="in_progress" {% if phase.status == 'in_progress' %}selected{% endif %}>進行中</option><option value="completed" {% if phase.status == 'completed' %}selected{% endif %}>已完成</option></select><input type="hidden" name="note" value="{{ phase.note }}"><button class="small-button" type="submit">保存</button></form>{% endfor %}
 </div></section>

@@ -3,7 +3,17 @@
 {% block content %}
 <section class="form-panel">
   <h1>驗證電子郵件</h1>
-  <p class="muted">FDE ID：{{ public_user_id }}。驗證碼已寄送至註冊信箱，15 分鐘內有效。</p>
+  {% if has_pending_code %}
+    {% if is_console_email_backend %}
+      <p class="notice" role="status">開發模式：驗證碼已輸出至伺服器控制台。請查看啟動網站的終端；Gmail 不會收到此封郵件。</p>
+    {% elif is_smtp_email_backend %}
+      <p class="notice" role="status">驗證碼已寄送至：{{ masked_email }}，15 分鐘內有效。</p>
+    {% else %}
+      <p class="notice" role="status">驗證碼已交由目前設定的郵件後端處理至：{{ masked_email }}。</p>
+    {% endif %}
+  {% else %}
+    <p class="notice" role="alert">目前沒有有效的驗證碼，請重新寄送。</p>
+  {% endif %}
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   <form method="post">{% csrf_token %}
     <div class="field"><label for="code">6 位數驗證碼</label><input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></div>

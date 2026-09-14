@@ -1,0 +1,74 @@
+[
+  {
+    "slot_id": "R01",
+    "title": "證照題庫學習記錄",
+    "description": "記錄學員實際進行過基礎操作證題庫練習。",
+    "completion_requirements": ["完成課堂指定的基礎操作證題庫練習。", "提交可辨識的刷題過程或結果截圖。"],
+    "evidence_requirement": ["刷題截圖"],
+    "learning_resource": ["請使用課堂提供的題庫入口，並依教師說明完成練習。"],
+    "display_order": 1
+  },
+  {
+    "slot_id": "R02",
+    "title": "模擬飛行學習記錄",
+    "description": "記錄學員實際進行過模擬飛行訓練。",
+    "completion_requirements": ["依課堂安排完成模擬器飛行練習。", "提交模擬器操作或練習結果。"],
+    "evidence_requirement": ["模擬器截圖或練習照片"],
+    "learning_resource": ["請使用課堂指定的模擬器與訓練場景。"],
+    "display_order": 2
+  },
+  {
+    "slot_id": "R03",
+    "title": "真機飛行學習記錄",
+    "description": "記錄學員實際參與室內或戶外真機飛行。",
+    "completion_requirements": ["依教師現場安全指示參與真機飛行。", "記錄訓練過程及使用的安全措施。"],
+    "evidence_requirement": ["現場照片或飛行訓練照片"],
+    "learning_resource": ["真機飛行前先完成教師指定的安全檢查。"],
+    "display_order": 3
+  },
+  {
+    "slot_id": "R04",
+    "title": "四面懸停學習記錄",
+    "description": "記錄學員實際進行過四面懸停訓練。",
+    "completion_requirements": ["依課堂訓練順序練習四面懸停。", "提交訓練或檢測結果。"],
+    "evidence_requirement": ["訓練照片、練習影片截圖或四面懸停 AI 檢測結果截圖"],
+    "learning_resource": ["請使用 FDE-AI 學習平台的四面懸停相關功能，並依教師指示操作。"],
+    "display_order": 4
+  },
+  {
+    "slot_id": "R05",
+    "title": "F450 組裝學習記錄",
+    "description": "記錄學員實際參與 F450 組裝。",
+    "completion_requirements": ["參與 F450 組裝流程。", "記錄組裝中的關鍵步驟並提交完成狀態。"],
+    "evidence_requirement": ["組裝過程、接線或完成機照片"],
+    "learning_resource": ["請參考課堂 F450 組裝示範與教師現場說明。"],
+    "display_order": 5
+  },
+  {
+    "slot_id": "R06",
+    "title": "FDE-AI 檢測使用記錄",
+    "description": "記錄學員實際使用過 FDE-AI 檢測功能。",
+    "completion_requirements": ["完成 F450 槳葉 CW/CCW 檢測或四面懸停檢測其中一項。", "提交實際操作結果。"],
+    "evidence_requirement": ["AI 檢測結果截圖或操作過程照片"],
+    "learning_resource": ["請在 FDE-AI 學習平台選擇桨葉檢測或四面懸停檢測，並依教師指示操作。"],
+    "display_order": 6
+  },
+  {
+    "slot_id": "R07",
+    "title": "本組專業成長記錄",
+    "description": "依所屬小組的專業方向記錄學習過程與成果；具體內容由本期課程的小組設定提供。",
+    "completion_requirements": ["完成本組課程設定的專業學習活動。", "提交可呈現學習成果的證據。"],
+    "evidence_requirement": ["本組專業成果照片或作品連結"],
+    "learning_resource": ["請依本組教師公布的學習資源與成果要求進行。"],
+    "display_order": 7
+  },
+  {
+    "slot_id": "R08",
+    "title": "我的本期學習成果總結",
+    "description": "整理 R01～R07 的代表成果並撰寫本期學習總結，不需重新上傳相同檔案。",
+    "completion_requirements": ["從 R01～R07 已有證據選擇 3～5 項代表成果。", "撰寫本期學習總結並提交教師複核。"],
+    "evidence_requirement": ["引用 3～5 項已上傳的代表成果及一段學習總結"],
+    "learning_resource": ["完成 R01～R07 後，從已有學習證據中整理代表成果。"],
+    "display_order": 8
+  }
+]

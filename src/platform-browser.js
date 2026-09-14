@@ -115,7 +115,7 @@ const hero = {
   status: 'v1.0 MVP frontend',
   showMotionStrip: false,
   actions: [
-    { label: '進入學習平台', target: '#learn', kind: 'primary' },
+    { label: '我的學習日誌', target: '/student/', kind: 'primary' },
     { label: '觀看系統 Demo', target: '#inspection', kind: 'secondary' }
   ]
 };

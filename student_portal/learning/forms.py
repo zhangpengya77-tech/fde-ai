@@ -1,5 +1,6 @@
 import uuid
 from django import forms
+from django.forms.widgets import ClearableFileInput
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
@@ -93,13 +94,6 @@ class StudentPasswordResetForm(PasswordResetForm):
                 yield user
 
 
-class JoinCohortForm(forms.Form):
-    class_code = forms.CharField(label="課程邀請碼", max_length=24)
-
-    def clean_class_code(self):
-        return self.cleaned_data["class_code"].strip().upper()
-
-
 class EvidenceForm(forms.ModelForm):
     class Meta:
         model = Evidence
@@ -115,6 +109,38 @@ class EvidenceForm(forms.ModelForm):
         if external_url and upload:
             raise ValidationError("網址和檔案只能選擇一種。")
         return cleaned
+
+
+class MultipleFileInput(ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.FileField):
+    widget = MultipleFileInput
+
+    def clean(self, data, initial=None):
+        if not data and initial is None:
+            return []
+        files = data if isinstance(data, (list, tuple)) else [data]
+        return [super(MultipleImageField, self).clean(upload, initial) for upload in files]
+
+
+class GrowthRecordForm(forms.Form):
+    student_note = forms.CharField(
+        label="學習備註",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "maxlength": 4000}),
+    )
+    learning_summary = forms.CharField(
+        label="本期學習總結",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 6, "maxlength": 10000}),
+    )
+    images = MultipleImageField(
+        label="新增照片",
+        required=False,
+        widget=MultipleFileInput(attrs={"accept": "image/*"}),
+    )
 
 
 class StudentTaskProgressForm(forms.ModelForm):

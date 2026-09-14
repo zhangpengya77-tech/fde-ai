@@ -10,7 +10,7 @@ from learning.models import StudentProfile
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
 class AnonymousAccountFlowTests(TestCase):
-    def test_registration_verification_email_login_and_original_platform_entry(self):
+    def test_registration_verification_login_opens_student_page_and_platform_remains_available(self):
         response = self.client.post(
             reverse("learning:register"),
             {
@@ -39,7 +39,11 @@ class AnonymousAccountFlowTests(TestCase):
             {"username": "STUDENT@example.com", "password": "A-strong-passphrase-984!"},
         )
         self.assertEqual(login.status_code, 302)
-        self.assertEqual(login["Location"], reverse("learning:platform"))
+        self.assertEqual(login["Location"], reverse("learning:student_dashboard"))
+
+        student_page = self.client.get(reverse("learning:student_dashboard"))
+        self.assertEqual(student_page.status_code, 200)
+        self.assertContains(student_page, profile.public_user_id)
 
         platform = self.client.get(reverse("learning:platform"))
         self.assertEqual(platform.status_code, 200)

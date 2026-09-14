@@ -7,6 +7,10 @@ from .models import (
     EmailVerificationCode,
     Enrollment,
     Evidence,
+    GrowthRecordDefinition,
+    GrowthRecordReview,
+    GrowthRecordSubmission,
+    LearningGroup,
     PhaseProgress,
     StudentProfile,
     StudentTaskProgress,
@@ -63,12 +67,75 @@ class ClassCodeAdmin(admin.ModelAdmin):
 
 @admin.register(Enrollment)
 class EnrollmentAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
-    list_display = ("student", "cohort", "joined_at", "active")
+    list_display = ("student", "cohort", "group", "joined_at", "active")
     search_fields = ("student__public_user_id", "student__nickname", "cohort__cohort_id")
     list_filter = ("cohort", "active")
 
     def get_queryset(self, request):
         return _teacher_scope(super().get_queryset(request), request, "cohort__teacher_accesses__teacher")
+
+
+@admin.register(LearningGroup)
+class LearningGroupAdmin(admin.ModelAdmin):
+    list_display = ("cohort", "code", "name", "active")
+    search_fields = ("cohort__cohort_id", "code", "name")
+    list_filter = ("cohort", "active")
+
+    def get_queryset(self, request):
+        return _teacher_scope(super().get_queryset(request), request, "cohort__teacher_accesses__teacher")
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "cohort" and not request.user.is_superuser:
+            kwargs["queryset"] = Cohort.objects.filter(
+                active=True, teacher_accesses__teacher=request.user
+            ).distinct()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(GrowthRecordDefinition)
+class GrowthRecordDefinitionAdmin(admin.ModelAdmin):
+    list_display = ("cohort", "slot_id", "title", "group_scope", "display_order", "enabled")
+    search_fields = ("cohort__cohort_id", "slot_id", "title")
+    list_filter = ("cohort", "enabled", "group_scope")
+    list_editable = ("display_order", "enabled")
+
+    def get_queryset(self, request):
+        return _teacher_scope(super().get_queryset(request), request, "cohort__teacher_accesses__teacher")
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser:
+            accessible = Cohort.objects.filter(active=True, teacher_accesses__teacher=request.user)
+            if db_field.name == "cohort":
+                kwargs["queryset"] = accessible.distinct()
+            elif db_field.name == "group_scope":
+                kwargs["queryset"] = LearningGroup.objects.filter(cohort__in=accessible).distinct()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(GrowthRecordSubmission)
+class GrowthRecordSubmissionAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
+    list_display = ("enrollment", "definition", "status", "submitted_at", "updated_at")
+    search_fields = ("enrollment__student__public_user_id", "enrollment__student__nickname", "definition__title")
+    list_filter = ("status", "definition__cohort", "definition__slot_id")
+
+    def get_queryset(self, request):
+        return _teacher_scope(
+            super().get_queryset(request), request, "enrollment__cohort__teacher_accesses__teacher"
+        )
+
+
+@admin.register(GrowthRecordReview)
+class GrowthRecordReviewAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
+    list_display = ("submission", "reviewer", "review_status", "score", "reviewed_at")
+    list_filter = ("review_status", "reviewer", "reviewed_at")
+    search_fields = ("submission__enrollment__student__public_user_id", "teacher_note")
+
+    def get_queryset(self, request):
+        return _teacher_scope(
+            super().get_queryset(request),
+            request,
+            "submission__enrollment__cohort__teacher_accesses__teacher",
+        )
 
 
 @admin.register(StudentProfile)
@@ -132,13 +199,25 @@ class PhaseProgressAdmin(admin.ModelAdmin):
 
 @admin.register(Evidence)
 class EvidenceAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
-    list_display = ("evidence_id", "progress", "evidence_type", "created_at")
-    search_fields = ("progress__enrollment__student__public_user_id", "description")
-    list_filter = ("evidence_type", "progress__enrollment__cohort")
+    list_display = ("evidence_id", "progress", "growth_submission", "evidence_type", "created_at")
+    search_fields = (
+        "progress__enrollment__student__public_user_id",
+        "growth_submission__enrollment__student__public_user_id",
+        "description",
+    )
+    list_filter = ("evidence_type", "progress__enrollment__cohort", "growth_submission__enrollment__cohort")
     readonly_fields = ("evidence_id", "created_at")
 
     def get_queryset(self, request):
-        return _teacher_scope(super().get_queryset(request), request, "progress__enrollment__cohort__teacher_accesses__teacher")
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        from django.db.models import Q
+
+        return queryset.filter(
+            Q(progress__enrollment__cohort__teacher_accesses__teacher=request.user)
+            | Q(growth_submission__enrollment__cohort__teacher_accesses__teacher=request.user)
+        ).distinct()
 
 
 @admin.register(TeacherReviewEvent)

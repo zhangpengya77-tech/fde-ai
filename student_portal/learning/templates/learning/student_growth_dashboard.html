@@ -1,0 +1,29 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}我的學習成長日誌｜{{ enrollment.cohort.name }}{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/growth-records.css' %}">{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:student_course_dashboard' enrollment.pk %}">返回課程任務</a>
+<section class="page-heading">
+  <p class="eyebrow">{{ enrollment.cohort.name }} · {{ profile.public_user_id }}</p>
+  <h1>我的學習成長日誌</h1>
+  <p class="muted">{{ profile.nickname }} · {{ enrollment.cohort_id }} · 小組：{% if enrollment.group %}{{ enrollment.group.name }}{% else %}尚未分組{% endif %}</p>
+</section>
+<section class="growth-summary" aria-label="成長記錄進度">
+  <div><span>已提交</span><strong>{{ submitted_count }} / {{ record_count }}</strong></div>
+  <div><span>教師已複核</span><strong>{{ reviewed_count }} / {{ record_count }}</strong></div>
+</section>
+<section class="growth-grid" aria-label="R01 至 R08 成長記錄">
+  {% for row in records %}
+  <article class="growth-card">
+    <div class="growth-card-heading"><span class="growth-slot">{{ row.submission.definition.slot_id }}</span><span class="status status-{{ row.submission.status }}">{{ row.submission.get_status_display }}</span></div>
+    <h2>{{ row.submission.definition.title }}</h2>
+    <p>{{ row.submission.definition.description }}</p>
+    <div class="growth-card-meta"><span>{% if row.submission.submitted_at %}已提交{% else %}尚未提交{% endif %}</span><span>{% if row.submission.status == 'needs_revision' or row.submission.status == 'approved' or row.submission.status == 'rejected' %}已複核{% else %}待教師複核{% endif %}</span><span>照片 {{ row.image_count }} / 5</span></div>
+    <a class="button secondary full" href="{% url 'learning:growth_record_detail' enrollment.pk row.submission.definition.slot_id %}">進入記錄</a>
+  </article>
+  {% empty %}
+  <p class="empty-state">本期成長記錄尚未啟用，請聯絡教師。</p>
+  {% endfor %}
+</section>
+{% endblock %}

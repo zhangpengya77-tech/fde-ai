@@ -2,7 +2,7 @@ import uuid
 import secrets
 
 from django.conf import settings
-from django.core.validators import FileExtensionValidator, RegexValidator
+from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
 
@@ -45,15 +45,38 @@ class Cohort(models.Model):
         return self.name
 
 
+class LearningGroup(models.Model):
+    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name="groups")
+    code = models.CharField(max_length=24)
+    name = models.CharField(max_length=80)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["cohort_id", "code"]
+        constraints = [models.UniqueConstraint(fields=["cohort", "code"], name="one_group_code_per_cohort")]
+
+    def __str__(self):
+        return f"{self.cohort_id} · {self.name}"
+
+
 class Enrollment(models.Model):
     student = models.ForeignKey("StudentProfile", on_delete=models.CASCADE, related_name="enrollments")
     cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="enrollments")
+    group = models.ForeignKey(
+        LearningGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="enrollments"
+    )
     joined_at = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["-joined_at"]
         constraints = [models.UniqueConstraint(fields=["student", "cohort"], name="one_enrollment_per_cohort")]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.group_id and self.cohort_id and self.group.cohort_id != self.cohort_id:
+            raise ValidationError({"group": "小組必須屬於此課程期別。"})
 
     def __str__(self):
         return f"{self.student.public_user_id} · {self.cohort_id}"
@@ -77,6 +100,99 @@ class ClassCode(models.Model):
 
     def __str__(self):
         return f"{self.cohort_id} · {self.code}"
+
+
+class GrowthRecordDefinition(models.Model):
+    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name="growth_record_definitions")
+    group_scope = models.ForeignKey(
+        LearningGroup,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="growth_record_definitions",
+    )
+    slot_id = models.CharField(max_length=3, validators=[RegexValidator(r"^R0[1-8]$")])
+    title = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    completion_requirements = models.JSONField(default=list, blank=True)
+    evidence_requirement = models.JSONField(default=list, blank=True)
+    learning_resource = models.JSONField(default=list, blank=True)
+    display_order = models.PositiveSmallIntegerField(default=1)
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["display_order", "slot_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cohort", "slot_id"],
+                condition=models.Q(group_scope__isnull=True),
+                name="one_default_growth_definition_per_slot",
+            ),
+            models.UniqueConstraint(
+                fields=["cohort", "slot_id", "group_scope"],
+                condition=models.Q(group_scope__isnull=False),
+                name="one_group_growth_definition_per_slot",
+            ),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.group_scope_id and self.cohort_id and self.group_scope.cohort_id != self.cohort_id:
+            raise ValidationError({"group_scope": "小組必須屬於此課程期別。"})
+
+    def __str__(self):
+        return f"{self.cohort_id} · {self.slot_id} · {self.title}"
+
+
+class GrowthRecordSubmission(models.Model):
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "未開始"
+        IN_PROGRESS = "in_progress", "進行中"
+        SUBMITTED = "submitted", "已提交"
+        NEEDS_REVISION = "needs_revision", "需要補充"
+        APPROVED = "approved", "合格"
+        REJECTED = "rejected", "不合格"
+
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="growth_submissions")
+    definition = models.ForeignKey(
+        GrowthRecordDefinition, on_delete=models.PROTECT, related_name="submissions"
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_STARTED)
+    student_note = models.TextField(blank=True)
+    learning_summary = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    teacher_final_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    selected_evidence = models.ManyToManyField(
+        "Evidence", blank=True, related_name="summary_submissions"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["definition__display_order", "definition__slot_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["enrollment", "definition"], name="one_growth_submission_per_record"),
+            models.CheckConstraint(
+                condition=models.Q(teacher_final_score__isnull=True)
+                | models.Q(teacher_final_score__gte=0, teacher_final_score__lte=100),
+                name="growth_final_score_0_100",
+            ),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.enrollment_id and self.definition_id and self.enrollment.cohort_id != self.definition.cohort_id:
+            raise ValidationError("成長記錄定義必須屬於學員加入的課程期別。")
+
+    def __str__(self):
+        return f"{self.enrollment.student.public_user_id} · {self.definition.slot_id}"
 
 
 class TeacherCohortAccess(models.Model):
@@ -311,7 +427,16 @@ class Evidence(models.Model):
         OTHER = "other", "其他"
 
     evidence_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    progress = models.ForeignKey(StudentTaskProgress, on_delete=models.CASCADE, related_name="evidence")
+    progress = models.ForeignKey(
+        StudentTaskProgress, null=True, blank=True, on_delete=models.CASCADE, related_name="evidence"
+    )
+    growth_submission = models.ForeignKey(
+        GrowthRecordSubmission,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="evidence",
+    )
     evidence_type = models.CharField(max_length=12, choices=Type.choices)
     external_url = models.URLField(blank=True)
     upload = models.FileField(
@@ -325,23 +450,81 @@ class Evidence(models.Model):
         ],
     )
     description = models.CharField(max_length=500, blank=True)
+    original_metadata = models.JSONField(default=dict, blank=True)
+    processed_metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(progress__isnull=False, growth_submission__isnull=True)
+                    | models.Q(progress__isnull=True, growth_submission__isnull=False)
+                ),
+                name="evidence_has_exactly_one_parent",
+            )
+        ]
 
     def clean(self):
         from django.core.exceptions import ValidationError
 
+        if self.progress_id and self.growth_submission_id:
+            raise ValidationError("證據必須且只能屬於一項任務或一筆成長記錄。")
+        if not self._state.adding and not self.progress_id and not self.growth_submission_id:
+            raise ValidationError("證據必須且只能屬於一項任務或一筆成長記錄。")
         if bool(self.external_url) == bool(self.upload):
             raise ValidationError("證據必須且只能提供一個檔案或一個外部連結。")
 
     @property
     def student(self):
-        return self.progress.enrollment.student
+        return self.enrollment.student
+
+    @property
+    def enrollment(self):
+        if self.growth_submission_id:
+            return self.growth_submission.enrollment
+        return self.progress.enrollment
 
     def __str__(self):
-        return f"{self.progress.task_id} · {self.get_evidence_type_display()}"
+        if self.growth_submission_id:
+            label = self.growth_submission.definition.slot_id
+        else:
+            label = self.progress.task_id
+        return f"{label} · {self.get_evidence_type_display()}"
+
+
+class GrowthRecordReview(models.Model):
+    class Status(models.TextChoices):
+        APPROVED = "approved", "合格"
+        NEEDS_REVISION = "needs_revision", "需要補充"
+        REJECTED = "rejected", "不合格"
+
+    submission = models.ForeignKey(
+        GrowthRecordSubmission, on_delete=models.CASCADE, related_name="reviews"
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="growth_record_reviews"
+    )
+    review_status = models.CharField(max_length=16, choices=Status.choices)
+    score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    teacher_note = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-reviewed_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(score__isnull=True) | models.Q(score__gte=0, score__lte=100),
+                name="growth_review_score_0_100",
+            )
+        ]
 
 
 class TeacherReviewEvent(models.Model):

@@ -4,7 +4,6 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from learning.models import (
-    ClassCode,
     Cohort,
     Enrollment,
     StudentTaskProgress,
@@ -22,42 +21,70 @@ class EnrollmentWorkflowTests(TestCase):
         self.client.force_login(self.profile.user)
         self.first_cohort = Cohort.objects.create(cohort_id="2026-01", name="2026 第一梯")
         self.second_cohort = Cohort.objects.create(cohort_id="2026-02", name="2026 第二梯")
-        self.first_code = ClassCode.objects.create(code="FDE2601", cohort=self.first_cohort)
-        self.second_code = ClassCode.objects.create(code="FDE2602", cohort=self.second_cohort)
+        teacher = get_user_model().objects.create_user(
+            username="course-teacher", email="course-teacher@example.com", password="Teacher-passphrase-986!", is_staff=True
+        )
+        TeacherCohortAccess.objects.create(teacher=teacher, cohort=self.first_cohort)
+        TeacherCohortAccess.objects.create(teacher=teacher, cohort=self.second_cohort)
 
-    def join(self, code):
-        return self.client.post(reverse("learning:join_cohort"), {"class_code": code})
+    def join(self, cohort):
+        return self.client.post(reverse("learning:join_cohort"), {"cohort_id": cohort.pk})
 
-    def test_class_code_joins_student_and_initializes_course_tasks(self):
-        response = self.join("fde2601")
+    def test_join_page_shows_open_courses_without_an_invite_code(self):
+        response = self.client.get(reverse("learning:join_cohort"))
 
-        self.assertRedirects(response, reverse("learning:student_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.first_cohort.name)
+        self.assertContains(response, self.second_cohort.name)
+        self.assertNotContains(response, "課程邀請碼")
+        self.assertNotContains(response, "class_code")
+
+    def test_student_can_join_active_course_and_open_it_directly(self):
+        response = self.join(self.first_cohort)
+
         enrollment = Enrollment.objects.get(student=self.profile, cohort=self.first_cohort)
+        self.assertRedirects(
+            response,
+            reverse("learning:student_course_dashboard", args=[enrollment.pk]),
+        )
         self.assertEqual(enrollment.task_progress.count(), 12)
         self.assertEqual(enrollment.phase_progress.count(), 5)
-        self.assertEqual(self.first_code.__class__.objects.get(pk=self.first_code.pk).use_count, 1)
 
     def test_duplicate_join_is_idempotent_and_course_progress_is_separate(self):
-        self.join("FDE2601")
+        self.join(self.first_cohort)
         first = Enrollment.objects.get(student=self.profile, cohort=self.first_cohort)
         task = TaskDefinition.objects.get(task_id="T01")
         StudentTaskProgress.objects.filter(enrollment=first, task=task).update(student_note="第一門課紀錄")
 
-        self.join("FDE2601")
-        self.join("FDE2602")
+        self.join(self.first_cohort)
+        self.join(self.second_cohort)
 
         self.assertEqual(Enrollment.objects.filter(student=self.profile).count(), 2)
-        self.assertEqual(ClassCode.objects.get(pk=self.first_code.pk).use_count, 1)
         second = Enrollment.objects.get(student=self.profile, cohort=self.second_cohort)
         second_progress = StudentTaskProgress.objects.get(enrollment=second, task=task)
         self.assertEqual(second_progress.student_note, "")
 
-    def test_invalid_code_does_not_create_enrollment(self):
-        response = self.join("NOT-A-CODE")
+    def test_inactive_course_cannot_be_joined(self):
+        inactive = Cohort.objects.create(cohort_id="2026-03", name="已關閉課程", active=False)
+        response = self.client.post(
+            reverse("learning:join_cohort"), {"cohort_id": inactive.pk}, follow=True
+        )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(response, reverse("learning:join_cohort"))
         self.assertFalse(Enrollment.objects.filter(student=self.profile).exists())
-        self.assertContains(response, "無效或已失效")
+        self.assertContains(response, "這門課程目前未開放加入")
+
+    def test_unassigned_active_course_is_not_publicly_joinable(self):
+        internal_cohort = Cohort.objects.create(cohort_id="2026-04", name="內部測試期別")
+        page = self.client.get(reverse("learning:join_cohort"))
+
+        self.assertNotContains(page, internal_cohort.name)
+        response = self.client.post(
+            reverse("learning:join_cohort"), {"cohort_id": internal_cohort.pk}, follow=True
+        )
+
+        self.assertFalse(Enrollment.objects.filter(student=self.profile, cohort=internal_cohort).exists())
+        self.assertContains(response, "這門課程目前未開放加入")
 
     def test_teacher_can_find_registered_account_by_id_and_nickname_without_full_email(self):
         TeacherCohortAccess.objects.create(
@@ -82,7 +109,7 @@ class EnrollmentWorkflowTests(TestCase):
             username="teacher", email="teacher@example.com", password="Teacher-passphrase-984!", is_staff=True
         )
         TeacherCohortAccess.objects.create(teacher=teacher, cohort=self.first_cohort)
-        self.join("FDE2601")
+        self.join(self.first_cohort)
         enrollment = Enrollment.objects.get(student=self.profile, cohort=self.first_cohort)
         task = TaskDefinition.objects.get(task_id="T01")
         StudentTaskProgress.objects.filter(enrollment=enrollment, task=task).update(status=StudentTaskProgress.Status.REVIEWED)

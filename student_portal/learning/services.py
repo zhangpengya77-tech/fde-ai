@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import timedelta
 
@@ -9,6 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import EmailVerificationCode
+
+
+logger = logging.getLogger(__name__)
 
 
 def send_activation_code(email, code):
@@ -25,6 +29,12 @@ def send_activation_code(email, code):
 def issue_activation_code(user):
     user = type(user).objects.select_for_update().get(pk=user.pk)
     now = timezone.now()
+    recent_count = EmailVerificationCode.objects.filter(
+        user=user,
+        created_at__gte=now - timedelta(hours=1),
+    ).count()
+    if recent_count >= 5:
+        raise ValidationError("驗證碼請求次數過多，請一小時後再試。")
     latest = EmailVerificationCode.objects.filter(user=user, consumed_at__isnull=True).first()
     if latest and latest.created_at > now - timedelta(seconds=60):
         raise ValidationError("請稍候 60 秒後再要求新的驗證碼。")
@@ -35,5 +45,7 @@ def issue_activation_code(user):
         code_hash=make_password(code),
         expires_at=now + timedelta(minutes=15),
     )
-    if send_activation_code(user.email, code) != 1:
-        raise ValidationError("驗證郵件未能寄出，請稍後再試。")
+    sent_count = send_activation_code(user.email, code)
+    if sent_count != 1:
+        logger.error("Verification email backend accepted %s messages; expected 1.", sent_count)
+        raise ValidationError("驗證碼寄送失敗，請稍後重試。")

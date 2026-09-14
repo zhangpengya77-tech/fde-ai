@@ -21,6 +21,13 @@ urlpatterns = [
     path("student/", views.student_dashboard, name="student_dashboard"),
     path("courses/join/", views.join_cohort, name="join_cohort"),
     path("student/courses/<int:enrollment_id>/", views.student_course_dashboard, name="student_course_dashboard"),
+    path("student/courses/<int:enrollment_id>/growth/", views.student_growth_dashboard, name="student_growth_dashboard"),
+    path("student/courses/<int:enrollment_id>/growth/<str:slot_id>/", views.growth_record_detail, name="growth_record_detail"),
+    path(
+        "student/courses/<int:enrollment_id>/growth/<str:slot_id>/evidence/<uuid:evidence_id>/delete/",
+        views.growth_evidence_delete,
+        name="growth_evidence_delete",
+    ),
     path("student/courses/<int:enrollment_id>/tasks/<str:task_id>/", views.task_detail, name="task_detail"),
     path("student/courses/<int:enrollment_id>/tasks/<str:task_id>/evidence/", views.evidence_add, name="evidence_add"),
     path("evidence/<uuid:evidence_id>/download/", views.evidence_download, name="evidence_download"),

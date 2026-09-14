@@ -5,11 +5,16 @@
   <a class="back-link" href="{% url 'learning:student_dashboard' %}">返回我的課程</a>
   <p class="eyebrow">{{ profile.public_user_id }} · {{ profile.nickname }}</p>
   <h1>加入課程</h1>
-  <p class="muted">輸入教師提供的課程邀請碼，例如 FDE2601。</p>
-  <form method="post" novalidate>{% csrf_token %}
-    {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>{% endfor %}
-    {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
-    <button class="button primary full" type="submit">加入課程</button>
-  </form>
+  <p class="muted">選擇課程即可直接加入，無需邀請碼。</p>
+  <div class="course-list">
+    {% for cohort in cohorts %}
+      <article class="course-row">
+        <div><p class="eyebrow">{{ cohort.cohort_id }}</p><h2>{{ cohort.name }}</h2></div>
+        <form method="post">{% csrf_token %}<input type="hidden" name="cohort_id" value="{{ cohort.pk }}"><button class="button primary" type="submit">加入並進入課程</button></form>
+      </article>
+    {% empty %}
+      <p class="empty-state">目前沒有可加入的課程。</p>
+    {% endfor %}
+  </div>
 </section>
 {% endblock %}

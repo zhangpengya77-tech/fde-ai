@@ -1,5 +1,8 @@
+import io
 import re
+from contextlib import redirect_stdout
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
@@ -45,6 +48,28 @@ class StudentRegistrationTests(TestCase):
         self.assertEqual(page.status_code, 302)
         self.assertEqual(asset.status_code, 302)
 
+    def test_platform_hero_action_opens_student_growth_portal(self):
+        self.register()
+        profile = StudentProfile.objects.get(email="student@example.com")
+        self.activate(profile)
+        self.client.force_login(profile.user)
+
+        response = self.client.get(
+            reverse("learning:platform_asset", args=["src/platform-browser.js"])
+        )
+        source = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("label: '我的學習日誌'", source)
+        self.assertIn("target: '/student/'", source)
+
+    def test_student_login_form_preserves_protected_page_destination(self):
+        destination = reverse("learning:student_dashboard")
+
+        response = self.client.get(f"{reverse('learning:student_login')}?next={destination}")
+
+        self.assertContains(response, f'name="next" value="{destination}"')
+
     def test_registration_generates_anonymous_id_and_sends_verification_code(self):
         response = self.register("Student@Example.com", "Eagle")
 
@@ -58,6 +83,54 @@ class StudentRegistrationTests(TestCase):
         self.assertRegex(mail.outbox[0].body, r"\b\d{6}\b")
         code = re.search(r"\b\d{6}\b", mail.outbox[0].body).group(0)
         self.assertNotIn(code, response.content.decode())
+        record = EmailVerificationCode.objects.get(user=profile.user)
+        self.assertEqual(record.user.email, profile.email)
+        self.assertIsNone(record.consumed_at)
+        self.assertEqual(record.attempts, 0)
+        self.assertGreater(record.expires_at, record.created_at)
+        self.assertAlmostEqual((record.expires_at - record.created_at).total_seconds(), 900, delta=1)
+
+    def test_registration_page_has_independent_accessible_password_toggles(self):
+        response = self.client.get(reverse("learning:register"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode().count('type="password"'), 2)
+        self.assertContains(response, 'data-password-toggle="id_password1"')
+        self.assertContains(response, 'data-password-toggle="id_password2"')
+        self.assertEqual(response.content.decode().count('aria-label="顯示密碼"'), 2)
+        self.assertContains(response, "input.type = visible ? 'text' : 'password'")
+
+    def test_console_email_backend_is_explained_on_activation_page(self):
+        console_output = io.StringIO()
+        with override_settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend"):
+            with redirect_stdout(console_output):
+                response = self.register()
+                profile = StudentProfile.objects.get(email="student@example.com")
+                activation = self.client.get(reverse("learning:activate", args=[profile.public_user_id]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertContains(activation, "開發模式：驗證碼已輸出至伺服器控制台")
+        self.assertRegex(console_output.getvalue(), r"驗證碼是：\d{6}")
+
+    def test_registration_mail_failure_is_visible_logged_and_rolls_back(self):
+        with patch("learning.services.send_mail", side_effect=OSError("SMTP connection refused")):
+            with self.assertLogs("learning.views", level="ERROR") as captured:
+                response = self.register("failure@example.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "驗證碼寄送失敗，請稍後重試。")
+        self.assertIn("SMTP connection refused", "\n".join(captured.output))
+        self.assertFalse(StudentProfile.objects.filter(email="failure@example.com").exists())
+        self.assertFalse(get_user_model().objects.filter(email="failure@example.com").exists())
+
+    def test_registration_rejects_a_mail_backend_that_accepts_zero_messages(self):
+        with patch("learning.services.send_mail", return_value=0):
+            with self.assertLogs("learning.services", level="ERROR"):
+                response = self.register("not-sent@example.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "驗證碼寄送失敗，請稍後重試。")
+        self.assertFalse(StudentProfile.objects.filter(email="not-sent@example.com").exists())
 
     def test_duplicate_email_is_rejected_case_insensitively(self):
         self.register()
@@ -86,6 +159,7 @@ class StudentRegistrationTests(TestCase):
         activation_url = reverse("learning:activate", args=[profile.public_user_id])
         page = self.client.get(activation_url)
         self.assertNotContains(page, "student@example.com")
+        self.assertContains(page, "st***@example.com")
 
         EmailVerificationCode.objects.filter(user=profile.user).update(
             created_at=timezone.now() - timedelta(seconds=61)
@@ -97,11 +171,53 @@ class StudentRegistrationTests(TestCase):
         self.assertEqual(len(mail.outbox), 2)
         self.assertEqual(EmailVerificationCode.objects.filter(user=profile.user, consumed_at__isnull=True).count(), 1)
 
-    def test_email_activation_enables_email_login_and_platform_access(self):
+    def test_resend_mail_failure_is_reported_instead_of_success(self):
         self.register()
         profile = StudentProfile.objects.get(email="student@example.com")
-        activation = self.activate(profile)
-        self.assertEqual(activation.status_code, 302)
+        EmailVerificationCode.objects.filter(user=profile.user).update(
+            created_at=timezone.now() - timedelta(seconds=61)
+        )
+
+        with patch("learning.services.send_mail", side_effect=OSError("SMTP unavailable")):
+            with self.assertLogs("learning.views", level="ERROR") as captured:
+                response = self.client.post(
+                    reverse("learning:resend_activation", args=[profile.public_user_id]), follow=True
+                )
+
+        self.assertContains(response, "驗證碼寄送失敗，請稍後重試。")
+        self.assertIn("SMTP unavailable", "\n".join(captured.output))
+        self.assertNotContains(response, "若帳號符合驗證條件，系統已寄送驗證碼")
+
+    def test_verification_email_resends_are_limited_per_hour(self):
+        self.register()
+        profile = StudentProfile.objects.get(email="student@example.com")
+        resend_url = reverse("learning:resend_activation", args=[profile.public_user_id])
+
+        for _ in range(4):
+            EmailVerificationCode.objects.filter(user=profile.user).update(
+                created_at=timezone.now() - timedelta(seconds=61)
+            )
+            self.client.post(resend_url)
+
+        self.assertEqual(EmailVerificationCode.objects.filter(user=profile.user).count(), 5)
+        EmailVerificationCode.objects.filter(user=profile.user).update(
+            created_at=timezone.now() - timedelta(seconds=61)
+        )
+        response = self.client.post(resend_url, follow=True)
+
+        self.assertContains(response, "驗證碼請求次數過多，請一小時後再試。")
+        self.assertEqual(EmailVerificationCode.objects.filter(user=profile.user).count(), 5)
+
+    def test_email_activation_enables_email_login_and_opens_student_dashboard(self):
+        self.register()
+        profile = StudentProfile.objects.get(email="student@example.com")
+        activation = self.client.post(
+            reverse("learning:activate", args=[profile.public_user_id]),
+            {"code": re.search(r"\b\d{6}\b", mail.outbox[-1].body).group(0)},
+            follow=True,
+        )
+        self.assertEqual(activation.status_code, 200)
+        self.assertContains(activation, f"永久 FDE ID：{profile.public_user_id}")
         profile.user.refresh_from_db()
         self.assertTrue(profile.user.is_active)
 
@@ -110,8 +226,8 @@ class StudentRegistrationTests(TestCase):
             {"username": "STUDENT@example.com", "password": self.password},
         )
         self.assertEqual(login.status_code, 302)
-        self.assertEqual(login["Location"], reverse("learning:platform"))
-        self.assertEqual(self.client.get(reverse("learning:platform")).status_code, 200)
+        self.assertEqual(login["Location"], reverse("learning:student_dashboard"))
+        self.assertEqual(self.client.get(reverse("learning:student_dashboard")).status_code, 200)
 
     def test_student_password_reset_never_targets_teacher_accounts(self):
         get_user_model().objects.create_user(
