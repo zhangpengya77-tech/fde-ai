@@ -1,0 +1,12 @@
+{% extends 'learning/base.html' %}
+{% block title %}我的任務｜FDE-AI{% endblock %}
+{% block content %}
+<section class="page-heading"><p class="eyebrow">{{ profile.cohort.name }} · {{ profile.student_id }}</p><h1>你好，{{ profile.display_name }}</h1><p class="muted">任務可依課程安排自由進入，不會因前一項未完成而鎖定。</p></section>
+<section class="section-block"><div class="section-heading"><h2>學習階段</h2><span>{{ reviewed_count }} / {{ progress|length }} 項教師已複核</span></div><div class="phase-grid">
+  {% for phase in phases %}<form class="phase-row" method="post" action="{% url 'learning:update_phase' phase.phase %}">{% csrf_token %}<strong>{{ phase.get_phase_display }}</strong><select name="status" aria-label="{{ phase.get_phase_display }} 狀態"><option value="not_started" {% if phase.status == 'not_started' %}selected{% endif %}>未開始</option><option value="in_progress" {% if phase.status == 'in_progress' %}selected{% endif %}>進行中</option><option value="completed" {% if phase.status == 'completed' %}selected{% endif %}>已完成</option></select><input type="hidden" name="note" value="{{ phase.note }}"><button class="small-button" type="submit">保存</button></form>{% endfor %}
+</div></section>
+<section class="section-block"><div class="section-heading"><h2>12 項任務</h2><span>{{ progress|length }} 項</span></div><div class="task-list">
+  {% for item in progress %}<article class="task-row"><div class="task-id">{{ item.task.task_id }}</div><div class="task-copy"><div class="task-title-line"><a href="{% url 'learning:task_detail' item.task.task_id %}">{{ item.task_content.title }}</a><span class="stage-label">{{ item.task_content.get_stage_display }}</span></div><p>{{ item.task_content.description }}</p><small>{{ item.evidence.count }} 項證據{% if item.submitted_at %} · 提交 {{ item.submitted_at|date:'Y-m-d H:i' }}{% endif %}</small></div><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></article>
+  {% empty %}<p class="empty-state">任務尚未設定。請聯絡教師，或由教師執行預設任務初始化。</p>{% endfor %}
+</div></section>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'learning/base.html' %}
+{% block title %}登入｜FDE-AI 學員任務平台{% endblock %}
+{% block content %}
+<section class="auth-panel">
+  <p class="eyebrow">FDE-AI · v1.5</p>
+  <h1>學員任務平台</h1>
+  <div class="action-list">
+    <a class="button primary" href="{% url 'learning:student_login' %}">學員登入</a>
+    <a class="button secondary" href="{% url 'learning:register' %}">學員註冊</a>
+    <a class="button quiet" href="{% url 'learning:teacher_login' %}">教師登入</a>
+  </div>
+</section>
+{% endblock %}

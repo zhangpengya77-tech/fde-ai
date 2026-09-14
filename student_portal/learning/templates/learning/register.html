@@ -1,0 +1,15 @@
+{% extends 'learning/base.html' %}
+{% block title %}學員註冊｜FDE-AI{% endblock %}
+{% block content %}
+<section class="form-panel">
+  <a class="back-link" href="{% url 'learning:home' %}">返回</a>
+  <h1>學員註冊</h1>
+  <p class="muted">請使用教師名冊中的學員 ID 與電子郵件。</p>
+  <form method="post" novalidate>{% csrf_token %}
+    {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>{% endfor %}
+    {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
+    <button class="button primary full" type="submit">寄送驗證碼</button>
+  </form>
+  <p class="form-foot">已有帳號？ <a href="{% url 'learning:student_login' %}">學員登入</a></p>
+</section>
+{% endblock %}

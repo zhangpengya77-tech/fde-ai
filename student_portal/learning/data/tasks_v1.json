@@ -1,0 +1,14 @@
+[
+  {"task_id":"T01","sort_order":1,"stage":"learn","title":"基礎課程學習","description":"完成無人載具基礎課程並整理學習重點。","requirements":["瀏覽指定課程","整理至少三項學習重點"],"evidence_required":["學習摘要或課程紀錄"]},
+  {"task_id":"T02","sort_order":2,"stage":"learn","title":"F450 / 飛控基礎知識","description":"認識 F450 結構、飛控、動力系統與基本安全概念。","requirements":["辨識主要組件","完成基礎知識紀錄"],"evidence_required":["知識整理或課堂紀錄"]},
+  {"task_id":"T03","sort_order":3,"stage":"practice","title":"模擬器練習","description":"在模擬器中練習基本方向控制與安全操作。","requirements":["完成教師指定的模擬練習"],"evidence_required":["模擬器畫面或練習紀錄"]},
+  {"task_id":"T04","sort_order":4,"stage":"practice","title":"真機基礎練習","description":"在教師監督下完成真機基礎操作練習。","requirements":["遵守場地與安全規範","完成指定基礎動作"],"evidence_required":["練習紀錄或教師確認"]},
+  {"task_id":"T05","sort_order":5,"stage":"practice","title":"四面懸停 / 操控練習","description":"練習不同機頭方向的懸停與操控。","requirements":["完成四面方向練習","記錄控制狀況"],"evidence_required":["四面懸停練習紀錄"]},
+  {"task_id":"T06","sort_order":6,"stage":"build","title":"F450 組裝","description":"依教師指引完成 F450 組件辨識與組裝檢查。","requirements":["檢查機架與動力系統","記錄組裝檢查結果"],"evidence_required":["組裝照片或檢查紀錄"]},
+  {"task_id":"T07","sort_order":7,"stage":"build","title":"飛控 / Mission Planner 設定","description":"完成飛控連接與地面站基本設定練習。","requirements":["記錄飛控連接狀態","保存設定畫面"],"evidence_required":["設定截圖或操作紀錄"]},
+  {"task_id":"T08","sort_order":8,"stage":"build","title":"自動航線任務","description":"在教師監督與安全條件下規劃並檢查自動航線任務。","requirements":["提交航線規劃","完成安全檢查清單"],"evidence_required":["航線檔或規劃截圖"]},
+  {"task_id":"T09","sort_order":9,"stage":"assess","title":"行業應用任務","description":"選擇一個無人載具應用情境並整理任務需求。","requirements":["說明應用情境","整理任務流程與限制"],"evidence_required":["應用任務說明"]},
+  {"task_id":"T10","sort_order":10,"stage":"assess","title":"AI / 測繪 / 專業成果","description":"完成一項 AI、測繪或其他專業成果的展示與說明。","requirements":["說明成果用途","提交可檢視的成果"],"evidence_required":["成果檔案、連結或截圖"]},
+  {"task_id":"T11","sort_order":11,"stage":"certify","title":"綜合成果整理","description":"整理課程中的任務成果與學習紀錄。","requirements":["整理作品集","附上成果說明"],"evidence_required":["作品集或成果連結"]},
+  {"task_id":"T12","sort_order":12,"stage":"certify","title":"教師複核 / 成果認證","description":"提交完整成果供教師複核與結業確認。","requirements":["確認任務紀錄完整","完成教師複核"],"evidence_required":["綜合成果提交"]}
+]
