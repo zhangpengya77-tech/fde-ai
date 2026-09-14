@@ -222,7 +222,13 @@ def student_dashboard(request):
 def task_detail(request, task_id):
     task = get_object_or_404(TaskDefinition, task_id=task_id.upper(), active=True)
     progress, _ = StudentTaskProgress.objects.get_or_create(student=request.student_profile, task=task)
-    if request.method == "POST":
+    is_reviewed = progress.status == StudentTaskProgress.Status.REVIEWED
+    if is_reviewed and request.method == "POST":
+        messages.error(request, "此任務已由教師覆核；如需修改，請聯絡教師重新開放。")
+        return redirect("learning:task_detail", task_id=task.task_id)
+    if is_reviewed:
+        form = None
+    elif request.method == "POST":
         form = StudentTaskProgressForm(request.POST, instance=progress)
         if form.is_valid():
             progress = form.save(commit=False)
@@ -247,6 +253,9 @@ def task_detail(request, task_id):
 def evidence_add(request, task_id):
     task = get_object_or_404(TaskDefinition, task_id=task_id.upper(), active=True)
     progress, _ = StudentTaskProgress.objects.get_or_create(student=request.student_profile, task=task)
+    if progress.status == StudentTaskProgress.Status.REVIEWED:
+        messages.error(request, "此任務已由教師覆核，不能再新增證據。")
+        return redirect("learning:task_detail", task_id=task.task_id)
     form = EvidenceForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         evidence = form.save(commit=False)

@@ -111,3 +111,66 @@ class StudentTaskWorkflowTests(TestCase):
         self.assertContains(response, "至少一項證據")
         progress = StudentTaskProgress.objects.get(student=self.student, task=self.t04)
         self.assertEqual(progress.status, StudentTaskProgress.Status.NOT_STARTED)
+
+    def test_student_cannot_withdraw_submitted_task_from_review_queue(self):
+        progress = StudentTaskProgress.objects.create(
+            student=self.student, task=self.t04, status=StudentTaskProgress.Status.SUBMITTED
+        )
+
+        response = self.client.post(
+            reverse("learning:task_detail", args=["T04"]),
+            {"status": StudentTaskProgress.Status.IN_PROGRESS, "student_note": "撤回提交"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        progress.refresh_from_db()
+        self.assertEqual(progress.status, StudentTaskProgress.Status.SUBMITTED)
+        self.assertEqual(progress.student_note, "")
+
+        response = self.client.post(
+            reverse("learning:task_detail", args=["T04"]),
+            {"status": StudentTaskProgress.Status.SUBMITTED, "student_note": "補充說明"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        progress.refresh_from_db()
+        self.assertEqual(progress.status, StudentTaskProgress.Status.SUBMITTED)
+        self.assertEqual(progress.student_note, "補充說明")
+
+    def test_reviewed_task_is_read_only_and_rejects_new_evidence(self):
+        progress = StudentTaskProgress.objects.create(
+            student=self.student,
+            task=self.t04,
+            status=StudentTaskProgress.Status.REVIEWED,
+            student_note="送審說明",
+        )
+
+        detail = self.client.get(reverse("learning:task_detail", args=["T04"]))
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertIsNone(detail.context["form"])
+        self.assertContains(detail, "送審說明")
+        self.assertNotContains(detail, "保存任務狀態")
+        self.assertNotContains(detail, reverse("learning:evidence_add", args=["T04"]))
+
+        response = self.client.post(
+            reverse("learning:task_detail", args=["T04"]),
+            {"status": StudentTaskProgress.Status.IN_PROGRESS, "student_note": "覆寫內容"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        progress.refresh_from_db()
+        self.assertEqual(progress.status, StudentTaskProgress.Status.REVIEWED)
+        self.assertEqual(progress.student_note, "送審說明")
+
+        response = self.client.post(
+            reverse("learning:evidence_add", args=["T04"]),
+            {
+                "evidence_type": Evidence.Type.GITHUB,
+                "external_url": "https://github.com/example/late-proof",
+                "description": "覆核後證據",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(progress.evidence.exists())

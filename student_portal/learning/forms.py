@@ -134,10 +134,13 @@ class StudentTaskProgressForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["status"].choices = [
-            (StudentTaskProgress.Status.IN_PROGRESS, "進行中"),
-            (StudentTaskProgress.Status.SUBMITTED, "已提交"),
-        ]
+        if self.instance.status == StudentTaskProgress.Status.SUBMITTED:
+            self.fields["status"].choices = [(StudentTaskProgress.Status.SUBMITTED, "已提交")]
+        else:
+            self.fields["status"].choices = [
+                (StudentTaskProgress.Status.IN_PROGRESS, "進行中"),
+                (StudentTaskProgress.Status.SUBMITTED, "已提交"),
+            ]
 
     def clean_status(self):
         status = self.cleaned_data["status"]
