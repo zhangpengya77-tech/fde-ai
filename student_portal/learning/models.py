@@ -1,4 +1,5 @@
 import uuid
+import secrets
 
 from django.conf import settings
 from django.core.validators import FileExtensionValidator, RegexValidator
@@ -6,10 +7,13 @@ from django.db import models
 from django.utils import timezone
 
 
-student_id_validator = RegexValidator(
-    regex=r"^\d{4}-\d{2}-S\d{2,}$",
-    message="學員 ID 格式須為 YYYY-期別-S編號，例如 2026-01-S01。",
-)
+PUBLIC_ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_public_user_id():
+    year = timezone.now().year % 100
+    suffix = "".join(secrets.choice(PUBLIC_ID_ALPHABET) for _ in range(6))
+    return f"FDE-{year:02d}-{suffix}"
 
 
 def evidence_upload_path(instance, filename):
@@ -41,6 +45,40 @@ class Cohort(models.Model):
         return self.name
 
 
+class Enrollment(models.Model):
+    student = models.ForeignKey("StudentProfile", on_delete=models.CASCADE, related_name="enrollments")
+    cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="enrollments")
+    joined_at = models.DateTimeField(auto_now_add=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-joined_at"]
+        constraints = [models.UniqueConstraint(fields=["student", "cohort"], name="one_enrollment_per_cohort")]
+
+    def __str__(self):
+        return f"{self.student.public_user_id} · {self.cohort_id}"
+
+
+class ClassCode(models.Model):
+    code = models.CharField(max_length=24, unique=True)
+    cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name="class_codes")
+    active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_uses = models.PositiveIntegerField(null=True, blank=True)
+    use_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["cohort_id", "code"]
+
+    def save(self, *args, **kwargs):
+        self.code = self.code.strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.cohort_id} · {self.code}"
+
+
 class TeacherCohortAccess(models.Model):
     teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cohort_accesses")
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name="teacher_accesses")
@@ -61,12 +99,17 @@ class TeacherCohortAccess(models.Model):
 
 
 class StudentProfile(models.Model):
-    student_id = models.CharField(primary_key=True, max_length=32, validators=[student_id_validator])
-    cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="students")
-    legal_name = models.CharField(max_length=80)
-    display_name = models.CharField(max_length=40)
-    expected_email = models.EmailField(blank=True)
-    registered_email = models.EmailField(unique=True, null=True, blank=True)
+    class AccountType(models.TextChoices):
+        FREE = "free", "免費"
+        STUDENT = "student", "學員"
+        PRO = "pro", "Pro"
+
+    # Retained as an opaque internal profile key for compatibility with the initial schema.
+    student_id = models.CharField(primary_key=True, max_length=32, editable=False)
+    public_user_id = models.CharField(max_length=13, unique=True, editable=False)
+    nickname = models.CharField(max_length=40)
+    email = models.EmailField(unique=True, null=True, blank=True)
+    account_type = models.CharField(max_length=12, choices=AccountType.choices, default=AccountType.FREE)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -79,10 +122,38 @@ class StudentProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["student_id"]
+        ordering = ["public_user_id"]
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.student_id:
+            self.student_id = uuid.uuid4().hex
+        if self._state.adding and not self.public_user_id:
+            from django.db import IntegrityError, transaction
+
+            for _ in range(10):
+                self.public_user_id = generate_public_user_id()
+                try:
+                    with transaction.atomic():
+                        return super().save(*args, **kwargs)
+                except IntegrityError:
+                    if StudentProfile.objects.filter(public_user_id=self.public_user_id).exists():
+                        continue
+                    raise
+            raise RuntimeError("無法產生唯一的 FDE ID，請重試。")
+        if not self._state.adding:
+            original = StudentProfile.objects.filter(pk=self.pk).values_list("public_user_id", flat=True).first()
+            if original and original != self.public_user_id:
+                from django.core.exceptions import ValidationError
+
+                raise ValidationError({"public_user_id": "FDE ID 建立後不可修改。"})
+        super().save(*args, **kwargs)
+
+    @property
+    def display_name(self):
+        return self.nickname
 
     def __str__(self):
-        return f"{self.student_id} · {self.display_name}"
+        return f"{self.public_user_id} · {self.nickname}"
 
 
 class TaskDefinition(models.Model):
@@ -179,7 +250,7 @@ class StudentTaskProgress(models.Model):
         INCOMPLETE = "incomplete", "未完成"
         SKIPPED = "skipped", "跳過"
 
-    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="task_progress")
+    enrollment = models.ForeignKey("Enrollment", on_delete=models.CASCADE, related_name="task_progress")
     task = models.ForeignKey(TaskDefinition, on_delete=models.PROTECT, related_name="progress_records")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_STARTED)
     task_version_snapshot = models.PositiveSmallIntegerField(default=1)
@@ -193,7 +264,7 @@ class StudentTaskProgress(models.Model):
 
     class Meta:
         ordering = ["task__sort_order", "task__task_id"]
-        constraints = [models.UniqueConstraint(fields=["student", "task"], name="one_progress_per_student_task")]
+        constraints = [models.UniqueConstraint(fields=["enrollment", "task"], name="one_progress_per_enrollment_task")]
 
     def save(self, *args, **kwargs):
         if self._state.adding and self.task_id:
@@ -207,7 +278,7 @@ class StudentTaskProgress(models.Model):
         return self.task.revisions.filter(version=self.task_version_snapshot).first() or self.task
 
     def __str__(self):
-        return f"{self.student_id} / {self.task_id}: {self.get_status_display()}"
+        return f"{self.enrollment.student.public_user_id} / {self.task_id}: {self.get_status_display()}"
 
 
 class PhaseProgress(models.Model):
@@ -217,7 +288,7 @@ class PhaseProgress(models.Model):
         COMPLETED = "completed", "已完成"
         SKIPPED = "skipped", "跳過"
 
-    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="phase_progress")
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="phase_progress")
     phase = models.CharField(max_length=12, choices=TaskDefinition.Stage.choices)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.NOT_STARTED)
     note = models.TextField(blank=True)
@@ -225,7 +296,7 @@ class PhaseProgress(models.Model):
 
     class Meta:
         ordering = ["phase"]
-        constraints = [models.UniqueConstraint(fields=["student", "phase"], name="one_phase_per_student")]
+        constraints = [models.UniqueConstraint(fields=["enrollment", "phase"], name="one_phase_per_enrollment")]
 
 
 class Evidence(models.Model):
@@ -267,7 +338,7 @@ class Evidence(models.Model):
 
     @property
     def student(self):
-        return self.progress.student
+        return self.progress.enrollment.student
 
     def __str__(self):
         return f"{self.progress.task_id} · {self.get_evidence_type_display()}"

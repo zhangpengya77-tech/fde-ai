@@ -1,15 +1,15 @@
 {% extends 'learning/base.html' %}
-{% block title %}學員註冊｜FDE-AI{% endblock %}
+{% block title %}加入課程｜FDE-AI{% endblock %}
 {% block content %}
 <section class="form-panel">
-  <a class="back-link" href="{% url 'learning:home' %}">返回</a>
-  <h1>學員註冊</h1>
-  <p class="muted">建立匿名學員帳號。驗證電子郵件後，系統會自動產生永久 FDE ID。</p>
+  <a class="back-link" href="{% url 'learning:student_dashboard' %}">返回我的課程</a>
+  <p class="eyebrow">{{ profile.public_user_id }} · {{ profile.nickname }}</p>
+  <h1>加入課程</h1>
+  <p class="muted">輸入教師提供的課程邀請碼，例如 FDE2601。</p>
   <form method="post" novalidate>{% csrf_token %}
     {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>{% endfor %}
     {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
-    <button class="button primary full" type="submit">建立帳號並寄送驗證碼</button>
+    <button class="button primary full" type="submit">加入課程</button>
   </form>
-  <p class="form-foot">已有帳號？ <a href="{% url 'learning:student_login' %}">學員登入</a></p>
 </section>
 {% endblock %}

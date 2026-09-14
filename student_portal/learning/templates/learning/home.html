@@ -1,12 +1,19 @@
 {% extends 'learning/base.html' %}
-{% block title %}登入｜FDE-AI 學員任務平台{% endblock %}
+{% block title %}FDE-AI 無人載具學習平台{% endblock %}
 {% block content %}
-<section class="auth-panel">
-  <p class="eyebrow">FDE-AI · v1.5</p>
-  <h1>學員任務平台</h1>
-  <div class="action-list">
-    <a class="button primary" href="{% url 'learning:student_login' %}">學員登入</a>
-    <a class="button secondary" href="{% url 'learning:register' %}">學員註冊</a>
+<section class="portal-landing">
+  <div class="portal-intro">
+    <p class="eyebrow">FDE-AI · 無人載具學習平台</p>
+    <h1>從學習走向無人載具實作</h1>
+    <p class="portal-slogan">會學、會做、會應用</p>
+    <p class="muted">以 F450 組裝、飛控、AI 視覺辨識與產業實作為主線，讓每一步學習都留下可追蹤的成果。</p>
+  </div>
+  <ol class="learning-stages" aria-label="FDE-AI 學習流程">
+    <li><strong>Learn</strong><span>學</span></li><li><strong>Practice</strong><span>練</span></li><li><strong>Build</strong><span>做</span></li><li><strong>Assess</strong><span>測</span></li><li><strong>Certify</strong><span>證</span></li>
+  </ol>
+  <div class="portal-actions">
+    <a class="button primary" href="{% url 'learning:register' %}">開始學習 / 註冊</a>
+    <a class="button secondary" href="{% url 'learning:student_login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">學員登入</a>
     <a class="button quiet" href="{% url 'learning:teacher_login' %}">教師登入</a>
   </div>
 </section>

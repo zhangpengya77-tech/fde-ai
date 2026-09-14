@@ -2,8 +2,10 @@ from django.contrib import admin
 
 from .models import (
     CandidatePool,
+    ClassCode,
     Cohort,
     EmailVerificationCode,
+    Enrollment,
     Evidence,
     PhaseProgress,
     StudentProfile,
@@ -18,7 +20,7 @@ from .models import (
 def _teacher_scope(queryset, request, lookup):
     if request.user.is_superuser:
         return queryset
-    return queryset.filter(**{lookup: request.user})
+    return queryset.filter(**{lookup: request.user}).distinct()
 
 
 class ImmutableRecordAdmin:
@@ -42,21 +44,14 @@ class CohortAdmin(admin.ModelAdmin):
         return _teacher_scope(super().get_queryset(request), request, "teacher_accesses__teacher")
 
 
-@admin.register(StudentProfile)
-class StudentProfileAdmin(admin.ModelAdmin):
-    list_display = ("student_id", "display_name", "legal_name", "cohort", "expected_email", "user", "active")
-    search_fields = ("student_id", "display_name", "legal_name", "expected_email")
-    list_filter = ("cohort", "active")
-    readonly_fields = ("created_at",)
+@admin.register(ClassCode)
+class ClassCodeAdmin(admin.ModelAdmin):
+    list_display = ("code", "cohort", "active", "use_count", "max_uses", "expires_at")
+    search_fields = ("code", "cohort__cohort_id", "cohort__name")
+    list_filter = ("active", "cohort")
 
     def get_queryset(self, request):
         return _teacher_scope(super().get_queryset(request), request, "cohort__teacher_accesses__teacher")
-
-    def get_readonly_fields(self, request, obj=None):
-        fields = ["created_at", "registered_email", "user"]
-        if obj:
-            fields.append("student_id")
-        return fields
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "cohort" and not request.user.is_superuser:
@@ -64,6 +59,32 @@ class StudentProfileAdmin(admin.ModelAdmin):
                 active=True, teacher_accesses__teacher=request.user
             ).distinct()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
+    list_display = ("student", "cohort", "joined_at", "active")
+    search_fields = ("student__public_user_id", "student__nickname", "cohort__cohort_id")
+    list_filter = ("cohort", "active")
+
+    def get_queryset(self, request):
+        return _teacher_scope(super().get_queryset(request), request, "cohort__teacher_accesses__teacher")
+
+
+@admin.register(StudentProfile)
+class StudentProfileAdmin(admin.ModelAdmin):
+    list_display = ("public_user_id", "nickname", "account_type", "created_at", "active")
+    search_fields = ("public_user_id", "nickname")
+    list_filter = ("account_type", "active")
+    fields = ("public_user_id", "nickname", "account_type", "active", "created_at")
+    readonly_fields = ("public_user_id", "created_at")
+
+    def get_queryset(self, request):
+        if request.user.is_superuser:
+            return super().get_queryset(request)
+        return super().get_queryset(request).filter(
+            enrollments__cohort__teacher_accesses__teacher=request.user
+        ).distinct()
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -89,46 +110,45 @@ class TaskDefinitionRevisionAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
     search_fields = ("task__task_id", "title")
     readonly_fields = ("task", "version", "sort_order", "stage", "title", "description", "requirements", "evidence_required", "updated_by", "created_at")
 
+
 @admin.register(StudentTaskProgress)
 class StudentTaskProgressAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
-    list_display = ("student", "task", "status", "submitted_at", "reviewed_at", "teacher_score")
-    search_fields = ("student__student_id", "student__legal_name", "task__title")
-    list_filter = ("status", "student__cohort", "task__stage")
-    readonly_fields = ("submitted_at", "reviewed_at", "updated_at")
+    list_display = ("enrollment", "task", "status", "submitted_at", "reviewed_at", "teacher_score")
+    search_fields = ("enrollment__student__public_user_id", "enrollment__student__nickname", "task__title")
+    list_filter = ("status", "enrollment__cohort", "task__stage")
 
     def get_queryset(self, request):
-        return _teacher_scope(super().get_queryset(request), request, "student__cohort__teacher_accesses__teacher")
+        return _teacher_scope(super().get_queryset(request), request, "enrollment__cohort__teacher_accesses__teacher")
 
 
 @admin.register(PhaseProgress)
 class PhaseProgressAdmin(admin.ModelAdmin):
-    list_display = ("student", "phase", "status", "updated_at")
-    list_filter = ("phase", "status", "student__cohort")
+    list_display = ("enrollment", "phase", "status", "updated_at")
+    list_filter = ("phase", "status", "enrollment__cohort")
 
     def get_queryset(self, request):
-        return _teacher_scope(super().get_queryset(request), request, "student__cohort__teacher_accesses__teacher")
+        return _teacher_scope(super().get_queryset(request), request, "enrollment__cohort__teacher_accesses__teacher")
 
 
 @admin.register(Evidence)
 class EvidenceAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
     list_display = ("evidence_id", "progress", "evidence_type", "created_at")
-    search_fields = ("progress__student__student_id", "description")
-    list_filter = ("evidence_type", "progress__student__cohort")
+    search_fields = ("progress__enrollment__student__public_user_id", "description")
+    list_filter = ("evidence_type", "progress__enrollment__cohort")
     readonly_fields = ("evidence_id", "created_at")
 
     def get_queryset(self, request):
-        return _teacher_scope(super().get_queryset(request), request, "progress__student__cohort__teacher_accesses__teacher")
+        return _teacher_scope(super().get_queryset(request), request, "progress__enrollment__cohort__teacher_accesses__teacher")
 
 
 @admin.register(TeacherReviewEvent)
 class TeacherReviewEventAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
     list_display = ("progress", "teacher", "result", "score", "created_at")
     list_filter = ("result", "teacher", "created_at")
-    search_fields = ("progress__student__student_id", "note")
-    readonly_fields = ("created_at",)
+    search_fields = ("progress__enrollment__student__public_user_id", "note")
 
     def get_queryset(self, request):
-        return _teacher_scope(super().get_queryset(request), request, "progress__student__cohort__teacher_accesses__teacher")
+        return _teacher_scope(super().get_queryset(request), request, "progress__enrollment__cohort__teacher_accesses__teacher")
 
 
 @admin.register(CandidatePool)
@@ -138,13 +158,14 @@ class CandidatePoolAdmin(ImmutableRecordAdmin, admin.ModelAdmin):
     readonly_fields = ("approved_at", "updated_at")
 
     def get_queryset(self, request):
-        return _teacher_scope(super().get_queryset(request), request, "evidence__progress__student__cohort__teacher_accesses__teacher")
+        return _teacher_scope(super().get_queryset(request), request, "evidence__progress__enrollment__cohort__teacher_accesses__teacher")
 
 
 @admin.register(EmailVerificationCode)
 class EmailVerificationCodeAdmin(admin.ModelAdmin):
     list_display = ("user", "expires_at", "attempts", "consumed_at", "created_at")
     readonly_fields = ("user", "code_hash", "expires_at", "attempts", "consumed_at", "created_at")
+
     def has_add_permission(self, request):
         return False
 

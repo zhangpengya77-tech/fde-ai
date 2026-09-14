@@ -1,4 +1,4 @@
-import re
+import uuid
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
@@ -10,41 +10,22 @@ from .models import Evidence, PhaseProgress, StudentProfile, StudentTaskProgress
 from .services import issue_activation_code
 
 
-STUDENT_ID_PATTERN = re.compile(r"^\d{4}-\d{2}-S\d{2,}$")
-
-
 class StudentRegistrationForm(forms.Form):
-    student_id = forms.CharField(label="學員 ID", max_length=32)
+    nickname = forms.CharField(label="暱稱", max_length=40)
     email = forms.EmailField(label="電子郵件")
     password1 = forms.CharField(label="密碼", widget=forms.PasswordInput)
     password2 = forms.CharField(label="確認密碼", widget=forms.PasswordInput)
 
     def __init__(self, *args, **kwargs):
-        self.student_profile = None
         super().__init__(*args, **kwargs)
-
-    def clean_student_id(self):
-        student_id = self.cleaned_data["student_id"].strip().upper()
-        if not STUDENT_ID_PATTERN.fullmatch(student_id):
-            raise ValidationError("學員 ID 格式須為 YYYY-期別-S編號，例如 2026-01-S01。")
-        profile = StudentProfile.objects.filter(student_id=student_id, active=True).first()
-        if profile is None:
-            raise ValidationError("找不到此學員編號，請確認後聯絡教師。")
-        if profile.user_id:
-            raise ValidationError("此學員 ID 已註冊，請直接登入或聯絡教師。")
-        self.student_profile = profile
-        return student_id
 
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
-        if self.student_profile and self.student_profile.expected_email:
-            if self.student_profile.expected_email.strip().lower() != email:
-                raise ValidationError("此電子郵件與教師名冊資料不符，請聯絡教師。")
-        if StudentProfile.objects.filter(registered_email__iexact=email).exists():
-            raise ValidationError("此電子郵件已用於其他學員，請聯絡教師。")
+        if StudentProfile.objects.filter(email__iexact=email).exists():
+            raise ValidationError("此電子郵件已註冊，請直接登入或使用忘記密碼功能。")
         user_model = get_user_model()
         if user_model.objects.filter(email__iexact=email).exists():
-            raise ValidationError("此電子郵件已用於其他帳號，請聯絡教師。")
+            raise ValidationError("此電子郵件已註冊，請直接登入或使用忘記密碼功能。")
         return email
 
     def clean(self):
@@ -53,7 +34,7 @@ class StudentRegistrationForm(forms.Form):
         password2 = cleaned.get("password2")
         if password1 and password2 and password1 != password2:
             self.add_error("password2", "兩次輸入的密碼不一致。")
-        if password1 and self.student_profile:
+        if password1:
             try:
                 validate_password(password1)
             except ValidationError as exc:
@@ -62,32 +43,35 @@ class StudentRegistrationForm(forms.Form):
 
     @transaction.atomic
     def create_account(self):
-        profile = StudentProfile.objects.select_for_update().get(student_id=self.cleaned_data["student_id"])
-        if profile.user_id:
-            raise ValidationError("此學員 ID 已註冊，請直接登入或聯絡教師。")
         user_model = get_user_model()
         user = user_model.objects.create_user(
-            username=profile.student_id,
+            username=self.cleaned_data["email"],
             email=self.cleaned_data["email"],
             password=self.cleaned_data["password1"],
             is_active=False,
         )
-        profile.user = user
-        profile.registered_email = self.cleaned_data["email"]
-        profile.save(update_fields=["user", "registered_email"])
+        profile = StudentProfile.objects.create(
+            student_id=uuid.uuid4().hex,
+            nickname=self.cleaned_data["nickname"].strip(),
+            email=self.cleaned_data["email"],
+            user=user,
+        )
         issue_activation_code(user)
-        return user
+        return profile
 
 
 class StudentLoginForm(AuthenticationForm):
-    username = forms.CharField(label="學員 ID", max_length=32)
+    username = forms.EmailField(label="電子郵件")
+
+    def clean_username(self):
+        return self.cleaned_data["username"].strip().lower()
 
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
         if user.is_staff:
             raise ValidationError("教師帳號請使用教師登入。")
         if not StudentProfile.objects.filter(user=user, active=True).exists():
-            raise ValidationError("此帳號目前沒有有效的學員名冊。")
+            raise ValidationError("此帳號沒有有效的學員資料，請聯絡管理員。")
 
 
 class TeacherLoginForm(AuthenticationForm):
@@ -107,6 +91,13 @@ class StudentPasswordResetForm(PasswordResetForm):
         for user in users:
             if user.has_usable_password() and StudentProfile.objects.filter(user=user, active=True).exists():
                 yield user
+
+
+class JoinCohortForm(forms.Form):
+    class_code = forms.CharField(label="課程邀請碼", max_length=24)
+
+    def clean_class_code(self):
+        return self.cleaned_data["class_code"].strip().upper()
 
 
 class EvidenceForm(forms.ModelForm):

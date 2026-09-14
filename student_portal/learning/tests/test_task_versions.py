@@ -1,18 +1,17 @@
 from django.test import TestCase
 
-from learning.models import Cohort, StudentProfile, StudentTaskProgress, TaskDefinition, TaskDefinitionRevision
+from learning.models import Cohort, StudentTaskProgress, TaskDefinition, TaskDefinitionRevision
+from learning.tests.helpers import create_student_account, enroll_student
 
 
 class TaskDefinitionVersionTests(TestCase):
     def test_editing_task_creates_revision_and_existing_progress_keeps_its_task_version(self):
         cohort = Cohort.objects.create(cohort_id="2026-01", name="2026 第一梯")
-        student = StudentProfile.objects.create(
-            student_id="2026-01-S01", cohort=cohort, legal_name="張小雅", display_name="張某雅"
-        )
+        enrollment = enroll_student(create_student_account(), cohort)
         task = TaskDefinition.objects.create(
             task_id="T06", sort_order=6, stage=TaskDefinition.Stage.BUILD, title="舊版組裝要求"
         )
-        progress = StudentTaskProgress.objects.create(student=student, task=task)
+        progress = StudentTaskProgress.objects.create(enrollment=enrollment, task=task)
 
         task.title = "新版組裝要求"
         task.description = "增加安全檢查"
@@ -27,13 +26,11 @@ class TaskDefinitionVersionTests(TestCase):
 
     def test_partial_admin_save_persists_the_new_task_version(self):
         cohort = Cohort.objects.create(cohort_id="2026-02", name="2026 第二梯")
-        student = StudentProfile.objects.create(
-            student_id="2026-02-S01", cohort=cohort, legal_name="陳小安", display_name="陳某安"
-        )
+        enrollment = enroll_student(create_student_account("second@example.com", "Second"), cohort)
         task = TaskDefinition.objects.create(
             task_id="T06", sort_order=6, stage=TaskDefinition.Stage.BUILD, title="舊版組裝要求"
         )
-        progress = StudentTaskProgress.objects.create(student=student, task=task)
+        progress = StudentTaskProgress.objects.create(enrollment=enrollment, task=task)
 
         task.description = "教師補充安全檢查"
         task.save(update_fields=["description"])

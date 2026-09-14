@@ -1,8 +1,8 @@
 {% extends 'learning/base.html' %}
-{% block title %}{{ profile.student_id }}｜教師覆核{% endblock %}
+{% block title %}{{ profile.public_user_id }}｜教師複核{% endblock %}
 {% block content %}
 <a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
-<section class="page-heading"><p class="eyebrow">{{ profile.cohort.name }} · {{ profile.student_id }}</p><h1>{{ profile.legal_name }} <small>({{ profile.display_name }})</small></h1><p class="muted">登入郵件：{{ profile.user.email|default:'尚未註冊' }} · GitHub：{% if profile.github_repo_url %}<a href="{{ profile.github_repo_url }}" target="_blank" rel="noopener noreferrer">作品集</a>{% else %}未設定{% endif %}</p></section>
+<section class="page-heading"><p class="eyebrow">{{ enrollment.cohort.name }} · {{ profile.public_user_id }}</p><h1>{{ profile.nickname }}</h1><p class="muted">Email：{{ email_masked }} · 註冊：{{ profile.created_at|date:'Y-m-d H:i' }} · 最後登入：{% if profile.user.last_login %}{{ profile.user.last_login|date:'Y-m-d H:i' }}{% else %}尚未登入{% endif %} · GitHub：{% if profile.github_repo_url %}<a href="{{ profile.github_repo_url }}" target="_blank" rel="noopener noreferrer">作品集</a>{% else %}未設定{% endif %}</p></section>
 <section class="section-block"><h2>學習階段</h2><div class="phase-summary">{% for phase in phases %}<div><span>{{ phase.get_phase_display }}</span><strong>{{ phase.get_status_display }}</strong></div>{% endfor %}</div></section>
 <section class="section-block"><h2>12 項任務與證據</h2><div class="teacher-task-list">
 {% for item in progress %}<article class="teacher-task"><div class="section-heading"><div><span class="eyebrow">{{ item.task.task_id }} · {{ item.task_content.get_stage_display }}</span><h3>{{ item.task_content.title }}</h3></div><span class="status status-{{ item.status }}">{{ item.get_status_display }}</span></div>

@@ -1,11 +1,17 @@
 {% extends 'learning/base.html' %}
-{% block title %}教師覆核中心｜FDE-AI{% endblock %}
+{% block title %}教師管理後台｜FDE-AI{% endblock %}
 {% block content %}
-<section class="page-heading"><p class="eyebrow">FDE-AI v1.5 · 教師</p><h1>教師覆核中心</h1><p class="muted">只顯示教師複核記錄；學員任務不鎖關，AI 不評分。</p></section>
-<section class="section-block"><form method="get" class="filter-bar"><label>班級<select name="cohort"><option value="">全部班級</option>{% for cohort in cohorts %}<option value="{{ cohort }}" {% if selected_cohort == cohort %}selected{% endif %}>{{ cohort }}</option>{% endfor %}</select></label><label>任務狀態<select name="status"><option value="">全部狀態</option>{% for value,label in statuses %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><label>搜尋<input type="search" name="q" value="{{ query }}" placeholder="學員 ID / 姓名"></label><button class="button primary" type="submit">篩選</button><a class="button quiet" href="{% url 'learning:teacher_dashboard' %}">清除</a></form>
-  <div class="section-heading"><h2>學員總覽</h2><a class="button secondary" href="{% url 'admin:learning_studentprofile_changelist' %}">管理名冊與任務</a></div>
-  <div class="table-wrap"><table><thead><tr><th>學員 ID</th><th>暱稱 / 教師姓名</th><th>班級</th><th>已複核</th><th>待複核</th><th>未完成</th><th>跳過</th><th></th></tr></thead><tbody>
-  {% for row in rows %}<tr><td>{{ row.student.student_id }}</td><td>{{ row.student.display_name }} / {{ row.student.legal_name }}</td><td>{{ row.student.cohort_id }}</td><td>{{ row.reviewed_count }} / {{ row.total_count }}</td><td>{{ row.submitted_count }}</td><td>{{ row.incomplete_count }}</td><td>{{ row.skipped_count }}</td><td><a href="{% url 'learning:teacher_student_detail' row.student.student_id %}">查看</a></td></tr>{% empty %}<tr><td colspan="8">目前沒有符合條件的學員。</td></tr>{% endfor %}
-  </tbody></table></div><p class="muted">目前啟用 {{ task_count }} 項任務。待複核即狀態為「已提交」。</p>
+<section class="page-heading"><p class="eyebrow">FDE-AI v1.5 · 教師</p><h1>教師管理後台</h1><p class="muted">以匿名 FDE ID 管理課程參與與學習紀錄；Email 預設脫敏，教師負責任務複核。</p></section>
+<section class="section-block">
+  <form method="get" class="filter-bar">
+    <label>班級<select name="cohort"><option value="">全部班級</option>{% for cohort in cohorts %}<option value="{{ cohort }}" {% if selected_cohort == cohort %}selected{% endif %}>{{ cohort }}</option>{% endfor %}</select></label>
+    <label>任務狀態<select name="status"><option value="">全部狀態</option>{% for value,label in statuses %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>搜尋 FDE ID / 暱稱<input type="search" name="q" value="{{ query }}" placeholder="FDE-26-ABC123 或暱稱"></label>
+    <button class="button primary" type="submit">搜尋</button><a class="button quiet" href="{% url 'learning:teacher_dashboard' %}">清除</a>
+  </form>
+  <div class="section-heading"><h2>學員帳號與課程</h2>{% if perms.learning.add_classcode or perms.learning.change_classcode %}<a class="button secondary" href="{% url 'admin:learning_classcode_changelist' %}">管理課程與邀請碼</a>{% endif %}</div>
+  <div class="table-wrap"><table><thead><tr><th>FDE ID</th><th>暱稱</th><th>課程</th><th>任務完成</th><th>待複核</th><th>Email</th><th>註冊時間</th><th>最後登入</th><th></th></tr></thead><tbody>
+  {% for row in rows %}<tr><td>{{ row.student.public_user_id }}</td><td>{{ row.student.nickname }}</td><td>{% if row.enrollment %}{{ row.enrollment.cohort_id }}{% else %}尚未加入課程{% endif %}</td><td>{{ row.reviewed_count }} / {{ row.total_count }}</td><td>{{ row.submitted_count }}</td><td>{{ row.email_masked }}</td><td>{{ row.student.created_at|date:'Y-m-d H:i' }}</td><td>{% if row.student.user.last_login %}{{ row.student.user.last_login|date:'Y-m-d H:i' }}{% else %}尚未登入{% endif %}</td><td>{% if row.enrollment %}<a href="{% url 'learning:teacher_student_detail' row.enrollment.pk %}">查看</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="9">目前沒有符合條件的學員。</td></tr>{% endfor %}
+  </tbody></table></div><p class="muted">目前啟用 {{ task_count }} 項任務。任務完成數以教師已複核計算。</p>
 </section>
 {% endblock %}

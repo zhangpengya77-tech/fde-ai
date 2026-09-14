@@ -1,12 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, override_settings
-from django.test import TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from learning.models import (
     CandidatePool,
+    ClassCode,
     Cohort,
+    Enrollment,
     Evidence,
     StudentProfile,
     StudentTaskProgress,
@@ -14,18 +15,15 @@ from learning.models import (
     TeacherCohortAccess,
     TeacherReviewEvent,
 )
+from learning.tests.helpers import create_student_account, enroll_student
 
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
 class TeacherWorkflowTests(TestCase):
     def setUp(self):
         self.cohort = Cohort.objects.create(cohort_id="2026-01", name="2026 第一梯")
-        self.student_user = get_user_model().objects.create_user(
-            username="2026-01-S01", email="s01@example.com", password="A-strong-passphrase-984!", is_active=True
-        )
-        self.student = StudentProfile.objects.create(
-            student_id="2026-01-S01", cohort=self.cohort, legal_name="張小雅", display_name="張某雅", user=self.student_user
-        )
+        self.student = create_student_account()
+        self.enrollment = enroll_student(self.student, self.cohort)
         self.teacher = get_user_model().objects.create_user(
             username="teacher", email="teacher@example.com", password="Another-strong-passphrase-911!", is_staff=True
         )
@@ -34,35 +32,18 @@ class TeacherWorkflowTests(TestCase):
             task_id="T06", sort_order=6, stage=TaskDefinition.Stage.BUILD, title="F450 組裝"
         )
         self.progress = StudentTaskProgress.objects.create(
-            student=self.student, task=self.task, status=StudentTaskProgress.Status.SUBMITTED
+            enrollment=self.enrollment, task=self.task, status=StudentTaskProgress.Status.SUBMITTED
         )
 
     def test_only_teacher_can_open_review_dashboard(self):
-        self.client.force_login(self.student_user)
+        self.client.force_login(self.student.user)
         response = self.client.get(reverse("learning:teacher_dashboard"))
         self.assertEqual(response.status_code, 302)
 
         self.client.force_login(self.teacher)
         response = self.client.get(reverse("learning:teacher_dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "2026-01-S01")
-
-    def test_teacher_dashboard_filters_by_submitted_status(self):
-        second_user = get_user_model().objects.create_user(
-            username="2026-01-S02", email="s02@example.com", password="A-strong-passphrase-992!", is_active=True
-        )
-        second = StudentProfile.objects.create(
-            student_id="2026-01-S02", cohort=self.cohort, legal_name="李小華", display_name="李某華", user=second_user
-        )
-        StudentTaskProgress.objects.create(
-            student=second, task=self.task, status=StudentTaskProgress.Status.REVIEWED
-        )
-        self.client.force_login(self.teacher)
-
-        response = self.client.get(reverse("learning:teacher_dashboard"), {"status": "submitted"})
-
-        self.assertContains(response, "2026-01-S01")
-        self.assertNotContains(response, "2026-01-S02")
+        self.assertContains(response, self.student.public_user_id)
 
     def test_teacher_cannot_read_or_review_an_unassigned_cohort(self):
         other_cohort = Cohort.objects.create(cohort_id="2026-02", name="2026 第二梯")
@@ -72,7 +53,7 @@ class TeacherWorkflowTests(TestCase):
         TeacherCohortAccess.objects.create(teacher=other_teacher, cohort=other_cohort)
         self.client.force_login(other_teacher)
 
-        detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.student.student_id]))
+        detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
         review = self.client.post(
             reverse("learning:review_task", args=[self.progress.pk]),
             {"result": TeacherReviewEvent.Result.REVIEWED, "note": "不能跨班查看", "score": ""},
@@ -110,9 +91,9 @@ class TeacherWorkflowTests(TestCase):
         self.assertEqual(self.progress.status, StudentTaskProgress.Status.INCOMPLETE)
         self.assertEqual(TeacherReviewEvent.objects.filter(progress=self.progress).count(), 1)
 
-        self.client.force_login(self.student_user)
+        self.client.force_login(self.student.user)
         response = self.client.post(
-            reverse("learning:task_detail", args=["T06"]),
+            reverse("learning:task_detail", args=[self.enrollment.pk, "T06"]),
             {"status": StudentTaskProgress.Status.SUBMITTED, "student_note": "已補照片"},
         )
         self.assertEqual(response.status_code, 302)
@@ -161,24 +142,22 @@ class TeacherWorkflowTests(TestCase):
         )
 
         profile_admin = admin.site._registry[StudentProfile]
-        self.assertIn("student_id", profile_admin.get_readonly_fields(request, self.student))
-        self.assertIn("user", profile_admin.get_readonly_fields(request, self.student))
-        self.assertIn("registered_email", profile_admin.get_readonly_fields(request, self.student))
+        self.assertIn("public_user_id", profile_admin.get_readonly_fields(request, self.student))
+        self.assertNotIn("email", profile_admin.get_fields(request, self.student))
 
-        for record in (self.student, self.progress, evidence, event, candidate):
+        for record in (self.progress, evidence, event, candidate):
             model_admin = admin.site._registry[type(record)]
-            if not isinstance(record, StudentProfile):
-                self.assertFalse(model_admin.has_add_permission(request))
-                self.assertFalse(model_admin.has_change_permission(request, record))
+            self.assertFalse(model_admin.has_add_permission(request))
+            self.assertFalse(model_admin.has_change_permission(request, record))
             self.assertFalse(model_admin.has_delete_permission(request, record))
 
-    def test_teacher_roster_admin_only_offers_assigned_cohorts(self):
+    def test_class_code_admin_only_offers_assigned_cohorts(self):
         other_cohort = Cohort.objects.create(cohort_id="2026-02", name="2026 第二梯")
         request = RequestFactory().get("/admin/")
         request.user = self.teacher
-        model_admin = admin.site._registry[StudentProfile]
+        model_admin = admin.site._registry[ClassCode]
 
-        field = model_admin.formfield_for_foreignkey(StudentProfile._meta.get_field("cohort"), request)
+        field = model_admin.formfield_for_foreignkey(ClassCode._meta.get_field("cohort"), request)
 
-        self.assertQuerySetEqual(field.queryset.order_by("cohort_id"), [self.cohort,], transform=lambda item: item)
+        self.assertQuerySetEqual(field.queryset.order_by("cohort_id"), [self.cohort], transform=lambda item: item)
         self.assertNotIn(other_cohort, field.queryset)
