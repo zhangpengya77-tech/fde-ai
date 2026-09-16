@@ -199,22 +199,24 @@
                 <small>回答依目前啟用的 F450 V1 知識庫；未取得可靠回答時會提示稍後再試。</small>
               </div>
               <div class="voice-controls">
-                <button class="secondary-action" id="voiceStartButton" type="button">開始語音提問</button>
-                <button class="secondary-action" id="voiceStopButton" type="button" disabled>停止</button>
+                <button class="secondary-action" id="voiceStartButton" type="button">按住說話</button>
+                <button class="secondary-action" id="voiceStopButton" type="button" disabled hidden>正在聽…放開送出</button>
                 <button class="secondary-action" id="voicePauseButton" type="button" disabled>暫停播報</button>
               </div>
-              <p id="voiceStatus">待命：按一下開始語音提問</p>
+              <p id="voiceStatus">待命：按住說話，放開後送出</p>
             </div>
             <div class="upload-row">
               <label>
                 <span>照片</span>
-                <input type="file" accept="image/*" />
+                <input type="file" id="assistantImageInput" accept="image/*" capture="environment" />
               </label>
               <label>
                 <span>30 秒影片</span>
-                <input type="file" accept="video/*" />
+                <input type="file" id="assistantVideoInput" accept="video/*" capture="environment" />
               </label>
             </div>
+            <p class="upload-status" data-assistant-upload-status aria-live="polite"></p>
+            <div class="assistant-media-preview" data-assistant-media-preview hidden></div>
             <button class="primary-action button" id="assistantButton">詢問 AI 助教</button>
             <div class="result" id="assistantResult"></div>
           </div>

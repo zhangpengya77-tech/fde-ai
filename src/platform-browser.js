@@ -673,20 +673,20 @@ const buildWorkflow = {
 
 const voiceAssistant = {
   locale: 'zh-TW',
-  interactionMode: 'click-start-click-stop',
+  interactionMode: 'hold-to-talk',
   ragFirst: true,
-  endpoint: 'http://127.0.0.1:8765/api/voice/ask',
-  healthEndpoint: 'http://127.0.0.1:8765/api/voice/health',
+  endpoint: '/api/public/voice/ask/',
+  healthEndpoint: '/api/public/voice/health/',
   controls: [
-    { label: '開始語音提問', action: 'start' },
-    { label: '停止', action: 'stop' }
+    { label: '按住說話', action: 'hold' },
+    { label: '正在聽…放開送出', action: 'release' }
   ],
   statuses: {
-    idle: '待命：按一下開始語音提問',
-    listening: '正在聽你說話，完成後按停止',
-    searching: '正在先查 RAG 知識庫',
+    idle: '待命：按住說話，放開後送出',
+    listening: '正在聽…放開送出',
+    searching: 'AI 助教正在查詢 F450 RAG V1…',
     answering: '正在產生台灣繁中回答',
-    unsupported: '這個瀏覽器不支援語音辨識，請改用文字輸入'
+    unsupported: '目前瀏覽器不支援語音錄製，請使用 Safari 開啟。'
   },
   safetyInstruction:
     '請使用台灣繁中回答；涉及槳葉、電池、通電、解鎖或實飛時，提醒學生停機檢查並請老師確認。'

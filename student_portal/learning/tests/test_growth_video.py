@@ -51,6 +51,12 @@ def uploaded_video(path, content_type="video/mp4"):
     return SimpleUploadedFile(path.name, path.read_bytes(), content_type=content_type)
 
 
+def uploaded_document(name="成果.pptx", content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    return SimpleUploadedFile(name, b"presentation test", content_type=content_type)
+
+
 @unittest.skipUnless(FFMPEG and FFPROBE, "ffmpeg and ffprobe are required")
 class GrowthVideoProcessorTests(SimpleTestCase):
     def test_mp4_mov_and_m4v_are_normalized_to_mp4(self):
@@ -122,13 +128,15 @@ class GrowthVideoProcessorTests(SimpleTestCase):
             process_growth_video(upload)
         self.assertEqual(raised.exception.reason, "ffprobe_rejected")
 
-    def test_duration_and_size_limits_are_enforced(self):
+    def test_long_video_is_trimmed_and_size_limit_is_enforced(self):
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "long.mp4"
             create_video_file(source, duration=31, size="160x90", rate=1, audio=False)
-            with self.assertRaises(VideoProcessingError) as raised:
-                process_growth_video(uploaded_video(source))
-            self.assertIn("最長30秒", str(raised.exception))
+            processed = process_growth_video(uploaded_video(source))
+            try:
+                self.assertLessEqual(processed.processed_metadata["duration"], 30.01)
+            finally:
+                processed.cleanup()
 
             with override_settings(GROWTH_VIDEO_MAX_UPLOAD_BYTES=10):
                 with self.assertRaises(VideoProcessingError) as raised:
@@ -317,3 +325,69 @@ class GrowthVideoViewTests(TestCase):
                 enrollment=self.enrollment, definition__slot_id="R08"
             )
             self.assertEqual(submission.status, GrowthRecordSubmission.Status.SUBMITTED)
+
+    def test_r08_long_video_is_trimmed_and_submission_is_completed(self):
+        with TemporaryDirectory() as media_dir, TemporaryDirectory() as temp_dir, override_settings(MEDIA_ROOT=media_dir):
+            source = Path(temp_dir) / "summary-long.mp4"
+            create_video_file(source, duration=31, size="160x90", rate=1, audio=False)
+            url = reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R08"])
+
+            response = self.client.post(
+                url,
+                {
+                    "action": "submit_review",
+                    "learning_summary": "本期成果總結。",
+                    "video": uploaded_video(source),
+                },
+            )
+
+            self.assertEqual(response.status_code, 302)
+            submission = GrowthRecordSubmission.objects.get(
+                enrollment=self.enrollment, definition__slot_id="R08"
+            )
+            self.assertEqual(submission.status, GrowthRecordSubmission.Status.SUBMITTED)
+            self.assertIsNotNone(submission.submitted_at)
+            evidence = Evidence.objects.get(growth_submission=submission, evidence_type=Evidence.Type.VIDEO)
+            self.assertLessEqual(evidence.processed_metadata["duration"], 30.01)
+
+    def test_r08_single_document_is_enough_to_submit(self):
+        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):
+            url = reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R08"])
+            response = self.client.post(
+                url,
+                {
+                    "action": "submit_review",
+                    "learning_summary": "只提交一份成果檔案。",
+                    "documents": [uploaded_document("成果.pptx")],
+                },
+            )
+
+            self.assertEqual(response.status_code, 302)
+            submission = GrowthRecordSubmission.objects.get(
+                enrollment=self.enrollment, definition__slot_id="R08"
+            )
+            self.assertEqual(submission.status, GrowthRecordSubmission.Status.SUBMITTED)
+
+    def test_r08_long_video_is_trimmed_and_submitted(self):
+        with TemporaryDirectory() as media_dir, TemporaryDirectory() as temp_dir, override_settings(MEDIA_ROOT=media_dir):
+            source = Path(temp_dir) / "summary-too-long.mp4"
+            create_video_file(source, duration=31, size="160x90", rate=1, audio=False)
+            url = reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R08"])
+
+            response = self.client.post(
+                url,
+                {
+                    "action": "submit_review",
+                    "learning_summary": "本期成果總結。",
+                    "video": uploaded_video(source),
+                },
+            )
+
+            self.assertEqual(response.status_code, 302)
+            submission = GrowthRecordSubmission.objects.get(
+                enrollment=self.enrollment, definition__slot_id="R08"
+            )
+            self.assertEqual(submission.status, GrowthRecordSubmission.Status.SUBMITTED)
+            self.assertIsNotNone(submission.submitted_at)
+            evidence = Evidence.objects.get(growth_submission=submission, evidence_type=Evidence.Type.VIDEO)
+            self.assertLessEqual(evidence.processed_metadata["duration"], 30.01)

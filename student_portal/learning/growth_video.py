@@ -217,7 +217,7 @@ def _write_upload_to_temp(upload):
     return path
 
 
-def _transcode(source_path, output_path, source_probe):
+def _transcode(source_path, output_path, source_probe, max_duration):
     binary = _binary("GROWTH_VIDEO_FFMPEG_BINARY", "ffmpeg")
     if not binary:
         raise VideoProcessingError(
@@ -252,6 +252,8 @@ def _transcode(source_path, output_path, source_probe):
         "yuv420p",
         "-fpsmax",
         str(_setting("GROWTH_VIDEO_MAX_FPS", 30)),
+        "-t",
+        str(max_duration),
         "-movflags",
         "+faststart",
     ]
@@ -338,17 +340,11 @@ def process_growth_video(upload):
             _log_rejection(upload, "unsupported_container", format_name=source_probe["format_name"])
             raise VideoProcessingError(FRIENDLY_INVALID_VIDEO, reason="unsupported_container")
         max_duration = float(_setting("GROWTH_VIDEO_MAX_DURATION_SECONDS", 30))
-        if source_probe["duration"] > max_duration:
-            _log_rejection(upload, "duration_limit", format_name=source_probe["format_name"])
-            raise VideoProcessingError(
-                "學習成果影片最長30秒，請先縮短影片後再上傳。",
-                reason="duration_limit",
-            )
 
         output_fd, output_name = tempfile.mkstemp(prefix="fde-growth-video-processed-", suffix=".mp4")
         os.close(output_fd)
         output_path = Path(output_name)
-        _transcode(source_path, output_path, source_probe)
+        _transcode(source_path, output_path, source_probe, max_duration)
         processed_probe = _probe_video(output_path)
         _validate_processed_video(processed_probe)
         original_filename = Path(str(getattr(upload, "name", "video"))).name

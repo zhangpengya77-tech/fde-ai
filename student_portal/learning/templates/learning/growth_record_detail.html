@@ -31,7 +31,7 @@
 </section>
 {% if video_allowed %}
 <section class="section-block growth-upload-section growth-video-section">
-  <div class="section-heading"><div><h2>成果影片</h2><p class="muted">R07、R08 最多保存 1 段影片，最長 30 秒；上傳後會自動轉成手機可播放的 MP4。</p></div></div>
+  <div class="section-heading"><div><h2>成果影片</h2><p class="muted">R07、R08 最多保存 1 段影片；上傳後會自動轉成手機可播放的 MP4，超過 30 秒會自動截取前 30 秒。</p></div></div>
   <div class="growth-video-list">
     {% for video in videos %}<article class="growth-video" data-saved-video><video controls preload="metadata" playsinline><source src="{% url 'learning:evidence_download' video.pk %}?inline=1" type="video/mp4">你的瀏覽器不支援影片播放。</video><p><strong>{{ video.upload.name|cut:'evidence/' }}</strong><br><small>已處理 {{ video.created_at|date:'Y-m-d H:i' }} · {{ video.processed_metadata.duration|default:'-' }} 秒</small></p>{% if editable %}<form class="growth-video-delete" method="post" action="{% url 'learning:growth_evidence_delete' enrollment.pk definition.slot_id video.pk %}" onsubmit="return confirm('確定刪除此影片？');">{% csrf_token %}<button class="small-button growth-photo-remove" type="submit" aria-label="刪除成果影片">×</button></form>{% endif %}</article>{% empty %}<p class="empty-state">尚未上傳成果影片。</p>{% endfor %}
   </div>
@@ -72,7 +72,7 @@
         {{ form.video }}<label class="button secondary growth-video-picker" for="id_video" role="button" tabindex="0" data-growth-video-picker>＋拍攝 / 選擇影片</label>
         {% for error in form.video.errors %}<p class="error">{{ error }}</p>{% endfor %}
         <div class="growth-video-preview" data-growth-video-preview hidden></div>
-        <p class="muted" data-growth-video-status aria-live="polite">支援手機拍攝的 MOV/HEVC、MP4，以及其他常見影片格式；單段最長 30 秒、最大 300 MB。</p>
+        <p class="muted" data-growth-video-status aria-live="polite">支援手機拍攝的 MOV/HEVC、MP4，以及其他常見影片格式；超過 30 秒會自動截取前 30 秒，最大 300 MB。</p>
       </section>
     {% endif %}
     {% if document_allowed %}
