@@ -3,6 +3,7 @@ import re
 from contextlib import redirect_stdout
 from datetime import timedelta
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
@@ -39,18 +40,29 @@ class StudentRegistrationTests(TestCase):
         response = self.client.get(reverse("learning:home"))
 
         self.assertEqual(response.status_code, 200)
-        for label in ("Learn", "Practice", "Build", "Assess", "Certify", "開始學習 / 註冊", "學員登入", "教師登入"):
+        for label in (
+            'id="missions"',
+            'id="learn"',
+            'id="inspection"',
+            'id="teacher"',
+            "開始學習 / 註冊",
+            "學員登入",
+            "教師登入",
+        ):
             self.assertContains(response, label)
 
-    def test_authenticated_student_home_opens_personal_learning_entry(self):
+    def test_authenticated_student_home_remains_public_and_shows_identity_navigation(self):
         profile = create_student_account("home-student@example.com", "Home Student")
         self.client.force_login(profile.user)
 
         response = self.client.get(reverse("learning:home"))
 
-        self.assertRedirects(response, reverse("learning:student_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="moduleNav"')
+        self.assertContains(response, profile.public_user_id)
+        self.assertContains(response, "我的學習成長日誌")
 
-    def test_authenticated_teacher_home_opens_teacher_dashboard(self):
+    def test_authenticated_teacher_home_remains_public_and_links_real_dashboard(self):
         teacher = get_user_model().objects.create_user(
             username="home-teacher", email="home-teacher@example.com", password="Teacher-passphrase-998!", is_staff=True
         )
@@ -58,14 +70,17 @@ class StudentRegistrationTests(TestCase):
 
         response = self.client.get(reverse("learning:home"))
 
-        self.assertRedirects(response, reverse("learning:teacher_dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="moduleNav"')
+        self.assertContains(response, "教師後台")
 
-    def test_original_v12_page_and_assets_require_authentication(self):
+    def test_original_v12_page_and_assets_are_public(self):
         page = self.client.get(reverse("learning:platform"))
         asset = self.client.get(reverse("learning:platform_asset", args=["src/styles.css"]))
 
-        self.assertEqual(page.status_code, 302)
-        self.assertEqual(asset.status_code, 302)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'id="moduleNav"')
+        self.assertEqual(asset.status_code, 200)
 
     def test_platform_hero_action_opens_student_growth_portal(self):
         self.register()
@@ -88,6 +103,55 @@ class StudentRegistrationTests(TestCase):
         response = self.client.get(f"{reverse('learning:student_login')}?next={destination}")
 
         self.assertContains(response, f'name="next" value="{destination}"')
+
+    def test_registration_activation_and_login_preserve_protected_destination(self):
+        destination = "/student/courses/42/growth/R01/"
+        registration_page = self.client.get(f"{reverse('learning:register')}?next={destination}")
+        self.assertContains(registration_page, f'name="next" value="{destination}"')
+
+        response = self.client.post(
+            reverse("learning:register"),
+            {
+                "nickname": "Return Path",
+                "email": "return-path@example.com",
+                "password1": self.password,
+                "password2": self.password,
+                "next": destination,
+            },
+        )
+        profile = StudentProfile.objects.get(email="return-path@example.com")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("next=%2Fstudent%2Fcourses%2F42%2Fgrowth%2FR01%2F", response["Location"])
+
+        activation_page = self.client.get(response["Location"])
+        self.assertContains(activation_page, f'name="next" value="{destination}"')
+        code = re.search(r"\b(\d{6})\b", mail.outbox[-1].body).group(1)
+        activation = self.client.post(
+            reverse("learning:activate", args=[profile.public_user_id]),
+            {"code": code, "next": destination},
+        )
+        self.assertEqual(parse_qs(urlsplit(activation["Location"]).query)["next"], [destination])
+
+        login = self.client.post(
+            reverse("learning:student_login"),
+            {"username": profile.email, "password": self.password, "next": destination},
+        )
+        self.assertEqual(login["Location"], destination)
+
+    def test_registration_discards_external_next_destination(self):
+        response = self.client.post(
+            reverse("learning:register"),
+            {
+                "nickname": "External Path",
+                "email": "external-path@example.com",
+                "password1": self.password,
+                "password2": self.password,
+                "next": "https://attacker.example/collect",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn("next=", response["Location"])
 
     def test_registration_generates_anonymous_id_and_sends_verification_code(self):
         response = self.register("Student@Example.com", "Eagle")

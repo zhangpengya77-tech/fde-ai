@@ -2374,6 +2374,15 @@ textarea {
     display: none;
   }
 
+  /* v1.5B teacher reference route must remain visible on desktop. */
+  body[data-route="teacher"] #teacher {
+    display: block;
+  }
+
+  body[data-route="teacher"] .teacher-queue {
+    display: grid;
+  }
+
   .platform-modes-section,
   .dashboard-page,
   .teacher-queue,

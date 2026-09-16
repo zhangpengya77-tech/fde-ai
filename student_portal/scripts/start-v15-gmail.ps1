@@ -27,7 +27,7 @@ if ($appPassword.Length -ne 16) {
 }
 
 $environmentNames = @(
-    "DJANGO_SECRET_KEY", "DJANGO_DEBUG", "DJANGO_ALLOWED_HOSTS", "DJANGO_CSRF_TRUSTED_ORIGINS", "DJANGO_DB_NAME",
+    "DJANGO_SECRET_KEY", "DJANGO_DEBUG", "DJANGO_ALLOWED_HOSTS", "DJANGO_CSRF_TRUSTED_ORIGINS", "DJANGO_DB_NAME", "DATABASE_URL", "DJANGO_MEDIA_ROOT",
     "DJANGO_EMAIL_BACKEND", "DJANGO_EMAIL_HOST", "DJANGO_EMAIL_PORT", "DJANGO_EMAIL_HOST_USER",
     "DJANGO_EMAIL_HOST_PASSWORD", "DJANGO_EMAIL_USE_TLS", "DEFAULT_FROM_EMAIL"
 )
@@ -60,10 +60,12 @@ finally {
     [Array]::Clear($randomBytes, 0, $randomBytes.Length)
 }
 
-$env:DJANGO_DEBUG = "false"
+$env:DJANGO_DEBUG = "true"
 $env:DJANGO_ALLOWED_HOSTS = ".trycloudflare.com,127.0.0.1,localhost"
 $env:DJANGO_CSRF_TRUSTED_ORIGINS = "https://*.trycloudflare.com"
 $env:DJANGO_DB_NAME = Join-Path $projectRoot "db.sqlite3"
+$env:DATABASE_URL = "sqlite:///" + (($env:DJANGO_DB_NAME) -replace '\\', '/')
+$env:DJANGO_MEDIA_ROOT = Join-Path $projectRoot "private_media"
 $env:DJANGO_EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 $env:DJANGO_EMAIL_HOST = "smtp.gmail.com"
 $env:DJANGO_EMAIL_PORT = "587"
@@ -75,7 +77,9 @@ $appPassword = $null
 
 $probeCode = @'
 import os
+import sys
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+sys.path.insert(0, os.getcwd())
 import django
 django.setup()
 from django.conf import settings
@@ -85,10 +89,12 @@ if sent != 1:
     raise RuntimeError(f"SMTP accepted {sent} messages; expected one")
 print("SMTP_TEST_SENT")
 '@
+$probePath = Join-Path ([System.IO.Path]::GetTempPath()) ("fde-ai-smtp-probe-" + [guid]::NewGuid().ToString("N") + ".py")
 
 Push-Location $projectRoot
 try {
-    & $python -c $probeCode
+    [System.IO.File]::WriteAllText($probePath, $probeCode, [System.Text.UTF8Encoding]::new($false))
+    & $python $probePath
     if ($LASTEXITCODE -ne 0) {
         throw "Gmail SMTP test failed. Check the error above; the website server was not started."
     }
@@ -102,6 +108,7 @@ try {
     exit $server.ExitCode
 }
 finally {
+    Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
     foreach ($name in $environmentNames) {
         [Environment]::SetEnvironmentVariable($name, $originalEnvironment[$name], "Process")
     }

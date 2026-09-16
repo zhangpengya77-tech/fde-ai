@@ -11,6 +11,6 @@
     {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
     <button class="button primary full" type="submit">登入</button>
   </form>
-  <p class="form-foot"><a href="{% url 'learning:password_reset' %}">忘記密碼？</a>　<a href="{% url 'learning:register' %}">建立帳號</a></p>
+  <p class="form-foot"><a href="{% url 'learning:password_reset' %}">忘記密碼？</a>　<a href="{% url 'learning:register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">建立帳號</a></p>
 </section>
 {% endblock %}

@@ -444,7 +444,7 @@ class Evidence(models.Model):
         blank=True,
         validators=[
             FileExtensionValidator(
-                allowed_extensions=["jpg", "jpeg", "png", "webp", "mp4", "mov", "pdf", "zip", "pt", "onnx", "tif", "tiff", "obj", "stl", "glb", "txt"],
+                allowed_extensions=["jpg", "jpeg", "png", "webp", "mp4", "mov", "pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "csv", "zip", "pt", "onnx", "tif", "tiff", "obj", "stl", "glb", "txt", "odt", "odp", "ods"],
             ),
             validate_evidence_size,
         ],

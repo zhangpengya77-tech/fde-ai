@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import public_ai
 
 app_name = "learning"
 
@@ -8,6 +9,10 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("platform/", views.platform_entry, name="platform"),
     path("platform/<path:asset_path>", views.platform_asset, name="platform_asset"),
+    path("api/public/rag/ask/", public_ai.public_rag_ask, name="public_rag_ask"),
+    path("api/public/inspection/detect/", public_ai.public_inspection_detect, name="public_inspection_detect"),
+    path("api/public/inspection/hover/", public_ai.public_inspection_hover, name="public_inspection_hover"),
+    path("api/public/voice/ask/", public_ai.public_voice_ask, name="public_voice_ask"),
     path("register/", views.register, name="register"),
     path("activate/<str:public_user_id>/", views.activate, name="activate"),
     path("activate/<str:public_user_id>/resend/", views.resend_activation, name="resend_activation"),

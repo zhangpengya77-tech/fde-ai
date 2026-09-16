@@ -1,11 +1,13 @@
 import logging
 import mimetypes
+import re
+from functools import wraps
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.views import (
     LoginView,
@@ -16,14 +18,18 @@ from django.contrib.auth.views import (
     PasswordResetView,
 )
 from django.core.exceptions import ValidationError
+from django.core.files import File
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.db.models import Max, Q
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import (
@@ -54,6 +60,7 @@ from .models import (
     TeacherReviewEvent,
 )
 from .growth_media import process_growth_image
+from .growth_video import VideoProcessingError, process_growth_video
 from .growth_records import ensure_growth_submissions
 from .services import issue_activation_code
 
@@ -74,24 +81,89 @@ GROWTH_REVIEWED_STATUSES = {
 
 
 def home(request):
-    if request.user.is_authenticated:
-        if request.user.is_staff:
-            return redirect("learning:teacher_dashboard")
-        return redirect("learning:student_dashboard")
-    next_url = request.GET.get("next", "")
+    return _platform_response(PLATFORM_ROOT / "index.html", html=True, request=request)
+
+
+def _validated_next(request, value=None):
+    candidate = value if value is not None else request.GET.get("next", "")
     if not url_has_allowed_host_and_scheme(
-        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
     ):
-        next_url = ""
-    return render(request, "learning/home.html", {"next_url": next_url})
+        return ""
+    return candidate
 
 
-def _platform_response(file_path, *, html=False):
+def _platform_identity_context(request):
+    role = "anonymous"
+    profile = None
+    if request.user.is_authenticated:
+        role = "teacher" if request.user.is_staff else "student"
+        if role == "student":
+            profile = getattr(request.user, "student_profile", None)
+            if profile is None or not profile.active:
+                role = "unverified"
+    platform_context = {
+        "role": role,
+        "growthUrl": reverse("learning:student_growth_entry"),
+        "teacherDashboardUrl": reverse("learning:teacher_dashboard"),
+        "teacherLoginUrl": reverse("learning:teacher_login"),
+    }
+    return {
+        "role": role,
+        "profile": profile,
+        "platform_context": platform_context,
+        "growth_url": reverse("learning:student_growth_entry"),
+        "courses_url": reverse("learning:student_dashboard"),
+        "teacher_dashboard_url": reverse("learning:teacher_dashboard"),
+        "student_login_url": reverse("learning:student_login"),
+        "register_url": reverse("learning:register"),
+        "teacher_login_url": reverse("learning:teacher_login"),
+    }
+
+
+def _platform_response(file_path, *, html=False, request=None):
     if not file_path.is_file():
         raise Http404
     if html:
         content = file_path.read_text(encoding="utf-8").replace(
             "<head>", '<head>\n    <base href="/platform/">', 1
+        )
+        if request is not None:
+            identity_context = _platform_identity_context(request)
+            identity_context["csrf_token"] = get_token(request)
+            identity_context["request"] = request
+            nav = render_to_string("learning/platform_identity_nav.html", identity_context, request=request)
+            content = re.sub(r"(<body\b[^>]*>)", rf"\1\n{nav}", content, count=1, flags=re.IGNORECASE)
+            demo_note = render_to_string(
+                "learning/platform_demo_note.html", identity_context, request=request
+            )
+            content = re.sub(
+                r'(<section\b[^>]*id=["\']teacher["\'][^>]*>.*?<div\b[^>]*class=["\'][^"\']*section-intro[^"\']*["\'][^>]*>)',
+                rf"\1{demo_note}",
+                content,
+                count=1,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        content = content.replace(
+            "</head>",
+            '    <link rel="stylesheet" href="/static/learning/public-platform.css?v=1.5b">\n</head>',
+            1,
+        )
+        content = re.sub(
+            r'(<script\b[^>]*src=["\']\./src/platform-browser\.js[^>]*></script>)',
+            r'\1\n    <script src="/static/learning/public-platform.js?v=1.5b"></script>',
+            content,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        content = re.sub(
+            r'(</script>\s*)(?=<script\b[^>]*src=["\']\./src/rag-client\.js)',
+            r'\1\n    <script src="/static/learning/public-rag-config.js?v=1.5b"></script>\n    ',
+            content,
+            count=1,
+            flags=re.IGNORECASE,
         )
         response = HttpResponse(content, content_type="text/html; charset=utf-8")
     else:
@@ -102,15 +174,13 @@ def _platform_response(file_path, *, html=False):
     return response
 
 
-@login_required(login_url=reverse_lazy("learning:home"))
 def platform_entry(request):
-    return _platform_response(PLATFORM_ROOT / "index.html", html=True)
+    return _platform_response(PLATFORM_ROOT / "index.html", html=True, request=request)
 
 
-@login_required(login_url=reverse_lazy("learning:home"))
 def platform_asset(request, asset_path):
     if asset_path == "index.html":
-        return _platform_response(PLATFORM_ROOT / "index.html", html=True)
+        return _platform_response(PLATFORM_ROOT / "index.html", html=True, request=request)
 
     static_roots = (PLATFORM_ROOT / "src").resolve(), (PLATFORM_ROOT / "assets").resolve()
     file_path = (PLATFORM_ROOT / asset_path).resolve()
@@ -118,12 +188,13 @@ def platform_asset(request, asset_path):
         return _platform_response(file_path)
     if Path(asset_path).suffix:
         raise Http404
-    return _platform_response(PLATFORM_ROOT / "index.html", html=True)
+    return _platform_response(PLATFORM_ROOT / "index.html", html=True, request=request)
 
 
 @require_http_methods(["GET", "POST"])
 def register(request):
     form = StudentRegistrationForm(request.POST or None)
+    next_url = _validated_next(request, request.POST.get("next") if request.method == "POST" else None)
     is_console_email_backend = settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend"
     if request.method == "POST" and form.is_valid():
         try:
@@ -136,16 +207,20 @@ def register(request):
             logger.exception("Student registration failed while issuing verification email (%s).", type(exc).__name__)
             form.add_error(None, "驗證碼寄送失敗，請稍後重試。")
         else:
-            return redirect("learning:activate", public_user_id=profile.public_user_id)
+            activation_url = reverse("learning:activate", args=[profile.public_user_id])
+            if next_url:
+                activation_url = f"{activation_url}?{urlencode({'next': next_url})}"
+            return redirect(activation_url)
     return render(
         request,
         "learning/register.html",
-        {"form": form, "is_console_email_backend": is_console_email_backend},
+        {"form": form, "is_console_email_backend": is_console_email_backend, "next_url": next_url},
     )
 
 
 @require_http_methods(["GET", "POST"])
 def activate(request, public_user_id):
+    next_url = _validated_next(request, request.POST.get("next") if request.method == "POST" else None)
     profile = StudentProfile.objects.filter(public_user_id=public_user_id, active=True).select_related("user").first()
     user = profile.user if profile and profile.user_id else None
     error = ""
@@ -184,7 +259,10 @@ def activate(request, public_user_id):
                     request,
                     f"電子郵件驗證完成，您的永久 FDE ID：{profile.public_user_id}。現在可以登入。",
                 )
-                return redirect("learning:student_login")
+                login_url = reverse("learning:student_login")
+                if next_url:
+                    login_url = f"{login_url}?{urlencode({'next': next_url})}"
+                return redirect(login_url)
     return render(
         request,
         "learning/activate.html",
@@ -195,12 +273,14 @@ def activate(request, public_user_id):
             "is_console_email_backend": settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend",
             "is_smtp_email_backend": settings.EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend",
             "masked_email": mask_email((profile.email or user.email) if profile and user else ""),
+            "next_url": next_url,
         },
     )
 
 
 @require_POST
 def resend_activation(request, public_user_id):
+    next_url = _validated_next(request, request.POST.get("next"))
     profile = StudentProfile.objects.filter(
         public_user_id=public_user_id, active=True, user__is_active=False
     ).select_related("user").first()
@@ -221,7 +301,10 @@ def resend_activation(request, public_user_id):
                 messages.success(request, "驗證碼已交由目前設定的郵件後端處理。")
     else:
         messages.info(request, "若帳號符合驗證條件，系統會提供重新寄送結果。")
-    return redirect("learning:activate", public_user_id=public_user_id)
+    activation_url = reverse("learning:activate", args=[public_user_id])
+    if next_url:
+        activation_url = f"{activation_url}?{urlencode({'next': next_url})}"
+    return redirect(activation_url)
 
 
 class StudentLoginView(LoginView):
@@ -262,26 +345,31 @@ class StudentPasswordResetCompleteView(PasswordResetCompleteView):
 
 
 def student_required(view_func):
-    @login_required(login_url=reverse_lazy("learning:student_login"))
+    @wraps(view_func)
     def wrapped(request, *args, **kwargs):
-        try:
-            profile = request.user.student_profile
-        except StudentProfile.DoesNotExist:
-            logout(request)
-            return redirect("learning:student_login")
-        if not profile.active:
-            logout(request)
-            return redirect("learning:student_login")
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), reverse("learning:student_login"))
+        if request.user.is_staff:
+            return render(request, "learning/role_denied.html", {"required_role": "學員"}, status=403)
+        profile = getattr(request.user, "student_profile", None)
+        if profile is None or not profile.active:
+            return render(request, "learning/role_denied.html", {"required_role": "有效學員帳號"}, status=403)
         request.student_profile = profile
         return view_func(request, *args, **kwargs)
 
     return wrapped
 
 
-teacher_required = user_passes_test(
-    lambda user: user.is_authenticated and user.is_staff,
-    login_url=reverse_lazy("learning:teacher_login"),
-)
+def teacher_required(view_func):
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), reverse("learning:teacher_login"))
+        if not request.user.is_staff:
+            return render(request, "learning/role_denied.html", {"required_role": "教師"}, status=403)
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
 
 
 def teacher_cohorts(user):
@@ -457,6 +545,10 @@ def growth_record_detail(request, enrollment_id, slot_id):
         raise Http404
 
     images = submission.evidence.filter(evidence_type=Evidence.Type.IMAGE).order_by("created_at")
+    videos = submission.evidence.filter(evidence_type=Evidence.Type.VIDEO).order_by("created_at")
+    documents = submission.evidence.filter(evidence_type=Evidence.Type.FILE).order_by("created_at")
+    video_allowed = submission.definition.slot_id in {"R07", "R08"}
+    document_allowed = submission.definition.slot_id in {"R07", "R08"}
     editable = submission.status in {
         GrowthRecordSubmission.Status.NOT_STARTED,
         GrowthRecordSubmission.Status.IN_PROGRESS,
@@ -473,24 +565,41 @@ def growth_record_detail(request, enrollment_id, slot_id):
         form = GrowthRecordForm(request.POST, request.FILES)
         if form.is_valid():
             new_uploads = form.cleaned_data["images"]
+            new_video = form.cleaned_data["video"]
+            new_documents = form.cleaned_data["documents"]
+            uploaded_videos = request.FILES.getlist("video")
             is_summary = submission.definition.slot_id == "R08"
-            if is_summary and new_uploads:
-                form.add_error("images", "R08 使用既有代表成果，不接受重新上傳複製檔案。")
-            elif action == "submit_review" and is_summary:
-                form.add_error(None, "完成代表成果選擇後才能提交 R08；代表成果選擇功能將在 v1.5B-4 開放。")
+            if len(uploaded_videos) > 1:
+                form.add_error("video", "每項成長記錄最多上傳1段影片。")
+            elif new_video and not video_allowed:
+                form.add_error(None, "影片只開放於 R07、R08 成長記錄。")
+            elif new_documents and not document_allowed:
+                form.add_error(None, "成果檔案只開放於 R07、R08 成長記錄。")
             elif action not in {"save_draft", "submit_review"}:
                 form.add_error(None, "無效的保存操作，請重新提交。")
-            elif not is_summary and images.count() + len(new_uploads) > 5:
-                form.add_error("images", "每項最多上傳 5 張圖片，請先移除多餘照片。")
-            elif action == "submit_review" and not is_summary and images.count() + len(new_uploads) == 0:
-                form.add_error("images", "請先上傳至少一張圖片，再提交教師複核。")
+            elif images.count() + len(new_uploads) > 5:
+                form.add_error("images", "每項學習成長記錄最多上傳5張照片，請先刪除現有照片再添加。")
+            elif (
+                action == "submit_review"
+                and images.count() + len(new_uploads) + videos.count() + bool(new_video) + documents.count() + len(new_documents) == 0
+            ):
+                if is_summary:
+                    form.add_error(None, "請先上傳至少一項照片、影片或成果檔案，再提交教師複核。")
+                else:
+                    form.add_error("images", "請先上傳至少一張圖片，再提交教師複核。")
 
             processed_images = []
+            processed_video = None
             if not form.errors:
                 try:
                     processed_images = [process_growth_image(upload) for upload in new_uploads]
                 except ValidationError as exc:
                     form.add_error("images", exc.messages[0])
+            if not form.errors and new_video:
+                try:
+                    processed_video = process_growth_video(new_video)
+                except VideoProcessingError as exc:
+                    form.add_error("video", exc.user_message)
 
             if form.is_valid() and not form.errors:
                 submission.student_note = form.cleaned_data["student_note"].strip()
@@ -515,16 +624,66 @@ def growth_record_detail(request, enrollment_id, slot_id):
                             )
                             evidence.upload.save(filename, ContentFile(image_bytes), save=True)
                             created_evidence.append(evidence)
+                        if processed_video is not None:
+                            old_videos = list(
+                                submission.evidence.filter(evidence_type=Evidence.Type.VIDEO)
+                            )
+                            for old_video in old_videos:
+                                old_name = old_video.upload.name
+                                old_storage = old_video.upload.storage
+                                old_video.delete()
+                                transaction.on_commit(
+                                    lambda name=old_name, storage=old_storage: storage.delete(name)
+                                )
+                            video_evidence = Evidence(
+                                growth_submission=submission,
+                                evidence_type=Evidence.Type.VIDEO,
+                                description=submission.definition.title,
+                                original_metadata=processed_video.original_metadata,
+                                processed_metadata=processed_video.processed_metadata,
+                            )
+                            with processed_video.path.open("rb") as video_file:
+                                video_evidence.upload.save(
+                                    f"growth-video-{video_evidence.evidence_id}.mp4",
+                                    File(video_file),
+                                    save=True,
+                                )
+                            created_evidence.append(video_evidence)
+                        for upload in new_documents:
+                            original_name = Path(str(upload.name)).name
+                            extension = Path(original_name).suffix.lower()
+                            document_evidence = Evidence(
+                                growth_submission=submission,
+                                evidence_type=Evidence.Type.FILE,
+                                description=submission.definition.title,
+                                original_metadata={
+                                    "filename": original_name,
+                                    "extension": extension,
+                                    "content_type": getattr(upload, "content_type", "") or "",
+                                    "size_bytes": upload.size,
+                                },
+                                processed_metadata={
+                                    "filename": original_name,
+                                    "extension": extension,
+                                    "content_type": getattr(upload, "content_type", "") or "",
+                                    "size_bytes": upload.size,
+                                },
+                            )
+                            document_evidence.upload.save(original_name, File(upload), save=True)
+                            created_evidence.append(document_evidence)
                 except Exception:
                     for evidence in created_evidence:
                         evidence.upload.delete(save=False)
                         evidence.delete()
                     raise
+                finally:
+                    if processed_video is not None:
+                        processed_video.cleanup()
 
-                messages.success(
-                    request,
-                    "已提交教師複核。" if action == "submit_review" else "成長記錄草稿已保存。",
-                )
+                success_message = "已提交教師複核。" if action == "submit_review" else "成長記錄草稿已保存。"
+                messages.success(request, success_message)
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse({"ok": True})
                 return redirect("learning:growth_record_detail", enrollment_id=enrollment.pk, slot_id=slot_id)
     else:
         form = GrowthRecordForm(
@@ -534,8 +693,10 @@ def growth_record_detail(request, enrollment_id, slot_id):
             }
         )
 
-    if submission.definition.slot_id == "R08":
-        form.fields.pop("images", None)
+    if not video_allowed:
+        form.fields.pop("video", None)
+    if not document_allowed:
+        form.fields.pop("documents", None)
     return render(
         request,
         "learning/growth_record_detail.html",
@@ -545,7 +706,11 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "submission": submission,
             "definition": submission.definition,
             "images": images,
+            "videos": videos,
+            "documents": documents,
             "image_count": images.count(),
+            "video_allowed": video_allowed,
+            "document_allowed": document_allowed,
             "form": form,
             "editable": editable,
             "is_summary": submission.definition.slot_id == "R08",
@@ -568,15 +733,19 @@ def growth_evidence_delete(request, enrollment_id, slot_id, evidence_id):
     if submission.status not in {
         GrowthRecordSubmission.Status.NOT_STARTED,
         GrowthRecordSubmission.Status.IN_PROGRESS,
+        GrowthRecordSubmission.Status.NEEDS_REVISION,
     }:
-        messages.error(request, "只有尚未提交的照片可以刪除。")
+        messages.error(request, "只有尚未提交或教師要求補充的照片可以刪除。")
         return redirect("learning:growth_record_detail", enrollment_id=enrollment.pk, slot_id=slot_id)
+    allowed_types = [Evidence.Type.IMAGE]
+    if submission.definition.slot_id in {"R07", "R08"}:
+        allowed_types.extend([Evidence.Type.VIDEO, Evidence.Type.FILE])
     evidence = get_object_or_404(
-        Evidence, pk=evidence_id, growth_submission=submission, evidence_type=Evidence.Type.IMAGE
+        Evidence, pk=evidence_id, growth_submission=submission, evidence_type__in=allowed_types
     )
     evidence.upload.delete(save=False)
     evidence.delete()
-    messages.success(request, "照片已刪除。")
+    messages.success(request, "照片或影片已刪除。")
     return redirect("learning:growth_record_detail", enrollment_id=enrollment.pk, slot_id=slot_id)
 
 
@@ -663,11 +832,14 @@ def evidence_download(request, evidence_id):
         file_handle = evidence.upload.open("rb")
     except (OSError, ValueError):
         raise Http404
-    inline_image = request.GET.get("inline") == "1" and evidence.evidence_type == Evidence.Type.IMAGE
+    inline_media = request.GET.get("inline") == "1" and evidence.evidence_type in {
+        Evidence.Type.IMAGE,
+        Evidence.Type.VIDEO,
+    }
     content_type = mimetypes.guess_type(evidence.upload.name)[0] or "application/octet-stream"
     response = FileResponse(
         file_handle,
-        as_attachment=not inline_image,
+        as_attachment=not inline_media,
         filename=evidence.upload.name.rsplit("/", 1)[-1],
         content_type=content_type,
     )

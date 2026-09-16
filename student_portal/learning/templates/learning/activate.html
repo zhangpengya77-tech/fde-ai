@@ -16,10 +16,12 @@
   {% endif %}
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   <form method="post">{% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     <div class="field"><label for="code">6 位數驗證碼</label><input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></div>
     <button class="button primary full" type="submit">驗證並啟用</button>
   </form>
   <form method="post" action="{% url 'learning:resend_activation' public_user_id %}">{% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     <button class="button full" type="submit">重新寄送驗證碼</button>
   </form>
 </section>

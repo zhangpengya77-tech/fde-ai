@@ -1,0 +1,35 @@
+{% load static %}
+<div class="fde-public-bar">
+  <a class="fde-public-brand" href="/" aria-label="FDE-AI 首頁"><span class="fde-public-mark">FDE</span><span>FDE-AI<small>無人載具學習平台</small></span></a>
+  <nav class="fde-public-links" aria-label="帳號導覽">
+    {% if role == "anonymous" %}
+      <a href="{{ growth_url }}">我的學習成長日誌</a>
+      <a href="{{ student_login_url }}">學員登入</a>
+      <a href="{{ register_url }}">開始學習 / 註冊</a>
+      <a href="{{ teacher_login_url }}">教師登入</a>
+    {% elif role == "student" and profile %}
+      <span class="fde-public-identity">{{ profile.public_user_id }} · {{ profile.nickname }}</span>
+      <a href="{{ growth_url }}">我的學習成長日誌</a>
+      <a href="{{ courses_url }}">我的課程</a>
+      <form method="post" action="{% url 'learning:logout' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">登出</button></form>
+    {% elif role == "teacher" %}
+      <span class="fde-public-identity">教師帳號 · {{ user.get_username }}</span>
+      <a href="{{ teacher_dashboard_url }}">教師後台</a>
+      <a href="{{ teacher_dashboard_url }}">班級 / 學員複核</a>
+      <form method="post" action="{% url 'learning:logout' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">登出</button></form>
+    {% else %}
+      <span class="fde-public-identity">帳號權限待確認</span>
+      <form method="post" action="{% url 'learning:logout' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">登出</button></form>
+    {% endif %}
+  </nav>
+</div>
+<nav class="fde-public-sections" aria-label="平台学习分类">
+  <a href="/platform/courses">學</a>
+  <a href="/platform/simulator">練</a>
+  <a href="/platform/f450">作</a>
+  <a href="/platform/eagle">測</a>
+  <a href="/platform/github">證</a>
+  <a href="/platform/results">歷屆學員成果</a>
+  <a href="/platform/teacher">教師復核參照</a>
+</nav>
+{{ platform_context|json_script:"fde-public-context" }}

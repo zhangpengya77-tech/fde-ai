@@ -1,4 +1,5 @@
 from io import BytesIO
+from tempfile import TemporaryDirectory
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
@@ -46,7 +47,7 @@ class TeacherWorkflowTests(TestCase):
     def test_only_teacher_can_open_review_dashboard(self):
         self.client.force_login(self.student.user)
         response = self.client.get(reverse("learning:teacher_dashboard"))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
 
         self.client.force_login(self.teacher)
         response = self.client.get(reverse("learning:teacher_dashboard"))
@@ -133,6 +134,9 @@ class TeacherWorkflowTests(TestCase):
 
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(len(detail.context["growth_records"]), 8)
+        self.assertContains(detail, 'id="growth-review"')
+        self.assertContains(detail, "R01～R08 詳細教師複核")
+        self.assertNotContains(detail, "原有 12 項任務與證據（保留參考）")
         for number in range(1, 9):
             self.assertContains(detail, f"R{number:02d}")
         self.assertContains(detail, "R01 刷題證據")
@@ -158,30 +162,36 @@ class TeacherWorkflowTests(TestCase):
         self.assertContains(student_detail, "91.00")
 
     def test_assigned_teacher_can_preview_private_growth_photo(self):
-        self.client.force_login(self.student.user)
-        self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
-        submission = GrowthRecordSubmission.objects.get(
-            enrollment=self.enrollment, definition__slot_id="R01"
-        )
-        image_buffer = BytesIO()
-        Image.new("RGB", (16, 12), color="teal").save(image_buffer, format="JPEG")
-        evidence = Evidence.objects.create(
-            growth_submission=submission,
-            evidence_type=Evidence.Type.IMAGE,
-            upload=SimpleUploadedFile("r01.jpg", image_buffer.getvalue(), content_type="image/jpeg"),
-            description="R01 私有照片",
-        )
-        self.client.force_login(self.teacher)
+        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):
+            self.client.force_login(self.student.user)
+            self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
+            image_buffer = BytesIO()
+            Image.new("RGB", (16, 12), color="teal").save(image_buffer, format="JPEG")
+            upload_response = self.client.post(
+                reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R01"]),
+                {
+                    "action": "save_draft",
+                    "student_note": "教師端照片查看驗收",
+                    "images": [SimpleUploadedFile("r01.jpg", image_buffer.getvalue(), content_type="image/jpeg")],
+                },
+                follow=True,
+            )
+            self.assertEqual(upload_response.status_code, 200)
+            evidence = Evidence.objects.get(
+                growth_submission__enrollment=self.enrollment,
+                growth_submission__definition__slot_id="R01",
+            )
+            self.client.force_login(self.teacher)
 
-        detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
-        preview = self.client.get(reverse("learning:evidence_download", args=[evidence.pk]) + "?inline=1")
+            detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+            preview = self.client.get(reverse("learning:evidence_download", args=[evidence.pk]) + "?inline=1")
 
-        self.assertContains(detail, "R01 私有照片")
-        self.assertContains(detail, 'alt="R01 學習證據"')
-        self.assertEqual(preview.status_code, 200)
-        self.assertEqual(preview["Content-Type"], "image/jpeg")
-        self.assertTrue(preview["Content-Disposition"].startswith("inline;"))
-        preview.close()
+            self.assertContains(detail, "教師端照片查看驗收")
+            self.assertContains(detail, 'alt="R01 學習證據"')
+            self.assertEqual(preview.status_code, 200)
+            self.assertEqual(preview["Content-Type"], "image/jpeg")
+            self.assertTrue(preview["Content-Disposition"].startswith("inline;"))
+            preview.close()
 
     def test_teacher_cannot_review_growth_record_outside_assigned_cohort(self):
         self.client.force_login(self.student.user)

@@ -1,0 +1,8 @@
+<div class="fde-public-demo-note">
+  <span>公開演示 · 靜態樣例資料；此處不含真實班級或學員記錄。</span>
+  {% if role == "teacher" %}
+    <a href="{{ teacher_dashboard_url }}">開啟真實教師後台</a>
+  {% else %}
+    <a href="{{ teacher_login_url }}">教師登入查看真實班級與學員</a>
+  {% endif %}
+</div>

@@ -7,6 +7,7 @@
   <p class="muted">建立匿名學員帳號。完成電子郵件驗證後，帳號啟用並顯示永久 FDE ID。</p>
   {% if is_console_email_backend %}<p class="notice" role="status">開發模式：驗證碼會輸出至伺服器控制台，不會寄到 Gmail。</p>{% endif %}
   <form method="post" novalidate>{% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     {% for field in form %}
       <div class="field">
         <label for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -25,7 +26,7 @@
     {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
     <button class="button primary full" type="submit">建立帳號並寄送驗證碼</button>
   </form>
-  <p class="form-foot">已有帳號？ <a href="{% url 'learning:student_login' %}">學員登入</a></p>
+  <p class="form-foot">已有帳號？ <a href="{% url 'learning:student_login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">學員登入</a></p>
 </section>
 <style>
   .notice{padding:10px 12px;background:#eaf5f5;border-left:3px solid #087f91;color:#17415b;line-height:1.6}

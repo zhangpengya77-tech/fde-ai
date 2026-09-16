@@ -1,7 +1,7 @@
 {% extends 'learning/base.html' %}
 {% load static %}
 {% block title %}{{ definition.slot_id }}｜{{ definition.title }}{% endblock %}
-{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/growth-records.css' %}">{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/growth-records.css' %}?v=growth-video-3">{% endblock %}
 {% block content %}
 <a class="back-link" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">返回我的學習成長日誌</a>
 <section class="page-heading">
@@ -24,32 +24,69 @@
 </section>
 <section class="section-block growth-upload-section">
   <div class="section-heading"><div><h2>學習證據</h2><p class="muted">已上傳 {{ image_count }} / 5 張圖片</p></div></div>
-  {% if images %}<div class="growth-photo-grid">
-    {% for image in images %}<article class="growth-photo"><a href="{% url 'learning:evidence_download' image.pk %}?inline=1" target="_blank" rel="noopener noreferrer"><img src="{% url 'learning:evidence_download' image.pk %}?inline=1" alt="{{ definition.slot_id }} 學習證據照片" loading="lazy"></a><small>{{ image.created_at|date:'Y-m-d H:i' }}</small>{% if editable %}<form method="post" action="{% url 'learning:growth_evidence_delete' enrollment.pk definition.slot_id image.pk %}" onsubmit="return confirm('確定刪除此照片？');">{% csrf_token %}<button class="small-button" type="submit">刪除照片</button></form>{% endif %}</article>{% endfor %}
-  </div>{% else %}<p class="empty-state">尚未上傳照片。</p>{% endif %}
-  {% if is_summary %}<p class="notice">R08 不複製上傳檔案。請從 R01～R07 選擇 3～5 項代表成果的功能將在 v1.5B-4 開放；目前可先保存學習總結草稿。</p>{% endif %}
+  <div class="growth-photo-grid" data-growth-saved-photo-list>
+    {% for image in images %}<article class="growth-photo" data-saved-photo><a href="{% url 'learning:evidence_download' image.pk %}?inline=1" target="_blank" rel="noopener noreferrer"><img src="{% url 'learning:evidence_download' image.pk %}?inline=1" alt="{{ definition.slot_id }} 學習證據照片" loading="lazy"></a><small>已保存 {{ image.created_at|date:'Y-m-d H:i' }}</small>{% if editable %}<form class="growth-photo-delete" method="post" action="{% url 'learning:growth_evidence_delete' enrollment.pk definition.slot_id image.pk %}" onsubmit="return confirm('確定刪除此照片？');">{% csrf_token %}<button class="small-button growth-photo-remove" type="submit" aria-label="刪除已保存照片 {{ forloop.counter }}">×</button></form>{% endif %}</article>{% endfor %}
+  </div>
+  {% if not images %}<p class="empty-state">{% if editable %}尚未保存照片；新選照片會列在下方待提交清單。{% else %}尚未上傳照片。{% endif %}</p>{% endif %}
 </section>
+{% if video_allowed %}
+<section class="section-block growth-upload-section growth-video-section">
+  <div class="section-heading"><div><h2>成果影片</h2><p class="muted">R07、R08 最多保存 1 段影片，最長 30 秒；上傳後會自動轉成手機可播放的 MP4。</p></div></div>
+  <div class="growth-video-list">
+    {% for video in videos %}<article class="growth-video" data-saved-video><video controls preload="metadata" playsinline><source src="{% url 'learning:evidence_download' video.pk %}?inline=1" type="video/mp4">你的瀏覽器不支援影片播放。</video><p><strong>{{ video.upload.name|cut:'evidence/' }}</strong><br><small>已處理 {{ video.created_at|date:'Y-m-d H:i' }} · {{ video.processed_metadata.duration|default:'-' }} 秒</small></p>{% if editable %}<form class="growth-video-delete" method="post" action="{% url 'learning:growth_evidence_delete' enrollment.pk definition.slot_id video.pk %}" onsubmit="return confirm('確定刪除此影片？');">{% csrf_token %}<button class="small-button growth-photo-remove" type="submit" aria-label="刪除成果影片">×</button></form>{% endif %}</article>{% empty %}<p class="empty-state">尚未上傳成果影片。</p>{% endfor %}
+  </div>
+</section>
+{% else %}
 <section class="section-block growth-upload-section">
   <h2>影片上傳</h2>
-  <p class="muted">影片上傳將在 v1.5B-2 開放；本階段可使用照片記錄學習過程。</p>
+  <p class="muted">影片上傳僅開放於 R07、R08；本項可使用照片記錄學習過程。</p>
 </section>
+{% endif %}
 <section class="section-block growth-upload-section">
   <h2>檔案與作品連結</h2>
-  <p class="muted">檔案及外部作品連結欄位預留，第一階段先完成手機照片上傳。</p>
+  {% if document_allowed %}
+    <p class="muted">可提交 PPT、PPTX、PDF、Word、Excel 或其他成果檔案；檔案會和本筆成長記錄一起送交教師複核。</p>
+    <div class="growth-document-list">
+      {% for document in documents %}<article class="growth-document"><div><strong>{{ document.original_metadata.filename|default:'成果檔案' }}</strong><small>已保存 {{ document.created_at|date:'Y-m-d H:i' }}</small></div><a class="button secondary" href="{% url 'learning:evidence_download' document.pk %}">開啟檔案</a>{% if editable %}<form method="post" action="{% url 'learning:growth_evidence_delete' enrollment.pk definition.slot_id document.pk %}" onsubmit="return confirm('確定刪除此成果檔案？');">{% csrf_token %}<button class="small-button growth-photo-remove" type="submit" aria-label="刪除成果檔案">×</button></form>{% endif %}</article>{% empty %}<p class="empty-state">尚未上傳成果檔案。</p>{% endfor %}
+    </div>
+  {% else %}<p class="muted">本項暫不需要額外成果檔案。</p>{% endif %}
 </section>
 <section class="section-block">
   <h2>學習備註</h2>
   {% if editable %}
-  <form class="growth-form" data-growth-form method="post" enctype="multipart/form-data">
+  <form class="growth-form" data-growth-form data-existing-image-count="{{ image_count }}" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <label for="id_student_note">學習備註</label>{{ form.student_note }}{% for error in form.student_note.errors %}<p class="error">{{ error }}</p>{% endfor %}
-    {% if is_summary %}
-      <label for="id_learning_summary">本期學習總結</label>{{ form.learning_summary }}{% for error in form.learning_summary.errors %}<p class="error">{{ error }}</p>{% endfor %}
-    {% else %}
-      <label for="id_images">新增照片（手機可拍照或從相簿選擇）</label>{{ form.images }}{% for error in form.images.errors %}<p class="error">{{ error }}</p>{% endfor %}
+    {% if is_summary %}<label for="id_learning_summary">本期學習總結</label>{{ form.learning_summary }}{% for error in form.learning_summary.errors %}<p class="error">{{ error }}</p>{% endfor %}{% endif %}
+    {{ form.images }}<label class="button secondary growth-photo-picker" for="id_images" role="button" tabindex="0" data-growth-photo-picker>＋拍照 / 選擇照片</label>{% for error in form.images.errors %}<p class="error">{{ error }}</p>{% endfor %}
+    <section class="growth-pending-photos" aria-label="待提交照片">
+      <h3>本次新增照片</h3>
+      <p class="muted" data-growth-photo-count>共 {{ image_count }} / 5 張（已保存 {{ image_count }}，待保存 0）</p>
+      <div class="growth-photo-grid" data-growth-photo-list aria-live="polite">
+      </div>
+      <p class="muted">每項最多 5 張。新選照片會先預覽，保存草稿或提交複核時才上傳。</p>
+    </section>
+    {% if video_allowed %}
+      <section class="growth-video-upload" aria-label="成果影片上傳">
+        <h3>新增成果影片</h3>
+        {{ form.video }}<label class="button secondary growth-video-picker" for="id_video" role="button" tabindex="0" data-growth-video-picker>＋拍攝 / 選擇影片</label>
+        {% for error in form.video.errors %}<p class="error">{{ error }}</p>{% endfor %}
+        <div class="growth-video-preview" data-growth-video-preview hidden></div>
+        <p class="muted" data-growth-video-status aria-live="polite">支援手機拍攝的 MOV/HEVC、MP4，以及其他常見影片格式；單段最長 30 秒、最大 300 MB。</p>
+      </section>
+    {% endif %}
+    {% if document_allowed %}
+      <section class="growth-document-upload" aria-label="成果檔案上傳">
+        <h3>新增成果檔案</h3>
+        {{ form.documents }}<label class="button secondary growth-document-picker" for="id_documents">＋新增 PPT / PDF 等檔案</label>
+        {% for error in form.documents.errors %}<p class="error">{{ error }}</p>{% endfor %}
+        <div class="growth-document-list" data-growth-document-list aria-live="polite"></div>
+        <p class="muted" data-growth-document-status></p>
+        <p class="muted">可一次選擇多個檔案；單一檔案最大 100 MB。</p>
+      </section>
     {% endif %}
     {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
-    <div class="growth-actions"><button class="button secondary" type="submit" name="action" value="save_draft">保存草稿</button>{% if is_summary %}<button class="button primary" type="button" disabled aria-disabled="true">代表成果選擇完成後提交</button>{% else %}<button class="button primary" type="submit" name="action" value="submit_review">提交教師複核</button>{% endif %}</div>
+    <div class="growth-actions"><button class="button secondary" type="submit" name="action" value="save_draft">保存草稿</button><button class="button primary" type="submit" name="action" value="submit_review">提交教師複核</button></div>
     <progress class="growth-upload-progress" data-upload-progress max="100" value="0" hidden></progress>
     <p class="muted" data-upload-status aria-live="polite"></p>
   </form>
@@ -62,5 +99,5 @@
   <h2>教師複核結果</h2>
   {% if latest_review %}<p><strong>{{ latest_review.get_review_status_display }}</strong>{% if latest_review.score != None %} · {{ latest_review.score }} 分{% endif %} · {{ latest_review.reviewed_at|date:'Y-m-d H:i' }}</p><h3>教師評語</h3><p>{{ latest_review.teacher_note|default:'教師未填寫評語。'|linebreaksbr }}</p>{% else %}<p class="muted">尚未完成教師複核。</p><h3>教師評語</h3><p class="muted">尚無教師評語。</p>{% endif %}
 </section>
-<script src="{% static 'learning/growth-upload.js' %}" defer></script>
+<script src="{% static 'learning/growth-upload.js' %}?v=staged-files-1" defer></script>
 {% endblock %}

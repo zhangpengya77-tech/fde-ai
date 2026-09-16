@@ -1,1 +1,13 @@
-.teacher-growth-image{display:block;width:min(100%,420px);max-height:360px;object-fit:contain;margin:10px 0;background:#edf2f4}
+.teacher-growth-image,.teacher-growth-video{display:block;width:min(100%,420px);max-height:360px;object-fit:contain;margin:10px 0;background:#edf2f4}
+ .growth-review-entry {
+  border-inline-start: 4px solid #00a8b8;
+}
+
+.growth-review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-top: 12px;
+  color: #27717b;
+  font-size: .95rem;
+}

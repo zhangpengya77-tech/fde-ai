@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 from django import forms
 from django.forms.widgets import ClearableFileInput
 from django.contrib.auth import get_user_model
@@ -132,6 +133,36 @@ class MultipleImageField(forms.FileField):
         return [super(MultipleImageField, self).clean(upload, initial) for upload in files]
 
 
+GROWTH_DOCUMENT_EXTENSIONS = {
+    ".pdf",
+    ".ppt",
+    ".pptx",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".csv",
+    ".zip",
+    ".txt",
+    ".odt",
+    ".odp",
+    ".ods",
+}
+GROWTH_DOCUMENT_MAX_BYTES = 100 * 1024 * 1024
+
+
+class GrowthDocumentField(MultipleImageField):
+    def clean(self, data, initial=None):
+        files = super().clean(data, initial)
+        for upload in files:
+            extension = Path(str(upload.name)).suffix.lower()
+            if extension not in GROWTH_DOCUMENT_EXTENSIONS:
+                raise ValidationError("檔案格式無效，請上傳 PDF、PPT、PPTX、Word 或 Excel 檔案。")
+            if upload.size > GROWTH_DOCUMENT_MAX_BYTES:
+                raise ValidationError("檔案過大，單一成果檔案請控制在100 MB以內。")
+        return files
+
+
 class GrowthRecordForm(forms.Form):
     student_note = forms.CharField(
         label="學習備註",
@@ -146,7 +177,35 @@ class GrowthRecordForm(forms.Form):
     images = MultipleImageField(
         label="新增照片",
         required=False,
-        widget=MultipleFileInput(attrs={"accept": "image/*"}),
+        widget=MultipleFileInput(
+            attrs={
+                "accept": "image/*",
+                "data-growth-images": "",
+                "class": "growth-file-input",
+            }
+        ),
+    )
+    video = forms.FileField(
+        label="新增影片",
+        required=False,
+        widget=forms.ClearableFileInput(
+            attrs={
+                "accept": "video/*",
+                "data-growth-video": "",
+                "class": "growth-file-input",
+            }
+        ),
+    )
+    documents = GrowthDocumentField(
+        label="成果檔案",
+        required=False,
+        widget=MultipleFileInput(
+            attrs={
+                "accept": "application/pdf,application/msword,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.csv,.zip,.txt,.odt,.odp,.ods",
+                "data-growth-documents": "",
+                "class": "growth-file-input",
+            }
+        ),
     )
 
 

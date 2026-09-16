@@ -28,12 +28,19 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or ('local-development-only-not
 if not SECRET_KEY:
     raise RuntimeError('DJANGO_SECRET_KEY must be configured when DJANGO_DEBUG is false.')
 
-ALLOWED_HOSTS = [host.strip() for host in os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()]
+default_allowed_hosts = '127.0.0.1,localhost,.trycloudflare.com' if DEBUG else '127.0.0.1,localhost'
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', default_allowed_hosts).split(',')
+    if host.strip()
+]
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
     if origin.strip()
 ]
+if DEBUG and not CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS = ['https://*.trycloudflare.com']
 if not DEBUG:
     if not ALLOWED_HOSTS:
         raise RuntimeError('DJANGO_ALLOWED_HOSTS must be configured when DJANGO_DEBUG is false.')
@@ -43,6 +50,19 @@ if not DEBUG:
         raise RuntimeError('DATABASE_URL must point to a durable production database.')
     if not os.environ.get('DJANGO_MEDIA_ROOT', '').strip():
         raise RuntimeError('DJANGO_MEDIA_ROOT must point to persistent media storage in production.')
+
+CACHE_BACKEND = os.environ.get('DJANGO_CACHE_BACKEND', '').strip()
+CACHE_LOCATION = os.environ.get('DJANGO_CACHE_LOCATION', '').strip()
+if not DEBUG:
+    CACHE_BACKEND = CACHE_BACKEND or 'django.core.cache.backends.filebased.FileBasedCache'
+    CACHE_LOCATION = CACHE_LOCATION or str(BASE_DIR / '.cache')
+if CACHE_BACKEND and CACHE_LOCATION:
+    CACHES = {
+        'default': {
+            'BACKEND': CACHE_BACKEND,
+            'LOCATION': CACHE_LOCATION,
+        }
+    }
 
 
 # Application definition
@@ -94,12 +114,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 if DATABASE_URL:
+    database_options = {
+        'conn_max_age': 600,
+        'conn_health_checks': True,
+    }
+    if not DATABASE_URL.lower().startswith('sqlite://'):
+        database_options['ssl_require'] = not DEBUG
     DATABASES = {
         'default': dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-            ssl_require=not DEBUG,
+            **database_options,
         )
     }
 else:
@@ -175,9 +199,46 @@ EMAIL_HOST_PASSWORD = os.environ.get('DJANGO_EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('DJANGO_EMAIL_USE_TLS', 'true').lower() == 'true'
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'FDE-AI 學習平台 <no-reply@example.invalid>')
 
+PUBLIC_RAG_UPSTREAM_URL = os.environ.get(
+    'DJANGO_PUBLIC_RAG_UPSTREAM_URL',
+    'http://127.0.0.1:8770' if DEBUG else '',
+).strip()
+PUBLIC_INSPECTION_UPSTREAM_URL = os.environ.get(
+    'DJANGO_PUBLIC_INSPECTION_UPSTREAM_URL',
+    'http://127.0.0.1:8765' if DEBUG else '',
+).strip()
+PUBLIC_VOICE_UPSTREAM_URL = os.environ.get(
+    'DJANGO_PUBLIC_VOICE_UPSTREAM_URL', PUBLIC_INSPECTION_UPSTREAM_URL,
+).strip()
+PUBLIC_AI_TIMEOUT_SECONDS = max(1, int(os.environ.get('DJANGO_PUBLIC_AI_TIMEOUT_SECONDS', '20')))
+PUBLIC_AI_MAX_REQUEST_BYTES = max(1024, int(os.environ.get('DJANGO_PUBLIC_AI_MAX_REQUEST_BYTES', '25000000')))
+PUBLIC_RAG_REQUESTS_PER_MINUTE = max(1, int(os.environ.get('DJANGO_PUBLIC_RAG_REQUESTS_PER_MINUTE', '30')))
+PUBLIC_INSPECTION_REQUESTS_PER_MINUTE = max(1, int(os.environ.get('DJANGO_PUBLIC_INSPECTION_REQUESTS_PER_MINUTE', '5')))
+PUBLIC_VOICE_REQUESTS_PER_MINUTE = max(1, int(os.environ.get('DJANGO_PUBLIC_VOICE_REQUESTS_PER_MINUTE', '20')))
+PUBLIC_AI_TRUSTED_PROXY_IPS = frozenset(
+    ip.strip()
+    for ip in os.environ.get('DJANGO_PUBLIC_AI_TRUSTED_PROXY_IPS', '').split(',')
+    if ip.strip()
+)
+
 MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT') or BASE_DIR / 'private_media')
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2_500_000
-DATA_UPLOAD_MAX_MEMORY_SIZE = 30_000_000
+GROWTH_VIDEO_MAX_UPLOAD_BYTES = int(
+    os.environ.get('DJANGO_GROWTH_VIDEO_MAX_UPLOAD_BYTES', str(300 * 1024 * 1024))
+)
+GROWTH_VIDEO_MAX_DURATION_SECONDS = 30
+GROWTH_VIDEO_MAX_FPS = 30
+GROWTH_VIDEO_CRF = 28
+GROWTH_VIDEO_PRESET = os.environ.get('DJANGO_GROWTH_VIDEO_PRESET', 'veryfast')
+GROWTH_VIDEO_FFMPEG_BINARY = os.environ.get('DJANGO_FFMPEG_BINARY', 'ffmpeg')
+GROWTH_VIDEO_FFPROBE_BINARY = os.environ.get('DJANGO_FFPROBE_BINARY', 'ffprobe')
+# Keep enough multipart headroom for the 300 MB raw video limit. Large files
+# still use Django's temporary-file upload handler because the memory limit
+# above remains 2.5 MB.
+DATA_UPLOAD_MAX_MEMORY_SIZE = max(
+    int(os.environ.get('DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE', '0') or 0),
+    GROWTH_VIDEO_MAX_UPLOAD_BYTES + 2_000_000,
+)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG

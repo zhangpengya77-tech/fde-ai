@@ -1,0 +1,10 @@
+{% extends 'learning/base.html' %}
+{% block title %}帳號權限不足｜FDE-AI{% endblock %}
+{% block content %}
+<section class="form-panel" role="alert">
+  <h1>目前帳號無法進入此區域</h1>
+  <p>此頁面需要{{ required_role }}權限。你的登入狀態仍保留，請切換至正確帳號後再試。</p>
+  <p><a class="button secondary" href="{% url 'learning:home' %}">返回 FDE-AI 首頁</a></p>
+  <form method="post" action="{% url 'learning:logout' %}">{% csrf_token %}<button class="button" type="submit">登出並切換帳號</button></form>
+</section>
+{% endblock %}
