@@ -14,6 +14,10 @@
   <div><span>已提交</span><strong>{{ growth_submitted_count }} / {{ growth_record_count }}</strong></div>
   <div><span>教師已複核</span><strong>{{ growth_reviewed_count }} / {{ growth_record_count }}</strong></div>
 </section>
+<section class="section-block" aria-labelledby="project-direction-title">
+  <div class="section-heading"><div><p class="eyebrow">專案方向</p><h2 id="project-direction-title">{% if enrollment.project_direction %}{{ direction_content.title }}{% else %}選擇本期專案方向{% endif %}</h2></div><a class="button secondary" href="{% url 'learning:select_project_direction' enrollment.pk %}">{% if enrollment.project_direction %}修改方向{% else %}選擇方向{% endif %}</a></div>
+  {% if direction_content %}<p>{{ direction_content.learning_goal }}</p><p class="muted">{{ direction_content.what_to_do|join:'、' }}</p>{% else %}<p class="muted">尚未選擇方向；R01～R05 仍可依共同課程進行。</p>{% endif %}
+</section>
 <section class="section-block growth-entry">
   <div><p class="eyebrow">R01～R08</p><h2>我的學習成長日誌</h2><p class="muted">記錄課堂練習、作品與本期學習歷程。</p></div>
   <a class="button primary" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">打開我的學習成長日誌</a>

@@ -27,6 +27,7 @@ urlpatterns = [
     path("student/growth/", views.student_growth_entry, name="student_growth_entry"),
     path("courses/join/", views.join_cohort, name="join_cohort"),
     path("student/courses/<int:enrollment_id>/", views.student_course_dashboard, name="student_course_dashboard"),
+    path("student/courses/<int:enrollment_id>/project-direction/", views.select_project_direction, name="select_project_direction"),
     path("student/courses/<int:enrollment_id>/growth/", views.student_growth_dashboard, name="student_growth_dashboard"),
     path("student/courses/<int:enrollment_id>/growth/<str:slot_id>/", views.growth_record_detail, name="growth_record_detail"),
     path(
@@ -40,6 +41,7 @@ urlpatterns = [
     path("student/courses/<int:enrollment_id>/phases/<str:phase>/", views.update_phase, name="update_phase"),
     path("teacher/", views.teacher_dashboard, name="teacher_dashboard"),
     path("teacher/enrollments/<int:enrollment_id>/", views.teacher_student_detail, name="teacher_student_detail"),
+    path("teacher/enrollments/<int:enrollment_id>/project-direction/", views.teacher_update_project_direction, name="teacher_update_project_direction"),
     path("teacher/growth-reviews/<int:submission_id>/", views.review_growth_record, name="growth_review"),
     path("teacher/reviews/<int:progress_id>/", views.review_task, name="review_task"),
     path("teacher/evidence/<uuid:evidence_id>/candidate/", views.promote_candidate, name="promote_candidate"),

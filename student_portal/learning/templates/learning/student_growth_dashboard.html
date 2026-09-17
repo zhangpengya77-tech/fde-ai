@@ -8,6 +8,7 @@
   <p class="eyebrow">{{ enrollment.cohort.name }} · {{ profile.public_user_id }}</p>
   <h1>我的學習成長日誌</h1>
   <p class="muted">{{ profile.nickname }} · {{ enrollment.cohort_id }} · 小組：{% if enrollment.group %}{{ enrollment.group.name }}{% else %}尚未分組{% endif %}</p>
+  <p class="muted">專案方向：{{ direction_label }}</p>
 </section>
 <section class="growth-summary" aria-label="成長記錄進度">
   <div><span>已提交</span><strong>{{ submitted_count }} / {{ record_count }}</strong></div>
@@ -16,9 +17,14 @@
 <section class="growth-grid" aria-label="R01 至 R08 成長記錄">
   {% for row in records %}
   <article class="growth-card">
-    <div class="growth-card-heading"><span class="growth-slot">{{ row.submission.definition.slot_id }}</span><span class="status status-{{ row.submission.status }}">{{ row.submission.get_status_display }}</span></div>
-    <h2>{{ row.submission.definition.title }}</h2>
-    <p>{{ row.submission.definition.description }}</p>
+    <div class="growth-card-heading"><span class="growth-slot">{{ row.submission.definition.slot_id }}</span><span class="status status-{{ row.submission.status }}">{{ row.status_label }}</span></div>
+    <h2>{{ row.content.title|default:row.submission.definition.title }}</h2>
+    {% if row.content.subtitle %}<p class="eyebrow">{{ row.content.subtitle }}</p>{% endif %}
+    <p>{{ row.content.learning_goal|default:row.submission.definition.description }}</p>
+    {% if row.content.what_to_do %}<p><strong>我要做：</strong>{{ row.content.what_to_do|join:'、' }}</p>{% endif %}
+    {% if row.content.deliverables %}<p><strong>我要留下：</strong>{{ row.content.deliverables|join:'、' }}</p>{% endif %}
+    {% if row.content.optional.3d_printing %}<p class="notice"><strong>延伸選修：</strong>3D列印／數位製造，不影響主要測繪完成狀態。</p>{% endif %}
+    {% if row.content.teacher_provided.dataflash_log %}<p class="notice"><strong>教師提供資料：</strong>DataFlash Log；學員負責查看、對照與理解。</p>{% endif %}
     <div class="growth-card-meta"><span>{% if row.submission.submitted_at %}已提交{% else %}尚未提交{% endif %}</span><span>{% if row.submission.status == 'needs_revision' or row.submission.status == 'approved' or row.submission.status == 'rejected' %}已複核{% else %}待教師複核{% endif %}</span><span>照片 {{ row.image_count }} / 5</span></div>
     <a class="button secondary full" href="{% url 'learning:growth_record_detail' enrollment.pk row.submission.definition.slot_id %}">進入記錄</a>
   </article>

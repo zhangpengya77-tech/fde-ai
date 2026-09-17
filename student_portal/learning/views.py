@@ -36,6 +36,7 @@ from .forms import (
     EvidenceForm,
     GrowthRecordReviewForm,
     GrowthRecordForm,
+    ProjectDirectionForm,
     PhaseProgressForm,
     StudentLoginForm,
     StudentPasswordResetForm,
@@ -62,6 +63,14 @@ from .models import (
 from .growth_media import process_growth_image
 from .growth_video import VideoProcessingError, process_growth_video
 from .growth_records import ensure_growth_submissions
+from .project_directions import (
+    direction_content,
+    direction_label,
+    direction_options,
+    student_status_label,
+    task_display_id,
+    task_status_label,
+)
 from .services import issue_activation_code
 
 
@@ -493,8 +502,23 @@ def student_course_dashboard(request, enrollment_id):
                 item.status in GROWTH_REVIEWED_STATUSES for item in growth_submissions
             ),
             "growth_record_count": len(growth_submissions),
+            "direction_options": direction_options(),
+            "direction_content": direction_content(enrollment, "R06"),
         },
     )
+
+
+@student_required
+@require_http_methods(["GET", "POST"])
+def select_project_direction(request, enrollment_id):
+    enrollment = get_object_or_404(Enrollment, pk=enrollment_id, student=request.student_profile, active=True)
+    form = ProjectDirectionForm(request.POST or None, initial={"project_direction": enrollment.project_direction})
+    if request.method == "POST" and form.is_valid():
+        enrollment.project_direction = form.cleaned_data["project_direction"]
+        enrollment.save(update_fields=["project_direction"])
+        messages.success(request, "本期專案方向已保存。")
+        return redirect("learning:student_course_dashboard", enrollment_id=enrollment.pk)
+    return render(request, "learning/project_direction_select.html", {"profile": request.student_profile, "enrollment": enrollment, "form": form})
 
 
 @student_required
@@ -509,6 +533,8 @@ def student_growth_dashboard(request, enrollment_id):
     records = [
         {
             "submission": submission,
+            "content": direction_content(enrollment, submission.definition.slot_id),
+            "status_label": student_status_label(submission.status),
             "image_count": submission.evidence.filter(evidence_type=Evidence.Type.IMAGE).count(),
         }
         for submission in submissions
@@ -523,6 +549,7 @@ def student_growth_dashboard(request, enrollment_id):
             "submitted_count": sum(item.status in GROWTH_SUBMITTED_STATUSES for item in submissions),
             "reviewed_count": sum(item.status in GROWTH_REVIEWED_STATUSES for item in submissions),
             "record_count": len(submissions),
+            "direction_label": direction_label(enrollment.project_direction),
         },
     )
 
@@ -715,6 +742,8 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "editable": editable,
             "is_summary": submission.definition.slot_id == "R08",
             "latest_review": latest_review,
+            "direction_content": direction_content(enrollment, submission.definition.slot_id),
+            "status_label": student_status_label(submission.status),
         },
     )
 
@@ -779,7 +808,16 @@ def task_detail(request, enrollment_id, task_id):
     return render(
         request,
         "learning/task_detail.html",
-        {"task": task, "task_content": progress.task_content, "progress": progress, "enrollment": enrollment, "form": form, "evidence": progress.evidence.all()},
+        {
+            "task": task,
+            "task_content": progress.task_content,
+            "progress": progress,
+            "enrollment": enrollment,
+            "form": form,
+            "evidence": progress.evidence.all(),
+            "task_display_id": task_display_id(task.task_id),
+            "task_status_label": task_status_label(progress.status),
+        },
     )
 
 
@@ -897,6 +935,7 @@ def teacher_dashboard(request):
                     "incomplete_count": 0,
                     "skipped_count": 0,
                     "group": None,
+                    "project_direction_label": "尚未選擇",
                     "growth_submitted_count": 0,
                     "growth_reviewed_count": 0,
                     "growth_pending_count": 0,
@@ -954,6 +993,7 @@ def teacher_dashboard(request):
                     "student": profile,
                     "email_masked": mask_email(profile.email),
                     "group": enrollment.group,
+                    "project_direction_label": direction_label(enrollment.project_direction),
                     "reviewed_count": sum(item.status == StudentTaskProgress.Status.REVIEWED for item in items),
                     "total_count": len(items),
                     "submitted_count": sum(item.status == StudentTaskProgress.Status.SUBMITTED for item in items),
@@ -986,7 +1026,7 @@ def teacher_dashboard(request):
 @teacher_required
 def teacher_student_detail(request, enrollment_id):
     enrollment = get_object_or_404(
-        Enrollment.objects.filter(cohort__in=teacher_cohorts(request.user)).select_related("cohort", "student__user"),
+        Enrollment.objects.filter(cohort__in=teacher_cohorts(request.user)).select_related("cohort", "group", "student__user"),
         pk=enrollment_id,
         active=True,
     )
@@ -1019,8 +1059,26 @@ def teacher_student_detail(request, enrollment_id):
             "progress": progress,
             "phases": ordered_phase_progress(enrollment),
             "growth_records": growth_records,
+            "project_direction_label": direction_label(enrollment.project_direction),
+            "project_direction_options": direction_options(),
         },
     )
+
+
+@teacher_required
+@require_POST
+def teacher_update_project_direction(request, enrollment_id):
+    enrollment = get_object_or_404(
+        Enrollment.objects.filter(cohort__in=teacher_cohorts(request.user)), pk=enrollment_id, active=True
+    )
+    form = ProjectDirectionForm(request.POST)
+    if form.is_valid():
+        enrollment.project_direction = form.cleaned_data["project_direction"]
+        enrollment.save(update_fields=["project_direction"])
+        messages.success(request, "學員專案方向已更新。")
+    else:
+        messages.error(request, "專案方向無效，未保存變更。")
+    return redirect("learning:teacher_student_detail", enrollment_id=enrollment.pk)
 
 
 @teacher_required

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "direction_keys": ["flight_f450", "autonomous_mission", "ai_flight_assessment", "uav_3d_mapping"],
+  "shared_growth_records": [
+    {"slot_id": "R01", "subtitle": "（法規・安全・證照・產業認識）", "what_to_do": ["認識無人機", "認識基本安全", "認識臺灣無人機證照", "認識產業應用", "完成學科練習"], "deliverables": ["學習紀錄", "測驗結果"], "learning_goal": "建立安全、法規與產業應用的基礎認識。"},
+    {"slot_id": "R02", "subtitle": "（模擬器・方向感・起降・懸停）", "what_to_do": ["模擬起飛", "模擬懸停", "方向控制", "安全降落"], "deliverables": ["模擬飛行紀錄"], "learning_goal": "建立方向感與基本飛行操作能力。"},
+    {"slot_id": "R03", "subtitle": "（足球無人機／微型無人機・基礎操控）", "what_to_do": ["真機起飛", "定點懸停", "方向控制", "安全降落"], "deliverables": ["飛行紀錄", "影片／照片"], "learning_goal": "在教師指導下完成安全的真機基礎操控。"},
+    {"slot_id": "R04", "subtitle": "（四面懸停・八字・模擬考・AI 輔助評測）", "what_to_do": ["對頭懸停", "對尾懸停", "左側懸停", "右側懸停", "八字", "定點起降", "模擬考"], "deliverables": ["飛行影片", "測試紀錄", "AI 輔助結果", "教師複核"], "learning_goal": "完成證照動作練習並理解 AI 輔助評測流程。"},
+    {"slot_id": "R05", "subtitle": "（機架・馬達・ESC・槳葉・飛控基礎）", "what_to_do": ["F450 機架組裝", "馬達安裝", "ESC 接線", "CW／CCW 辨識", "供電檢查", "飛控基本認識"], "deliverables": ["F450 組裝成果", "照片", "檢查結果"], "learning_goal": "理解 F450 結構與基本組裝安全。"}
+  ],
+  "flight_f450": {
+    "key": "flight_f450", "title": "F450 組裝與飛行", "short_description": "從 F450 組裝、接線與檢查，延伸到安全基礎飛行。",
+    "R06": {"title": "飛行與 F450 專案技能實作", "subtitle": "（F450 組裝・基礎操控・四面懸停）", "what_to_do": ["F450 飛行前檢查", "基礎真機操控", "四面懸停", "證照動作", "定點起降", "飛行影片紀錄"], "deliverables": ["飛行影片", "飛行前檢查", "四面懸停紀錄", "教師評價"], "learning_goal": "能夠正確檢查並安全操控無人機。", "resources": ["F450 組裝與飛行課程"]},
+    "R07": {"title": "巡檢飛行任務驗證", "subtitle": "（飛行前檢查・指定位置觀察・安全降落）", "what_to_do": ["飛行前檢查", "起飛至指定位置", "定點懸停", "指定方向觀察／拍攝", "返回並安全降落"], "deliverables": ["飛行影片", "任務紀錄", "教師評價"], "learning_goal": "在安全條件下完成一次基礎巡檢飛行任務。", "resources": ["教師現場任務說明"]},
+    "R08": {"title": "F450 飛行綜合成果", "subtitle": "（作品・影片・教師複核）", "what_to_do": ["整理 F450 組裝成果", "整理飛行影片", "整理四面懸停與巡檢紀錄"], "deliverables": ["F450 組裝", "飛行影片", "四面懸停", "巡檢飛行", "教師評價"], "learning_goal": "整理本期 F450 組裝與飛行能力成果。", "resources": ["我的學習成長日誌"]}
+  },
+  "autonomous_mission": {
+    "key": "autonomous_mission", "title": "自動航線任務", "short_description": "使用開源飛控與地面站規劃、檢查並執行基礎航線。",
+    "R06": {"title": "自主航線專案技能實作", "subtitle": "（ArduPilot・Pixhawk／H743・Mission Planner）", "what_to_do": ["認識 ArduPilot", "認識 Pixhawk／H743 飛控", "使用 Mission Planner", "設定 Waypoint", "練習 Takeoff、AUTO、RTL", "查看基礎 Flight Log"], "deliverables": ["Mission 任務航線", "航線截圖", "模擬／真機執行結果", "基礎 Flight Log"], "learning_goal": "能夠規劃並執行一條基礎自動航線。", "resources": ["Mission Planner 課程"]},
+    "R07": {"title": "物流自主航線任務驗證", "subtitle": "（Mission Planner・Waypoint・RTL）", "what_to_do": ["規劃 Mission Planner 航線", "執行 Takeoff", "通過 Waypoint 任務點", "完成模擬／實際載荷任務", "執行 RTL"], "deliverables": ["Mission", "航線截圖", "飛行影片", "Flight Log", "任務結果"], "learning_goal": "在教師監督與安全條件下完成自主航線任務。", "resources": ["教師任務範例"]},
+    "R08": {"title": "自主航線綜合成果", "subtitle": "（Mission・航線・Flight Log・教師複核）", "what_to_do": ["整理航線規劃", "整理執行結果", "對照基礎 Flight Log", "完成任務說明"], "deliverables": ["Mission", "航線截圖", "自動飛行", "Flight Log", "物流任務", "教師評價"], "learning_goal": "呈現從航線規劃到任務執行的完整成果。", "resources": ["我的學習成長日誌"]}
+  },
+  "ai_flight_assessment": {
+    "key": "ai_flight_assessment", "title": "AI 飛行評測", "short_description": "以影像、YOLO 與四面懸停資料理解 AI 輔助飛行評測。",
+    "R06": {"title": "AI 視覺與飛行評測實作", "subtitle": "（影像拍攝・抽幀・標註・YOLO・四面懸停）", "what_to_do": ["拍攝／整理影像", "影片抽幀", "Bounding Box 標註", "建立 Dataset", "訓練／使用 YOLO", "觀察四面懸停位置", "認識老師提供的飛行日誌"], "deliverables": ["原始影像", "標註資料", "Dataset", "YOLO 模型", "影片", "AI 檢測結果"], "learning_goal": "理解影像資料如何延伸到無人機飛行評測。", "resources": ["Action 5 拍攝與四面懸停課程"], "teacher_provided": {"dataflash_log": true}},
+    "R07": {"title": "四面懸停 AI 評測任務", "subtitle": "（Action 5・YOLO・DataFlash Log 基礎認識）", "what_to_do": ["整理 Action 5 影片", "抽幀與標註飛機位置", "使用 YOLO 進行位置辨識", "查看教師提供的 DataFlash Log", "理解視覺與飛行資料的時間對應"], "deliverables": ["Dataset", "YOLO 模型", "影片", "老師提供的 Log", "AI 初判", "教師複核"], "learning_goal": "理解視覺證據與飛控資料如何共同完成評測。", "resources": ["教師提供標準 DataFlash Log"], "teacher_provided": {"dataflash_log": true}},
+    "R08": {"title": "AI 飛行評測綜合成果", "subtitle": "（Dataset・模型・影片・教師提供資料・教師複核）", "what_to_do": ["整理影像與標註成果", "整理 YOLO 模型與檢測結果", "查看老師提供的 DataFlash Log", "整理 PASS／NG 示範與說明"], "deliverables": ["Dataset", "YOLO 模型", "Action 5 影片", "老師提供的 DataFlash Log", "AI 檢測", "PASS／NG", "教師複核"], "learning_goal": "展示從影像整理到 AI 輔助飛行評測的學習成果。", "resources": ["教師複核流程"], "teacher_provided": {"dataflash_log": true}}
+  },
+  "uav_3d_mapping": {
+    "key": "uav_3d_mapping", "title": "無人機 3D 測繪", "short_description": "主線是正確空拍、Meshroom 與 3D 模型成果；3D 列印為延伸選修。",
+    "R06": {"title": "無人機 3D 測繪實作", "subtitle": "（正確空拍・照片整理・Meshroom・3D模型）", "what_to_do": ["規劃測繪拍攝", "正確空拍", "整理原始照片", "使用 Meshroom", "建立 3D 模型", "檢查模型品質", "匯出成果"], "deliverables": ["原始空拍照片", "Meshroom 專案", "3D 模型", "成果截圖", "專案說明"], "learning_goal": "完成正確空拍 → Meshroom → 3D 模型的完整測繪流程。", "resources": ["無人機測繪與 Meshroom 課程"], "optional": {"3d_printing": true}},
+    "R07": {"title": "無人機 3D 測繪任務驗證", "subtitle": "（測繪規劃・正確空拍・Meshroom・模型檢查）", "what_to_do": ["選定測繪對象", "規劃拍攝", "整理照片", "Meshroom 建模", "檢查模型", "補拍／調整", "匯出 3D 模型"], "deliverables": ["原始照片", "Meshroom 專案", "3D 模型", "成果截圖", "測繪說明"], "learning_goal": "完成一項可檢查與說明的無人機測繪建模任務。", "resources": ["測繪成果檢查表"], "optional": {"3d_printing": true}},
+    "R08": {"title": "無人機 3D 測繪綜合成果", "subtitle": "（空拍照片・Meshroom・3D模型・教師複核）", "what_to_do": ["整理空拍照片", "整理 Meshroom 專案", "檢查 3D 模型", "保存成果截圖與說明"], "deliverables": ["空拍照片", "Meshroom 專案", "3D 模型", "測繪成果", "成果截圖", "教師評價"], "learning_goal": "呈現從正確空拍到 3D 模型輸出的完整成果。", "resources": ["我的學習成長日誌"], "optional": {"3d_printing": true}}
+  }
+}

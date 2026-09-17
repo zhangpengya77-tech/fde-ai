@@ -65,6 +65,7 @@ class Enrollment(models.Model):
     group = models.ForeignKey(
         LearningGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="enrollments"
     )
+    project_direction = models.CharField(max_length=64, null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
 

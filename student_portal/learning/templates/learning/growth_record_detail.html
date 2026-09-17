@@ -6,9 +6,14 @@
 <a class="back-link" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">返回我的學習成長日誌</a>
 <section class="page-heading">
   <p class="eyebrow">{{ definition.slot_id }} · {{ enrollment.cohort_id }} · {{ profile.public_user_id }}</p>
-  <h1>{{ definition.title }}</h1>
+  <h1>{{ direction_content.title|default:definition.title }}</h1>
+  {% if direction_content.subtitle %}<p class="eyebrow">{{ direction_content.subtitle }}</p>{% endif %}
+  {% if direction_content.what_to_do %}<p><strong>我要做：</strong>{{ direction_content.what_to_do|join:'、' }}</p>{% endif %}
+  {% if direction_content.deliverables %}<p><strong>我要留下：</strong>{{ direction_content.deliverables|join:'、' }}</p>{% endif %}
+  {% if direction_content.optional.3d_printing %}<p class="notice"><strong>延伸選修：</strong>3D列印／數位製造，不影響主要測繪完成狀態。</p>{% endif %}
+  {% if direction_content.teacher_provided.dataflash_log %}<p class="notice"><strong>教師提供資料：</strong>DataFlash Log；學員負責查看、對照與理解。</p>{% endif %}
   <p class="muted">{{ profile.nickname }} · {% if enrollment.group %}{{ enrollment.group.name }}{% else %}尚未分組{% endif %}</p>
-  <span class="status status-{{ submission.status }}">{{ submission.get_status_display }}</span>
+  <span class="status status-{{ submission.status }}">{{ status_label }}</span>
 </section>
 <section class="section-block growth-instructions">
   <h2>這次我要完成什麼</h2>

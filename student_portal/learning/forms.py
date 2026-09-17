@@ -17,6 +17,7 @@ from .models import (
     TeacherReviewEvent,
 )
 from .services import issue_activation_code
+from .project_directions import direction_options
 
 
 class StudentRegistrationForm(forms.Form):
@@ -67,6 +68,10 @@ class StudentRegistrationForm(forms.Form):
         )
         issue_activation_code(user)
         return profile
+
+
+class ProjectDirectionForm(forms.Form):
+    project_direction = forms.ChoiceField(label="本期專案方向", choices=direction_options())
 
 
 class StudentLoginForm(AuthenticationForm):
