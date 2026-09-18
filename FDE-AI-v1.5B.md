@@ -4,6 +4,7 @@
 
 - Branch: `fde-ai-v1.5b`
 - Tag: `v1.5B-classroom-stable-20260918`
+- Stable classroom tag: `v1.5B-classroom-final-20260919`
 - Commit: `3fb9f53`
 
 ## Runtime
