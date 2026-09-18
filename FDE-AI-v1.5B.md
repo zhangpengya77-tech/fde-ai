@@ -3,8 +3,8 @@
 ## Recovery checkpoint
 
 - Branch: `fde-ai-v1.5b`
-- Tag: `v1.5B-classroom-stable`
-- Commit: `bdc75f7e083e58f39277cc1132a0b494b5c95a17`
+- Tag: `v1.5B-classroom-stable-20260918`
+- Commit: `3fb9f53`
 
 ## Runtime
 

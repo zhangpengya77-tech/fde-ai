@@ -37,6 +37,15 @@ def direction_options():
     return [(key, config[key]["title"]) for key in direction_keys()]
 
 
+def learner_direction_options():
+    return [
+        *direction_options(),
+        ("fpv", "FPV（第一人稱視角無人機）組"),
+        ("", "無組別"),
+        ("other", "其他"),
+    ]
+
+
 def direction_label(key):
     if not key:
         return "尚未選擇"

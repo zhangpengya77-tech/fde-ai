@@ -51,6 +51,24 @@ function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
 }
 
+const taskStatusLabels = {
+  not_started: '○ 未開始',
+  in_progress: '🟡 進行中',
+  submitted: '待教師複核',
+  needs_review: '待教師複核',
+  completed: '✅ 已完成',
+  approved: '✅ 已完成',
+  rejected: '未通過'
+};
+
+function displayTaskStatus(status) {
+  return taskStatusLabels[status] || status;
+}
+
+function displayTaskMeta(task) {
+  return task.estimatedHours ? `${task.difficulty} · ${task.estimatedHours}h` : task.difficulty;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -278,11 +296,11 @@ function renderMissionMap() {
                   <button class="mission-card task-select ${task.id === selectedTaskId ? 'is-selected' : ''}" type="button" data-task-id="${task.id}">
                     <div class="section-head">
                       <span class="mission-code">${task.id}</span>
-                      <span class="status ${statusClass(task.status)}">${task.status}</span>
+                      <span class="status ${statusClass(task.status)}">${displayTaskStatus(task.status)}</span>
                     </div>
                     <strong>${task.title}</strong>
                     <small>${task.subtitle}</small>
-                    <span class="difficulty">${task.difficulty} · ${task.estimatedHours || '?'}h</span>
+                    <span class="difficulty">${displayTaskMeta(task)}</span>
                   </button>
                 `
               )
@@ -349,7 +367,7 @@ function renderTaskDetailLegacy(taskId) {
         </div>
         <div class="task-meta">
           <span>${task.difficulty}</span>
-          <span>${task.estimatedHours || '?'} 小時</span>
+          ${task.estimatedHours ? `<span>${task.estimatedHours} 小時</span>` : ''}
           <span>${task.suitableFor.join(' / ')}</span>
         </div>
       </div>

@@ -1,14 +1,14 @@
 [
-  {"task_id":"T01","sort_order":1,"stage":"learn","title":"基礎課程學習","description":"完成無人載具基礎課程並整理學習重點。","requirements":["瀏覽指定課程","整理至少三項學習重點"],"evidence_required":["學習摘要或課程紀錄"]},
-  {"task_id":"T02","sort_order":2,"stage":"learn","title":"F450 / 飛控基礎知識","description":"認識 F450 結構、飛控、動力系統與基本安全概念。","requirements":["辨識主要組件","完成基礎知識紀錄"],"evidence_required":["知識整理或課堂紀錄"]},
-  {"task_id":"T03","sort_order":3,"stage":"practice","title":"模擬器練習","description":"在模擬器中練習基本方向控制與安全操作。","requirements":["完成教師指定的模擬練習"],"evidence_required":["模擬器畫面或練習紀錄"]},
-  {"task_id":"T04","sort_order":4,"stage":"practice","title":"真機基礎練習","description":"在教師監督下完成真機基礎操作練習。","requirements":["遵守場地與安全規範","完成指定基礎動作"],"evidence_required":["練習紀錄或教師確認"]},
-  {"task_id":"T05","sort_order":5,"stage":"practice","title":"四面懸停 / 操控練習","description":"練習不同機頭方向的懸停與操控。","requirements":["完成四面方向練習","記錄控制狀況"],"evidence_required":["四面懸停練習紀錄"]},
-  {"task_id":"T06","sort_order":6,"stage":"build","title":"F450 組裝","description":"依教師指引完成 F450 組件辨識與組裝檢查。","requirements":["檢查機架與動力系統","記錄組裝檢查結果"],"evidence_required":["組裝照片或檢查紀錄"]},
-  {"task_id":"T07","sort_order":7,"stage":"build","title":"飛控 / Mission Planner 設定","description":"完成飛控連接與地面站基本設定練習。","requirements":["記錄飛控連接狀態","保存設定畫面"],"evidence_required":["設定截圖或操作紀錄"]},
-  {"task_id":"T08","sort_order":8,"stage":"build","title":"自動航線任務","description":"在教師監督與安全條件下規劃並檢查自動航線任務。","requirements":["提交航線規劃","完成安全檢查清單"],"evidence_required":["航線檔或規劃截圖"]},
-  {"task_id":"T09","sort_order":9,"stage":"assess","title":"行業應用任務","description":"選擇一個無人載具應用情境並整理任務需求。","requirements":["說明應用情境","整理任務流程與限制"],"evidence_required":["應用任務說明"]},
-  {"task_id":"T10","sort_order":10,"stage":"assess","title":"AI / 測繪 / 專業成果","description":"完成一項 AI、測繪或其他專業成果的展示與說明。","requirements":["說明成果用途","提交可檢視的成果"],"evidence_required":["成果檔案、連結或截圖"]},
-  {"task_id":"T11","sort_order":11,"stage":"certify","title":"綜合成果整理","description":"整理課程中的任務成果與學習紀錄。","requirements":["整理作品集","附上成果說明"],"evidence_required":["作品集或成果連結"]},
-  {"task_id":"T12","sort_order":12,"stage":"certify","title":"教師複核 / 成果認證","description":"提交完整成果供教師複核與結業確認。","requirements":["確認任務紀錄完整","完成教師複核"],"evidence_required":["綜合成果提交"]}
+  {"task_id":"T01","sort_order":1,"stage":"learn","title":"安全、法規與證照認知","description":"認識無人機安全、法規、證照與產業應用。","requirements":["認識基本安全與法規","完成證照與產業認知學習"],"evidence_required":["學習紀錄","測驗結果"]},
+  {"task_id":"T02","sort_order":2,"stage":"learn","title":"模擬飛行訓練","description":"在模擬器中練習方向感、起降與懸停。","requirements":["模擬起飛與安全降落","完成方向控制與懸停練習"],"evidence_required":["模擬飛行紀錄"]},
+  {"task_id":"T03","sort_order":3,"stage":"practice","title":"安全真機飛行","description":"在教師指導下完成真機基礎操控。","requirements":["完成真機起飛與定點懸停","完成方向控制與安全降落"],"evidence_required":["飛行紀錄","影片或照片"]},
+  {"task_id":"T04","sort_order":4,"stage":"practice","title":"證照動作與 AI 飛行評測","description":"練習四面懸停、八字、定點起降與模擬考，理解 AI 輔助評測。","requirements":["完成證照動作練習","完成模擬考與 AI 輔助評測理解"],"evidence_required":["飛行影片","測試紀錄","AI 輔助結果","教師複核"]},
+  {"task_id":"T05","sort_order":5,"stage":"practice","title":"F450 工程組裝","description":"完成 F450 機架、馬達、ESC、槳葉與飛控基礎認識。","requirements":["完成機架與馬達安裝","完成 ESC 接線、CW／CCW 辨識與供電檢查"],"evidence_required":["F450 組裝成果","照片","檢查結果"]},
+  {"task_id":"T06","sort_order":6,"stage":"build","title":"飛控與感測器調校","description":"認識飛控、GPS、感測器與基本調校流程。","requirements":["完成飛控與感測器基本檢查","記錄調校與安全檢查結果"],"evidence_required":["調校紀錄","設定截圖"]},
+  {"task_id":"T07","sort_order":7,"stage":"build","title":"自主航線與任務規劃","description":"使用 Mission Planner 規劃航點、自動起飛、AUTO 與 RTL 任務。","requirements":["建立一條基礎任務航線","完成任務檢查與執行紀錄"],"evidence_required":["Mission 任務航線","航線截圖","執行結果","基礎 Flight Log"]},
+  {"task_id":"T08","sort_order":8,"stage":"build","title":"無人機 3D 測繪建模","description":"完成正確空拍、照片整理、Meshroom 攝影測量與 3D 模型輸出。3D 列印為延伸選修。","requirements":["完成正確空拍與影像資料整理","使用 Meshroom 建立、檢查並匯出 3D 模型"],"evidence_required":["原始空拍照片","Meshroom 專案","3D 模型","模型截圖","測繪說明"]},
+  {"task_id":"T09","sort_order":9,"stage":"assess","title":"AI 視覺與飛行評測","description":"完成影像採集、抽幀、標註、YOLO 與四面懸停視覺評測。DataFlash Log 由教師提供。","requirements":["完成影像整理、抽幀與標註","使用 YOLO 觀察飛行位置並理解教師提供的 DataFlash Log"],"evidence_required":["Dataset","YOLO 模型","Action 5 影片","AI 初步檢測結果","教師提供的 DataFlash Log"]},
+  {"task_id":"T10","sort_order":10,"stage":"assess","title":"機器人與無人系統開發","description":"認識 ROS 2、Gazebo、無人車、LiDAR、SLAM 與多感測器融合。","requirements":["了解無人系統整合概念","認識後續進階學習方向"],"evidence_required":["學習紀錄或課程說明"]},
+  {"task_id":"T11","sort_order":11,"stage":"certify","title":"產業應用 Project Pack","description":"依專案方向完成 FPV、巡檢、農業、物流、測繪或搜救等小型驗證。","requirements":["選定產業應用情境","完成小型任務驗證與成果說明"],"evidence_required":["專案成果","任務紀錄","成果說明"]},
+  {"task_id":"T12","sort_order":12,"stage":"certify","title":"空地協同與綜合 Capstone","description":"整合 UAV、UGV、AI、ROS 2、GIS 與感測器融合，作為後續進階方向。","requirements":["理解空地協同系統整合概念","確認後續進階學習方向"],"evidence_required":["綜合學習紀錄或專案說明"]}
 ]

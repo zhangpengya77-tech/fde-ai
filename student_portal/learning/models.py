@@ -68,6 +68,8 @@ class Enrollment(models.Model):
     project_direction = models.CharField(max_length=64, null=True, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
+    teacher_verified = models.BooleanField(default=False)
+    teacher_verified_name = models.CharField(max_length=40, blank=True)
 
     class Meta:
         ordering = ["-joined_at"]

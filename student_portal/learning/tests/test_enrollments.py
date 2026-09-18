@@ -86,7 +86,7 @@ class EnrollmentWorkflowTests(TestCase):
         self.assertFalse(Enrollment.objects.filter(student=self.profile, cohort=internal_cohort).exists())
         self.assertContains(response, "這門課程目前未開放加入")
 
-    def test_teacher_can_find_registered_account_by_id_and_nickname_without_full_email(self):
+    def test_teacher_can_find_registered_account_by_id_and_nickname_with_full_email(self):
         TeacherCohortAccess.objects.create(
             teacher=get_user_model().objects.create_user(
                 username="teacher", email="teacher@example.com", password="Teacher-passphrase-984!", is_staff=True
@@ -100,8 +100,7 @@ class EnrollmentWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.profile.public_user_id)
         self.assertContains(response, "Eagle")
-        self.assertContains(response, "st***@example.com")
-        self.assertNotContains(response, "student@example.com")
+        self.assertContains(response, "student@example.com")
         self.assertContains(response, "尚未加入課程")
 
     def test_teacher_dashboard_shows_course_progress_and_scoped_details(self):

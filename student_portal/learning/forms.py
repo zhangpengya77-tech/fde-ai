@@ -7,8 +7,11 @@ from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from .models import (
+    ClassCode,
+    Enrollment,
     Evidence,
     GrowthRecordReview,
     PhaseProgress,
@@ -17,12 +20,29 @@ from .models import (
     TeacherReviewEvent,
 )
 from .services import issue_activation_code
-from .project_directions import direction_options
+from .project_directions import learner_direction_options
 
 
 class StudentRegistrationForm(forms.Form):
-    nickname = forms.CharField(label="暱稱", max_length=40)
+    nickname = forms.CharField(
+        label="姓名／暱稱",
+        max_length=40,
+        help_text="建議填寫授課教師可辨識的姓名，例如：張○亞；也可使用個人暱稱。",
+    )
     email = forms.EmailField(label="電子郵件")
+    class_code = forms.CharField(
+        label="班級代碼",
+        max_length=24,
+        required=False,
+        help_text="班級代碼請向授課教師索取。",
+        widget=forms.TextInput(attrs={"placeholder": "2026-01"}),
+    )
+    project_direction = forms.ChoiceField(
+        label="組別／專案方向",
+        choices=learner_direction_options(),
+        required=False,
+        initial="",
+    )
     password1 = forms.CharField(label="密碼", widget=forms.PasswordInput)
     password2 = forms.CharField(label="確認密碼", widget=forms.PasswordInput)
 
@@ -51,6 +71,21 @@ class StudentRegistrationForm(forms.Form):
                 self.add_error("password1", exc)
         return cleaned
 
+    def clean_class_code(self):
+        value = self.cleaned_data["class_code"].strip().upper()
+        if not value:
+            self._class_code = None
+            return value
+        code = ClassCode.objects.filter(code=value, active=True).select_related("cohort").first()
+        if code is None or not code.cohort.active:
+            raise ValidationError("班級代碼無效，請向授課教師確認。")
+        if code.expires_at and code.expires_at <= timezone.now():
+            raise ValidationError("班級代碼已過期，請向授課教師確認。")
+        if code.max_uses is not None and code.use_count >= code.max_uses:
+            raise ValidationError("班級代碼已達使用上限，請向授課教師確認。")
+        self._class_code = code
+        return value
+
     @transaction.atomic
     def create_account(self):
         user_model = get_user_model()
@@ -66,12 +101,31 @@ class StudentRegistrationForm(forms.Form):
             email=self.cleaned_data["email"],
             user=user,
         )
+        if self._class_code is not None:
+            code = ClassCode.objects.select_for_update().select_related("cohort").get(pk=self._class_code.pk)
+            enrollment, created = Enrollment.objects.get_or_create(
+                student=profile,
+                cohort=code.cohort,
+                defaults={"project_direction": self.cleaned_data.get("project_direction") or None},
+            )
+            if not created and enrollment.project_direction != (self.cleaned_data.get("project_direction") or None):
+                enrollment.project_direction = self.cleaned_data.get("project_direction") or None
+                enrollment.save(update_fields=["project_direction"])
+            code.use_count += 1
+            code.save(update_fields=["use_count"])
         issue_activation_code(user)
         return profile
 
 
 class ProjectDirectionForm(forms.Form):
-    project_direction = forms.ChoiceField(label="本期專案方向", choices=direction_options())
+    project_direction = forms.ChoiceField(label="本期專案方向", choices=learner_direction_options())
+
+
+class TeacherIdentityForm(forms.Form):
+    teacher_verified_name = forms.CharField(label="教師核實姓名", max_length=40, required=False)
+
+    def clean_teacher_verified_name(self):
+        return self.cleaned_data["teacher_verified_name"].strip()
 
 
 class StudentLoginForm(AuthenticationForm):

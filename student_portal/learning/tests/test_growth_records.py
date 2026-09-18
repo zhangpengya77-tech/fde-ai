@@ -202,7 +202,7 @@ class GrowthRecordFoundationTests(TestCase):
         response = self.client.get(f"/student/courses/{self.enrollment.pk}/growth/R01/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "證照題庫學習記錄")
+        self.assertContains(response, "無人機基礎認知")
         self.assertContains(response, "已上傳 0 / 5")
         self.assertContains(response, 'accept="image/*"')
         self.assertContains(response, "multiple")

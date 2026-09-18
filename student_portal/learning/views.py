@@ -42,6 +42,7 @@ from .forms import (
     StudentPasswordResetForm,
     StudentRegistrationForm,
     StudentTaskProgressForm,
+    TeacherIdentityForm,
     TeacherLoginForm,
     TeacherReviewForm,
 )
@@ -66,7 +67,7 @@ from .growth_records import ensure_growth_submissions
 from .project_directions import (
     direction_content,
     direction_label,
-    direction_options,
+    learner_direction_options,
     student_status_label,
     task_display_id,
     task_status_label,
@@ -502,7 +503,7 @@ def student_course_dashboard(request, enrollment_id):
                 item.status in GROWTH_REVIEWED_STATUSES for item in growth_submissions
             ),
             "growth_record_count": len(growth_submissions),
-            "direction_options": direction_options(),
+            "direction_options": learner_direction_options(),
             "direction_content": direction_content(enrollment, "R06"),
         },
     )
@@ -936,6 +937,8 @@ def teacher_dashboard(request):
                     "skipped_count": 0,
                     "group": None,
                     "project_direction_label": "尚未選擇",
+                    "teacher_verified": False,
+                    "teacher_verified_name": "",
                     "growth_submitted_count": 0,
                     "growth_reviewed_count": 0,
                     "growth_pending_count": 0,
@@ -994,6 +997,8 @@ def teacher_dashboard(request):
                     "email_masked": mask_email(profile.email),
                     "group": enrollment.group,
                     "project_direction_label": direction_label(enrollment.project_direction),
+                    "teacher_verified": enrollment.teacher_verified,
+                    "teacher_verified_name": enrollment.teacher_verified_name,
                     "reviewed_count": sum(item.status == StudentTaskProgress.Status.REVIEWED for item in items),
                     "total_count": len(items),
                     "submitted_count": sum(item.status == StudentTaskProgress.Status.SUBMITTED for item in items),
@@ -1055,14 +1060,46 @@ def teacher_student_detail(request, enrollment_id):
         {
             "profile": enrollment.student,
             "enrollment": enrollment,
+            "email": enrollment.student.email,
             "email_masked": mask_email(enrollment.student.email),
             "progress": progress,
             "phases": ordered_phase_progress(enrollment),
             "growth_records": growth_records,
             "project_direction_label": direction_label(enrollment.project_direction),
-            "project_direction_options": direction_options(),
+            "project_direction_options": learner_direction_options(),
         },
     )
+
+
+@teacher_required
+@require_POST
+def teacher_toggle_verified(request, enrollment_id):
+    enrollment = get_object_or_404(
+        Enrollment.objects.filter(cohort__in=teacher_cohorts(request.user)),
+        pk=enrollment_id,
+        active=True,
+    )
+    enrollment.teacher_verified = not enrollment.teacher_verified
+    enrollment.save(update_fields=["teacher_verified"])
+    return redirect(request.POST.get("next") or "learning:teacher_dashboard")
+
+
+@teacher_required
+@require_POST
+def teacher_save_identity(request, enrollment_id):
+    enrollment = get_object_or_404(
+        Enrollment.objects.filter(cohort__in=teacher_cohorts(request.user)),
+        pk=enrollment_id,
+        active=True,
+    )
+    form = TeacherIdentityForm(request.POST)
+    if form.is_valid():
+        enrollment.teacher_verified_name = form.cleaned_data["teacher_verified_name"]
+        enrollment.save(update_fields=["teacher_verified_name"])
+        messages.success(request, "教師核實姓名已保存。")
+    else:
+        messages.error(request, "身份資料無效，未保存變更。")
+    return redirect("learning:teacher_student_detail", enrollment_id=enrollment.pk)
 
 
 @teacher_required
