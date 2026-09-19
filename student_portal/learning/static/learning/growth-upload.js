@@ -259,6 +259,7 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
           result = null;
         }
         if (result?.ok) {
+          const hadVideo = Boolean(stagedVideo);
           stagedFiles.length = 0;
           stagedPhotos.length = 0;
           stagedVideo = null;
@@ -268,7 +269,13 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
           previewUrls.forEach((url) => URL.revokeObjectURL(url));
           previewUrls.clear();
           renderStagedDocuments();
-          window.location.reload();
+          if (hadVideo && status) status.textContent = "影片已完成。";
+          if (hadVideo && videoStatus) videoStatus.textContent = "影片已完成。";
+          if (hadVideo) {
+            window.setTimeout(() => window.location.reload(), 350);
+          } else {
+            window.location.reload();
+          }
           return;
         }
       }

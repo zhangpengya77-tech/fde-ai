@@ -18,9 +18,10 @@
   {% for row in records %}
   <article class="growth-card">
     <div class="growth-card-heading"><span class="growth-slot">{{ row.submission.definition.slot_id }}</span><span class="status status-{{ row.submission.status }}">{{ row.status_label }}</span></div>
-    <h2>{{ row.content.title|default:row.submission.definition.title }}</h2>
+    <h2>{{ row.display_title }}</h2>
+    {% if row.content.title and row.content.title != row.display_title %}<p class="eyebrow">{{ row.content.title }}</p>{% endif %}
     {% if row.content.subtitle %}<p class="eyebrow">{{ row.content.subtitle }}</p>{% endif %}
-    <p>{{ row.content.learning_goal|default:row.submission.definition.description }}</p>
+    {% if row.overview_description %}<p>{{ row.overview_description }}</p>{% elif row.content %}<p>{{ row.content.learning_goal }}</p>{% else %}<p>{{ row.submission.definition.description }}</p>{% endif %}
     {% if row.content.what_to_do %}<p><strong>我要做：</strong>{{ row.content.what_to_do|join:'、' }}</p>{% endif %}
     {% if row.content.deliverables %}<p><strong>我要留下：</strong>{{ row.content.deliverables|join:'、' }}</p>{% endif %}
     {% if row.content.optional.3d_printing %}<p class="notice"><strong>延伸選修：</strong>3D列印／數位製造，不影響主要測繪完成狀態。</p>{% endif %}

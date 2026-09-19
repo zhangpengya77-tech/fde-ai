@@ -14,3 +14,12 @@ node_modules/
 private-config*
 *.key
 *.pem
+db.sqlite3
+media/
+private_media/
+backup/
+student_portal/media/
+student_portal/private_media/
+student_portal/backup/
+.test-temp/
+student_portal/.test-temp/

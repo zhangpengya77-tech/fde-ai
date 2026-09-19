@@ -23,6 +23,16 @@ from .services import issue_activation_code
 from .project_directions import learner_direction_options
 
 
+REGISTRATION_CLASS_CODES = (
+    ("2026-01", "2026-01"),
+    ("2026-02", "2026-02"),
+    ("2026-03", "2026-03"),
+    ("2026-04", "2026-04"),
+    ("2026-05", "2026-05"),
+    ("2026-06", "2026-06"),
+)
+
+
 class StudentRegistrationForm(forms.Form):
     nickname = forms.CharField(
         label="姓名／暱稱",
@@ -30,12 +40,16 @@ class StudentRegistrationForm(forms.Form):
         help_text="建議填寫授課教師可辨識的姓名，例如：張○亞；也可使用個人暱稱。",
     )
     email = forms.EmailField(label="電子郵件")
-    class_code = forms.CharField(
+    class_code = forms.ChoiceField(
         label="班級代碼",
-        max_length=24,
-        required=False,
-        help_text="班級代碼請向授課教師索取。",
-        widget=forms.TextInput(attrs={"placeholder": "2026-01"}),
+        choices=REGISTRATION_CLASS_CODES,
+        initial="2026-01",
+        help_text="請依教師指示選擇本期班級代碼。",
+    )
+    training_source = forms.ChoiceField(
+        label="班型來源",
+        choices=[("", "請選擇班型來源"), *Enrollment.TrainingSource.choices],
+        required=True,
     )
     project_direction = forms.ChoiceField(
         label="組別／專案方向",
@@ -106,11 +120,21 @@ class StudentRegistrationForm(forms.Form):
             enrollment, created = Enrollment.objects.get_or_create(
                 student=profile,
                 cohort=code.cohort,
-                defaults={"project_direction": self.cleaned_data.get("project_direction") or None},
+                defaults={
+                    "project_direction": self.cleaned_data.get("project_direction") or None,
+                    "training_source": self.cleaned_data["training_source"],
+                },
             )
-            if not created and enrollment.project_direction != (self.cleaned_data.get("project_direction") or None):
-                enrollment.project_direction = self.cleaned_data.get("project_direction") or None
-                enrollment.save(update_fields=["project_direction"])
+            updates = {}
+            project_direction = self.cleaned_data.get("project_direction") or None
+            if not created and enrollment.project_direction != project_direction:
+                enrollment.project_direction = project_direction
+                updates["project_direction"] = project_direction
+            if not created and enrollment.training_source != self.cleaned_data["training_source"]:
+                enrollment.training_source = self.cleaned_data["training_source"]
+                updates["training_source"] = self.cleaned_data["training_source"]
+            if updates:
+                enrollment.save(update_fields=list(updates))
             code.use_count += 1
             code.save(update_fields=["use_count"])
         issue_activation_code(user)

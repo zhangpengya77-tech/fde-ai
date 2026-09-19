@@ -75,6 +75,7 @@ class GrowthVideoProcessorTests(SimpleTestCase):
                     self.assertEqual(processed.processed_metadata["format"], "MP4")
                     self.assertEqual(processed.processed_metadata["video_codec"], "h264")
                     self.assertEqual(processed.processed_metadata["audio_codec"], "aac")
+                    self.assertAlmostEqual(processed.processed_metadata["fps"], 30, delta=0.1)
                     self.assertLessEqual(processed.processed_metadata["width"], 1280)
                     self.assertLessEqual(processed.processed_metadata["height"], 720)
                 finally:
@@ -82,7 +83,7 @@ class GrowthVideoProcessorTests(SimpleTestCase):
                     processed.cleanup()
                 self.assertFalse(output_path.exists())
 
-    def test_large_and_high_frame_rate_video_is_scaled_and_capped(self):
+    def test_large_and_high_frame_rate_video_is_scaled_to_720p_and_30fps(self):
         with TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "portrait.mp4"
             create_video_file(source, size="1440x2560", rate=60)
@@ -92,7 +93,7 @@ class GrowthVideoProcessorTests(SimpleTestCase):
                 self.assertEqual(metadata["height"], 720)
                 self.assertGreaterEqual(metadata["width"], 400)
                 self.assertLessEqual(metadata["width"], 410)
-                self.assertLessEqual(metadata["fps"], 30.01)
+                self.assertAlmostEqual(metadata["fps"], 30, delta=0.1)
             finally:
                 processed.cleanup()
 
@@ -142,6 +143,17 @@ class GrowthVideoProcessorTests(SimpleTestCase):
                 with self.assertRaises(VideoProcessingError) as raised:
                     process_growth_video(uploaded_video(source))
             self.assertIn("檔案過大", str(raised.exception))
+
+    def test_two_minute_source_is_accepted_and_trimmed_to_thirty_seconds(self):
+        with TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "two-minute.mp4"
+            create_video_file(source, duration=120, size="160x90", rate=1, audio=False)
+            processed = process_growth_video(uploaded_video(source))
+            try:
+                self.assertLessEqual(processed.processed_metadata["duration"], 30.01)
+                self.assertAlmostEqual(processed.processed_metadata["fps"], 30, delta=0.1)
+            finally:
+                processed.cleanup()
 
     def test_missing_ffmpeg_is_reported_as_a_friendly_error(self):
         with patch("learning.growth_video.shutil.which", return_value=None):
@@ -203,13 +215,41 @@ class GrowthVideoViewTests(TestCase):
             self.assertContains(refreshed, "video")
             self.assertContains(refreshed, "controls")
 
-    def test_r01_rejects_video_without_creating_video_evidence(self):
+    def test_r01_video_can_be_submitted_without_a_photo(self):
+        with TemporaryDirectory() as media_dir, TemporaryDirectory() as temp_dir, override_settings(MEDIA_ROOT=media_dir):
+            source = Path(temp_dir) / "r01.mp4"
+            create_video_file(source, audio=False)
+            response = self.client.post(
+                reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R01"]),
+                {"action": "submit_review", "video": uploaded_video(source)},
+            )
+
+            self.assertEqual(response.status_code, 302)
+            submission = GrowthRecordSubmission.objects.get(
+                enrollment=self.enrollment, definition__slot_id="R01"
+            )
+            self.assertEqual(submission.status, GrowthRecordSubmission.Status.SUBMITTED)
+            self.assertTrue(
+                Evidence.objects.filter(
+                    growth_submission=submission, evidence_type=Evidence.Type.VIDEO
+                ).exists()
+            )
+
+    def test_all_growth_records_expose_video_upload(self):
+        for slot_id in (f"R{index:02d}" for index in range(1, 9)):
+            with self.subTest(slot_id=slot_id):
+                page = self.client.get(
+                    reverse("learning:growth_record_detail", args=[self.enrollment.pk, slot_id])
+                )
+                self.assertContains(page, 'data-growth-video=""')
+
+    def test_r01_rejects_corrupt_video_without_creating_video_evidence(self):
         response = self.client.post(
             reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R01"]),
             {"action": "save_draft", "video": uploaded_video(Path(__file__))},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "影片只開放於 R07、R08")
+        self.assertContains(response, "影片格式無效")
         self.assertFalse(Evidence.objects.filter(evidence_type=Evidence.Type.VIDEO).exists())
 
     def test_submitted_r07_cannot_replace_existing_video(self):

@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from learning.models import ClassCode, Cohort, Enrollment, StudentProfile, TeacherCohortAccess
+from learning.forms import StudentRegistrationForm
 from learning.tests.helpers import create_student_account
 
 
@@ -27,6 +28,7 @@ class RegistrationProfileTests(TestCase):
                 "nickname": "課堂學員",
                 "email": "classroom@example.com",
                 "class_code": "2026-01",
+                "training_source": "in_service",
                 "project_direction": "flight_f450",
                 "password1": self.password,
                 "password2": self.password,
@@ -51,6 +53,7 @@ class RegistrationProfileTests(TestCase):
                 "nickname": "Changed",
                 "email": profile.email,
                 "class_code": "2026-01",
+                "training_source": "in_service",
                 "project_direction": "flight_f450",
                 "password1": self.password,
                 "password2": self.password,
@@ -115,11 +118,75 @@ class RegistrationProfileTests(TestCase):
                 "nickname": "No Class",
                 "email": "no-class@example.com",
                 "class_code": "9999-99",
+                "training_source": "in_service",
                 "project_direction": "",
                 "password1": self.password,
                 "password2": self.password,
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "班級代碼無效")
+        self.assertContains(response, "不是一個可用的選項")
         self.assertFalse(StudentProfile.objects.filter(email="no-class@example.com").exists())
+
+    def test_registration_class_code_is_a_fixed_select_with_2026_default(self):
+        form = StudentRegistrationForm()
+
+        self.assertEqual(form.fields["class_code"].initial, "2026-01")
+        self.assertEqual(
+            [value for value, _label in form.fields["class_code"].choices],
+            ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"],
+        )
+        self.assertTrue(form.fields["class_code"].required)
+        self.assertEqual(form.fields["class_code"].help_text, "請依教師指示選擇本期班級代碼。")
+
+    def test_all_2026_registration_class_codes_are_backend_valid(self):
+        for code in ("2026-02", "2026-03", "2026-04", "2026-05", "2026-06"):
+            cohort = Cohort.objects.create(cohort_id=code, name=f"{code} 班")
+            ClassCode.objects.create(code=code, cohort=cohort)
+
+        for index, code in enumerate(("2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06")):
+            form = StudentRegistrationForm(
+                data={
+                    "nickname": f"班級 {code}",
+                    "email": f"class-{index}@example.com",
+                    "class_code": code,
+                    "training_source": "in_service",
+                    "project_direction": "",
+                    "password1": self.password,
+                    "password2": self.password,
+                }
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+
+    def test_registration_requires_training_source_and_saves_it_on_enrollment(self):
+        form = StudentRegistrationForm()
+        self.assertEqual(form.fields["training_source"].initial, None)
+        self.assertTrue(form.fields["training_source"].required)
+        self.assertEqual(
+            list(form.fields["training_source"].choices),
+            [
+                ("", "請選擇班型來源"),
+                ("pre_employment", "職前培訓"),
+                ("in_service", "在職培訓"),
+                ("college", "大中專院校"),
+                ("other", "其他"),
+            ],
+        )
+
+        data = {
+            "nickname": "班型測試",
+            "email": "training-source@example.com",
+            "class_code": "2026-01",
+            "training_source": "college",
+            "project_direction": "",
+            "password1": self.password,
+            "password2": self.password,
+        }
+        form = StudentRegistrationForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        profile = form.create_account()
+        self.assertEqual(profile.enrollments.get().training_source, "college")
+
+        data["email"] = "training-source-missing@example.com"
+        data["training_source"] = ""
+        self.assertFalse(StudentRegistrationForm(data=data).is_valid())

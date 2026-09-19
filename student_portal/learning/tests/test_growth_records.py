@@ -214,7 +214,7 @@ class GrowthRecordFoundationTests(TestCase):
         self.assertContains(response, 'data-growth-photo-list')
         self.assertContains(response, 'data-growth-photo-count')
         self.assertContains(response, 'data-growth-saved-photo-list')
-        self.assertContains(response, "/static/learning/growth-upload.js?v=staged-files-1")
+        self.assertContains(response, "/static/learning/growth-upload.js?v=staged-files-2")
         self.assertContains(response, "/static/learning/growth-records.css?v=growth-video-3")
         self.assertNotContains(response, "growth-photo-queue.js")
         self.assertContains(response, "這次我要完成什麼")
@@ -656,7 +656,7 @@ class GrowthRecordFoundationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "請先上傳至少一張圖片")
+        self.assertContains(response, "請先上傳至少一張照片或一段影片")
 
     def test_photo_can_be_submitted_and_cannot_be_deleted_after_submission(self):
         with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):

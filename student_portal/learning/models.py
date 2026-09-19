@@ -60,12 +60,24 @@ class LearningGroup(models.Model):
 
 
 class Enrollment(models.Model):
+    class TrainingSource(models.TextChoices):
+        PRE_EMPLOYMENT = "pre_employment", "職前培訓"
+        IN_SERVICE = "in_service", "在職培訓"
+        COLLEGE = "college", "大中專院校"
+        OTHER = "other", "其他"
+
     student = models.ForeignKey("StudentProfile", on_delete=models.CASCADE, related_name="enrollments")
     cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="enrollments")
     group = models.ForeignKey(
         LearningGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="enrollments"
     )
     project_direction = models.CharField(max_length=64, null=True, blank=True)
+    training_source = models.CharField(
+        max_length=20,
+        choices=TrainingSource.choices,
+        null=True,
+        blank=True,
+    )
     joined_at = models.DateTimeField(auto_now_add=True)
     active = models.BooleanField(default=True)
     teacher_verified = models.BooleanField(default=False)

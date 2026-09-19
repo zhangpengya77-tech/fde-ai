@@ -23,8 +23,10 @@
 </article>{% empty %}<p class="empty-state">任務尚未初始化。</p>{% endfor %}
 </div></section>{% endif %}
 <section class="section-block" id="growth-records"><h2>R01～R08 詳細教師複核</h2><div class="teacher-task-list">
-{% for record in growth_records %}<article class="teacher-task"><div class="section-heading"><div><span class="eyebrow">{{ record.definition.slot_id }}</span><h3>{{ record.definition.title }}</h3></div><span class="status status-{{ record.status }}">{{ record.get_status_display }}</span></div>
-  <p>{{ record.definition.description }}</p>
+{% for record in growth_records %}<article class="teacher-task"><div class="section-heading"><div><span class="eyebrow">{{ record.definition.slot_id }}</span><h3>{{ record.definition.title }}</h3>{% if record.display_content.title and record.display_content.title != record.definition.title %}<p class="eyebrow">{{ record.display_content.title }}</p>{% endif %}</div><span class="status status-{{ record.status }}">{{ record.get_status_display }}</span></div>
+  <p>{% if record.display_content %}{{ record.display_content.learning_goal }}{% else %}{{ record.definition.description }}{% endif %}</p>
+  {% if record.display_content.what_to_do %}<p><strong>任務內容：</strong>{{ record.display_content.what_to_do|join:'、' }}</p>{% endif %}
+  {% if record.display_content.deliverables %}<p><strong>提交成果：</strong>{{ record.display_content.deliverables|join:'、' }}</p>{% endif %}
   {% if record.student_note %}<p>學員備註：{{ record.student_note|linebreaksbr }}</p>{% endif %}
   {% if record.learning_summary %}<p>本期學習總結：{{ record.learning_summary|linebreaksbr }}</p>{% endif %}
   <p class="muted">{% if record.submitted_at %}提交時間：{{ record.submitted_at|date:'Y-m-d H:i' }}{% else %}尚未提交{% endif %}</p>

@@ -67,6 +67,7 @@ from .growth_records import ensure_growth_submissions
 from .project_directions import (
     direction_content,
     direction_label,
+    direction_overview,
     learner_direction_options,
     student_status_label,
     task_display_id,
@@ -504,7 +505,8 @@ def student_course_dashboard(request, enrollment_id):
             ),
             "growth_record_count": len(growth_submissions),
             "direction_options": learner_direction_options(),
-            "direction_content": direction_content(enrollment, "R06"),
+            "direction_content": direction_content(enrollment, "R07"),
+            "direction_overview": direction_overview(),
         },
     )
 
@@ -534,7 +536,9 @@ def student_growth_dashboard(request, enrollment_id):
     records = [
         {
             "submission": submission,
-            "content": direction_content(enrollment, submission.definition.slot_id),
+            "display_title": "鷹眼 AI 目標檢測" if submission.definition.slot_id == "R06" else submission.definition.title,
+            "content": None if submission.definition.slot_id == "R07" else direction_content(enrollment, submission.definition.slot_id),
+            "overview_description": "依專業方向完成本期行業應用任務驗證。" if submission.definition.slot_id == "R07" else "",
             "status_label": student_status_label(submission.status),
             "image_count": submission.evidence.filter(evidence_type=Evidence.Type.IMAGE).count(),
         }
@@ -575,7 +579,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
     images = submission.evidence.filter(evidence_type=Evidence.Type.IMAGE).order_by("created_at")
     videos = submission.evidence.filter(evidence_type=Evidence.Type.VIDEO).order_by("created_at")
     documents = submission.evidence.filter(evidence_type=Evidence.Type.FILE).order_by("created_at")
-    video_allowed = submission.definition.slot_id in {"R07", "R08"}
+    video_allowed = submission.definition.slot_id in {f"R0{index}" for index in range(1, 9)}
     document_allowed = submission.definition.slot_id in {"R07", "R08"}
     editable = submission.status in {
         GrowthRecordSubmission.Status.NOT_STARTED,
@@ -599,8 +603,6 @@ def growth_record_detail(request, enrollment_id, slot_id):
             is_summary = submission.definition.slot_id == "R08"
             if len(uploaded_videos) > 1:
                 form.add_error("video", "每項成長記錄最多上傳1段影片。")
-            elif new_video and not video_allowed:
-                form.add_error(None, "影片只開放於 R07、R08 成長記錄。")
             elif new_documents and not document_allowed:
                 form.add_error(None, "成果檔案只開放於 R07、R08 成長記錄。")
             elif action not in {"save_draft", "submit_review"}:
@@ -614,7 +616,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
                 if is_summary:
                     form.add_error(None, "請先上傳至少一項照片、影片或成果檔案，再提交教師複核。")
                 else:
-                    form.add_error("images", "請先上傳至少一張圖片，再提交教師複核。")
+                    form.add_error("images", "請先上傳至少一張照片或一段影片，再提交教師複核。")
 
             processed_images = []
             processed_video = None
@@ -733,6 +735,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "enrollment": enrollment,
             "submission": submission,
             "definition": submission.definition,
+            "display_title": "鷹眼 AI 目標檢測" if submission.definition.slot_id == "R06" else submission.definition.title,
             "images": images,
             "videos": videos,
             "documents": documents,
@@ -744,6 +747,9 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "is_summary": submission.definition.slot_id == "R08",
             "latest_review": latest_review,
             "direction_content": direction_content(enrollment, submission.definition.slot_id),
+            "direction_label": direction_label(enrollment.project_direction),
+            "direction_overview": direction_overview(),
+            "content_override": submission.definition.slot_id in {"R06", "R07", "R08"},
             "status_label": student_status_label(submission.status),
         },
     )
@@ -767,7 +773,7 @@ def growth_evidence_delete(request, enrollment_id, slot_id, evidence_id):
     }:
         messages.error(request, "只有尚未提交或教師要求補充的照片可以刪除。")
         return redirect("learning:growth_record_detail", enrollment_id=enrollment.pk, slot_id=slot_id)
-    allowed_types = [Evidence.Type.IMAGE]
+    allowed_types = [Evidence.Type.IMAGE, Evidence.Type.VIDEO]
     if submission.definition.slot_id in {"R07", "R08"}:
         allowed_types.extend([Evidence.Type.VIDEO, Evidence.Type.FILE])
     evidence = get_object_or_404(
@@ -936,6 +942,7 @@ def teacher_dashboard(request):
                     "incomplete_count": 0,
                     "skipped_count": 0,
                     "group": None,
+                    "training_source_label": "尚未選擇",
                     "project_direction_label": "尚未選擇",
                     "teacher_verified": False,
                     "teacher_verified_name": "",
@@ -996,6 +1003,7 @@ def teacher_dashboard(request):
                     "student": profile,
                     "email_masked": mask_email(profile.email),
                     "group": enrollment.group,
+                    "training_source_label": enrollment.get_training_source_display() or "尚未選擇",
                     "project_direction_label": direction_label(enrollment.project_direction),
                     "teacher_verified": enrollment.teacher_verified,
                     "teacher_verified_name": enrollment.teacher_verified_name,
@@ -1054,6 +1062,10 @@ def teacher_student_detail(request, enrollment_id):
     for record in growth_records:
         review_history = list(record.reviews.all())
         record.latest_review = review_history[0] if review_history else None
+        if record.definition.slot_id in {"R06", "R07", "R08"}:
+            record.display_content = direction_content(enrollment, record.definition.slot_id)
+        else:
+            record.display_content = None
     return render(
         request,
         "learning/teacher_student_detail.html",

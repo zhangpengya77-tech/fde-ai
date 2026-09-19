@@ -37,6 +37,19 @@ def direction_options():
     return [(key, config[key]["title"]) for key in direction_keys()]
 
 
+def direction_overview():
+    config = load_project_directions()
+    return [
+        {
+            "prefix": chr(65 + index),
+            "key": key,
+            "label": config[key]["title"],
+            "summary": config[key]["R07"]["learning_goal"],
+        }
+        for index, key in enumerate(config["direction_keys"])
+    ]
+
+
 def learner_direction_options():
     return [
         *direction_options(),
@@ -54,7 +67,7 @@ def direction_label(key):
 
 def direction_content(enrollment, slot_id):
     config = load_project_directions()
-    if slot_id in {f"R{i:02d}" for i in range(1, 6)}:
+    if slot_id in {"R01", "R02", "R03", "R04", "R05", "R06", "R08"}:
         return next(item for item in config["shared_growth_records"] if item["slot_id"] == slot_id)
     if enrollment.project_direction in direction_keys():
         return config[enrollment.project_direction].get(slot_id)
