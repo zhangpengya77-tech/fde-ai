@@ -3,34 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FDE-AI | 無人載具學習控制中心</title>
+    <title>FDE-AI-UAS | 無人載具學習平台</title>
     <link rel="stylesheet" href="./src/styles.css?v=1.2-fde-column" />
   </head>
   <body class="home-view">
+    <header class="fde-public-bar" aria-label="FDE-AI v1.5B 動態入口">
+      <a href="https://fde-ai-gateway.fde-ai-gateway.workers.dev/login/">學員登入</a>
+      <a href="https://fde-ai-gateway.fde-ai-gateway.workers.dev/register/">學員註冊</a>
+      <a href="https://fde-ai-gateway.fde-ai-gateway.workers.dev/student/growth/">我的學習成長日誌</a>
+      <a href="https://fde-ai-gateway.fde-ai-gateway.workers.dev/teacher/login/">教師入口</a>
+    </header>
     <aside class="sidebar">
       <a class="brand" href="./" aria-label="FDE-AI home">
         <span class="brand-mark">FDE</span>
         <span>
           <strong>FDE-AI</strong>
-          <small>Learning Control Center</small>
+        <small>無人載具學習平台</small>
         </span>
       </a>
       <nav class="nav" id="moduleNav" aria-label="Main navigation"></nav>
       <div class="sidebar-foot">
-        <span>v1.1 MVP</span>
+        <span>FDE-AI v1.5B</span>
         <small>AI 雙師教學系統</small>
       </div>
     </aside>
 
     <nav class="mobile-demo-nav" aria-label="Mobile demo navigation">
-      <strong>FDE-AI 手機展示</strong>
+      <strong>FDE-AI 公開平台</strong>
       <div>
         <a href="./">首頁</a>
         <a href="./tasks">12 任務</a>
-        <a href="./courses">學練作測證</a>
-        <a href="./f450">AI 雙師</a>
-        <a href="./eagle">AI 檢測</a>
-        <a href="./results">成果 / 聯絡</a>
+        <a href="./courses">學</a>
+        <a href="./simulator">練</a>
+        <a href="./f450">作</a>
+        <a href="./eagle">測</a>
+        <a href="./github">證</a>
+        <a href="./results">歷屆學員成果</a>
+        <a href="./teacher">教師復核參照</a>
       </div>
     </nav>
 
@@ -67,15 +76,18 @@
         <div class="section-intro">
           <p class="eyebrow">Mobile Demo Mode</p>
           <h2>三分鐘看懂 FDE-AI</h2>
-          <p>手機展示優先呈現首頁、四階段 12 任務、學練作測證、AI 雙師、AI 檢測 Demo 與成果聯絡入口。</p>
+          <p>手機展示依照首頁、12 任務、學練作測證、歷屆學員成果與教師復核參照的电脑版結構排列。</p>
         </div>
         <div class="mobile-demo-grid">
-          <a href="./tasks"><span>01</span><strong>四階段 12 任務</strong><small>Explore / Build / AI / Project</small></a>
-          <a href="./courses"><span>02</span><strong>學練作測證</strong><small>每個任務都用同一套流程完成</small></a>
-          <a href="./f450"><span>03</span><strong>AI 雙師助教</strong><small>只查本機 RAG 教材知識庫</small></a>
-          <a href="./eagle"><span>04</span><strong>AI 檢測 Demo</strong><small>組裝檢測與四面懸停評分入口</small></a>
-          <a href="./results"><span>05</span><strong>YouTube 成果</strong><small>展示歷屆學員影片與作品</small></a>
-          <a href="./github"><span>06</span><strong>GitHub 存證</strong><small>把作品整理成可驗證能力紀錄</small></a>
+          <a href="./"><span>01</span><strong>首頁</strong><small>FDE-AI 無人載具學習平台</small></a>
+          <a href="./tasks"><span>02</span><strong>12 任務</strong><small>四階段成長地圖</small></a>
+          <a href="./courses"><span>03</span><strong>學</strong><small>課程影片與學習資源</small></a>
+          <a href="./simulator"><span>04</span><strong>練</strong><small>模擬器與考照練習</small></a>
+          <a href="./f450"><span>05</span><strong>作</strong><small>F450、AI 助教與專案實作</small></a>
+          <a href="./eagle"><span>06</span><strong>測</strong><small>鷹眼 AI 檢測中心</small></a>
+          <a href="./github"><span>07</span><strong>證</strong><small>GitHub 成果存證</small></a>
+          <a href="./results"><span>08</span><strong>歷屆學員成果</strong><small>展示歷屆學員影片與作品</small></a>
+          <a href="./teacher"><span>09</span><strong>教師復核參照</strong><small>查看教師複核流程與示例</small></a>
         </div>
       </section>
 
@@ -118,7 +130,7 @@
 
       <section class="section-block module-page" id="missions">
         <div class="section-intro">
-          <p class="eyebrow">Mission Map · v1.1</p>
+          <p class="eyebrow">12 任務成長地圖</p>
           <h2>四階段 × 12 任務成長地圖</h2>
           <p>12 個任務分布在四個階段，依序完成每個階段的任務。</p>
         </div>
@@ -193,22 +205,24 @@
                 <small>回答依目前啟用的 F450 V1 知識庫；未取得可靠回答時會提示稍後再試。</small>
               </div>
               <div class="voice-controls">
-                <button class="secondary-action" id="voiceStartButton" type="button">開始語音提問</button>
-                <button class="secondary-action" id="voiceStopButton" type="button" disabled>停止</button>
+                <button class="secondary-action" id="voiceStartButton" type="button">按住說話</button>
+                <button class="secondary-action" id="voiceStopButton" type="button" disabled hidden>正在聽…放開送出</button>
                 <button class="secondary-action" id="voicePauseButton" type="button" disabled>暫停播報</button>
               </div>
-              <p id="voiceStatus">待命：按一下開始語音提問</p>
+              <p id="voiceStatus">待命：按住說話，放開後送出</p>
             </div>
             <div class="upload-row">
               <label>
                 <span>照片</span>
-                <input type="file" accept="image/*" />
+                <input type="file" id="assistantImageInput" accept="image/*" capture="environment" />
               </label>
               <label>
                 <span>30 秒影片</span>
-                <input type="file" accept="video/*" />
+                <input type="file" id="assistantVideoInput" accept="video/*" capture="environment" />
               </label>
             </div>
+            <p class="upload-status" data-assistant-upload-status aria-live="polite"></p>
+            <div class="assistant-media-preview" data-assistant-media-preview hidden></div>
             <button class="primary-action button" id="assistantButton">詢問 AI 助教</button>
             <div class="result" id="assistantResult"></div>
           </div>
@@ -282,9 +296,10 @@
     </main>
 
     <script src="./src/router.js?v=1.2-fde-column"></script>
-    <script src="./src/platform-browser.js?v=1.2-rag-api"></script>
+    <script src="./src/course-definitions.js?v=1.5b-course-sync"></script>
+    <script src="./src/platform-browser.js?v=1.5b-course-sync"></script>
     <script src="./src/data/fdeVideos.js?v=1.2-fde-column-suffix"></script>
-    <script src="./src/fde-column.js?v=1.2-fde-column"></script>
+    <script src="./src/fde-column.js?v=1.2-fde-column-tags"></script>
     <script>
       document.write('<script src="./src/rag-config.js?v=' + Date.now() + '"><\/script>');
     </script>

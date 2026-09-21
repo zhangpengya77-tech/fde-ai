@@ -2374,6 +2374,15 @@ textarea {
     display: none;
   }
 
+  /* v1.5B teacher reference route must remain visible on desktop. */
+  body[data-route="teacher"] #teacher {
+    display: block;
+  }
+
+  body[data-route="teacher"] .teacher-queue {
+    display: grid;
+  }
+
   .platform-modes-section,
   .dashboard-page,
   .teacher-queue,
@@ -2633,5 +2642,34 @@ body.fde-column-view main {
 
   .fde-video-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+.fde-public-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 17, 31, 0.96);
+}
+
+.fde-public-bar a {
+  color: #9fe8ff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.fde-public-bar a:hover,
+.fde-public-bar a:focus-visible {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+@media (max-width: 680px) {
+  .fde-public-bar {
+    justify-content: flex-start;
+    gap: 8px 14px;
+    padding: 10px 16px;
   }
 }

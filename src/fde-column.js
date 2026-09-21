@@ -19,7 +19,11 @@
   function filterVideos(category, videos = data.FDE_VIDEOS || []) {
     if (category === 'all') return [...videos];
     if (!Object.hasOwn(categories, category)) return [];
-    return videos.filter((video) => video.category === category);
+    const categoryLabel = categories[category].toLocaleLowerCase();
+    return videos.filter((video) => video.category === category || (video.tags || []).some((tag) => {
+      const normalizedTag = String(tag).trim().toLocaleLowerCase();
+      return normalizedTag === category.toLocaleLowerCase() || normalizedTag === categoryLabel;
+    }));
   }
 
   function getYoutubeVideoId(value) {

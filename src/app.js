@@ -29,12 +29,12 @@ const fdeVideoData = window.FdeVideoData || {};
 const fdeColumn = window.FdeColumn || {};
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
 const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
-const localVoiceEndpoint = voiceAssistant.endpoint;
 const ragConfig = window.FdeRagConfig || {};
 const ragClient = window.FdeRagClient?.createRagClient(ragConfig);
 const assistantService = ragClient && window.FdeRagClient?.createF450AssistantService(ragClient);
 let voiceRecognition = null;
 let voiceTranscript = '';
+let voiceSubmitOnEnd = false;
 let isVoicePlaybackPaused = false;
 let selectedTaskId = null;
 let activeFdeVideoFilter = 'all';
@@ -49,6 +49,24 @@ const defaultMetaContent = {
 
 function statusClass(status) {
   return String(status).toLowerCase().replaceAll(' ', '-').replaceAll('／', '-').replaceAll('_', '-');
+}
+
+const taskStatusLabels = {
+  not_started: '○ 未開始',
+  in_progress: '🟡 進行中',
+  submitted: '待教師複核',
+  needs_review: '待教師複核',
+  completed: '✅ 已完成',
+  approved: '✅ 已完成',
+  rejected: '未通過'
+};
+
+function displayTaskStatus(status) {
+  return taskStatusLabels[status] || status;
+}
+
+function displayTaskMeta(task) {
+  return task.estimatedHours ? `${task.difficulty} · ${task.estimatedHours}h` : task.difficulty;
 }
 
 function escapeHtml(value) {
@@ -278,11 +296,11 @@ function renderMissionMap() {
                   <button class="mission-card task-select ${task.id === selectedTaskId ? 'is-selected' : ''}" type="button" data-task-id="${task.id}">
                     <div class="section-head">
                       <span class="mission-code">${task.id}</span>
-                      <span class="status ${statusClass(task.status)}">${task.status}</span>
+                      <span class="status ${statusClass(task.status)}">${displayTaskStatus(task.status)}</span>
                     </div>
                     <strong>${task.title}</strong>
                     <small>${task.subtitle}</small>
-                    <span class="difficulty">${task.difficulty} · ${task.estimatedHours || '?'}h</span>
+                    <span class="difficulty">${displayTaskMeta(task)}</span>
                   </button>
                 `
               )
@@ -349,7 +367,7 @@ function renderTaskDetailLegacy(taskId) {
         </div>
         <div class="task-meta">
           <span>${task.difficulty}</span>
-          <span>${task.estimatedHours || '?'} 小時</span>
+          ${task.estimatedHours ? `<span>${task.estimatedHours} 小時</span>` : ''}
           <span>${task.suitableFor.join(' / ')}</span>
         </div>
       </div>
@@ -647,9 +665,14 @@ function toggleVoicePlayback() {
 }
 
 async function runVoiceAssistantQuestion(question) {
-  const response = await fetch(localVoiceEndpoint, {
+  const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+  const response = await fetch('/api/public/voice/ask/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {})
+    },
+    credentials: 'same-origin',
     body: JSON.stringify({ question, locale: voiceAssistant.locale })
   });
   const payload = await response.json();
@@ -1011,10 +1034,19 @@ function bindActions() {
     askAssistantFromText($('#assistantQuestion').value);
   });
 
-  $('#voiceStartButton').addEventListener('click', () => {
+  const voiceStartButton = $('#voiceStartButton');
+  const voiceStopButton = $('#voiceStopButton');
+
+  function voiceUnsupportedMessage() {
+    if (!window.isSecureContext) return '語音功能需要 HTTPS 安全連線。';
+    return voiceAssistant.statuses.unsupported || '目前瀏覽器不支援語音錄製，請使用 Safari 開啟。';
+  }
+
+  function startVoiceCapture(event) {
+    event?.preventDefault();
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      $('#voiceStatus').textContent = voiceAssistant.statuses.unsupported;
+      $('#voiceStatus').textContent = voiceUnsupportedMessage();
       return;
     }
 
@@ -1032,24 +1064,91 @@ function bindActions() {
     });
 
     voiceRecognition.addEventListener('end', () => {
-      $('#voiceStartButton').disabled = false;
-      $('#voiceStopButton').disabled = true;
+      const shouldSubmit = voiceSubmitOnEnd;
+      voiceRecognition = null;
+      voiceStartButton.disabled = false;
+      voiceStopButton.disabled = true;
+      voiceStopButton.hidden = true;
+      voiceStartButton.hidden = false;
+      if (shouldSubmit) {
+        voiceSubmitOnEnd = false;
+        askAssistantFromText($('#assistantQuestion').value || voiceTranscript);
+      }
     });
 
-    voiceRecognition.start();
-    $('#voiceStartButton').disabled = true;
-    $('#voiceStopButton').disabled = false;
-    $('#voiceStatus').textContent = voiceAssistant.statuses.listening;
-  });
-
-  $('#voiceStopButton').addEventListener('click', () => {
-    if (voiceRecognition) {
-      voiceRecognition.stop();
+    try {
+      voiceRecognition.start();
+    } catch {
       voiceRecognition = null;
+      $('#voiceStatus').textContent = '錄音失敗，請重新按住說話。';
+      return;
     }
-    $('#voiceStartButton').disabled = false;
-    $('#voiceStopButton').disabled = true;
-    askAssistantFromText($('#assistantQuestion').value || voiceTranscript);
+    voiceStartButton.disabled = true;
+    voiceStartButton.hidden = true;
+    voiceStopButton.disabled = false;
+    voiceStopButton.hidden = false;
+    $('#voiceStatus').textContent = voiceAssistant.statuses.listening;
+  }
+
+  function stopVoiceCapture(event) {
+    event?.preventDefault();
+    if (voiceRecognition && !voiceSubmitOnEnd) {
+      voiceSubmitOnEnd = true;
+      try {
+        voiceRecognition.stop();
+      } catch {
+        voiceRecognition = null;
+        voiceSubmitOnEnd = false;
+        $('#voiceStatus').textContent = '錄音失敗，請重新按住說話。';
+        return;
+      }
+      $('#voiceStatus').textContent = '正在處理語音…';
+    }
+  }
+
+  voiceStartButton.addEventListener('pointerdown', startVoiceCapture);
+  voiceStartButton.addEventListener('pointerup', stopVoiceCapture);
+  voiceStartButton.addEventListener('pointercancel', stopVoiceCapture);
+  voiceStartButton.addEventListener('lostpointercapture', stopVoiceCapture);
+  voiceStopButton.addEventListener('click', stopVoiceCapture);
+
+  const uploadStatus = $('[data-assistant-upload-status]');
+  const mediaPreview = $('[data-assistant-media-preview]');
+  const previewAssistantMedia = (input, label) => {
+    const file = input?.files?.[0];
+    if (!file || !mediaPreview) return;
+    mediaPreview.replaceChildren();
+    const preview = document.createElement(file.type.startsWith('video/') ? 'video' : 'img');
+    preview.src = URL.createObjectURL(file);
+    if (preview.tagName === 'VIDEO') {
+      preview.controls = true;
+      preview.playsInline = true;
+    }
+    preview.alt = file.name;
+    mediaPreview.append(preview);
+    mediaPreview.hidden = false;
+    if (uploadStatus) uploadStatus.textContent = `${label}已選取：${file.name}。請到學習成長日誌完成正式保存。`;
+  };
+  const uploadAssistantMedia = async (input, label, uploader, successEvent, failureEvent) => {
+    const file = input?.files?.[0];
+    if (!file) return;
+    previewAssistantMedia(input, label);
+    if (uploadStatus) uploadStatus.textContent = `${label}已選取，正在上傳…`;
+    console.info(successEvent.replace('_OK', '_START'), file.type, file.size);
+    try {
+      await uploader(file);
+      console.info(successEvent, file.type, file.size);
+      if (uploadStatus) uploadStatus.textContent = `${label}已上傳，伺服器已收到檔案。`;
+    } catch (error) {
+      console.warn(failureEvent, error.message);
+      if (uploadStatus) uploadStatus.textContent = `${label}已選取，但上傳服務目前無法回應：${error.message}`;
+    }
+  };
+  $('#assistantImageInput')?.addEventListener('change', (event) => {
+    uploadAssistantMedia(event.target, '照片', runLocalYoloDetection, 'IMAGE_UPLOAD_OK', 'IMAGE_UPLOAD_FAIL');
+  });
+  $('#assistantVideoInput')?.addEventListener('change', (event) => {
+    uploadAssistantMedia(event.target, '影片', runLocalHoverScoring, 'VIDEO_UPLOAD_OK', 'VIDEO_UPLOAD_FAIL');
   });
 
   $('#voicePauseButton').addEventListener('click', () => {
