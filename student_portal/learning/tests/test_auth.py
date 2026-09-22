@@ -13,7 +13,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from learning.models import EmailVerificationCode, StudentProfile
+from learning.models import ClassCode, Cohort, EmailVerificationCode, StudentProfile
 from learning.tests.helpers import create_student_account
 
 
@@ -21,12 +21,19 @@ from learning.tests.helpers import create_student_account
 class StudentRegistrationTests(TestCase):
     password = "A-strong-passphrase-984!"
 
+    def setUp(self):
+        self.cohort = Cohort.objects.create(cohort_id="2026-01", name="2026 第一梯")
+        ClassCode.objects.create(code="2026-01", cohort=self.cohort)
+
     def register(self, email="student@example.com", nickname="Eagle"):
         return self.client.post(
             reverse("learning:register"),
             {
                 "nickname": nickname,
                 "email": email,
+                "class_code": "2026-01",
+                "training_source": "other",
+                "project_direction": "",
                 "password1": self.password,
                 "password2": self.password,
             },
@@ -114,6 +121,9 @@ class StudentRegistrationTests(TestCase):
             {
                 "nickname": "Return Path",
                 "email": "return-path@example.com",
+                "class_code": "2026-01",
+                "training_source": "other",
+                "project_direction": "",
                 "password1": self.password,
                 "password2": self.password,
                 "next": destination,
@@ -144,6 +154,9 @@ class StudentRegistrationTests(TestCase):
             {
                 "nickname": "External Path",
                 "email": "external-path@example.com",
+                "class_code": "2026-01",
+                "training_source": "other",
+                "project_direction": "",
                 "password1": self.password,
                 "password2": self.password,
                 "next": "https://attacker.example/collect",

@@ -5,17 +5,24 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from learning.models import StudentProfile
+from learning.models import ClassCode, Cohort, StudentProfile
 
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
 class AnonymousAccountFlowTests(TestCase):
+    def setUp(self):
+        cohort = Cohort.objects.create(cohort_id="2026-01", name="2026 第一梯")
+        ClassCode.objects.create(code="2026-01", cohort=cohort)
+
     def test_registration_verification_login_opens_student_page_and_platform_remains_available(self):
         response = self.client.post(
             reverse("learning:register"),
             {
                 "nickname": "Eagle",
                 "email": "Student@Example.com",
+                "class_code": "2026-01",
+                "training_source": "other",
+                "project_direction": "",
                 "password1": "A-strong-passphrase-984!",
                 "password2": "A-strong-passphrase-984!",
             },
