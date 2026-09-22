@@ -3,6 +3,10 @@
 {% block content %}
 <section class="page-heading"><p class="eyebrow">FDE-AI v1.5 · 教師</p><h1>教師管理後台</h1><p class="muted">以 FDE ID、暱稱與完整 Email 管理課程參與和學習紀錄；教師負責任務複核。</p></section>
 <section class="section-block">
+  <div class="survey-dashboard-entry">
+    <div><p class="eyebrow">R08 · 學員回饋</p><h2>R08 學員發展調查</h2><p class="muted">查看學員學習回饋、進階方向與後續課程需求。</p></div>
+    <a class="button secondary" href="{% url 'learning:teacher_survey_dashboard' %}">查看調查分析</a>
+  </div>
   <form method="get" class="filter-bar">
     <label>班級<select name="cohort"><option value="">全部班級</option>{% for cohort in cohorts %}<option value="{{ cohort }}" {% if selected_cohort == cohort %}selected{% endif %}>{{ cohort }}</option>{% endfor %}</select></label>
     <label>任務狀態<select name="status"><option value="">全部狀態</option>{% for value,label in statuses %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>

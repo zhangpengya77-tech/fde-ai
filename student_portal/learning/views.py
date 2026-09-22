@@ -45,6 +45,12 @@ from .forms import (
     StudentRegistrationForm,
     StudentSurveyForm,
     StudentTaskProgressForm,
+    SURVEY_HELPFUL_TOPIC_CHOICES,
+    SURVEY_FUTURE_INTEREST_CHOICES,
+    SURVEY_FORMAT_CHOICES,
+    SURVEY_LICENSE_CHOICES,
+    SURVEY_PRIORITY_CHOICES,
+    SURVEY_DURATION_CHOICES,
     TeacherIdentityForm,
     TeacherLoginForm,
     TeacherReviewForm,
@@ -79,6 +85,15 @@ from .project_directions import (
 )
 from .services import issue_activation_code
 from .survey_recommendations import recommend_paths
+from .survey_analytics import (
+    PATH_INTEREST_CHOICES,
+    apply_survey_filters,
+    build_survey_analytics,
+    choice_labels,
+    contact_status,
+    contact_status_label,
+    labels_for,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -1290,6 +1305,93 @@ def teacher_student_detail(request, enrollment_id):
             "growth_records": growth_records,
             "project_direction_label": direction_label(enrollment.project_direction),
             "project_direction_options": learner_direction_options(),
+        },
+    )
+
+
+@teacher_required
+def teacher_survey_dashboard(request):
+    cohorts = teacher_cohorts(request.user)
+    selected_cohort = request.GET.get("cohort", "").strip()
+    authorized_enrollments = Enrollment.objects.filter(
+        active=True,
+        cohort__in=cohorts,
+    ).select_related("cohort", "student")
+    if selected_cohort:
+        authorized_enrollments = authorized_enrollments.filter(cohort_id=selected_cohort)
+    enrollment_list = list(authorized_enrollments)
+    surveys = list(
+        StudentSurvey.objects.filter(enrollment__in=enrollment_list)
+        .select_related("student", "enrollment__cohort")
+        .order_by("-submitted_at")
+    )
+    filtered_surveys = apply_survey_filters(surveys, request.GET)
+    analytics = build_survey_analytics(filtered_surveys)
+    completed_count = len(surveys)
+    total_count = len(enrollment_list)
+    rows = [
+        {
+            "survey": survey,
+            "status": contact_status_label(contact_status(survey)),
+            "detail_url": reverse("learning:teacher_survey_detail", args=[survey.enrollment_id]),
+        }
+        for survey in filtered_surveys
+    ]
+    analytics.update(
+        {
+            "total_students": total_count,
+            "completed_surveys": completed_count,
+            "incomplete_surveys": max(total_count - completed_count, 0),
+            "completion_rate": round(completed_count * 100 / total_count, 1) if total_count else 0,
+            "filtered_count": len(filtered_surveys),
+        }
+    )
+    return render(
+        request,
+        "learning/teacher_survey_dashboard.html",
+        {
+            "cohorts": cohorts,
+            "selected_cohort": selected_cohort,
+            "selected_filters": request.GET,
+            "analytics": analytics,
+            "rows": rows,
+            "path_interest_choices": PATH_INTEREST_CHOICES,
+            "g03_choices": StudentSurvey.AdvancedCourseIntent.choices,
+            "interest_choices": SURVEY_FUTURE_INTEREST_CHOICES,
+            "license_choices": SURVEY_LICENSE_CHOICES,
+        },
+    )
+
+
+@teacher_required
+def teacher_survey_detail(request, enrollment_id):
+    enrollment = get_object_or_404(
+        Enrollment.objects.filter(cohort__in=teacher_cohorts(request.user)).select_related("cohort", "student"),
+        pk=enrollment_id,
+        active=True,
+    )
+    survey = get_object_or_404(
+        StudentSurvey.objects.select_related("student", "enrollment__cohort"),
+        enrollment=enrollment,
+    )
+    answers = [(f"A0{index}", getattr(survey, f"a0{index}")) for index in range(1, 8)]
+    answer_labels = dict(PATH_INTEREST_CHOICES)
+    return render(
+        request,
+        "learning/teacher_survey_detail.html",
+        {
+            "survey": survey,
+            "enrollment": enrollment,
+            "answers": answers,
+            "path_interest_labels": answer_labels,
+            "contact_status": contact_status_label(contact_status(survey)),
+            "show_contact_email": contact_status(survey) == "contactable",
+            "helpful_topics": labels_for(survey.helpful_topics, SURVEY_HELPFUL_TOPIC_CHOICES),
+            "future_interests": labels_for(survey.future_interests, SURVEY_FUTURE_INTEREST_CHOICES),
+            "license_interest": labels_for(survey.license_interest, SURVEY_LICENSE_CHOICES),
+            "course_formats": labels_for(survey.course_format_preferences, SURVEY_FORMAT_CHOICES),
+            "course_priorities": labels_for(survey.course_priority_factors, SURVEY_PRIORITY_CHOICES),
+            "course_duration": dict(SURVEY_DURATION_CHOICES).get(survey.course_duration_preference, survey.course_duration_preference),
         },
     )
 

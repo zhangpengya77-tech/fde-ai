@@ -1,0 +1,13 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/teacher-survey.css' %}">{% endblock %}
+{% block title %}R08 問卷明細｜{{ survey.student.public_user_id }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_survey_dashboard' %}">返回 R08 調查分析</a>
+<section class="page-heading"><p class="eyebrow">{{ enrollment.cohort.name }} · {{ survey.student.public_user_id }}</p><h1>R08 學員發展調查明細</h1><p class="muted">提交時間：{{ survey.submitted_at|date:'Y-m-d H:i' }} · 暱稱：{{ survey.student.nickname }}</p></section>
+<section class="section-block"><h2>本期學習體驗 A01～A07</h2><div class="metric-list">{% for key,value in answers %}<div class="metric-row"><span>{{ key }}</span><strong>{{ value }} / 5</strong></div>{% endfor %}</div></section>
+<section class="section-block"><h2>B～C 學習興趣</h2><p><strong>最有幫助：</strong>{{ helpful_topics|join:'、' }}{% if survey.helpful_other %}；其他：{{ survey.helpful_other }}{% endif %}</p><p><strong>下一階段興趣：</strong>{{ future_interests|join:'、' }}</p></section>
+<section class="section-block"><h2>未來方向</h2><div class="survey-card-grid"><article class="survey-card"><h3>人才路徑</h3><p>2.0：{{ survey.get_path_20_interest_display }}</p><p>2.5：{{ survey.get_path_25_interest_display }}</p><p>3.0：{{ survey.get_path_30_interest_display }}</p></article><article class="survey-card"><h3>G03 實際進階學習意願</h3><p>{{ survey.get_advanced_course_intent_display }}</p></article></div><p><strong>技術興趣：</strong>{{ future_interests|join:'、' }}</p><p><strong>下一步：</strong>{{ survey.next_step_text|default:'未填寫' }}</p><p><strong>給 FDE-AI 的建議：</strong>{{ survey.feedback_text|default:'未填寫' }}</p></section>
+<section class="section-block"><h2>E～G 課程偏好</h2><p><strong>證照：</strong>{{ license_interest|join:'、' }}</p><p><strong>課程形式：</strong>{{ course_formats|join:'、' }}</p><p><strong>課程週期：</strong>{{ course_duration|default:'未填寫' }}</p><p><strong>重視因素：</strong>{{ course_priorities|join:'、' }}</p></section>
+<section class="section-block"><h2>聯絡狀態</h2><p>{{ contact_status }}</p>{% if show_contact_email %}<p><strong>後續聯絡 Email：</strong>{{ survey.contact_email }}</p>{% elif survey.contact_opt_in %}<p class="muted">學員願意收到資訊，但未留下聯絡 Email。</p>{% else %}<p class="muted">學員僅完成調查，未同意後續聯絡。</p>{% endif %}</section>
+{% endblock %}
