@@ -78,6 +78,7 @@ from .project_directions import (
     task_status_label,
 )
 from .services import issue_activation_code
+from .survey_recommendations import recommend_paths
 
 
 logger = logging.getLogger(__name__)
@@ -936,6 +937,31 @@ def student_survey(request, enrollment_id):
             "submission": r08_submission,
             "form": form,
             "survey": survey,
+        },
+    )
+
+
+@student_required
+def student_survey_result(request, enrollment_id):
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related("cohort", "group", "student"),
+        pk=enrollment_id,
+        student=request.student_profile,
+        active=True,
+    )
+    survey = StudentSurvey.objects.filter(enrollment=enrollment).first()
+    if survey is None:
+        return redirect("learning:student_survey", enrollment_id=enrollment.pk)
+
+    return render(
+        request,
+        "learning/student_survey_result.html",
+        {
+            "profile": request.student_profile,
+            "enrollment": enrollment,
+            "survey": survey,
+            "recommendations": recommend_paths(survey),
+            "contact_notice": survey.contact_opt_in and bool(survey.contact_email),
         },
     )
 

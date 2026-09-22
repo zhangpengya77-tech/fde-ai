@@ -1,0 +1,39 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}我的下一階段學習方向｜R08{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/student-survey.css' %}?v=phase3-1">{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:growth_record_detail' enrollment.pk 'R08' %}">返回 R08 綜合成果</a>
+<section class="page-heading survey-heading">
+  <p class="eyebrow">R08 · 我的下一階段學習方向</p>
+  <h1>調查已完成</h1>
+  <p class="muted">謝謝你的回饋。以下結果根據你選擇的學習興趣產生，僅作為下一階段學習方向參考。</p>
+  <a class="button secondary" href="{% url 'learning:student_survey' enrollment.pk %}">修改我的調查</a>
+</section>
+
+{% if recommendations %}
+  <div class="survey-result-list">
+  {% for path in recommendations %}
+    <article class="survey-result-card">
+      <p class="survey-section-label">建議方向 {{ forloop.counter }}</p>
+      <h2>{{ path.title }}</h2>
+      <p class="result-subtitle">{{ path.subtitle }}</p>
+      <h3>建議繼續探索</h3>
+      <ul class="result-topics">{% for topic in path.topics %}<li>{{ topic }}</li>{% endfor %}</ul>
+      <details class="result-reason"><summary>為什麼推薦給我？</summary><p>根據你在問卷中選擇的相關興趣：</p><ul>{% for reason in path.reasons %}<li>{{ reason }}</li>{% endfor %}</ul></details>
+    </article>
+  {% endfor %}
+  </div>
+{% else %}
+  <section class="survey-section survey-exploration">
+    <p class="survey-section-label">探索階段</p>
+    <h2>你目前還在探索階段</h2>
+    <p>可以先繼續體驗不同的無人載具任務，再決定下一階段方向。</p>
+  </section>
+{% endif %}
+
+<section class="survey-result-footer">
+  <p>這是學習方向建議，不是 AI 評分、職涯保證、錄取判定、正式報名或付費推薦。</p>
+  {% if contact_notice %}<p class="contact-notice">你已選擇接收後續進階課程資訊。</p>{% endif %}
+</section>
+{% endblock %}

@@ -119,7 +119,7 @@
   <h2 id="survey-entry-title">我的下一階段學習方向</h2>
   <p>完成這一期之後，你想把無人載具能力帶到哪裡？</p>
   <p class="muted">這份調查用於了解你的學習感受、未來技術興趣與進階學習需求，不會影響 R08 成績、教師複核或結訓結果。</p>
-  <a class="button primary" href="{% url 'learning:student_survey' enrollment.pk %}">{% if survey_exists %}查看／修改我的調查{% else %}開始填寫{% endif %}</a>
+  <a class="button primary" href="{% if survey_exists %}{% url 'learning:student_survey_result' enrollment.pk %}{% else %}{% url 'learning:student_survey' enrollment.pk %}{% endif %}">{% if survey_exists %}查看我的學習方向{% else %}開始填寫{% endif %}</a>
 </section>
 {% endif %}
 <script src="{% static 'learning/growth-upload.js' %}?v=video-field-split-1" defer></script>
