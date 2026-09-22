@@ -17,6 +17,7 @@ urlpatterns = [
     path("activate/<str:public_user_id>/", views.activate, name="activate"),
     path("activate/<str:public_user_id>/resend/", views.resend_activation, name="resend_activation"),
     path("login/", views.StudentLoginView.as_view(), name="student_login"),
+    path("login/resend-verification/", views.resend_activation_by_email, name="resend_activation_by_email"),
     path("teacher/login/", views.TeacherLoginView.as_view(), name="teacher_login"),
     path("logout/", views.LogoutView.as_view(next_page="learning:home"), name="logout"),
     path("password-reset/", views.StudentPasswordResetView.as_view(), name="password_reset"),

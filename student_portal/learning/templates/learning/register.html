@@ -5,7 +5,7 @@
   <a class="back-link" href="{% url 'learning:home' %}">返回</a>
   <h1>學員註冊</h1>
   <p class="muted">建立匿名學員帳號。完成電子郵件驗證後，帳號啟用並顯示永久 FDE ID。</p>
-  {% if is_console_email_backend %}<p class="notice" role="status">開發模式：驗證碼會輸出至伺服器控制台，不會寄到 Gmail。</p>{% endif %}
+  <p class="notice" role="status">電子郵件驗證：驗證碼將寄送至您填寫的電子郵件信箱。支援 Gmail、QQ、Outlook、Yahoo、學校與公司信箱。</p>
   <form method="post" novalidate>{% csrf_token %}
     {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     {% for field in form %}
@@ -25,6 +25,10 @@
       </div>
     {% endfor %}
     {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
+    {% if existing_unverified_activation_url %}
+      <p class="notice" role="status">這個電子郵件已有尚未完成驗證的帳號。請繼續驗證原帳號，或重新寄送驗證碼，不需要重新註冊。</p>
+      <p class="form-foot"><a href="{{ existing_unverified_activation_url }}">繼續驗證此帳號</a></p>
+    {% endif %}
     <button class="button primary full" type="submit">建立帳號並寄送驗證碼</button>
   </form>
   <p class="form-foot">已有帳號？ <a href="{% url 'learning:student_login' %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}">學員登入</a></p>

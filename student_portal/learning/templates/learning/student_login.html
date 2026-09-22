@@ -11,6 +11,13 @@
     {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
     <button class="button primary full" type="submit">登入</button>
   </form>
+  {% if form.unverified_email %}
+    <form method="post" action="{% url 'learning:resend_activation_by_email' %}">{% csrf_token %}
+      <input type="hidden" name="email" value="{{ form.unverified_email }}">
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button class="button full" type="submit">重新寄送驗證碼</button>
+    </form>
+  {% endif %}
   <p class="form-foot"><a href="{% url 'learning:password_reset' %}">忘記密碼？</a>　<a href="{% url 'learning:register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">建立帳號</a></p>
 </section>
 {% endblock %}
