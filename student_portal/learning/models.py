@@ -210,6 +210,96 @@ class GrowthRecordSubmission(models.Model):
         return f"{self.enrollment.student.public_user_id} · {self.definition.slot_id}"
 
 
+class StudentSurvey(models.Model):
+    class PathInterest(models.TextChoices):
+        VERY_INTERESTED = "very_interested", "非常有興趣"
+        INTERESTED = "interested", "有興趣"
+        LEARN_MORE = "learn_more", "想先了解"
+        NOT_NOW = "not_now", "目前沒有"
+
+    class AdvancedCourseIntent(models.TextChoices):
+        HIGH = "HIGH", "很有意願參加"
+        INTERESTED = "INTERESTED", "有意願，想先了解課程內容與費用"
+        TIME_UNCERTAIN = "TIME_UNCERTAIN", "有興趣，但目前時間還不確定"
+        INFO_ONLY = "INFO_ONLY", "目前只想先收到相關資訊"
+        NONE = "NONE", "暫時沒有進階學習計畫"
+
+    student = models.ForeignKey(
+        "StudentProfile",
+        on_delete=models.PROTECT,
+        related_name="surveys",
+    )
+    enrollment = models.ForeignKey(
+        Enrollment,
+        on_delete=models.PROTECT,
+        related_name="student_surveys",
+    )
+    growth_record = models.OneToOneField(
+        GrowthRecordSubmission,
+        on_delete=models.PROTECT,
+        related_name="student_survey",
+    )
+    a01 = models.PositiveSmallIntegerField()
+    a02 = models.PositiveSmallIntegerField()
+    a03 = models.PositiveSmallIntegerField()
+    a04 = models.PositiveSmallIntegerField()
+    a05 = models.PositiveSmallIntegerField()
+    a06 = models.PositiveSmallIntegerField()
+    a07 = models.PositiveSmallIntegerField()
+    helpful_topics = models.JSONField(default=list, blank=True)
+    helpful_other = models.CharField(max_length=100, blank=True)
+    future_interests = models.JSONField(default=list, blank=True)
+    path_20_interest = models.CharField(max_length=20, choices=PathInterest.choices, blank=True)
+    path_25_interest = models.CharField(max_length=20, choices=PathInterest.choices, blank=True)
+    path_30_interest = models.CharField(max_length=20, choices=PathInterest.choices, blank=True)
+    license_interest = models.JSONField(default=list, blank=True)
+    course_format_preferences = models.JSONField(default=list, blank=True)
+    course_duration_preference = models.CharField(max_length=32, blank=True)
+    course_priority_factors = models.JSONField(default=list, blank=True)
+    advanced_course_intent = models.CharField(
+        max_length=20,
+        choices=AdvancedCourseIntent.choices,
+        blank=True,
+    )
+    contact_opt_in = models.BooleanField(default=False)
+    contact_email = models.EmailField(blank=True)
+    next_step_text = models.CharField(max_length=300, blank=True)
+    feedback_text = models.CharField(max_length=500, blank=True)
+    submitted_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["enrollment"], name="one_student_survey_per_enrollment"),
+        ]
+
+    @property
+    def public_user_id(self):
+        return self.student.public_user_id
+
+    @property
+    def cohort(self):
+        return self.enrollment.cohort
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+        if self.student_id and self.enrollment_id and self.enrollment.student_id != self.student_id:
+            errors["student"] = "學員必須與期別參與記錄一致。"
+        if self.growth_record_id:
+            if self.growth_record.enrollment_id != self.enrollment_id:
+                errors["growth_record"] = "R08 成長記錄必須屬於此期別參與記錄。"
+            if self.growth_record.definition.slot_id != "R08":
+                errors["growth_record"] = "調查只能關聯 R08 成長記錄。"
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.public_user_id} · {self.enrollment.cohort_id} · R08 調查"
+
+
 class TeacherCohortAccess(models.Model):
     teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cohort_accesses")
     cohort = models.ForeignKey(Cohort, on_delete=models.CASCADE, related_name="teacher_accesses")

@@ -17,6 +17,7 @@ from .models import (
     GrowthRecordReview,
     PhaseProgress,
     StudentProfile,
+    StudentSurvey,
     StudentTaskProgress,
     TeacherReviewEvent,
     EmailVerificationCode,
@@ -368,6 +369,118 @@ class GrowthRecordForm(forms.Form):
             }
         ),
     )
+
+
+SURVEY_LIKERT_CHOICES = [(value, str(value)) for value in range(1, 6)]
+SURVEY_HELPFUL_TOPIC_CHOICES = [
+    ("safety_regulations", "無人機安全與法規"),
+    ("simulation_flight", "模擬飛行"),
+    ("real_flight", "真機飛行"),
+    ("f450_assembly", "F450／多旋翼組裝"),
+    ("flight_controller_sensors", "飛控與感測器"),
+    ("mission_planner", "Mission Planner 航線規劃"),
+    ("ai_detection", "AI 目標檢測"),
+    ("yolo_training", "YOLO 圖片標註與模型訓練"),
+    ("rag_tutor", "RAG AI 助教"),
+    ("modeling_3d", "3D 建模"),
+    ("printing_3d", "3D 列印"),
+    ("other", "其他"),
+]
+SURVEY_FUTURE_INTEREST_CHOICES = [
+    ("aerial_photo", "航拍／攝影"),
+    ("drone_license", "無人機考照"),
+    ("inspection", "巡檢應用"),
+    ("surveying", "測繪"),
+    ("modeling_3d", "3D 建模"),
+    ("printing_3d", "3D 列印"),
+    ("route_planning", "航線規劃"),
+    ("autonomous_mission", "自動任務"),
+    ("ai_detection", "AI 目標檢測"),
+    ("ai_training", "AI 模型訓練"),
+    ("drone_assembly", "無人機組裝"),
+    ("drone_repair", "無人機維修"),
+    ("fpv", "FPV 穿越機"),
+    ("rover", "無人車 Rover"),
+    ("air_ground_coordination", "陸空協同"),
+    ("ros2", "ROS 2"),
+    ("uas_software", "無人系統軟體開發"),
+    ("uas_career", "無人載具相關就業"),
+    ("undecided", "目前還不確定"),
+]
+SURVEY_LICENSE_CHOICES = [
+    ("basic", "目前先以基本操作能力為主"),
+    ("g1", "想準備 G1"),
+    ("g2", "想準備 G2"),
+    ("g3", "未來想挑戰 G3"),
+    ("already_certified", "已經有相關操作證"),
+    ("none", "暫時沒有考照規劃"),
+]
+SURVEY_FORMAT_CHOICES = [
+    ("weekday_day", "平日白天"),
+    ("weekday_evening", "平日晚間"),
+    ("weekend", "週末班"),
+    ("intensive_practical", "密集實作班"),
+    ("project_practical", "專題實作班"),
+    ("hybrid", "線上＋實體混合"),
+    ("small_class", "小班制"),
+    ("individual_coaching", "個人專題指導"),
+    ("enterprise_career", "企業／就業導向班"),
+]
+SURVEY_PRIORITY_CHOICES = [
+    ("content", "課程內容"),
+    ("equipment", "實作設備"),
+    ("license", "證照"),
+    ("employment", "就業連結"),
+    ("project", "專題作品"),
+    ("instructor", "師資"),
+    ("price", "價格"),
+    ("schedule", "時間安排"),
+]
+SURVEY_DURATION_CHOICES = [
+    ("1_2_days", "1～2 天體驗課"),
+    ("4_6_weeks", "4～6 週進階班"),
+    ("8_12_weeks", "8～12 週專題班"),
+    ("320_hours", "320 小時職前／專業人才訓練"),
+    ("decide_by_content", "視課程內容決定"),
+]
+
+
+class StudentSurveyForm(forms.ModelForm):
+    a01 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A01")
+    a02 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A02")
+    a03 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A03")
+    a04 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A04")
+    a05 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A05")
+    a06 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A06")
+    a07 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A07")
+    helpful_topics = forms.MultipleChoiceField(choices=SURVEY_HELPFUL_TOPIC_CHOICES, required=False)
+    future_interests = forms.MultipleChoiceField(choices=SURVEY_FUTURE_INTEREST_CHOICES, required=False)
+    license_interest = forms.MultipleChoiceField(choices=SURVEY_LICENSE_CHOICES, required=False)
+    course_format_preferences = forms.MultipleChoiceField(choices=SURVEY_FORMAT_CHOICES, required=False)
+    course_priority_factors = forms.MultipleChoiceField(choices=SURVEY_PRIORITY_CHOICES, required=False)
+    path_20_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False)
+    path_25_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False)
+    path_30_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False)
+    course_duration_preference = forms.ChoiceField(choices=[("", "---------"), *SURVEY_DURATION_CHOICES], required=False)
+    advanced_course_intent = forms.ChoiceField(
+        choices=[("", "---------"), *StudentSurvey.AdvancedCourseIntent.choices],
+        required=False,
+    )
+    contact_opt_in = forms.BooleanField(required=False, initial=False)
+    contact_email = forms.EmailField(required=False)
+    helpful_other = forms.CharField(required=False, max_length=100)
+    next_step_text = forms.CharField(required=False, max_length=300)
+    feedback_text = forms.CharField(required=False, max_length=500)
+
+    class Meta:
+        model = StudentSurvey
+        exclude = ["student", "enrollment", "growth_record", "submitted_at", "updated_at"]
+
+    def clean_future_interests(self):
+        values = self.cleaned_data.get("future_interests", [])
+        if len(values) > 3:
+            raise ValidationError("下一階段學習興趣最多選 3 項。")
+        return values
 
 
 class StudentTaskProgressForm(forms.ModelForm):
