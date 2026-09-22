@@ -1,8 +1,9 @@
+import logging
 import uuid
 from pathlib import Path
 from django import forms
 from django.forms.widgets import ClearableFileInput
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -18,9 +19,20 @@ from .models import (
     StudentProfile,
     StudentTaskProgress,
     TeacherReviewEvent,
+    EmailVerificationCode,
 )
 from .services import issue_activation_code
 from .project_directions import learner_direction_options
+
+
+logger = logging.getLogger(__name__)
+
+
+def _mask_login_email(email):
+    local, separator, domain = email.partition("@")
+    if not separator:
+        return "***"
+    return f"{local[:2]}***@{domain}"
 
 
 REGISTRATION_CLASS_CODES = (
@@ -158,6 +170,68 @@ class StudentLoginForm(AuthenticationForm):
     def clean_username(self):
         return self.cleaned_data["username"].strip().lower()
 
+    def clean(self):
+        cleaned_data = forms.Form.clean(self)
+        email = cleaned_data.get("username")
+        password = cleaned_data.get("password")
+        if not email or not password:
+            return cleaned_data
+
+        user_model = get_user_model()
+        user = (
+            user_model.objects.filter(email__iexact=email)
+            .select_related("student_profile")
+            .first()
+        )
+        verification_completed = bool(
+            user
+            and EmailVerificationCode.objects.filter(
+                user=user,
+                consumed_at__isnull=False,
+            ).exists()
+        )
+        diagnostic = {
+            "email": _mask_login_email(email),
+            "user_found": user is not None,
+            "email_verified": bool(user and (user.is_active or verification_completed)),
+            "is_active": bool(user and user.is_active),
+            "check_password": False,
+            "authenticate": False,
+            "session_created": False,
+            "redirect_url": "",
+            "user_agent": self.request.META.get("HTTP_USER_AGENT", "")[:240],
+        }
+        self.login_diagnostic = diagnostic
+        if user is None:
+            logger.info("Student login diagnostic: %s", diagnostic)
+            self.add_error(None, "電子郵箱或密碼錯誤，請重新確認。")
+            return cleaned_data
+        if not user.is_active:
+            if verification_completed:
+                user.is_active = True
+                user.save(update_fields=["is_active"])
+                diagnostic["is_active"] = True
+            else:
+                logger.info("Student login diagnostic: %s", diagnostic)
+                self.unverified_email = email
+                self.add_error(None, "此帳號尚未完成電子郵件驗證，請先完成驗證。")
+                return cleaned_data
+
+        diagnostic["check_password"] = user.check_password(password)
+        self.user_cache = authenticate(
+            self.request,
+            username=user.get_username(),
+            password=password,
+        )
+        diagnostic["authenticate"] = self.user_cache is not None
+        if self.user_cache is None:
+            logger.info("Student login diagnostic: %s", diagnostic)
+            self.add_error(None, "電子郵箱或密碼錯誤，請重新確認。")
+            return cleaned_data
+        self.confirm_login_allowed(self.user_cache)
+        logger.info("Student login diagnostic: %s", diagnostic)
+        return cleaned_data
+
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
         if user.is_staff:
@@ -213,6 +287,10 @@ class MultipleImageField(forms.FileField):
         if not data and initial is None:
             return []
         files = data if isinstance(data, (list, tuple)) else [data]
+        # Browsers may submit an empty file control alongside another media
+        # field. Ignore only zero-byte placeholders; real images still use
+        # the existing image validation path unchanged.
+        files = [upload for upload in files if upload and getattr(upload, "size", 0) > 0]
         return [super(MultipleImageField, self).clean(upload, initial) for upload in files]
 
 

@@ -214,7 +214,7 @@ class GrowthRecordFoundationTests(TestCase):
         self.assertContains(response, 'data-growth-photo-list')
         self.assertContains(response, 'data-growth-photo-count')
         self.assertContains(response, 'data-growth-saved-photo-list')
-        self.assertContains(response, "/static/learning/growth-upload.js?v=staged-files-2")
+        self.assertContains(response, "/static/learning/growth-upload.js?v=video-field-split-1")
         self.assertContains(response, "/static/learning/growth-records.css?v=growth-video-3")
         self.assertNotContains(response, "growth-photo-queue.js")
         self.assertContains(response, "這次我要完成什麼")

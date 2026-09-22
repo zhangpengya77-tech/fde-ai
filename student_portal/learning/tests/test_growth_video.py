@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
+from learning.forms import GrowthRecordForm
 from learning.growth_video import VideoProcessingError, process_growth_video
 from learning.models import Cohort, Evidence, GrowthRecordSubmission, TeacherCohortAccess
 from learning.tests.helpers import create_student_account, enroll_student
@@ -59,6 +60,25 @@ def uploaded_document(name="成果.pptx", content_type="application/vnd.openxmlf
 
 @unittest.skipUnless(FFMPEG and FFPROBE, "ffmpeg and ffprobe are required")
 class GrowthVideoProcessorTests(SimpleTestCase):
+    def test_empty_browser_image_placeholder_does_not_block_video_field(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        for filename, content_type in (("flight.MOV", "video/quicktime"), ("flight.mp4", "video/mp4")):
+            with self.subTest(filename=filename):
+                form = GrowthRecordForm(
+                    data={"action": "save_draft"},
+                    files={
+                        "images": SimpleUploadedFile(
+                            "empty-image-input", b"", content_type="application/octet-stream"
+                        ),
+                        "video": SimpleUploadedFile(filename, b"video-bytes", content_type=content_type),
+                    },
+                )
+
+                self.assertTrue(form.is_valid(), form.errors)
+                self.assertEqual(form.cleaned_data["images"], [])
+                self.assertEqual(form.cleaned_data["video"].name, filename)
+
     def test_mp4_mov_and_m4v_are_normalized_to_mp4(self):
         for extension, content_type in (
             ("mp4", "video/mp4"),

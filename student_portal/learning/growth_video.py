@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -302,7 +303,7 @@ def _validate_processed_video(probe):
         raise VideoProcessingError(FRIENDLY_INVALID_VIDEO, reason="output_not_aac")
 
 
-def process_growth_video(upload):
+def process_growth_video(upload, *, request_id=""):
     """Validate and transcode one uploaded video, returning a temp MP4 result."""
     ffmpeg_binary = _binary("GROWTH_VIDEO_FFMPEG_BINARY", "ffmpeg")
     ffprobe_binary = _binary("GROWTH_VIDEO_FFPROBE_BINARY", "ffprobe")
@@ -332,9 +333,30 @@ def process_growth_video(upload):
 
     source_path = None
     output_path = None
+    started_at = time.perf_counter()
+    log_prefix = f" request_id={request_id}" if request_id else ""
+    logger.info(
+        "VIDEO_PROCESS_START%s filename=%s extension=%s content_type=%s size=%s",
+        log_prefix,
+        Path(str(getattr(upload, "name", "video"))).name,
+        extension,
+        content_type,
+        size,
+    )
     try:
         source_path = _write_upload_to_temp(upload)
+        logger.info("TEMP_FILE_CREATED%s size=%s", log_prefix, source_path.stat().st_size)
         source_probe = _probe_video(source_path)
+        logger.info(
+            "FFMPEG_STARTED%s format=%s codec=%s duration=%s width=%s height=%s rotation=%s",
+            log_prefix,
+            source_probe["format_name"],
+            source_probe["video_codec"],
+            source_probe["duration"],
+            source_probe["width"],
+            source_probe["height"],
+            source_probe["rotation"],
+        )
         formats = set(source_probe["format_name"].split(","))
         if not formats.intersection(SUPPORTED_CONTAINER_NAMES):
             _log_rejection(upload, "unsupported_container", format_name=source_probe["format_name"])
@@ -347,6 +369,12 @@ def process_growth_video(upload):
         _transcode(source_path, output_path, source_probe, max_duration)
         processed_probe = _probe_video(output_path)
         _validate_processed_video(processed_probe)
+        logger.info(
+            "FFMPEG_PASS%s duration_ms=%s output_size=%s",
+            log_prefix,
+            round((time.perf_counter() - started_at) * 1000),
+            output_path.stat().st_size,
+        )
         original_filename = Path(str(getattr(upload, "name", "video"))).name
         original_metadata = {
             "filename": original_filename,

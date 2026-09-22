@@ -1,6 +1,8 @@
 import logging
 import mimetypes
 import re
+import secrets
+import time
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlencode
@@ -207,6 +209,26 @@ def register(request):
     form = StudentRegistrationForm(request.POST or None)
     next_url = _validated_next(request, request.POST.get("next") if request.method == "POST" else None)
     is_console_email_backend = settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend"
+    existing_unverified_activation_url = ""
+    if request.method == "POST":
+        submitted_email = request.POST.get("email", "").strip().lower()
+        existing_profile = (
+            StudentProfile.objects.filter(
+                email__iexact=submitted_email,
+                active=True,
+                user__is_active=False,
+            )
+            .only("public_user_id")
+            .first()
+        )
+        if existing_profile:
+            existing_unverified_activation_url = reverse(
+                "learning:activate", args=[existing_profile.public_user_id]
+            )
+            if next_url:
+                existing_unverified_activation_url = (
+                    f"{existing_unverified_activation_url}?{urlencode({'next': next_url})}"
+                )
     if request.method == "POST" and form.is_valid():
         try:
             profile = form.create_account()
@@ -225,7 +247,12 @@ def register(request):
     return render(
         request,
         "learning/register.html",
-        {"form": form, "is_console_email_backend": is_console_email_backend, "next_url": next_url},
+        {
+            "form": form,
+            "is_console_email_backend": is_console_email_backend,
+            "next_url": next_url,
+            "existing_unverified_activation_url": existing_unverified_activation_url,
+        },
     )
 
 
@@ -318,9 +345,48 @@ def resend_activation(request, public_user_id):
     return redirect(activation_url)
 
 
+@require_POST
+def resend_activation_by_email(request):
+    email = request.POST.get("email", "").strip().lower()
+    next_url = _validated_next(request, request.POST.get("next"))
+    profile = (
+        StudentProfile.objects.filter(
+            email__iexact=email,
+            active=True,
+            user__is_active=False,
+        )
+        .select_related("user")
+        .first()
+    )
+    if profile and profile.user_id:
+        try:
+            issue_activation_code(profile.user)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+        except Exception as exc:
+            logger.exception("Activation email resend by login failed (%s).", type(exc).__name__)
+            messages.error(request, "驗證碼寄送失敗，請稍後重試。")
+        else:
+            messages.success(request, "驗證碼已重新寄送，請查看收件匣或垃圾郵件。")
+    else:
+        messages.info(request, "若帳號符合驗證條件，系統會提供重新寄送結果。")
+    login_url = reverse("learning:student_login")
+    if next_url:
+        login_url = f"{login_url}?{urlencode({'next': next_url})}"
+    return redirect(login_url)
+
+
 class StudentLoginView(LoginView):
     authentication_form = StudentLoginForm
     template_name = "learning/student_login.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        diagnostic = getattr(form, "login_diagnostic", {})
+        diagnostic["session_created"] = bool(self.request.session.session_key)
+        diagnostic["redirect_url"] = response.headers.get("Location", "")
+        logger.info("Student login session diagnostic: %s", diagnostic)
+        return response
 
     def get_success_url(self):
         return self.get_redirect_url() or reverse("learning:student_dashboard")
@@ -589,6 +655,18 @@ def growth_record_detail(request, enrollment_id, slot_id):
     latest_review = submission.reviews.select_related("reviewer").first()
     form = None
     if request.method == "POST":
+        video_request_id = request.headers.get("X-FDE-Video-Request-ID", "").strip()
+        video_started_at = time.perf_counter()
+        if video_request_id:
+            logger.info(
+                "VIDEO_UPLOAD_REQUEST request_id=%s method=%s content_type=%s content_length=%s files=%s entered_at=%s",
+                video_request_id,
+                request.method,
+                request.META.get("CONTENT_TYPE", ""),
+                request.META.get("CONTENT_LENGTH", ""),
+                sorted(request.FILES.keys()),
+                timezone.now().isoformat(),
+            )
         if not editable:
             messages.error(request, "此成長記錄已提交或完成複核，目前唯讀。")
             return redirect("learning:growth_record_detail", enrollment_id=enrollment.pk, slot_id=slot_id)
@@ -600,6 +678,28 @@ def growth_record_detail(request, enrollment_id, slot_id):
             new_video = form.cleaned_data["video"]
             new_documents = form.cleaned_data["documents"]
             uploaded_videos = request.FILES.getlist("video")
+            if uploaded_videos and not video_request_id:
+                video_request_id = f"VID-{int(time.time() * 1000)}-{secrets.token_hex(3)}"
+                logger.info(
+                    "VIDEO_UPLOAD_REQUEST request_id=%s method=%s content_type=%s content_length=%s files=%s entered_at=%s",
+                    video_request_id,
+                    request.method,
+                    request.META.get("CONTENT_TYPE", ""),
+                    request.META.get("CONTENT_LENGTH", ""),
+                    sorted(request.FILES.keys()),
+                    timezone.now().isoformat(),
+                )
+            if video_request_id and uploaded_videos:
+                upload = uploaded_videos[0]
+                logger.info(
+                    "DJANGO_VIDEO_RECEIVED request_id=%s field=video filename=%s size=%s content_type=%s",
+                    video_request_id,
+                    Path(str(upload.name)).name,
+                    upload.size,
+                    getattr(upload, "content_type", ""),
+                )
+            elif video_request_id:
+                logger.warning("DJANGO_VIDEO_NOT_RECEIVED request_id=%s files=%s", video_request_id, sorted(request.FILES.keys()))
             is_summary = submission.definition.slot_id == "R08"
             if len(uploaded_videos) > 1:
                 form.add_error("video", "每項成長記錄最多上傳1段影片。")
@@ -627,9 +727,29 @@ def growth_record_detail(request, enrollment_id, slot_id):
                     form.add_error("images", exc.messages[0])
             if not form.errors and new_video:
                 try:
-                    processed_video = process_growth_video(new_video)
+                    processed_video = process_growth_video(new_video, request_id=video_request_id)
                 except VideoProcessingError as exc:
                     form.add_error("video", exc.user_message)
+                    if video_request_id:
+                        logger.warning(
+                            "VIDEO_UPLOAD_FAILED request_id=%s stage=VIDEO_PROCESSING reason=%s duration_ms=%s",
+                            video_request_id,
+                            exc.reason,
+                            round((time.perf_counter() - video_started_at) * 1000),
+                        )
+                except Exception:
+                    logger.exception(
+                        "Growth video upload failed after validation slot=%s enrollment_id=%s",
+                        submission.definition.slot_id,
+                        enrollment.pk,
+                    )
+                    form.add_error("video", "影片保存失敗，影片仍保留在待提交清單，請稍後重試。")
+                    if video_request_id:
+                        logger.exception(
+                            "VIDEO_UPLOAD_FAILED request_id=%s stage=VIDEO_PROCESSING duration_ms=%s",
+                            video_request_id,
+                            round((time.perf_counter() - video_started_at) * 1000),
+                        )
 
             if form.is_valid() and not form.errors:
                 submission.student_note = form.cleaned_data["student_note"].strip()
@@ -655,6 +775,13 @@ def growth_record_detail(request, enrollment_id, slot_id):
                             evidence.upload.save(filename, ContentFile(image_bytes), save=True)
                             created_evidence.append(evidence)
                         if processed_video is not None:
+                            if video_request_id:
+                                logger.info(
+                                    "FINAL_FILE_CREATED request_id=%s final_file_size=%s",
+                                    video_request_id,
+                                    processed_video.path.stat().st_size,
+                                )
+                                logger.info("EVIDENCE_SAVE_STARTED request_id=%s", video_request_id)
                             old_videos = list(
                                 submission.evidence.filter(evidence_type=Evidence.Type.VIDEO)
                             )
@@ -678,6 +805,8 @@ def growth_record_detail(request, enrollment_id, slot_id):
                                     File(video_file),
                                     save=True,
                                 )
+                            if video_request_id:
+                                logger.info("EVIDENCE_SAVE_PASS request_id=%s", video_request_id)
                             created_evidence.append(video_evidence)
                         for upload in new_documents:
                             original_name = Path(str(upload.name)).name
@@ -702,6 +831,8 @@ def growth_record_detail(request, enrollment_id, slot_id):
                             document_evidence.upload.save(original_name, File(upload), save=True)
                             created_evidence.append(document_evidence)
                 except Exception:
+                    if video_request_id and processed_video is not None:
+                        logger.exception("EVIDENCE_SAVE_FAIL request_id=%s", video_request_id)
                     for evidence in created_evidence:
                         evidence.upload.delete(save=False)
                         evidence.delete()
@@ -711,6 +842,14 @@ def growth_record_detail(request, enrollment_id, slot_id):
                         processed_video.cleanup()
 
                 success_message = "已提交教師複核。" if action == "submit_review" else "成長記錄草稿已保存。"
+                if video_request_id:
+                    logger.info(
+                        "VIDEO_UPLOAD_COMPLETE request_id=%s http_status=%s response_type=%s duration_ms=%s",
+                        video_request_id,
+                        200,
+                        "json" if request.headers.get("x-requested-with") == "XMLHttpRequest" else "redirect",
+                        round((time.perf_counter() - video_started_at) * 1000),
+                    )
                 messages.success(request, success_message)
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({"ok": True})

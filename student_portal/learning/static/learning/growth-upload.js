@@ -25,6 +25,11 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
   let lastSubmitAction = "save_draft";
   let stagedVideo = null;
   let stagedVideoPreviewUrl = null;
+  const monotonicNow = () => (
+    typeof performance !== "undefined" && typeof performance.now === "function"
+      ? performance.now()
+      : Date.now()
+  );
 
   function updatePhotoCount() {
     const total = savedCount + stagedFiles.length;
@@ -229,6 +234,21 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
     stagedFiles.forEach((file) => formData.append("images", file, file.name));
     if (stagedVideo) formData.append("video", stagedVideo, stagedVideo.name);
     stagedDocuments.forEach(({ file }) => formData.append("documents", file, file.name));
+    const videoRequestId = stagedVideo
+      ? `VID-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      : "";
+    const videoStartedAt = stagedVideo ? monotonicNow() : 0;
+    const videoRequestUrl = form.getAttribute("action") || window.location.href;
+    if (stagedVideo) {
+      console.info("FDE_VIDEO_UPLOAD_START", {
+        request_id: videoRequestId,
+        url: videoRequestUrl,
+        filename: stagedVideo.name,
+        size: stagedVideo.size,
+        mime: stagedVideo.type || "",
+        started_at: new Date().toISOString(),
+      });
+    }
     buttons.forEach((button) => { button.disabled = true; });
     if (progress) {
       progress.value = 0;
@@ -238,8 +258,9 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
     if (videoStatus && stagedVideo) videoStatus.textContent = "影片上傳中…";
 
     const request = new XMLHttpRequest();
-    request.open("POST", form.getAttribute("action") || window.location.href);
+    request.open("POST", videoRequestUrl);
     request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+    if (videoRequestId) request.setRequestHeader("X-FDE-Video-Request-ID", videoRequestId);
     request.upload.addEventListener("progress", (uploadEvent) => {
       if (!uploadEvent.lengthComputable || !progress) return;
       progress.value = Math.round((uploadEvent.loaded / uploadEvent.total) * 100);
@@ -251,6 +272,19 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
     });
     request.addEventListener("load", () => {
       const contentType = request.getResponseHeader("Content-Type") || "";
+      if (videoRequestId) {
+        console.info("FDE_VIDEO_UPLOAD_RESPONSE", {
+          request_id: videoRequestId,
+          status: request.status,
+          content_type: contentType,
+          body_preview: String(request.responseText || "").slice(0, 500),
+          json_parse_failed: contentType.includes("application/json") && !(() => {
+            try { JSON.parse(request.responseText); return true; } catch (_error) { return false; }
+          })(),
+          duration_ms: Math.round(monotonicNow() - videoStartedAt),
+          completed_at: new Date().toISOString(),
+        });
+      }
       if (request.status >= 200 && request.status < 300 && contentType.includes("application/json")) {
         let result = null;
         try {
@@ -284,21 +318,39 @@ document.querySelectorAll("[data-growth-form]").forEach((form) => {
       const errors = Array.from(responseDocument.querySelectorAll(".error"))
         .map((item) => item.textContent.trim())
         .filter(Boolean);
+      const fallbackMessage = stagedVideo
+        ? "影片保存失敗，影片仍保留在待提交清單，請稍後重試。"
+        : (stagedDocuments.length
+          ? "成果檔案保存失敗，檔案仍保留在待提交清單，請稍後重試。"
+          : "照片保存失敗，照片仍保留在待提交清單，請稍後重試。");
       buttons.forEach((button) => { button.disabled = false; });
       if (progress) {
         progress.hidden = true;
         progress.value = 0;
       }
-      if (status) status.textContent = errors[0] || "保存失敗，照片仍保留在待提交清單，請稍後重試。";
-      if (videoStatus && stagedVideo && !errors.length) videoStatus.textContent = status.textContent;
+      if (status) status.textContent = errors[0] || fallbackMessage;
+      if (videoStatus && stagedVideo) videoStatus.textContent = errors[0] || fallbackMessage;
     });
     request.addEventListener("error", () => {
+      if (videoRequestId) {
+        console.info("FDE_VIDEO_UPLOAD_ERROR", {
+          request_id: videoRequestId,
+          error_name: "XMLHttpRequestError",
+          error_message: "network request error",
+          duration_ms: Math.round(monotonicNow() - videoStartedAt),
+          failed_at: new Date().toISOString(),
+        });
+      }
       buttons.forEach((button) => { button.disabled = false; });
       if (progress) {
         progress.hidden = true;
         progress.value = 0;
       }
-      if (status) status.textContent = "網路連線中斷，照片仍保留在待提交清單，請確認連線後重試。";
+      if (status) status.textContent = stagedVideo
+        ? "網路連線中斷，影片仍保留在待提交清單，請確認連線後重試。"
+        : (stagedDocuments.length
+          ? "網路連線中斷，成果檔案仍保留在待提交清單，請確認連線後重試。"
+          : "網路連線中斷，照片仍保留在待提交清單，請確認連線後重試。");
       if (videoStatus && stagedVideo) videoStatus.textContent = "網路連線中斷，影片仍保留在待提交狀態，請確認連線後重試。";
     });
     request.send(formData);
