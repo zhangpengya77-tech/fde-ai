@@ -50,6 +50,38 @@ class TeacherSurveyDashboardTests(TestCase):
         values.update(overrides)
         return StudentSurvey.objects.create(**values)
 
+    def create_v2_survey(self, enrollment=None, contact_email="v2-contact@example.com", **overrides):
+        enrollment = enrollment or self.enrollment
+        r08 = GrowthRecordSubmission.objects.get(enrollment=enrollment, definition__slot_id="R08")
+        responses = {
+            "q1_helpfulness": "very_helpful",
+            "q2_practice_ratio": "balanced",
+            "q3_topics": ["ai_uas", "project_showcase"],
+            "q4_improvements": ["practical_time"],
+            "q5_feedback": "增加實作時間",
+            "q6_interests": ["physical_ai", "industry_tasks"],
+            "q7_paths": ["industry_pilot", "seed_instructor"],
+            "q8_intent": "learn_more",
+            "q9_courses": ["industry_pilot", "seed_instructor"],
+        }
+        responses.update(overrides.pop("v2_responses", {}))
+        return StudentSurvey.objects.create(
+            student=enrollment.student,
+            enrollment=enrollment,
+            growth_record=r08,
+            a01=5,
+            a02=2,
+            a03=0,
+            a04=0,
+            a05=0,
+            a06=0,
+            a07=0,
+            survey_version="v2",
+            v2_responses=responses,
+            contact_opt_in=bool(contact_email),
+            contact_email=contact_email,
+        )
+
     def test_teacher_dashboard_shows_scoped_survey_stats_and_privacy(self):
         self.create_survey()
         self.create_survey(self.other_enrollment, contact_email="other-contact@example.com")
@@ -58,7 +90,7 @@ class TeacherSurveyDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "R08 學員發展調查")
-        self.assertContains(response, "已完成 R08 Survey")
+        self.assertContains(response, "已完成問卷")
         self.assertContains(response, "1")
         self.assertEqual(response.context["analytics"]["path_stats"]["path_2_0"]["levels"][0]["count"], 1)
         self.assertNotContains(response, "follow-up@example.com")
@@ -187,3 +219,30 @@ class TeacherSurveyDashboardTests(TestCase):
         self.assertNotContains(response, "mailto:")
         self.assertNotContains(response, "一鍵通知")
         self.assertNotContains(response, "群發")
+
+    def test_v2_dashboard_reads_saved_responses(self):
+        self.create_v2_survey()
+        context = self.client.get(reverse("learning:teacher_survey_dashboard")).context
+        analytics = context["analytics_v2"]
+        self.assertEqual(analytics["completed"], 1)
+        self.assertEqual(next(item for item in analytics["q1_stats"] if item["value"] == "very_helpful")["count"], 1)
+        self.assertEqual(next(item for item in analytics["q6_stats"] if item["value"] == "physical_ai")["count"], 1)
+        self.assertEqual(next(item for item in analytics["q7_stats"] if item["value"] == "industry_pilot")["count"], 1)
+        self.assertEqual(next(item for item in analytics["q8_stats"] if item["value"] == "learn_more")["count"], 1)
+        self.assertEqual(next(item for item in analytics["q9_stats"] if item["value"] == "seed_instructor")["count"], 1)
+        self.assertEqual(analytics["contact_counts"]["with_email"], 1)
+
+    def test_v2_filters_select_saved_responses_and_email_state(self):
+        self.create_v2_survey()
+        second_profile = create_student_account("v2-second@example.com", "第二位學員")
+        second_enrollment = enroll_student(second_profile, self.cohort)
+        ensure_growth_submissions(second_enrollment)
+        self.create_v2_survey(
+            enrollment=second_enrollment,
+            contact_email="",
+            v2_responses={"q7_paths": ["technician"], "q8_intent": "practice_first", "q9_courses": []},
+        )
+        url = reverse("learning:teacher_survey_dashboard")
+        self.assertEqual(self.client.get(url, {"v2_path": "industry_pilot"}).context["analytics_v2"]["completed"], 1)
+        self.assertEqual(self.client.get(url, {"v2_intent": "practice_first"}).context["analytics_v2"]["completed"], 1)
+        self.assertEqual(self.client.get(url, {"v2_contact": "without_email"}).context["analytics_v2"]["completed"], 1)

@@ -1375,6 +1375,10 @@ def teacher_survey_dashboard(request):
             "g03_choices": StudentSurvey.AdvancedCourseIntent.choices,
             "interest_choices": SURVEY_FUTURE_INTEREST_CHOICES,
             "license_choices": SURVEY_LICENSE_CHOICES,
+            "v2_ability_choices": SURVEY_V2_ABILITY_CHOICES,
+            "v2_path_choices": SURVEY_V2_PATH_CHOICES,
+            "v2_intent_choices": SURVEY_V2_INTENT_CHOICES,
+            "v2_course_choices": SURVEY_V2_COURSE_CHOICES,
         },
     )
 

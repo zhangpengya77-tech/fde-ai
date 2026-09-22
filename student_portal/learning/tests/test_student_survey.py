@@ -204,7 +204,9 @@ class StudentSurveyViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "R08 結訓回饋與進階發展問卷")
+        self.assertContains(response, "R08｜職業人才成長路徑")
+        self.assertContains(response, "Foundation Plus")
+        self.assertContains(response, "Professional Track")
         self.assertContains(response, "這一期，我學得怎麼樣？")
         self.assertContains(response, "下一階段，你最想深入哪些能力？")
         self.assertContains(response, "最多選 3 項")

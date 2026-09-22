@@ -79,6 +79,11 @@ def apply_survey_filters(surveys, params):
     selected_interest = params.get("interest", "").strip()
     selected_license = params.get("license", "").strip()
     selected_contact = params.get("contact", "").strip()
+    selected_v2_ability = params.get("v2_ability", "").strip()
+    selected_v2_path = params.get("v2_path", "").strip()
+    selected_v2_intent = params.get("v2_intent", "").strip()
+    selected_v2_course = params.get("v2_course", "").strip()
+    selected_v2_contact = params.get("v2_contact", "").strip()
     filtered = []
     for survey in surveys:
         if any(selected[name] and getattr(survey, field) != selected[name] for name, field in filters.items()):
@@ -89,6 +94,22 @@ def apply_survey_filters(surveys, params):
             continue
         if selected_contact and contact_status(survey) != selected_contact:
             continue
+        if any((selected_v2_ability, selected_v2_path, selected_v2_intent, selected_v2_course, selected_v2_contact)):
+            if survey.survey_version != "v2":
+                continue
+            responses = survey.v2_responses or {}
+            if selected_v2_ability and selected_v2_ability not in responses.get("q6_interests", []):
+                continue
+            if selected_v2_path and selected_v2_path not in responses.get("q7_paths", []):
+                continue
+            if selected_v2_intent and responses.get("q8_intent") != selected_v2_intent:
+                continue
+            if selected_v2_course and selected_v2_course not in responses.get("q9_courses", []):
+                continue
+            if selected_v2_contact == "with_email" and not survey.contact_email.strip():
+                continue
+            if selected_v2_contact == "without_email" and survey.contact_email.strip():
+                continue
         filtered.append(survey)
     return filtered
 

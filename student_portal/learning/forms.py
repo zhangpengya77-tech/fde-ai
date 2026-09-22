@@ -517,6 +517,9 @@ SURVEY_V2_PATH_CHOICES = [
     ("technician", "無人機裝調檢修技師"),
     ("seed_instructor", "無人機種子教師／教官"),
     ("software_engineer", "無人機軟硬整合／軟體開發工程師"),
+    ("ai_industry", "AI／測繪／行業應用"),
+    ("engineering", "Engineering（軟硬整合工程）"),
+    ("foundation_first", "目前先完成基礎學習"),
     ("undecided", "目前還不確定"),
 ]
 SURVEY_V2_INTENT_CHOICES = [

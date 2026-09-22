@@ -71,11 +71,22 @@ class StudentSurveyV2ViewTests(TestCase):
     def test_page_is_traditional_chinese_v2_without_legacy_field_names(self):
         response = self.client.get(reverse("learning:student_survey", args=[self.enrollment.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "R08 結訓回饋與進階發展問卷")
+        self.assertContains(response, "R08｜職業人才成長路徑")
+        self.assertContains(response, "Foundation Plus")
+        self.assertContains(response, "Professional")
         self.assertContains(response, "行業無人機飛手")
         self.assertContains(response, "無人機種子教師／教官")
+        self.assertContains(response, "AI／測繪／行業應用")
+        self.assertContains(response, "Engineering（軟硬整合工程）")
         self.assertNotContains(response, "A01")
         self.assertNotContains(response, "advanced_course_intent")
+
+    def test_career_intent_choices_are_saved_in_existing_v2_field(self):
+        data = StudentSurveyV2FormTests().valid_data()
+        data["q7_paths"] = ["engineering", "ai_industry"]
+        self.client.post(reverse("learning:student_survey", args=[self.enrollment.pk]), data)
+        survey = StudentSurvey.objects.get(enrollment=self.enrollment)
+        self.assertEqual(survey.v2_responses["q7_paths"], ["engineering", "ai_industry"])
 
     def test_v2_submission_is_saved_and_does_not_copy_login_email(self):
         data = StudentSurveyV2FormTests().valid_data()
