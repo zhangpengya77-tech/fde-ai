@@ -204,10 +204,13 @@ class StudentSurveyViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        for marker in "ABCDEFGHIJK":
-            self.assertContains(response, f"SECTION {marker}")
-        self.assertContains(response, "最多選擇 3 項")
-        self.assertContains(response, "不會影響 R08 成績")
+        self.assertContains(response, "R08 結訓回饋與進階發展問卷")
+        self.assertContains(response, "這一期，我學得怎麼樣？")
+        self.assertContains(response, "下一階段，你最想深入哪些能力？")
+        self.assertContains(response, "最多選 3 項")
+        self.assertContains(response, "不影響 R08 成績")
+        self.assertNotContains(response, "A01")
+        self.assertNotContains(response, "advanced_course_intent")
 
     def test_valid_survey_post_creates_survey_and_preserves_r08(self):
         original_status = self.r08.status

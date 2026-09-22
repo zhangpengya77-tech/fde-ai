@@ -265,6 +265,8 @@ class StudentSurvey(models.Model):
     contact_email = models.EmailField(blank=True)
     next_step_text = models.CharField(max_length=300, blank=True)
     feedback_text = models.CharField(max_length=500, blank=True)
+    survey_version = models.CharField(max_length=8, default="v1")
+    v2_responses = models.JSONField(default=dict, blank=True)
     submitted_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 

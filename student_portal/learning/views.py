@@ -44,6 +44,7 @@ from .forms import (
     StudentPasswordResetForm,
     StudentRegistrationForm,
     StudentSurveyForm,
+    StudentSurveyV2Form,
     StudentTaskProgressForm,
     SURVEY_HELPFUL_TOPIC_CHOICES,
     SURVEY_FUTURE_INTEREST_CHOICES,
@@ -51,6 +52,12 @@ from .forms import (
     SURVEY_LICENSE_CHOICES,
     SURVEY_PRIORITY_CHOICES,
     SURVEY_DURATION_CHOICES,
+    SURVEY_V2_ABILITY_CHOICES,
+    SURVEY_V2_COURSE_CHOICES,
+    SURVEY_V2_PATH_CHOICES,
+    SURVEY_V2_INTENT_CHOICES,
+    SURVEY_V2_Q1_CHOICES,
+    SURVEY_V2_Q2_CHOICES,
     TeacherIdentityForm,
     TeacherLoginForm,
     TeacherReviewForm,
@@ -84,11 +91,12 @@ from .project_directions import (
     task_status_label,
 )
 from .services import issue_activation_code
-from .survey_recommendations import recommend_paths
+from .survey_recommendations import recommend_paths, recommend_v2_paths
 from .survey_analytics import (
     PATH_INTEREST_CHOICES,
     apply_survey_filters,
     build_survey_analytics,
+    build_survey_v2_analytics,
     choice_labels,
     contact_status,
     contact_status_label,
@@ -933,9 +941,14 @@ def student_survey(request, enrollment_id):
         raise Http404
 
     survey = StudentSurvey.objects.filter(enrollment=enrollment).first()
-    form = StudentSurveyForm(request.POST or None, instance=survey)
+    legacy_post = request.method == "POST" and "q1_helpfulness" not in request.POST and "a01" in request.POST
+    form = (
+        StudentSurveyForm(request.POST, instance=survey)
+        if legacy_post
+        else StudentSurveyV2Form(request.POST or None, instance=survey)
+    )
     if request.method == "POST" and form.is_valid():
-        survey = form.save(commit=False)
+        survey = form.save(commit=False) if legacy_post else form.apply_to_survey(survey or StudentSurvey())
         survey.student = request.student_profile
         survey.enrollment = enrollment
         survey.growth_record = r08_submission
@@ -975,7 +988,8 @@ def student_survey_result(request, enrollment_id):
             "profile": request.student_profile,
             "enrollment": enrollment,
             "survey": survey,
-            "recommendations": recommend_paths(survey),
+            "recommendations": recommend_v2_paths(survey) if survey.survey_version == "v2" else recommend_paths(survey),
+            "is_v2": survey.survey_version == "v2",
             "contact_notice": survey.contact_opt_in and bool(survey.contact_email),
         },
     )
@@ -1327,6 +1341,7 @@ def teacher_survey_dashboard(request):
     )
     filtered_surveys = apply_survey_filters(surveys, request.GET)
     analytics = build_survey_analytics(filtered_surveys)
+    analytics_v2 = build_survey_v2_analytics(filtered_surveys)
     completed_count = len(surveys)
     total_count = len(enrollment_list)
     rows = [
@@ -1354,6 +1369,7 @@ def teacher_survey_dashboard(request):
             "selected_cohort": selected_cohort,
             "selected_filters": request.GET,
             "analytics": analytics,
+            "analytics_v2": analytics_v2,
             "rows": rows,
             "path_interest_choices": PATH_INTEREST_CHOICES,
             "g03_choices": StudentSurvey.AdvancedCourseIntent.choices,
@@ -1376,6 +1392,13 @@ def teacher_survey_detail(request, enrollment_id):
     )
     answers = [(f"A0{index}", getattr(survey, f"a0{index}")) for index in range(1, 8)]
     answer_labels = dict(PATH_INTEREST_CHOICES)
+    v2_answers = survey.v2_responses or {}
+    v2_path_labels = dict(SURVEY_V2_PATH_CHOICES)
+    v2_ability_labels = dict(SURVEY_V2_ABILITY_CHOICES)
+    v2_course_labels = dict(SURVEY_V2_COURSE_CHOICES)
+    v2_q1_labels = dict(SURVEY_V2_Q1_CHOICES)
+    v2_q2_labels = dict(SURVEY_V2_Q2_CHOICES)
+    v2_intent_labels = dict(SURVEY_V2_INTENT_CHOICES)
     return render(
         request,
         "learning/teacher_survey_detail.html",
@@ -1392,6 +1415,14 @@ def teacher_survey_detail(request, enrollment_id):
             "course_formats": labels_for(survey.course_format_preferences, SURVEY_FORMAT_CHOICES),
             "course_priorities": labels_for(survey.course_priority_factors, SURVEY_PRIORITY_CHOICES),
             "course_duration": dict(SURVEY_DURATION_CHOICES).get(survey.course_duration_preference, survey.course_duration_preference),
+            "is_v2": survey.survey_version == "v2",
+            "v2_answers": v2_answers,
+            "v2_ability_answers": [v2_ability_labels.get(value, value) for value in v2_answers.get("q6_interests", [])],
+            "v2_path_answers": [v2_path_labels.get(value, value) for value in v2_answers.get("q7_paths", [])],
+            "v2_course_answers": [v2_course_labels.get(value, value) for value in v2_answers.get("q9_courses", [])],
+            "v2_q1_label": v2_q1_labels.get(v2_answers.get("q1_helpfulness", ""), "未填寫"),
+            "v2_q2_label": v2_q2_labels.get(v2_answers.get("q2_practice_ratio", ""), "未填寫"),
+            "v2_intent_label": v2_intent_labels.get(v2_answers.get("q8_intent", ""), "未填寫"),
         },
     )
 

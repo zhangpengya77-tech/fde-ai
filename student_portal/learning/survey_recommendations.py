@@ -54,6 +54,64 @@ PATH_INTEREST_SCORES = {
 }
 PATH_INTEREST_LABELS = dict(StudentSurvey.PathInterest.choices)
 
+V2_PATH_DEFINITIONS = (
+    {
+        "key": "industry_pilot",
+        "title": "行業無人機飛手",
+        "subtitle": "不只是會飛，而是能帶著任務出去工作。",
+        "topics": ("專業飛行", "G1／G2／G3", "航線規劃", "自動任務", "行業任務 SOP", "任務安全"),
+        "ability": "flight_license",
+    },
+    {
+        "key": "technician",
+        "title": "無人機裝調檢修技師",
+        "subtitle": "知道從哪裡查、怎麼修，重新調到安全可用。",
+        "topics": ("無人機組裝", "電機／ESC", "飛控", "GPS", "感測器", "故障診斷", "維修與保養"),
+        "ability": "assembly_repair",
+    },
+    {
+        "key": "seed_instructor",
+        "title": "無人機種子教師／教官",
+        "subtitle": "不只是自己會，而是有能力把學員真正教會。",
+        "topics": ("教學 SOP", "安全教學", "分組教學", "實作任務設計", "學習成果評量", "教材設計"),
+        "ability": "industry_tasks",
+    },
+    {
+        "key": "software_engineer",
+        "title": "無人機軟硬整合／軟體開發工程師",
+        "subtitle": "讓無人機感知、判斷並完成任務。",
+        "topics": ("ArduPilot／PX4", "MAVLink", "Python", "ROS 2", "YOLO", "LiDAR", "自主導航"),
+        "ability": "physical_ai",
+    },
+)
+
+
+def recommend_v2_paths(survey):
+    """Rank v2 directions from Q7 first and Q6 second, without G03/email scoring."""
+    responses = survey.v2_responses or {}
+    selected_paths = responses.get("q7_paths", [])
+    interests = set(responses.get("q6_interests", []))
+    if "undecided" in selected_paths and len(selected_paths) == 1 and not interests:
+        return []
+    ranked = []
+    for index, definition in enumerate(V2_PATH_DEFINITIONS):
+        path_score = 2 if definition["key"] in selected_paths else 0
+        ability_score = 1 if definition["ability"] in interests else 0
+        if definition["key"] == "software_engineer" and "physical_ai" in interests:
+            ability_score = 2
+        matched = []
+        if definition["ability"] in interests:
+            matched.append(definition["ability"])
+        ranked.append({
+            **definition,
+            "score": path_score + ability_score,
+            "matched_topics": matched,
+            "reasons": ["你在下一步方向中選擇了這條路徑。"] if path_score else ["你對相關能力表示有興趣。"],
+            "sort_key": (-(path_score + ability_score), index),
+        })
+    ranked.sort(key=lambda item: item["sort_key"])
+    return [item for item in ranked if item["score"] > 0][:2]
+
 
 def recommend_paths(survey):
     """Return up to two explainable path recommendations for a survey."""

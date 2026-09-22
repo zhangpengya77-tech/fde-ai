@@ -6,6 +6,14 @@ from .forms import (
     SURVEY_FUTURE_INTEREST_CHOICES,
     SURVEY_LICENSE_CHOICES,
     SURVEY_PRIORITY_CHOICES,
+    SURVEY_V2_ABILITY_CHOICES,
+    SURVEY_V2_COURSE_CHOICES,
+    SURVEY_V2_HELPFUL_CHOICES,
+    SURVEY_V2_IMPROVEMENT_CHOICES,
+    SURVEY_V2_INTENT_CHOICES,
+    SURVEY_V2_PATH_CHOICES,
+    SURVEY_V2_Q1_CHOICES,
+    SURVEY_V2_Q2_CHOICES,
 )
 from .models import StudentSurvey
 
@@ -159,5 +167,26 @@ def build_survey_analytics(surveys):
             "survey_only": contact_counts.get("survey_only", 0),
             "willing_no_email": contact_counts.get("willing_no_email", 0),
             "contactable": contact_counts.get("contactable", 0),
+        },
+    }
+
+
+def build_survey_v2_analytics(surveys):
+    """Build live v2 statistics while ignoring legacy rows without v2 answers."""
+    surveys = [survey for survey in surveys if survey.survey_version == "v2" and survey.v2_responses]
+    responses = [survey.v2_responses or {} for survey in surveys]
+    return {
+        "completed": len(surveys),
+        "q1_stats": _counter_stats((item.get("q1_helpfulness") for item in responses), SURVEY_V2_Q1_CHOICES),
+        "q2_stats": _counter_stats((item.get("q2_practice_ratio") for item in responses), SURVEY_V2_Q2_CHOICES),
+        "q3_stats": _counter_stats((value for item in responses for value in item.get("q3_topics", [])), SURVEY_V2_HELPFUL_CHOICES, len(surveys)),
+        "q4_stats": _counter_stats((value for item in responses for value in item.get("q4_improvements", [])), SURVEY_V2_IMPROVEMENT_CHOICES, len(surveys)),
+        "q6_stats": _counter_stats((value for item in responses for value in item.get("q6_interests", [])), SURVEY_V2_ABILITY_CHOICES, len(surveys)),
+        "q7_stats": _counter_stats((value for item in responses for value in item.get("q7_paths", [])), SURVEY_V2_PATH_CHOICES, len(surveys)),
+        "q8_stats": _counter_stats((item.get("q8_intent") for item in responses), SURVEY_V2_INTENT_CHOICES, len(surveys)),
+        "q9_stats": _counter_stats((value for item in responses for value in item.get("q9_courses", [])), SURVEY_V2_COURSE_CHOICES, len(surveys)),
+        "contact_counts": {
+            "with_email": sum(bool(survey.contact_email.strip()) for survey in surveys),
+            "without_email": sum(not survey.contact_email.strip() for survey in surveys),
         },
     }

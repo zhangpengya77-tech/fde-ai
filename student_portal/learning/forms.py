@@ -475,13 +475,153 @@ class StudentSurveyForm(forms.ModelForm):
 
     class Meta:
         model = StudentSurvey
-        exclude = ["student", "enrollment", "growth_record", "submitted_at", "updated_at"]
+        exclude = ["student", "enrollment", "growth_record", "submitted_at", "updated_at", "survey_version", "v2_responses"]
 
     def clean_future_interests(self):
         values = self.cleaned_data.get("future_interests", [])
         if len(values) > 3:
             raise ValidationError("下一階段學習興趣最多選 3 項。")
         return values
+
+
+SURVEY_V2_HELPFUL_CHOICES = [
+    ("flight_license", "飛行操作與證照"),
+    ("assembly_repair", "無人機組裝、調試與維修"),
+    ("mission_planning", "航線規劃與自動任務"),
+    ("mapping_printing", "測繪建模與 3D 列印"),
+    ("ai_uas", "AI 與智能無人系統應用"),
+    ("industry_tasks", "無人機行業任務應用"),
+    ("project_showcase", "專題實作與成果展示"),
+    ("other", "其他"),
+]
+SURVEY_V2_IMPROVEMENT_CHOICES = [
+    ("pace", "課程節奏"),
+    ("theory", "理論講解"),
+    ("practical_time", "實作時間"),
+    ("flight_time", "飛行練習時間"),
+    ("equipment", "設備數量"),
+    ("difficulty", "課程難度"),
+    ("grouping", "分組方式"),
+    ("materials", "教材與操作說明"),
+    ("other", "其他"),
+]
+SURVEY_V2_ABILITY_CHOICES = [
+    ("flight_license", "飛行與專業證照"),
+    ("assembly_repair", "無人機組裝、調試與維修"),
+    ("mapping_printing", "測繪建模與 3D 列印產業應用"),
+    ("industry_tasks", "無人機行業任務應用"),
+    ("physical_ai", "Physical AI（實體人工智慧）與智能無人系統"),
+]
+SURVEY_V2_PATH_CHOICES = [
+    ("industry_pilot", "行業無人機飛手"),
+    ("technician", "無人機裝調檢修技師"),
+    ("seed_instructor", "無人機種子教師／教官"),
+    ("software_engineer", "無人機軟硬整合／軟體開發工程師"),
+    ("undecided", "目前還不確定"),
+]
+SURVEY_V2_INTENT_CHOICES = [
+    ("deep_learning", "我希望繼續深入學習"),
+    ("learn_more", "我有興趣，想先了解進階課程內容"),
+    ("practice_first", "我想先把目前學到的內容練熟"),
+    ("experience", "我目前主要是興趣體驗"),
+    ("none", "暫時沒有繼續學習計畫"),
+]
+SURVEY_V2_COURSE_CHOICES = [
+    ("industry_pilot", "行業無人機飛手進階課程"),
+    ("technician", "無人機裝調檢修技師課程"),
+    ("seed_instructor", "無人機種子教師／教官培訓"),
+    ("software_engineer", "無人機軟硬整合／軟體開發工程課程"),
+]
+SURVEY_V2_Q1_CHOICES = [
+    ("very_helpful", "非常有幫助"),
+    ("helpful", "有幫助"),
+    ("ordinary", "普通"),
+    ("less_helpful", "幫助較少"),
+    ("uncertain", "目前還不確定"),
+]
+SURVEY_V2_Q2_CHOICES = [
+    ("more_practice", "希望增加更多實作"),
+    ("balanced", "目前比例剛好"),
+    ("more_theory", "希望增加更多原理與講解"),
+    ("uncertain", "目前還不確定"),
+]
+
+
+class StudentSurveyV2Form(forms.Form):
+    q1_helpfulness = forms.ChoiceField(choices=SURVEY_V2_Q1_CHOICES, label="整體而言，這一期課程對你有沒有實際幫助？", widget=forms.RadioSelect)
+    q2_practice_ratio = forms.ChoiceField(choices=SURVEY_V2_Q2_CHOICES, label="你覺得目前課程的實作比例如何？", widget=forms.RadioSelect)
+    q3_topics = forms.MultipleChoiceField(choices=SURVEY_V2_HELPFUL_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    q3_other = forms.CharField(required=False, max_length=100)
+    q4_improvements = forms.MultipleChoiceField(choices=SURVEY_V2_IMPROVEMENT_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    q4_other = forms.CharField(required=False, max_length=100)
+    q5_feedback = forms.CharField(required=False, max_length=500, widget=forms.Textarea(attrs={"rows": 5}))
+    q6_interests = forms.MultipleChoiceField(choices=SURVEY_V2_ABILITY_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    q7_paths = forms.MultipleChoiceField(choices=SURVEY_V2_PATH_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    q8_intent = forms.ChoiceField(choices=SURVEY_V2_INTENT_CHOICES, label="看完上面的發展方向後，你目前對進階學習的想法是？", widget=forms.RadioSelect)
+    q9_courses = forms.MultipleChoiceField(choices=SURVEY_V2_COURSE_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    contact_email = forms.EmailField(required=False)
+
+    def __init__(self, *args, instance=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance = instance
+        existing = (instance.v2_responses or {}) if instance is not None else {}
+        if not args or not args[0]:
+            for name in self.fields:
+                if name in existing:
+                    self.initial[name] = existing[name]
+            self.initial["contact_email"] = instance.contact_email if instance is not None else ""
+
+    def _clean_max(self, name, limit):
+        values = self.cleaned_data.get(name, [])
+        if len(values) > limit:
+            raise ValidationError(f"此題最多選 {limit} 項。")
+        return values
+
+    def clean_q3_topics(self):
+        return self._clean_max("q3_topics", 3)
+
+    def clean_q6_interests(self):
+        return self._clean_max("q6_interests", 3)
+
+    def clean_q7_paths(self):
+        values = self._clean_max("q7_paths", 2)
+        if "undecided" in values and len(values) > 1:
+            raise ValidationError("選擇「目前還不確定」時，請不要再選其他方向。")
+        return values
+
+    def clean_q9_courses(self):
+        return self._clean_max("q9_courses", 2)
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("q8_intent") in {"deep_learning", "learn_more"}:
+            return cleaned
+        cleaned["q9_courses"] = []
+        cleaned["contact_email"] = cleaned.get("contact_email", "")
+        return cleaned
+
+    def apply_to_survey(self, survey):
+        data = {name: self.cleaned_data.get(name, []) for name in (
+            "q1_helpfulness", "q2_practice_ratio", "q3_topics", "q3_other",
+            "q4_improvements", "q4_other", "q5_feedback", "q6_interests",
+            "q7_paths", "q8_intent", "q9_courses",
+        )}
+        survey.survey_version = "v2"
+        survey.v2_responses = data
+        survey.a01 = {"very_helpful": 5, "helpful": 4, "ordinary": 3, "less_helpful": 2, "uncertain": 1}[data["q1_helpfulness"]]
+        survey.a02 = {"more_practice": 1, "balanced": 2, "more_theory": 3, "uncertain": 4}[data["q2_practice_ratio"]]
+        survey.a03 = survey.a04 = survey.a05 = survey.a06 = survey.a07 = 0
+        survey.helpful_topics = data["q3_topics"]
+        survey.helpful_other = data["q3_other"]
+        survey.future_interests = data["q6_interests"]
+        survey.advanced_course_intent = {
+            "deep_learning": "HIGH", "learn_more": "INTERESTED", "practice_first": "TIME_UNCERTAIN",
+            "experience": "INFO_ONLY", "none": "NONE",
+        }[data["q8_intent"]]
+        survey.contact_email = self.cleaned_data.get("contact_email", "").strip()
+        survey.contact_opt_in = bool(survey.contact_email)
+        survey.feedback_text = data["q5_feedback"]
+        return survey
 
 
 class StudentTaskProgressForm(forms.ModelForm):

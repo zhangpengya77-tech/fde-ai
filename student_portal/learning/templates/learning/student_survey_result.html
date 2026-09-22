@@ -6,16 +6,16 @@
 <a class="back-link" href="{% url 'learning:growth_record_detail' enrollment.pk 'R08' %}">返回 R08 綜合成果</a>
 <section class="page-heading survey-heading">
   <p class="eyebrow">R08 · 我的下一階段學習方向</p>
-  <h1>調查已完成</h1>
-  <p class="muted">謝謝你的回饋。以下結果根據你選擇的學習興趣產生，僅作為下一階段學習方向參考。</p>
-  <a class="button secondary" href="{% url 'learning:student_survey' enrollment.pk %}">修改我的調查</a>
+  <h1>{% if is_v2 %}感謝完成 R08 學習回饋{% else %}調查已完成{% endif %}</h1>
+  <p class="muted">{% if is_v2 %}你的回饋將協助我們持續改善課程，也能幫助你整理下一階段的學習方向。{% else %}謝謝你的回饋。以下結果根據你選擇的學習興趣產生，僅作為下一階段學習方向參考。{% endif %}</p>
+  <a class="button secondary" href="{% url 'learning:student_survey' enrollment.pk %}">{% if is_v2 %}修改我的回饋{% else %}修改我的調查{% endif %}</a>
 </section>
 
 {% if recommendations %}
   <div class="survey-result-list">
   {% for path in recommendations %}
     <article class="survey-result-card">
-      <p class="survey-section-label">建議方向 {{ forloop.counter }}</p>
+      <p class="survey-section-label">{% if is_v2 %}推薦發展方向{% else %}建議方向 {{ forloop.counter }}{% endif %}</p>
       <h2>{{ path.title }}</h2>
       <p class="result-subtitle">{{ path.subtitle }}</p>
       <h3>建議繼續探索</h3>
@@ -34,6 +34,7 @@
 
 <section class="survey-result-footer">
   <p>這是學習方向建議，不是 AI 評分、職涯保證、錄取判定、正式報名或付費推薦。</p>
-  {% if contact_notice %}<p class="contact-notice">你已選擇接收後續進階課程資訊。</p>{% endif %}
+  {% if contact_notice %}<p class="contact-notice">未來有符合你所選方向的進階課程時，FDE-AI 會再提供相關資訊。</p>{% endif %}
+  {% if is_v2 %}<p>繼續學習，讓能力不只停在「會操作」，而是逐步走向真正的任務與專業。</p>{% endif %}
 </section>
 {% endblock %}
