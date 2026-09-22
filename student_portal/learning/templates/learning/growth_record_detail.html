@@ -113,5 +113,14 @@
   <h2>教師複核結果</h2>
   {% if latest_review %}<p><strong>{{ latest_review.get_review_status_display }}</strong>{% if latest_review.score != None %} · {{ latest_review.score }} 分{% endif %} · {{ latest_review.reviewed_at|date:'Y-m-d H:i' }}</p><h3>教師評語</h3><p>{{ latest_review.teacher_note|default:'教師未填寫評語。'|linebreaksbr }}</p>{% else %}<p class="muted">尚未完成教師複核。</p><h3>教師評語</h3><p class="muted">尚無教師評語。</p>{% endif %}
 </section>
+{% if definition.slot_id == "R08" %}
+<section class="section-block survey-entry-card" aria-labelledby="survey-entry-title">
+  <p class="eyebrow">R08 後續規劃</p>
+  <h2 id="survey-entry-title">我的下一階段學習方向</h2>
+  <p>完成這一期之後，你想把無人載具能力帶到哪裡？</p>
+  <p class="muted">這份調查用於了解你的學習感受、未來技術興趣與進階學習需求，不會影響 R08 成績、教師複核或結訓結果。</p>
+  <a class="button primary" href="{% url 'learning:student_survey' enrollment.pk %}">{% if survey_exists %}查看／修改我的調查{% else %}開始填寫{% endif %}</a>
+</section>
+{% endif %}
 <script src="{% static 'learning/growth-upload.js' %}?v=video-field-split-1" defer></script>
 {% endblock %}

@@ -446,31 +446,32 @@ SURVEY_DURATION_CHOICES = [
 
 
 class StudentSurveyForm(forms.ModelForm):
-    a01 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A01")
-    a02 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A02")
-    a03 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A03")
-    a04 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A04")
-    a05 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A05")
-    a06 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A06")
-    a07 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A07")
-    helpful_topics = forms.MultipleChoiceField(choices=SURVEY_HELPFUL_TOPIC_CHOICES, required=False)
-    future_interests = forms.MultipleChoiceField(choices=SURVEY_FUTURE_INTEREST_CHOICES, required=False)
-    license_interest = forms.MultipleChoiceField(choices=SURVEY_LICENSE_CHOICES, required=False)
-    course_format_preferences = forms.MultipleChoiceField(choices=SURVEY_FORMAT_CHOICES, required=False)
-    course_priority_factors = forms.MultipleChoiceField(choices=SURVEY_PRIORITY_CHOICES, required=False)
-    path_20_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False)
-    path_25_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False)
-    path_30_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False)
-    course_duration_preference = forms.ChoiceField(choices=[("", "---------"), *SURVEY_DURATION_CHOICES], required=False)
+    a01 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A01", widget=forms.RadioSelect)
+    a02 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A02", widget=forms.RadioSelect)
+    a03 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A03", widget=forms.RadioSelect)
+    a04 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A04", widget=forms.RadioSelect)
+    a05 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A05", widget=forms.RadioSelect)
+    a06 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A06", widget=forms.RadioSelect)
+    a07 = forms.TypedChoiceField(choices=SURVEY_LIKERT_CHOICES, coerce=int, label="A07", widget=forms.RadioSelect)
+    helpful_topics = forms.MultipleChoiceField(choices=SURVEY_HELPFUL_TOPIC_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    future_interests = forms.MultipleChoiceField(choices=SURVEY_FUTURE_INTEREST_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    license_interest = forms.MultipleChoiceField(choices=SURVEY_LICENSE_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    course_format_preferences = forms.MultipleChoiceField(choices=SURVEY_FORMAT_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    course_priority_factors = forms.MultipleChoiceField(choices=SURVEY_PRIORITY_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
+    path_20_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False, widget=forms.RadioSelect)
+    path_25_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False, widget=forms.RadioSelect)
+    path_30_interest = forms.ChoiceField(choices=[("", "---------"), *StudentSurvey.PathInterest.choices], required=False, widget=forms.RadioSelect)
+    course_duration_preference = forms.ChoiceField(choices=[("", "---------"), *SURVEY_DURATION_CHOICES], required=False, widget=forms.RadioSelect)
     advanced_course_intent = forms.ChoiceField(
         choices=[("", "---------"), *StudentSurvey.AdvancedCourseIntent.choices],
         required=False,
+        widget=forms.RadioSelect,
     )
     contact_opt_in = forms.BooleanField(required=False, initial=False)
     contact_email = forms.EmailField(required=False)
     helpful_other = forms.CharField(required=False, max_length=100)
-    next_step_text = forms.CharField(required=False, max_length=300)
-    feedback_text = forms.CharField(required=False, max_length=500)
+    next_step_text = forms.CharField(required=False, max_length=300, widget=forms.Textarea(attrs={"rows": 5}))
+    feedback_text = forms.CharField(required=False, max_length=500, widget=forms.Textarea(attrs={"rows": 6}))
 
     class Meta:
         model = StudentSurvey

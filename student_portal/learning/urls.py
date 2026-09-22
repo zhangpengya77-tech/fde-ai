@@ -31,6 +31,7 @@ urlpatterns = [
     path("student/courses/<int:enrollment_id>/project-direction/", views.select_project_direction, name="select_project_direction"),
     path("student/courses/<int:enrollment_id>/growth/", views.student_growth_dashboard, name="student_growth_dashboard"),
     path("student/courses/<int:enrollment_id>/growth/<str:slot_id>/", views.growth_record_detail, name="growth_record_detail"),
+    path("student/courses/<int:enrollment_id>/growth/R08/survey/", views.student_survey, name="student_survey"),
     path(
         "student/courses/<int:enrollment_id>/growth/<str:slot_id>/evidence/<uuid:evidence_id>/delete/",
         views.growth_evidence_delete,

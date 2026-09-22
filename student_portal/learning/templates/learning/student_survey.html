@@ -1,0 +1,112 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}我的下一階段學習方向｜R08{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/student-survey.css' %}?v=phase2-1">{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:growth_record_detail' enrollment.pk 'R08' %}">返回 R08 綜合成果</a>
+<section class="page-heading survey-heading">
+  <p class="eyebrow">R08 · 我的下一階段學習方向</p>
+  <h1>完成這一期之後，你想把無人載具能力帶到哪裡？</h1>
+  <p class="muted">這份調查用於了解你的學習感受、未來技術興趣與進階學習需求。問卷不會影響 R08 成績、教師複核或結訓結果。</p>
+  <div class="survey-progress" aria-label="問卷共 11 個區段"><strong>SECTION A～K</strong><span>共 11 個區段</span></div>
+</section>
+
+<form class="survey-form" method="post" data-survey-form>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="survey-errors">{{ form.non_field_errors }}</div>{% endif %}
+
+  <section class="survey-section" aria-labelledby="survey-a-title">
+    <p class="survey-section-label">SECTION A</p>
+    <h2 id="survey-a-title">這一期，我學得怎麼樣？</h2>
+    <p class="muted">請依你的實際感受評分：1 = 非常不同意，5 = 非常同意。</p>
+    {% for field in form %}{% if field.name|slice:':1' == 'a' %}
+      <fieldset class="survey-question">
+        <legend>{{ field.label }}{% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}</legend>
+        {{ field }}
+      </fieldset>
+    {% endif %}{% endfor %}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-b-title">
+    <p class="survey-section-label">SECTION B</p>
+    <h2 id="survey-b-title">這一期，哪些內容對我最有幫助？</h2>
+    <p class="muted">可複選。</p>
+    {{ form.helpful_topics }}{% for error in form.helpful_topics.errors %}<p class="error">{{ error }}</p>{% endfor %}
+    <label for="{{ form.helpful_other.id_for_label }}">其他（最多 100 字）</label>
+    {{ form.helpful_other }}{% for error in form.helpful_other.errors %}<p class="error">{{ error }}</p>{% endfor %}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-c-title">
+    <p class="survey-section-label">SECTION C</p>
+    <h2 id="survey-c-title">下一階段，我最想學什麼？</h2>
+    <p class="survey-limit">最多選擇 3 項</p>
+    {{ form.future_interests }}{% for error in form.future_interests.errors %}<p class="error">{{ error }}</p>{% endfor %}
+  </section>
+
+  <section class="survey-section survey-paths" aria-labelledby="survey-d-title">
+    <p class="survey-section-label">SECTION D</p>
+    <h2 id="survey-d-title">FDE-AI 下一階段，你想走哪一條路？</h2>
+    <div class="path-card"><h3>2.0｜無人系統專業人才</h3><p>從會操作進入可以完成專業任務。</p><p class="path-topics">無人車 · 3D 建模 · 3D 列印 · 自動任務 · 航線規劃 · 陸空協同</p>{{ form.path_20_interest }}</div>
+    <div class="path-card"><h3>2.5｜FPV 工程應用</h3><p>建立個人 FPV 工程能力與實戰飛行技能。</p><p class="path-topics">FPV · Betaflight · ELRS · VTX · PID · Blackbox · 維修</p>{{ form.path_25_interest }}</div>
+    <div class="path-card"><h3>3.0｜無人系統軟體工程師</h3><p>從應用層進入軟體、AI 與自主系統工程。</p><p class="path-topics">Python · MAVLink · QGC · YOLO · ROS 2 · Gazebo · LiDAR · GPS · 自主導航</p>{{ form.path_30_interest }}</div>
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-e-title">
+    <p class="survey-section-label">SECTION E</p>
+    <h2 id="survey-e-title">我的證照規劃</h2>
+    {{ form.license_interest }}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-f-title">
+    <p class="survey-section-label">SECTION F</p>
+    <h2 id="survey-f-title">如果繼續進階學習，我比較適合哪種方式？</h2>
+    {{ form.course_format_preferences }}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-g-title">
+    <p class="survey-section-label">SECTION G</p>
+    <h2 id="survey-g-title">進階課程投入與考量</h2>
+    <h3>G01｜課程週期</h3>{{ form.course_duration_preference }}
+    <h3>G02｜選擇進階課程時最重視什麼？</h3>{{ form.course_priority_factors }}
+    <h3>G03｜實際進階學習意願</h3>
+    <p class="muted">此題只用於了解未來課程需求，不代表正式報名，也不產生付款或報名義務。</p>
+    {{ form.advanced_course_intent }}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-h-title">
+    <p class="survey-section-label">SECTION H</p>
+    <h2 id="survey-h-title">你是否希望收到後續進階課程資訊？</h2>
+    <div class="survey-radio-list" data-contact-choice>
+      <label><input type="radio" name="contact_opt_in" value="true"{% if survey and survey.contact_opt_in %} checked{% endif %}>願意</label>
+      <label><input type="radio" name="contact_opt_in" value="false"{% if survey and not survey.contact_opt_in %} checked{% endif %}>暫時不用</label>
+    </div>
+    {% for error in form.contact_opt_in.errors %}<p class="error">{{ error }}</p>{% endfor %}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-i-title" data-contact-email-section>
+    <p class="survey-section-label">SECTION I</p>
+    <h2 id="survey-i-title">後續課程聯絡 Email</h2>
+    <p class="muted">Email 僅用於你主動同意的後續課程資訊與聯絡。未填寫 Email 仍可正常完成本問卷。</p>
+    <label for="{{ form.contact_email.id_for_label }}">後續課程聯絡 Email（選填）</label>
+    {{ form.contact_email }}{% for error in form.contact_email.errors %}<p class="error">{{ error }}</p>{% endfor %}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-j-title">
+    <p class="survey-section-label">SECTION J</p>
+    <h2 id="survey-j-title">如果明天繼續學，我最想做什麼？</h2>
+    <label for="{{ form.next_step_text.id_for_label }}">最多 300 字</label>
+    {{ form.next_step_text }}{% for error in form.next_step_text.errors %}<p class="error">{{ error }}</p>{% endfor %}
+  </section>
+
+  <section class="survey-section" aria-labelledby="survey-k-title">
+    <p class="survey-section-label">SECTION K</p>
+    <h2 id="survey-k-title">給 FDE-AI 的建議</h2>
+    <label for="{{ form.feedback_text.id_for_label }}">最多 500 字</label>
+    {{ form.feedback_text }}{% for error in form.feedback_text.errors %}<p class="error">{{ error }}</p>{% endfor %}
+  </section>
+
+  <p class="survey-privacy">本問卷只與你的 public_user_id 和本期學習記錄關聯，不要求填寫真實姓名、電話、身分證或地址。</p>
+  <button class="button primary survey-submit" type="submit">保存我的調查</button>
+</form>
+<script src="{% static 'learning/student-survey.js' %}?v=phase2-1" defer></script>
+{% endblock %}

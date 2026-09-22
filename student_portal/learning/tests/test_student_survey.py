@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.test import TestCase
 
 from learning.forms import StudentSurveyForm
@@ -10,6 +11,7 @@ from learning.models import (
     StudentSurvey,
 )
 from learning.tests.helpers import create_student_account, enroll_student
+from learning.growth_records import ensure_growth_submissions
 
 
 class StudentSurveyModelFormTests(TestCase):
@@ -150,3 +152,114 @@ class StudentSurveyModelFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("next_step_text", form.errors)
         self.assertIn("feedback_text", form.errors)
+
+
+class StudentSurveyViewTests(TestCase):
+    def setUp(self):
+        self.profile = create_student_account("survey-ui@example.com", "Survey UI Student")
+        self.cohort = Cohort.objects.create(cohort_id="2099-09", name="Survey UI Cohort")
+        self.enrollment = enroll_student(self.profile, self.cohort)
+        ensure_growth_submissions(self.enrollment)
+        self.r08 = GrowthRecordSubmission.objects.get(
+            enrollment=self.enrollment,
+            definition__slot_id="R08",
+        )
+        self.client.force_login(self.profile.user)
+
+    def valid_post_data(self):
+        return {
+            **{f"a0{index}": "4" for index in range(1, 8)},
+            "helpful_topics": ["real_flight", "ai_detection"],
+            "future_interests": ["fpv", "ros2"],
+            "helpful_other": "",
+            "path_20_interest": "interested",
+            "path_25_interest": "learn_more",
+            "path_30_interest": "not_now",
+            "license_interest": ["g2"],
+            "course_format_preferences": ["weekend"],
+            "course_duration_preference": "4_6_weeks",
+            "course_priority_factors": ["content", "project"],
+            "advanced_course_intent": "HIGH",
+            "contact_opt_in": "false",
+            "contact_email": "",
+            "next_step_text": "想繼續學習 FPV。",
+            "feedback_text": "希望增加更多實作時間。",
+        }
+
+    def test_r08_detail_shows_survey_entry_without_changing_evidence_flow(self):
+        response = self.client.get(
+            reverse(
+                "learning:growth_record_detail",
+                kwargs={"enrollment_id": self.enrollment.pk, "slot_id": "R08"},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "我的下一階段學習方向")
+        self.assertContains(response, reverse("learning:student_survey", args=[self.enrollment.pk]))
+
+    def test_survey_page_renders_all_sections(self):
+        response = self.client.get(
+            reverse("learning:student_survey", args=[self.enrollment.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for marker in "ABCDEFGHIJK":
+            self.assertContains(response, f"SECTION {marker}")
+        self.assertContains(response, "最多選擇 3 項")
+        self.assertContains(response, "不會影響 R08 成績")
+
+    def test_valid_survey_post_creates_survey_and_preserves_r08(self):
+        original_status = self.r08.status
+        response = self.client.post(
+            reverse("learning:student_survey", args=[self.enrollment.pk]),
+            self.valid_post_data(),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("learning:student_survey", args=[self.enrollment.pk]),
+        )
+        survey = StudentSurvey.objects.get(enrollment=self.enrollment)
+        self.assertEqual(survey.student_id, self.profile.pk)
+        self.assertEqual(survey.growth_record_id, self.r08.pk)
+        self.assertEqual(survey.contact_email, "")
+        self.assertEqual(survey.advanced_course_intent, "HIGH")
+        self.r08.refresh_from_db()
+        self.assertEqual(self.r08.status, original_status)
+
+    def test_survey_post_with_four_future_interests_is_rejected(self):
+        data = self.valid_post_data()
+        data["future_interests"] = ["fpv", "ros2", "rover", "surveying"]
+
+        response = self.client.post(
+            reverse("learning:student_survey", args=[self.enrollment.pk]),
+            data,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "最多選 3 項")
+        self.assertFalse(StudentSurvey.objects.filter(enrollment=self.enrollment).exists())
+
+    def test_second_valid_post_updates_existing_survey(self):
+        self.client.post(
+            reverse("learning:student_survey", args=[self.enrollment.pk]),
+            self.valid_post_data(),
+        )
+        data = self.valid_post_data()
+        data["a01"] = "5"
+        data["advanced_course_intent"] = "INFO_ONLY"
+
+        response = self.client.post(
+            reverse("learning:student_survey", args=[self.enrollment.pk]),
+            data,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("learning:student_survey", args=[self.enrollment.pk]),
+        )
+        self.assertEqual(StudentSurvey.objects.filter(enrollment=self.enrollment).count(), 1)
+        survey = StudentSurvey.objects.get(enrollment=self.enrollment)
+        self.assertEqual(survey.a01, 5)
+        self.assertEqual(survey.advanced_course_intent, "INFO_ONLY")

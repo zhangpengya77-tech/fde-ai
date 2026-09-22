@@ -43,6 +43,7 @@ from .forms import (
     StudentLoginForm,
     StudentPasswordResetForm,
     StudentRegistrationForm,
+    StudentSurveyForm,
     StudentTaskProgressForm,
     TeacherIdentityForm,
     TeacherLoginForm,
@@ -58,6 +59,7 @@ from .models import (
     GrowthRecordSubmission,
     PhaseProgress,
     StudentProfile,
+    StudentSurvey,
     StudentTaskProgress,
     TaskDefinition,
     TeacherCohortAccess,
@@ -890,6 +892,50 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "direction_overview": direction_overview(),
             "content_override": submission.definition.slot_id in {"R06", "R07", "R08"},
             "status_label": student_status_label(submission.status),
+            "survey_exists": StudentSurvey.objects.filter(enrollment=enrollment).exists()
+            if submission.definition.slot_id == "R08"
+            else False,
+        },
+    )
+
+
+@student_required
+@require_http_methods(["GET", "POST"])
+def student_survey(request, enrollment_id):
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related("cohort", "group", "student"),
+        pk=enrollment_id,
+        student=request.student_profile,
+        active=True,
+    )
+    submissions = ensure_growth_submissions(enrollment)
+    r08_submission = next(
+        (item for item in submissions if item.definition.slot_id == "R08"),
+        None,
+    )
+    if r08_submission is None:
+        raise Http404
+
+    survey = StudentSurvey.objects.filter(enrollment=enrollment).first()
+    form = StudentSurveyForm(request.POST or None, instance=survey)
+    if request.method == "POST" and form.is_valid():
+        survey = form.save(commit=False)
+        survey.student = request.student_profile
+        survey.enrollment = enrollment
+        survey.growth_record = r08_submission
+        survey.save()
+        messages.success(request, "我的下一階段學習方向已保存。")
+        return redirect("learning:student_survey", enrollment_id=enrollment.pk)
+
+    return render(
+        request,
+        "learning/student_survey.html",
+        {
+            "profile": request.student_profile,
+            "enrollment": enrollment,
+            "submission": r08_submission,
+            "form": form,
+            "survey": survey,
         },
     )
 
