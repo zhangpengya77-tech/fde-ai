@@ -54,6 +54,8 @@ from .forms import (
     SURVEY_DURATION_CHOICES,
     SURVEY_V2_ABILITY_CHOICES,
     SURVEY_V2_COURSE_CHOICES,
+    SURVEY_V2_HELPFUL_CHOICES,
+    SURVEY_V2_IMPROVEMENT_CHOICES,
     SURVEY_V2_PATH_CHOICES,
     SURVEY_V2_INTENT_CHOICES,
     SURVEY_V2_Q1_CHOICES,
@@ -1306,6 +1308,13 @@ def teacher_student_detail(request, enrollment_id):
             record.display_content = direction_content(enrollment, record.definition.slot_id)
         else:
             record.display_content = None
+    r08_survey = StudentSurvey.objects.filter(enrollment=enrollment).first()
+    r08_answers = (r08_survey.v2_responses or {}) if r08_survey and r08_survey.survey_version == "v2" else {}
+    r08_q1_labels = dict(SURVEY_V2_Q1_CHOICES)
+    r08_q2_labels = dict(SURVEY_V2_Q2_CHOICES)
+    r08_intent_labels = dict(SURVEY_V2_INTENT_CHOICES)
+    r08_path_labels = dict(SURVEY_V2_PATH_CHOICES)
+    r08_course_labels = dict(SURVEY_V2_COURSE_CHOICES)
     return render(
         request,
         "learning/teacher_student_detail.html",
@@ -1319,6 +1328,17 @@ def teacher_student_detail(request, enrollment_id):
             "growth_records": growth_records,
             "project_direction_label": direction_label(enrollment.project_direction),
             "project_direction_options": learner_direction_options(),
+            "r08_survey": r08_survey,
+            "r08_is_v2": bool(r08_survey and r08_survey.survey_version == "v2"),
+            "r08_answers": r08_answers,
+            "r08_q1_label": r08_q1_labels.get(r08_answers.get("q1_helpfulness", ""), "未填寫"),
+            "r08_q2_label": r08_q2_labels.get(r08_answers.get("q2_practice_ratio", ""), "未填寫"),
+            "r08_q3_labels": labels_for(r08_answers.get("q3_topics", []), SURVEY_V2_HELPFUL_CHOICES),
+            "r08_q4_labels": labels_for(r08_answers.get("q4_improvements", []), SURVEY_V2_IMPROVEMENT_CHOICES),
+            "r08_q6_labels": labels_for(r08_answers.get("q6_interests", []), SURVEY_V2_ABILITY_CHOICES),
+            "r08_q7_labels": labels_for(r08_answers.get("q7_paths", []), SURVEY_V2_PATH_CHOICES),
+            "r08_q9_labels": labels_for(r08_answers.get("q9_courses", []), SURVEY_V2_COURSE_CHOICES),
+            "r08_intent_label": r08_intent_labels.get(r08_answers.get("q8_intent", ""), "未填寫"),
         },
     )
 

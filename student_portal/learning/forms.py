@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import transaction
 from django.utils import timezone
 
@@ -564,6 +565,11 @@ class StudentSurveyV2Form(forms.Form):
     q8_intent = forms.ChoiceField(choices=SURVEY_V2_INTENT_CHOICES, label="看完上面的發展方向後，你目前對進階學習的想法是？", widget=forms.RadioSelect)
     q9_courses = forms.MultipleChoiceField(choices=SURVEY_V2_COURSE_CHOICES, required=False, widget=forms.CheckboxSelectMultiple)
     contact_email = forms.EmailField(required=False)
+    contact_phone = forms.CharField(
+        required=False,
+        max_length=30,
+        validators=[RegexValidator(r"^[0-9+()\-\s]*$", "請輸入有效的電話號碼格式。")],
+    )
 
     def __init__(self, *args, instance=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -602,13 +608,14 @@ class StudentSurveyV2Form(forms.Form):
             return cleaned
         cleaned["q9_courses"] = []
         cleaned["contact_email"] = cleaned.get("contact_email", "")
+        cleaned["contact_phone"] = cleaned.get("contact_phone", "").strip()
         return cleaned
 
     def apply_to_survey(self, survey):
         data = {name: self.cleaned_data.get(name, []) for name in (
             "q1_helpfulness", "q2_practice_ratio", "q3_topics", "q3_other",
             "q4_improvements", "q4_other", "q5_feedback", "q6_interests",
-            "q7_paths", "q8_intent", "q9_courses",
+            "q7_paths", "q8_intent", "q9_courses", "contact_phone",
         )}
         survey.survey_version = "v2"
         survey.v2_responses = data

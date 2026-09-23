@@ -23,6 +23,7 @@ class StudentSurveyV2FormTests(TestCase):
             "q8_intent": "deep_learning",
             "q9_courses": ["industry_pilot", "technician"],
             "contact_email": "",
+            "contact_phone": "",
         }
 
     def test_v2_form_accepts_valid_answers_without_email(self):
@@ -36,6 +37,18 @@ class StudentSurveyV2FormTests(TestCase):
         form = StudentSurveyV2Form(data=data)
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["q9_courses"], ["fpv_professional"])
+
+    def test_phone_is_optional_and_accepts_common_formats(self):
+        for phone in ("0912345678", "0912-345-678", "02-12345678", "+886912345678", "(02) 1234 5678"):
+            data = self.valid_data()
+            data["contact_phone"] = phone
+            form = StudentSurveyV2Form(data=data)
+            self.assertTrue(form.is_valid(), (phone, form.errors))
+            self.assertEqual(form.cleaned_data["contact_phone"], phone)
+
+        data = self.valid_data()
+        data["contact_phone"] = "phone-not-valid"
+        self.assertFalse(StudentSurveyV2Form(data=data).is_valid())
 
     def test_v2_selection_limits_are_enforced_server_side(self):
         data = self.valid_data()
@@ -90,7 +103,7 @@ class StudentSurveyV2ViewTests(TestCase):
 
     def test_page_explains_advanced_career_paths_before_course_choices(self):
         response = self.client.get(reverse("learning:student_survey", args=[self.enrollment.pk]))
-        self.assertContains(response, "進階學習，可以往哪些方向發展？")
+        self.assertContains(response, "進階學習與職業發展方向")
         self.assertContains(response, "行業無人機飛手")
         self.assertContains(response, "FPV 專業飛手／工程應用")
         self.assertContains(response, "無人機種子教師／教官")
@@ -99,7 +112,13 @@ class StudentSurveyV2ViewTests(TestCase):
         self.assertContains(response, "ROS 2")
         self.assertContains(response, "MAVLink")
         self.assertContains(response, "Gazebo")
+        self.assertContains(response, "電力巡檢")
+        self.assertContains(response, "物流運輸")
         self.assertContains(response, "FPV 專業飛手／工程應用課程")
+        self.assertLess(
+            response.content.index("無人機軟硬整合／軟體開發工程師".encode()),
+            response.content.index("FPV 專業飛手／工程應用課程".encode()),
+        )
 
     def test_career_intent_choices_are_saved_in_existing_v2_field(self):
         data = StudentSurveyV2FormTests().valid_data()
@@ -110,12 +129,14 @@ class StudentSurveyV2ViewTests(TestCase):
 
     def test_v2_submission_is_saved_and_does_not_copy_login_email(self):
         data = StudentSurveyV2FormTests().valid_data()
+        data["contact_phone"] = "0912-345-678"
         response = self.client.post(reverse("learning:student_survey", args=[self.enrollment.pk]), data)
         self.assertRedirects(response, reverse("learning:student_survey", args=[self.enrollment.pk]))
         survey = StudentSurvey.objects.get(enrollment=self.enrollment)
         self.assertEqual(survey.survey_version, "v2")
         self.assertEqual(survey.contact_email, "")
         self.assertFalse(survey.contact_opt_in)
+        self.assertEqual(survey.v2_responses["contact_phone"], "0912-345-678")
         self.assertEqual(survey.growth_record_id, self.r08.pk)
 
     def test_result_uses_q7_primary_and_q6_secondary(self):

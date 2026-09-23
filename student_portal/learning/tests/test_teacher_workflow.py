@@ -18,6 +18,7 @@ from learning.models import (
     GrowthRecordSubmission,
     LearningGroup,
     StudentProfile,
+    StudentSurvey,
     StudentTaskProgress,
     TaskDefinition,
     TeacherCohortAccess,
@@ -160,6 +161,59 @@ class TeacherWorkflowTests(TestCase):
         )
         self.assertContains(student_detail, "操作紀錄完整")
         self.assertContains(student_detail, "91.00")
+
+    def test_teacher_review_page_shows_current_enrollment_r08_survey(self):
+        ensure_growth_submissions(self.enrollment)
+        r08 = GrowthRecordSubmission.objects.get(
+            enrollment=self.enrollment, definition__slot_id="R08"
+        )
+        StudentSurvey.objects.create(
+            student=self.student,
+            enrollment=self.enrollment,
+            growth_record=r08,
+            a01=5,
+            a02=1,
+            a03=0,
+            a04=0,
+            a05=0,
+            a06=0,
+            a07=0,
+            survey_version="v2",
+            v2_responses={
+                "q1_helpfulness": "very_helpful",
+                "q2_practice_ratio": "more_practice",
+                "q3_topics": ["flight_license"],
+                "q3_other": "",
+                "q4_improvements": ["practical_time"],
+                "q4_other": "",
+                "q5_feedback": "希望增加更多實作",
+                "q6_interests": ["physical_ai"],
+                "q7_paths": ["industry_pilot"],
+                "q8_intent": "learn_more",
+                "q9_courses": ["fpv_professional"],
+                "contact_phone": "0912-345-678",
+            },
+            contact_email="career@example.com",
+        )
+        self.client.force_login(self.teacher)
+        response = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "R08｜學員結訓回饋與發展調查")
+        self.assertContains(response, "希望增加更多實作")
+        self.assertEqual(response.context["r08_q6_labels"], ["Physical AI（實體人工智慧）與智能無人系統"])
+        self.assertContains(response, "行業無人機飛手")
+        self.assertContains(response, "有興趣，想先了解進階課程內容")
+        self.assertContains(response, "FPV 專業飛手／工程應用課程")
+        self.assertContains(response, "career@example.com")
+        self.assertContains(response, "0912-345-678")
+
+    def test_teacher_review_page_handles_missing_r08_survey(self):
+        self.client.force_login(self.teacher)
+        response = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "此學員尚未填寫 R08 結訓回饋與進階發展調查。")
 
     def test_assigned_teacher_can_preview_private_growth_photo(self):
         with override_settings(
