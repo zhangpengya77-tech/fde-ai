@@ -92,12 +92,13 @@ class StudentSurveyV2ViewTests(TestCase):
         response = self.client.get(reverse("learning:student_survey", args=[self.enrollment.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "R08｜職業人才成長路徑")
-        self.assertContains(response, "Foundation Plus")
-        self.assertContains(response, "Professional")
+        self.assertNotContains(response, "Foundation Plus")
+        self.assertNotContains(response, "Professional Track")
+        self.assertNotContains(response, "約 48 小時")
         self.assertContains(response, "行業無人機飛手")
         self.assertContains(response, "無人機種子教師／教官")
         self.assertContains(response, "AI／測繪／行業應用")
-        self.assertContains(response, "Engineering（軟硬整合工程）")
+        self.assertContains(response, "無人機軟硬整合／軟體開發工程師")
         self.assertNotContains(response, "A01")
         self.assertNotContains(response, "advanced_course_intent")
 
@@ -147,7 +148,22 @@ class StudentSurveyV2ViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         result = self.client.get(reverse("learning:student_survey_result", args=[self.enrollment.pk]))
         self.assertEqual(result.status_code, 200)
+        self.assertContains(result, "R08｜我的職業發展方向")
+        self.assertContains(result, 'data-career-mode="result"')
         self.assertContains(result, "無人機軟硬整合／軟體開發工程師")
+        self.assertNotContains(result, "Foundation")
+        self.assertNotContains(result, "Professional Track")
+        self.assertNotContains(result, "2.0 無人系統專業人才")
+
+    def test_result_only_shows_selected_career_cards(self):
+        data = StudentSurveyV2FormTests().valid_data()
+        data["q7_paths"] = ["seed_instructor", "software_engineer"]
+        self.client.post(reverse("learning:student_survey", args=[self.enrollment.pk]), data)
+        result = self.client.get(reverse("learning:student_survey_result", args=[self.enrollment.pk]))
+        self.assertContains(result, "無人機種子教師／教官")
+        self.assertContains(result, "無人機軟硬整合／軟體開發工程師")
+        self.assertNotContains(result, "行業無人機飛手")
+        self.assertNotContains(result, "FPV 專業飛手／工程應用")
 
     def test_undecided_without_ability_interest_shows_exploration(self):
         data = StudentSurveyV2FormTests().valid_data()

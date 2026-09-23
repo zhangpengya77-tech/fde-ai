@@ -1,0 +1,26 @@
+<div class="advanced-career-grid{% if mode == 'teacher' %} teacher-career-reference{% endif %}" data-career-mode="{{ mode|default:'student' }}">
+{% if mode != 'result' or 'industry_pilot' in selected_career_paths %}
+  <details class="advanced-career-card" data-career-path="industry_pilot" data-career-selected="{% if mode == 'teacher' and 'industry_pilot' in selected_career_paths %}true{% else %}false{% endif %}">
+    <summary><strong>行業無人機飛手</strong>{% if mode == 'teacher' and 'industry_pilot' in selected_career_paths %}<span class="career-selected-badge">✓ 職業方向選擇</span>{% endif %}{% if mode == 'teacher' and 'industry_pilot' in selected_course_paths %}<span class="career-course-badge">★ 想進一步了解</span>{% endif %}<span>從「會飛」進一步做到「可以安全完成真正的行業任務」。</span><span><b>主要學習：</b>專業飛行、G1／G2／G3、航線規劃、Mission Planner、AUTO、RTL、任務安全。</span><span><b>未來方向：</b>電力巡檢、建築巡檢、航拍、測繪、農業植保、物流運輸。</span></summary>
+    <div><h3>完整學習內容</h3><p>專業飛行操作、G1／G2／G3 專業證照方向、航線規劃、Mission Planner、AUTO 自動任務、RTL 自動返航、飛行前安全檢查、任務現場風險判斷、異常狀況處理、基本設備維護與行業任務 SOP。</p><h3>完整未來應用／工作方向</h3><p>電力巡檢、建築與設施巡檢、高空巡檢、航拍、測繪、影像採集、農業植保、農業噴灑、物流運輸、無人機投送、自動航線任務與行業無人機飛行任務。</p><p class="career-card-highlight">不只是把飛機飛起來，而是能夠帶著任務出去工作。</p></div>
+  </details>
+{% endif %}
+{% if mode != 'result' or 'fpv_professional' in selected_career_paths %}
+  <details class="advanced-career-card" data-career-path="fpv_professional" data-career-selected="{% if mode == 'teacher' and 'fpv_professional' in selected_career_paths %}true{% else %}false{% endif %}">
+    <summary><strong>FPV 專業飛手／工程應用</strong>{% if mode == 'teacher' and 'fpv_professional' in selected_career_paths %}<span class="career-selected-badge">✓ 職業方向選擇</span>{% endif %}{% if mode == 'teacher' and 'fpv_professional' in selected_course_paths %}<span class="career-course-badge">★ 想進一步了解</span>{% endif %}<span>建立第一人稱視角高速飛行、競賽、影像與設備調校能力。</span><span><b>主要學習：</b>FPV 飛行、穿越機組裝、Betaflight、ELRS、VTX、PID、Blackbox。</span><span><b>未來方向：</b>FPV 競速、無人機競賽、第一視角影像、影視飛行、設備調校。</span></summary>
+    <div><h3>完整學習內容</h3><p>FPV 第一人稱視角飛行、穿越機組裝、Betaflight、ELRS、VTX、電機／ESC／飛控調試、PID、Blackbox 日誌分析、故障排查、維修保養、競速航線、精準操控與第一視角影像飛行。</p><h3>完整未來應用／發展方向</h3><p>FPV 競速、無人機競賽、第一視角影像拍攝、活動影像、影視飛行、FPV 設備調校、FPV 維修、競賽教學與特殊環境飛行任務。</p><p class="career-card-highlight">FPV 的核心是速度、操控、設備調校和第一視角任務能力。</p></div>
+  </details>
+{% endif %}
+{% if mode != 'result' or 'seed_instructor' in selected_career_paths %}
+  <details class="advanced-career-card" data-career-path="seed_instructor" data-career-selected="{% if mode == 'teacher' and 'seed_instructor' in selected_career_paths %}true{% else %}false{% endif %}">
+    <summary><strong>無人機種子教師／教官</strong>{% if mode == 'teacher' and 'seed_instructor' in selected_career_paths %}<span class="career-selected-badge">✓ 職業方向選擇</span>{% endif %}{% if mode == 'teacher' and 'seed_instructor' in selected_course_paths %}<span class="career-course-badge">★ 想進一步了解</span>{% endif %}<span>從「自己會」進一步做到「可以把一群零基礎學員教會」。</span><span><b>主要學習：</b>教學 SOP、飛行安全、組裝教學、故障排查、分組教學、成果評量。</span><span><b>未來方向：</b>大專院校、高中職、職訓、企業培訓、無人機教官、合作教師。</span></summary>
+    <div><h3>完整學習內容</h3><p>無人機教學 SOP、飛行安全教學、無人機組裝教學、飛行操作教學、基本維修、常見故障排查、學員問題診斷、分組教學、任務卡設計、學習成果評價、教師複核、教材與簡報製作、公開課教學、AI 教學工具、RAG 知識助教與 Evidence 管理。</p><h3>特色課程／活動</h3><p>無人機足球、無人機競賽、室內飛行活動、青少年課程、冬令營／夏令營、校園社團、體驗課程與公開示範課。</p><h3>完整未來發展方向</h3><p>大專院校課程、高中職無人機課程、校園社團、職業訓練、無人機教育中心、企業培訓、無人機教官、種子教師與 FDE-AI-UAS 合作教師。</p><p class="career-card-highlight">真正的種子教師，不只是會飛，還要會教、會帶班、會排錯、會複製課程。</p></div>
+  </details>
+{% endif %}
+{% if mode != 'result' or 'software_engineer' in selected_career_paths %}
+  <details class="advanced-career-card" data-career-path="software_engineer" data-career-selected="{% if mode == 'teacher' and 'software_engineer' in selected_career_paths %}true{% else %}false{% endif %}">
+    <summary><strong>無人機軟硬整合／軟體開發工程師</strong>{% if mode == 'teacher' and 'software_engineer' in selected_career_paths %}<span class="career-selected-badge">✓ 職業方向選擇</span>{% endif %}{% if mode == 'teacher' and 'software_engineer' in selected_course_paths %}<span class="career-course-badge">★ 想進一步了解</span>{% endif %}<span>從操作無人機，進一步走向開發智能無人系統。</span><span><b>主要學習：</b>ArduPilot、PX4、Mission Planner、QGroundControl、Python、MAVLink。</span><span><b>未來方向：</b>系統整合、飛控開發、AI 視覺、ROS 2、自主導航、無人系統研發。</span></summary>
+    <div><h3>完整學習內容</h3><p>ArduPilot、PX4、Mission Planner、QGroundControl、Lua、Python、MAVLink、ROS 2、Gazebo、SITL、YOLO、AI Vision、Optical Flow、LiDAR、GPS、IMU、Sensor Fusion、GPS-denied Navigation、Autonomous Navigation、Obstacle Avoidance、無人機與無人車協同及智能無人系統任務開發。</p><h3>學習階段</h3><p>第一階段：開源飛控、地面站、Lua、Python、MAVLink。第二階段：ROS 2、Gazebo、SITL、YOLO、AI Vision。第三階段：Optical Flow、LiDAR、GPS、IMU、多感測器融合、無 GPS 環境導航、自主導航與自主避障。</p><h3>完整未來工作／發展方向</h3><p>無人機系統整合工程師、飛控軟體開發、地面站開發、AI 視覺工程、ROS 2 機器人開發、自主導航工程、無人系統研發與無人機／無人車軟硬整合。</p><p class="career-card-highlight">讓無人載具從「人控制它」，進一步做到「自己感知、判斷並完成任務」。</p></div>
+  </details>
+{% endif %}
+</div>

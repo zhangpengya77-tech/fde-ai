@@ -11,7 +11,16 @@
   <a class="button secondary" href="{% url 'learning:student_survey' enrollment.pk %}">{% if is_v2 %}修改我的回饋{% else %}修改我的調查{% endif %}</a>
 </section>
 
-{% if recommendations %}
+{% if is_v2 and selected_career_paths %}
+<section class="survey-section result-career-section" aria-labelledby="result-career-title">
+  <p class="survey-section-label">職業方向</p>
+  <h2 id="result-career-title">R08｜我的職業發展方向</h2>
+  <p class="muted">根據你本次填寫的學習興趣與進階意願，整理目前較適合繼續了解的方向。</p>
+  {% include 'learning/partials/r08_career_cards.html' with mode='result' selected_career_paths=selected_career_paths %}
+</section>
+{% endif %}
+
+{% if not is_v2 and recommendations %}
   <div class="survey-result-list">
   {% for path in recommendations %}
     <article class="survey-result-card">
@@ -24,7 +33,7 @@
     </article>
   {% endfor %}
   </div>
-{% else %}
+{% elif not is_v2 or not selected_career_paths %}
   <section class="survey-section survey-exploration">
     <p class="survey-section-label">探索階段</p>
     <h2>你目前還在探索階段</h2>
@@ -36,5 +45,6 @@
   <p>這是學習方向建議，不是 AI 評分、職涯保證、錄取判定、正式報名或付費推薦。</p>
   {% if contact_notice %}<p class="contact-notice">未來有符合你所選方向的進階課程時，FDE-AI 會再提供相關資訊。</p>{% endif %}
   {% if is_v2 %}<p>繼續學習，讓能力不只停在「會操作」，而是逐步走向真正的任務與專業。</p>{% endif %}
+  {% if is_v2 %}<div class="result-contact"><h3>後續課程聯絡方式</h3><p><strong>Email：</strong>{{ survey.contact_email|default:'未填寫' }}</p><p><strong>電話號碼：</strong>{{ survey.v2_responses.contact_phone|default:'未填寫' }}</p></div>{% endif %}
 </section>
 {% endblock %}

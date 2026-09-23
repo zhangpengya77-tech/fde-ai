@@ -207,6 +207,46 @@ class TeacherWorkflowTests(TestCase):
         self.assertContains(response, "FPV 專業飛手／工程應用課程")
         self.assertContains(response, "career@example.com")
         self.assertContains(response, "0912-345-678")
+        self.assertContains(response, "職業發展方向參考")
+        self.assertContains(response, "FPV 專業飛手／工程應用")
+        self.assertContains(response, "無人機種子教師／教官")
+        self.assertContains(response, "無人機足球")
+        self.assertContains(response, "ROS 2")
+        self.assertContains(response, "MAVLink")
+        self.assertContains(response, "✓ 職業方向選擇")
+        self.assertContains(response, "★ 想進一步了解")
+        self.assertContains(response, 'data-career-path="industry_pilot"')
+        self.assertContains(response, 'data-career-selected="true"')
+        self.assertNotContains(response, 'data-career-path="seed_instructor" data-career-selected="true"')
+        self.assertNotContains(response, 'name="q7_paths"')
+
+    def test_teacher_review_separates_q7_and_q9_badges(self):
+        ensure_growth_submissions(self.enrollment)
+        r08 = GrowthRecordSubmission.objects.get(enrollment=self.enrollment, definition__slot_id="R08")
+        StudentSurvey.objects.create(
+            student=self.student,
+            enrollment=self.enrollment,
+            growth_record=r08,
+            a01=0,
+            a02=0,
+            a03=0,
+            a04=0,
+            a05=0,
+            a06=0,
+            a07=0,
+            survey_version="v2",
+            v2_responses={
+                "q7_paths": ["undecided"],
+                "q9_courses": ["seed_instructor", "software_engineer"],
+            },
+        )
+        self.client.force_login(self.teacher)
+        response = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "✓ 職業方向選擇")
+        self.assertEqual(response.content.decode().count("★ 想進一步了解"), 2)
+        self.assertNotContains(response, 'name="q7_paths"')
 
     def test_teacher_review_page_handles_missing_r08_survey(self):
         self.client.force_login(self.teacher)
@@ -214,6 +254,8 @@ class TeacherWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "此學員尚未填寫 R08 結訓回饋與進階發展調查。")
+        self.assertNotContains(response, "職業發展方向參考")
+        self.assertNotContains(response, "FPV 專業飛手／工程應用")
 
     def test_assigned_teacher_can_preview_private_growth_photo(self):
         with override_settings(

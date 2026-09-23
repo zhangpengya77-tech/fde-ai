@@ -992,6 +992,11 @@ def student_survey_result(request, enrollment_id):
             "survey": survey,
             "recommendations": recommend_v2_paths(survey) if survey.survey_version == "v2" else recommend_paths(survey),
             "is_v2": survey.survey_version == "v2",
+            "selected_career_paths": [
+                path
+                for path in (survey.v2_responses or {}).get("q7_paths", [])
+                if path in {"industry_pilot", "fpv_professional", "seed_instructor", "software_engineer"}
+            ] if survey.survey_version == "v2" else [],
             "contact_notice": survey.contact_opt_in and bool(survey.contact_email),
         },
     )
@@ -1331,6 +1336,8 @@ def teacher_student_detail(request, enrollment_id):
             "r08_survey": r08_survey,
             "r08_is_v2": bool(r08_survey and r08_survey.survey_version == "v2"),
             "r08_answers": r08_answers,
+            "r08_selected_career_paths": r08_answers.get("q7_paths", []),
+            "r08_selected_course_paths": r08_answers.get("q9_courses", []),
             "r08_q1_label": r08_q1_labels.get(r08_answers.get("q1_helpfulness", ""), "未填寫"),
             "r08_q2_label": r08_q2_labels.get(r08_answers.get("q2_practice_ratio", ""), "未填寫"),
             "r08_q3_labels": labels_for(r08_answers.get("q3_topics", []), SURVEY_V2_HELPFUL_CHOICES),
