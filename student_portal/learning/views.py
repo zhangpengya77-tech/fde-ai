@@ -1565,3 +1565,25 @@ def promote_candidate(request, evidence_id):
     record.save()
     messages.success(request, "已記錄教師批准的候選用途；未執行模型訓練或 RAG 更新。")
     return redirect("learning:teacher_student_detail", enrollment_id=evidence.progress.enrollment_id)
+
+
+@teacher_required
+@require_POST
+def teacher_delete_image_evidence(request, evidence_id):
+    evidence = get_object_or_404(
+        Evidence.objects.filter(
+            growth_submission__enrollment__cohort__in=teacher_cohorts(request.user),
+            evidence_type=Evidence.Type.IMAGE,
+            upload__gt="",
+        ).select_related("growth_submission__enrollment"),
+        evidence_id=evidence_id,
+    )
+    enrollment_id = evidence.growth_submission.enrollment_id
+    storage = evidence.upload.storage
+    upload_name = evidence.upload.name
+    shared_file = Evidence.objects.filter(upload=upload_name).exclude(pk=evidence.pk).exists()
+    if not shared_file:
+        storage.delete(upload_name)
+    evidence.delete()
+    messages.success(request, "已刪除指定照片；請確認是否需要學員補件。")
+    return redirect("learning:teacher_student_detail", enrollment_id=enrollment_id)

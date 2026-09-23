@@ -531,6 +531,7 @@ SURVEY_V2_INTENT_CHOICES = [
 ]
 SURVEY_V2_COURSE_CHOICES = [
     ("industry_pilot", "行業無人機飛手進階課程"),
+    ("fpv_professional", "FPV 專業飛手／工程應用課程"),
     ("technician", "無人機裝調檢修技師課程"),
     ("seed_instructor", "無人機種子教師／教官培訓"),
     ("software_engineer", "無人機軟硬整合／軟體開發工程課程"),

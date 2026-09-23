@@ -30,6 +30,13 @@ class StudentSurveyV2FormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["contact_email"], "")
 
+    def test_q9_accepts_fpv_professional_course(self):
+        data = self.valid_data()
+        data["q9_courses"] = ["fpv_professional"]
+        form = StudentSurveyV2Form(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["q9_courses"], ["fpv_professional"])
+
     def test_v2_selection_limits_are_enforced_server_side(self):
         data = self.valid_data()
         data["q3_topics"] = ["flight_license", "assembly_repair", "industry_tasks", "other"]
@@ -80,6 +87,19 @@ class StudentSurveyV2ViewTests(TestCase):
         self.assertContains(response, "Engineering（軟硬整合工程）")
         self.assertNotContains(response, "A01")
         self.assertNotContains(response, "advanced_course_intent")
+
+    def test_page_explains_advanced_career_paths_before_course_choices(self):
+        response = self.client.get(reverse("learning:student_survey", args=[self.enrollment.pk]))
+        self.assertContains(response, "進階學習，可以往哪些方向發展？")
+        self.assertContains(response, "行業無人機飛手")
+        self.assertContains(response, "FPV 專業飛手／工程應用")
+        self.assertContains(response, "無人機種子教師／教官")
+        self.assertContains(response, "無人機軟硬整合／軟體開發工程師")
+        self.assertContains(response, "無人機足球")
+        self.assertContains(response, "ROS 2")
+        self.assertContains(response, "MAVLink")
+        self.assertContains(response, "Gazebo")
+        self.assertContains(response, "FPV 專業飛手／工程應用課程")
 
     def test_career_intent_choices_are_saved_in_existing_v2_field(self):
         data = StudentSurveyV2FormTests().valid_data()

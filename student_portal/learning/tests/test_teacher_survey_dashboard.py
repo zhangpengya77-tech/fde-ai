@@ -232,6 +232,14 @@ class TeacherSurveyDashboardTests(TestCase):
         self.assertEqual(next(item for item in analytics["q9_stats"] if item["value"] == "seed_instructor")["count"], 1)
         self.assertEqual(analytics["contact_counts"]["with_email"], 1)
 
+    def test_v2_dashboard_counts_fpv_course_choice(self):
+        self.create_v2_survey(v2_responses={"q9_courses": ["fpv_professional"]})
+        response = self.client.get(reverse("learning:teacher_survey_dashboard"))
+        analytics = response.context["analytics_v2"]
+        fpv = next(item for item in analytics["q9_stats"] if item["value"] == "fpv_professional")
+        self.assertEqual(fpv["count"], 1)
+        self.assertContains(response, "FPV 專業飛手／工程應用課程")
+
     def test_v2_filters_select_saved_responses_and_email_state(self):
         self.create_v2_survey()
         second_profile = create_student_account("v2-second@example.com", "第二位學員")

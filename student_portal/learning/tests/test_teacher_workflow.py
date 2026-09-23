@@ -1,10 +1,9 @@
 from io import BytesIO
-from tempfile import TemporaryDirectory
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -24,6 +23,7 @@ from learning.models import (
     TeacherCohortAccess,
     TeacherReviewEvent,
 )
+from learning.growth_records import ensure_growth_submissions
 from learning.tests.helpers import create_student_account, enroll_student
 
 
@@ -162,7 +162,12 @@ class TeacherWorkflowTests(TestCase):
         self.assertContains(student_detail, "91.00")
 
     def test_assigned_teacher_can_preview_private_growth_photo(self):
-        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=media_dir):
+        with override_settings(
+            STORAGES={
+                "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+                "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+            }
+        ):
             self.client.force_login(self.student.user)
             self.client.get(reverse("learning:student_growth_dashboard", args=[self.enrollment.pk]))
             image_buffer = BytesIO()
@@ -192,6 +197,143 @@ class TeacherWorkflowTests(TestCase):
             self.assertEqual(preview["Content-Type"], "image/jpeg")
             self.assertTrue(preview["Content-Disposition"].startswith("inline;"))
             preview.close()
+
+    def test_authorized_teacher_can_delete_one_image_without_touching_record_review_or_video(self):
+        with override_settings(
+            STORAGES={
+                "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+                "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+            }
+        ):
+            self.client.force_login(self.student.user)
+            ensure_growth_submissions(self.enrollment)
+            record = GrowthRecordSubmission.objects.get(
+                enrollment=self.enrollment, definition__slot_id="R01"
+            )
+            record.status = GrowthRecordSubmission.Status.APPROVED
+            record.teacher_final_score = 92
+            record.save(update_fields=["status", "teacher_final_score", "updated_at"])
+            review = GrowthRecordReview.objects.create(
+                submission=record,
+                reviewer=self.teacher,
+                review_status=GrowthRecordReview.Status.APPROVED,
+                score=92,
+                teacher_note="保留原評語",
+            )
+            first = Evidence.objects.create(
+                growth_submission=record,
+                evidence_type=Evidence.Type.IMAGE,
+                description="錯誤照片",
+                upload=SimpleUploadedFile("wrong.jpg", b"image-one", content_type="image/jpeg"),
+            )
+            second = Evidence.objects.create(
+                growth_submission=record,
+                evidence_type=Evidence.Type.IMAGE,
+                description="正確照片",
+                upload=SimpleUploadedFile("right.jpg", b"image-two", content_type="image/jpeg"),
+            )
+            video = Evidence.objects.create(
+                growth_submission=record,
+                evidence_type=Evidence.Type.VIDEO,
+                upload=SimpleUploadedFile("flight.mp4", b"video", content_type="video/mp4"),
+            )
+            first_name = first.upload.name
+            self.client.force_login(self.teacher)
+
+            detail = self.client.get(reverse("learning:teacher_student_detail", args=[self.enrollment.pk]))
+            response = self.client.post(
+                reverse("learning:teacher_delete_image_evidence", args=[first.pk]),
+            )
+
+            self.assertContains(detail, "刪除此照片")
+            self.assertEqual(response.status_code, 302)
+            self.assertFalse(Evidence.objects.filter(pk=first.pk).exists())
+            self.assertTrue(Evidence.objects.filter(pk=second.pk).exists())
+            self.assertTrue(Evidence.objects.filter(pk=video.pk).exists())
+            self.assertTrue(GrowthRecordSubmission.objects.filter(pk=record.pk).exists())
+            self.assertTrue(GrowthRecordReview.objects.filter(pk=review.pk).exists())
+            record.refresh_from_db()
+            review.refresh_from_db()
+            self.assertEqual(str(record.teacher_final_score), "92.00")
+            self.assertEqual(review.teacher_note, "保留原評語")
+            self.assertFalse(first.upload.storage.exists(first_name))
+
+    def test_teacher_image_delete_is_post_only_and_cohort_scoped(self):
+        ensure_growth_submissions(self.enrollment)
+        record = GrowthRecordSubmission.objects.get(
+            enrollment=self.enrollment, definition__slot_id="R01"
+        )
+        image = Evidence.objects.create(
+            growth_submission=record,
+            evidence_type=Evidence.Type.IMAGE,
+            external_url="https://example.test/wrong.jpg",
+        )
+        self.client.force_login(self.teacher)
+        self.assertEqual(
+            self.client.get(reverse("learning:teacher_delete_image_evidence", args=[image.pk])).status_code,
+            405,
+        )
+
+        self.client.force_login(self.student.user)
+        self.assertEqual(
+            self.client.post(reverse("learning:teacher_delete_image_evidence", args=[image.pk])).status_code,
+            403,
+        )
+
+        other_cohort = Cohort.objects.create(cohort_id="2026-02", name="未授權班")
+        other_teacher = get_user_model().objects.create_user(
+            username="other-image-teacher",
+            email="other-image-teacher@example.com",
+            password="Another-strong-passphrase-914!",
+            is_staff=True,
+        )
+        TeacherCohortAccess.objects.create(teacher=other_teacher, cohort=other_cohort)
+        self.client.force_login(other_teacher)
+        response = self.client.post(
+            reverse("learning:teacher_delete_image_evidence", args=[image.pk]),
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Evidence.objects.filter(pk=image.pk).exists())
+
+    def test_teacher_image_delete_requires_csrf_and_preserves_shared_storage(self):
+        with override_settings(
+            STORAGES={
+                "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+                "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+            }
+        ):
+            ensure_growth_submissions(self.enrollment)
+            record = GrowthRecordSubmission.objects.get(
+                enrollment=self.enrollment, definition__slot_id="R01"
+            )
+            first = Evidence.objects.create(
+                growth_submission=record,
+                evidence_type=Evidence.Type.IMAGE,
+                upload=SimpleUploadedFile("shared.jpg", b"shared", content_type="image/jpeg"),
+            )
+            shared = Evidence.objects.create(
+                growth_submission=record,
+                evidence_type=Evidence.Type.IMAGE,
+                upload=first.upload.name,
+            )
+            storage = first.upload.storage
+            upload_name = first.upload.name
+            client = Client(enforce_csrf_checks=True)
+            client.force_login(self.teacher)
+            response = client.post(
+                reverse("learning:teacher_delete_image_evidence", args=[first.pk]),
+            )
+            self.assertEqual(response.status_code, 403)
+            self.assertTrue(Evidence.objects.filter(pk=first.pk).exists())
+
+            self.client.force_login(self.teacher)
+            response = self.client.post(
+                reverse("learning:teacher_delete_image_evidence", args=[first.pk]),
+            )
+            self.assertEqual(response.status_code, 302)
+            self.assertFalse(Evidence.objects.filter(pk=first.pk).exists())
+            self.assertTrue(Evidence.objects.filter(pk=shared.pk).exists())
+            self.assertTrue(storage.exists(upload_name))
 
     def test_teacher_cannot_review_growth_record_outside_assigned_cohort(self):
         self.client.force_login(self.student.user)

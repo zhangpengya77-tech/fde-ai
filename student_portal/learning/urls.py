@@ -52,4 +52,5 @@ urlpatterns = [
     path("teacher/growth-reviews/<int:submission_id>/", views.review_growth_record, name="growth_review"),
     path("teacher/reviews/<int:progress_id>/", views.review_task, name="review_task"),
     path("teacher/evidence/<uuid:evidence_id>/candidate/", views.promote_candidate, name="promote_candidate"),
+    path("teacher/evidence/<uuid:evidence_id>/delete/", views.teacher_delete_image_evidence, name="teacher_delete_image_evidence"),
 ]

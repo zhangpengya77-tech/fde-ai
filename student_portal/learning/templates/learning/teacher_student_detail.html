@@ -38,6 +38,7 @@
   {% if record.reviews.all %}<details class="review-history"><summary>複核歷史（{{ record.reviews.count }}）</summary>{% for review in record.reviews.all %}<p>{{ review.reviewed_at|date:'Y-m-d H:i' }} · {{ review.get_review_status_display }} · {{ review.reviewer.username }}{% if review.score != None %} · {{ review.score }} 分{% endif %}<br>{{ review.teacher_note }}</p>{% endfor %}</details>{% endif %}
 </article>{% empty %}<p class="empty-state">成長記錄尚未初始化。</p>{% endfor %}
 </div></section>
+<section class="teacher-evidence-delete-list"><h3>照片處理</h3>{% for record in growth_records %}{% for evidence in record.evidence.all %}{% if evidence.evidence_type == 'image' and evidence.upload %}<form method="post" action="{% url 'learning:teacher_delete_image_evidence' evidence.pk %}" class="teacher-evidence-delete-form" onsubmit="return confirm('確定要刪除這張照片嗎？刪除後，該學員可以重新上傳新的照片。');">{% csrf_token %}<span>{{ record.definition.slot_id }} · {{ evidence.description|default:'學習證據照片' }}</span><button type="submit" class="small-button growth-photo-remove">刪除此照片</button></form>{% endif %}{% endfor %}{% endfor %}</section>
 <script>
   document.getElementById("copy-nickname")?.addEventListener("click", (event) => {
     document.getElementById("teacher_verified_name").value = event.currentTarget.dataset.nickname;
