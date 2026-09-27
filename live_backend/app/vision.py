@@ -15,29 +15,30 @@ class VisionResponseError(Exception):
     """The local YOLO service returned an invalid response."""
 
 
+TIMING_KEYS = (
+    "server_decode_ms",
+    "queue_wait_ms",
+    "model_preprocess_ms",
+    "model_inference_ms",
+    "postprocess_ms",
+)
+
+
 @dataclass(frozen=True)
 class VisionResult:
     detections: list[dict]
     upstream_ms: float
+    timings: dict[str, float] | None = None
 
 
 class VisionAdapter:
-    def __init__(
-        self,
-        base_url: str,
-        *,
-        timeout_seconds: float = 20.0,
-        transport=None,
-    ):
+    def __init__(self, base_url: str, *, timeout_seconds: float = 20.0, transport=None):
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.transport = transport
 
     def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            transport=self.transport,
-            timeout=self.timeout_seconds,
-        )
+        return httpx.AsyncClient(transport=self.transport, timeout=self.timeout_seconds)
 
     async def health(self) -> bool:
         try:
@@ -47,23 +48,11 @@ class VisionAdapter:
         except httpx.HTTPError:
             return False
 
-    async def detect(
-        self,
-        image_data: str,
-        file_name: str,
-        confidence: float,
-    ) -> VisionResult:
+    async def detect(self, image_data: str, file_name: str, confidence: float) -> VisionResult:
         started = time.perf_counter()
         try:
             async with self._client() as client:
-                response = await client.post(
-                    f"{self.base_url}/api/detect",
-                    json={
-                        "imageData": image_data,
-                        "fileName": file_name,
-                        "conf": confidence,
-                    },
-                )
+                response = await client.post(f"{self.base_url}/api/detect", json={"imageData": image_data, "fileName": file_name, "conf": confidence})
                 response.raise_for_status()
                 payload = response.json()
         except httpx.HTTPError as exc:
@@ -72,17 +61,28 @@ class VisionAdapter:
             raise VisionResponseError() from exc
 
         try:
-            raw_detections = payload["result"]["detections"]
+            result_payload = payload["result"]
+            raw_detections = result_payload["detections"]
             if not isinstance(raw_detections, list):
                 raise TypeError("detections must be a list")
             detections = [self._normalize_detection(item) for item in raw_detections]
+            timings = self._normalize_timings(result_payload.get("timings", {}))
         except (KeyError, TypeError, ValueError) as exc:
             raise VisionResponseError() from exc
 
-        return VisionResult(
-            detections=detections,
-            upstream_ms=round((time.perf_counter() - started) * 1000, 1),
-        )
+        return VisionResult(detections=detections, upstream_ms=round((time.perf_counter() - started) * 1000, 1), timings=timings)
+
+    @staticmethod
+    def _normalize_timings(value: object) -> dict[str, float]:
+        if not isinstance(value, dict):
+            raise TypeError("timings must be an object")
+        normalized = {}
+        for key in TIMING_KEYS:
+            number = value.get(key, 0.0)
+            if not isinstance(number, (int, float)) or not math.isfinite(number) or number < 0:
+                raise ValueError("invalid timing")
+            normalized[key] = round(float(number), 1)
+        return normalized
 
     @staticmethod
     def _normalize_detection(item: dict) -> dict:
@@ -95,14 +95,7 @@ class VisionAdapter:
             raise ValueError("invalid detection class")
         if not isinstance(confidence, (int, float)) or not math.isfinite(confidence):
             raise ValueError("invalid detection confidence")
-        if (
-            not isinstance(box, list)
-            or len(box) != 4
-            or any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in box)
-        ):
+        if not isinstance(box, list) or len(box) != 4 or any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in box):
             raise ValueError("invalid detection box")
-        return {
-            "class": class_name,
-            "confidence": round(float(confidence), 3),
-            "box": [round(float(value)) for value in box],
-        }
+        return {"class": class_name, "confidence": round(float(confidence), 3), "box": [round(float(value)) for value in box]}
+
