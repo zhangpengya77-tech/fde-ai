@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07131f">
+  <title>FDE-AI Live Coach MVP</title>
+  <link rel="stylesheet" href="live.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">FDE-AI-UAS v2.0 · Phase 1A</p>
+      <h1>Live Coach MVP</h1>
+      <p>手動擷取一張影像，送到本機 YOLO，僅顯示 Detection Facts。</p>
+    </header>
+
+    <section class="status-panel" aria-label="服務狀態">
+      <div><span>Live Backend</span><strong id="backendStatus" data-state="checking">CHECKING</strong></div>
+      <div><span>Vision</span><strong id="visionStatus">CHECKING</strong></div>
+    </section>
+
+    <section class="camera-panel">
+      <div class="preview" aria-label="攝影機預覽與辨識框">
+        <video id="cameraPreview" playsinline muted></video>
+        <canvas id="detectionOverlay" aria-hidden="true"></canvas>
+        <canvas id="captureCanvas" hidden></canvas>
+      </div>
+      <div class="controls">
+        <button id="startCamera" type="button">開啟後鏡頭</button>
+        <button id="captureFrame" type="button" disabled>擷取一張並辨識</button>
+        <button id="stopCamera" type="button" disabled>停止 Camera</button>
+        <label class="file-button">或選擇圖片<input id="imageFile" type="file" accept="image/*"></label>
+      </div>
+      <p id="liveMessage" role="status">正在檢查 Live Backend…</p>
+    </section>
+
+    <section class="results-panel">
+      <h2>Detection Facts</h2>
+      <ul id="detectionResults"><li>尚未執行辨識。</li></ul>
+      <p id="timingMetrics">Capture、Upload、Vision、Total 與 Response Size 會顯示在這裡。</p>
+    </section>
+
+    <aside>
+      <strong>Phase 1A 限制</strong>
+      <p>這不是 PASS／NG 判定，也不會寫入正式學習紀錄。Live Backend 離線時，既有 FDE 教材與 Photo Check 不受影響。</p>
+    </aside>
+  </main>
+  <script src="live.js"></script>
+</body>
+</html>

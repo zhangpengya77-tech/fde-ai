@@ -1,0 +1,39 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #030811;
+  color: #eaf7ff;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% 0, #123854 0, #07131f 42%, #030811 100%); }
+main { width: min(100% - 28px, 900px); margin: 0 auto; padding: 32px 0 64px; }
+header, section, aside { margin-bottom: 18px; }
+.eyebrow { color: #5fe2ff; font-size: .76rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+h1 { margin: 8px 0; font-size: clamp(2rem, 8vw, 4rem); }
+h2 { margin-top: 0; }
+p { color: #b7cad8; line-height: 1.65; }
+.status-panel, .camera-panel, .results-panel, aside { border: 1px solid rgba(91, 217, 255, .3); border-radius: 16px; background: rgba(5, 20, 33, .88); padding: 18px; }
+.status-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.status-panel div { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 10px; background: #081c2c; }
+.status-panel strong { color: #ffcb64; }
+.status-panel strong[data-state="online"] { color: #6effb4; }
+.status-panel strong[data-state="offline"], .status-panel strong[data-state="degraded"] { color: #ff818f; }
+.preview { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: #010407; }
+.preview video, .preview #detectionOverlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+#detectionOverlay { pointer-events: none; }
+.controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+button, .file-button { min-height: 48px; display: flex; align-items: center; justify-content: center; border: 1px solid #51dfff; border-radius: 9px; background: #0e7696; color: white; font: inherit; font-weight: 750; cursor: pointer; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.file-button { background: transparent; }
+.file-button input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
+#detectionResults { display: grid; gap: 8px; padding: 0; list-style: none; }
+#detectionResults li { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 12px; border-radius: 9px; background: #081c2c; }
+#detectionResults code { grid-column: 1 / -1; color: #8feaff; }
+#timingMetrics { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .83rem; }
+aside strong { color: #ffcb64; }
+
+@media (max-width: 560px) {
+  main { width: min(100% - 18px, 900px); padding-top: 20px; }
+  .status-panel, .controls { grid-template-columns: 1fr; }
+}

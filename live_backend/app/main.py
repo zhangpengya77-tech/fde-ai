@@ -4,11 +4,13 @@ import asyncio
 import base64
 import binascii
 import time
+from pathlib import Path
 from uuid import uuid4
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.routing import Route
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from .config import LiveConfig
 from .errors import error_response, json_response
@@ -160,6 +162,11 @@ def create_app(
                 "/api/live/sessions/{session_id}",
                 delete_session,
                 methods=["DELETE"],
+            ),
+            Mount(
+                "/live",
+                app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "live"), html=True),
+                name="live",
             ),
         ]
     )
