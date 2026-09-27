@@ -44,15 +44,16 @@ test('captures one video frame and records capture time', () => {
     getContext: () => ({ drawImage: (...args) => calls.push(args) }),
     toDataURL: (mime, quality) => `${mime}:${quality}:snapshot`
   };
-  const times = [100, 106];
+  const times = [100, 106, 107, 112];
 
   const result = captureFrame(video, canvas, () => times.shift());
 
-  assert.equal(canvas.width, 1280);
-  assert.equal(canvas.height, 720);
+  assert.equal(canvas.width, 640);
+  assert.equal(canvas.height, 360);
   assert.equal(calls.length, 1);
-  assert.equal(result.imageData, 'image/jpeg:0.82:snapshot');
+  assert.equal(result.imageData, 'image/jpeg:0.75:snapshot');
   assert.equal(result.captureMs, 6);
+  assert.equal(result.encodeMs, 5);
 });
 
 test('maps source detection box into a letterboxed preview', () => {

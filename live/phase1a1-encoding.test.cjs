@@ -18,7 +18,7 @@ function makeCanvas() {
 
 test('bounds a landscape snapshot to 640x480 and separates capture from encoding time', () => {
   const { canvas, calls } = makeCanvas();
-  const times = [100, 104, 111];
+  const times = [100, 104, 105, 112];
   const result = captureFrame(
     { videoWidth: 1920, videoHeight: 1080 },
     canvas,
