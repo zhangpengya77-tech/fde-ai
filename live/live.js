@@ -27,18 +27,31 @@
     }
   }
 
-  function captureFrame(video, canvas, clock = performance.now.bind(performance)) {
+  function captureFrame(video, canvas, clock = performance.now.bind(performance), options = {}) {
     if (!video.videoWidth || !video.videoHeight) {
       throw new Error('camera_not_ready');
     }
-    const started = clock();
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const maxWidth = options.maxWidth || 640;
+    const maxHeight = options.maxHeight || 480;
+    const mimeType = options.mimeType || 'image/jpeg';
+    const quality = options.quality ?? 0.75;
+    const scale = Math.min(1, maxWidth / video.videoWidth, maxHeight / video.videoHeight);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
+    const captureStarted = clock();
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL('image/jpeg', 0.82);
+    const captureMs = Math.max(0, Number((clock() - captureStarted).toFixed(1)));
+    const encodeStarted = clock();
+    const imageData = canvas.toDataURL(mimeType, quality);
+    const encodeMs = Math.max(0, Number((clock() - encodeStarted).toFixed(1)));
     return {
       imageData,
-      captureMs: Math.max(0, Number((clock() - started).toFixed(1)))
+      captureMs,
+      encodeMs,
+      mimeType,
+      width: canvas.width,
+      height: canvas.height
     };
   }
 
