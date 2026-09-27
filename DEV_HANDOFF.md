@@ -1,35 +1,31 @@
-# FDE-AI-UAS v2.0 Phase 1A — Development Handoff
+# FDE-AI-UAS v2.0 Phase 1A.1 — Development Handoff
 
-## Current state
+## Workspace and services
 
+- Canonical directory: `D:\FDE-AI-UAS-v2.0`
 - Branch: `fde-ai-v2.0-dev`
-- Base: `12cabfb`
-- Phase 1A implementation commits through `a4b9376` before this documentation commit.
-- Local services: Live Backend `127.0.0.1:8030`; snapshot vision `127.0.0.1:8765`.
-- Start: `powershell -File ops/v2/start-phase1a.ps1`
-- Status: `powershell -File ops/v2/status-phase1a.ps1`
-- Stop: `powershell -File ops/v2/stop-phase1a.ps1`
+- Base: `12cabfb`; Phase 1A preservation point: `4e77c3e`
+- Live Backend: `127.0.0.1:8030`
+- Snapshot Vision: `127.0.0.1:8765`
+- Commands: `ops/v2/start-phase1a.ps1`, `status-phase1a.ps1`, `stop-phase1a.ps1`
 
-The supervisor owns and stops only processes it started. It starts no tunnel and updates no production Worker.
+## Phase 1A.1 evidence
 
-## Verification evidence
+- Actual model names: `cw_propeller`, `ccw_propeller`, `flight_controller`, `motor`, `esc`, `gps_compass`, `receiver`, `battery`, `frame_arm`, `power_module`.
+- Labeled-object test (IoU ≥ 0.5 and correct class): CW 6/10; CCW 3/10. Source is the training/validation dataset, not an independent field set.
+- Representative format comparison: original 266,605 bytes / inference 40.7 ms; JPEG 640×480 q0.75 40,551 bytes / encode 51.7 ms / inference 38.6 ms; WebP 640×480 q0.75 24,112 bytes / encode 202.3 ms / inference 40.0 ms.
+- Full HTTP original-image run: 266,605 bytes; 412.9 ms total; 1,392-byte response; decode 22.7 ms; queue 0.0 ms; preprocess 39.8 ms; inference 61.8 ms; postprocess 4.0 ms; vision upstream/backend 401.3 ms.
+- Django 5.2.17 isolated environment: system check clean, migration check reports no changes, test command completed without test failure.
+- Windows Webcam: not completed because the Windows UI automation helper failed twice before browser control. Android Chrome and iPhone Safari: no connected physical devices; pending.
 
-- Live Backend unit tests: 14 passed.
-- JavaScript tests: 38 browser/existing/ops tests plus 3 Worker tests passed.
-- Python compile check: passed.
-- Real snapshot integration: source `DJI_20260913094111_0002_D.JPG`, 966,656 bytes; four detections; client round trip 730.96 ms; vision upstream 710.4 ms; forbidden response fields absent.
-- Static analysis: `git diff --check` passed before the vision isolation commit.
+Full object-level and per-format records: `docs/verification/phase1a1-benchmark.json`.
 
-`vision_upstream_ms` measures the Live Backend-to-vision round trip; it is not pure model inference time.
+## Known issues / next gate
 
-## Known limitations and manual checks
+- Existing best.pt performed poorly on labeled CW/CCW objects (CW 60%, CCW 30% in this limited test); do not retrain until separately approved.
+- A browser cannot reliably isolate pure upload time from server processing using ordinary fetch timing; client fetch total and server-side stages must be interpreted together.
+- WebP was smaller but substantially slower to encode in the local Pillow benchmark; browser/device results may differ.
+- Windows Webcam, Android Chrome, and iPhone Safari still require hands-on HTTPS tests.
 
-- Android Chrome, iPhone Safari, and a physical Windows webcam were not physically exercised in this development session. Camera constraints and lifecycle are covered by automated tests; device permission/orientation behavior still needs hands-on validation through a temporary HTTPS development route.
-- The Cloudflare file is an undeployed development example. No production deployment was performed.
-- Django regression commands require the project dependencies. The available Python runtimes in this session did not contain Django, so the final report records that limitation unless an existing compatible environment is supplied.
-- Sessions are in-memory and intentionally non-authenticated demo sessions.
-
-## Next gate
-
-Before Phase 1B approval, run the manual matrix on Windows Chrome with webcam, Android Chrome, and iPhone Safari over an approved temporary HTTPS development route. Confirm overlay alignment in portrait and landscape, permission denial recovery, offline behavior, and several representative F450 images. Do not begin Phase 1B merely from this handoff.
+Do not enter Phase 1B until physical device tests and an acceptable CW/CCW acceptance threshold are approved.
 

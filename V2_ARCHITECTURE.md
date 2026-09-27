@@ -1,33 +1,25 @@
-# FDE-AI-UAS v2.0 Architecture — Phase 1A
+# FDE-AI-UAS v2.0 Architecture — Phase 1A.1
 
-## Runtime flow
+## Actual vision architecture
 
-`Browser /live/` → `HTTP /api/live/*` → `Live Backend :8030` → `Snapshot Vision :8765` → existing `yolo_server.Detector` → clean detections → browser overlay.
+`Browser /live/` → HTTP → `Live Backend 127.0.0.1:8030` → HTTP → `Snapshot Vision 127.0.0.1:8765` → imports existing `yolo_server.Detector` and loads existing `best.pt` → Ultralytics prediction → clean JSON → browser overlay.
 
-The Phase 1A vision wrapper imports the existing detector but does not construct HoverScorer or Voice services. This preserves the existing model pipeline while removing an unrelated hover-model startup dependency from the live snapshot path.
+Live Backend and YOLO are separate processes. The Vision wrapper imports Detector code; Live Backend does not import Detector and does not perform inference in-process.
 
-## Modules
+## Timing boundaries
 
-- `live/`: mobile-friendly camera/file UI, capture, upload timing, and canvas overlay.
-- `live_backend/app/`: session API, snapshot validation, health, and YOLO adapter.
-- `live_backend/dev/vision_snapshot_server.py`: development-only detector wrapper with `/api/health` and `/api/detect`.
-- `ops/v2/`: start, stop, and status scripts for ports 8030 and 8765.
-- `cloudflare/dev-phase1a/`: isolated route example for `/live*` and `/api/live/*`, using only `LIVE_ORIGIN_URL`.
+- Browser: `capture_ms`, `encode_ms`; request code currently records a combined fetch round trip.
+- Vision: `server_decode_ms`, inference-lock `queue_wait_ms`, `model_preprocess_ms`, Ultralytics `model_inference_ms`, and `postprocess_ms`.
+- Live Backend: `vision_upstream_ms` and `backend_ms`.
+- External test client: `total_round_trip_ms` and response bytes.
 
-## API contract
+`vision_upstream_ms` is never described as model inference. Pure inference comes from Ultralytics `result.speed.inference`.
 
-- `GET /api/live/health`: aggregate component health; degradation is explicit.
-- `POST /api/live/sessions`: creates an in-memory demo session.
-- `POST /api/live/sessions/{id}/snapshot`: accepts a bounded image data URL and returns frame/session IDs, detection facts, and timing.
-- `DELETE /api/live/sessions/{id}`: removes the in-memory session.
+## Image policy
 
-No annotated image, model path, AI narrative, PASS/NG, or other business decision is returned.
+New browser captures are bounded within 640×480 and default to JPEG quality 0.75. WebP quality 0.75 is supported for controlled comparison; JPEG remains the compatibility default. File-upload images remain accepted within the server size limit.
 
-## Failure behavior
+## Trust and deployment boundary
 
-Camera permission failure leaves file upload available. Vision failure produces stable `vision_offline`/503 behavior without internal addresses. The development Worker health route reports offline safely, and non-live paths never fall through to a production origin.
-
-## Deferred architecture
-
-Streaming/WebSocket transport, authenticated student sessions, voice, RAG, SOP decisions, teacher workflows, persistent storage, observability, and production routing belong to later approved phases.
+Demo sessions are in-memory and do not write Django data. The browser cannot assert identity, permissions, or PASS/NG. Phase 1A.1 does not deploy Cloudflare changes or modify production origins.
 
