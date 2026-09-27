@@ -1,0 +1,687 @@
+{
+  "model_path": "E:\\FDE_AI_F450_Dataset 無人機影像資料集專案\\05_Model_Training 訓練結果\\fde_f450_parts_v2_cw_ccw_full\\weights\\best.pt",
+  "model_names": {
+    "0": "cw_propeller",
+    "1": "ccw_propeller",
+    "2": "flight_controller",
+    "3": "motor",
+    "4": "esc",
+    "5": "gps_compass",
+    "6": "receiver",
+    "7": "battery",
+    "8": "frame_arm",
+    "9": "power_module"
+  },
+  "sample_source": "YOLO training/validation labels; not an independent field test set",
+  "cw_ccw_records": [
+    {
+      "image": "F450_A_0005.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.545,
+      "iou": 0.625,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0005.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "ccw_propeller",
+      "confidence": 0.275,
+      "iou": 0.974,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0005.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "ccw_propeller",
+      "confidence": 0.319,
+      "iou": 0.895,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0005.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "frame_arm",
+      "confidence": 0.525,
+      "iou": 0.247,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0010.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.751,
+      "iou": 0.929,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0010.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.689,
+      "iou": 0.847,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0010.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.36,
+      "iou": 0.944,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0010.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.342,
+      "iou": 0.822,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0015.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "ccw_propeller",
+      "confidence": 0.369,
+      "iou": 0.889,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0015.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "frame_arm",
+      "confidence": 0.727,
+      "iou": 0.185,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0015.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.461,
+      "iou": 0.919,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0015.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "frame_arm",
+      "confidence": 0.872,
+      "iou": 0.186,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0020.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "ccw_propeller",
+      "confidence": 0.268,
+      "iou": 0.86,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0020.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.485,
+      "iou": 0.763,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0020.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.288,
+      "iou": 0.938,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0020.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "ccw_propeller",
+      "confidence": 0.46,
+      "iou": 0.687,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0025.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.597,
+      "iou": 0.783,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0025.jpg",
+      "ground_truth": "ccw_propeller",
+      "prediction": "motor",
+      "confidence": 0.857,
+      "iou": 0.028,
+      "correct": false
+    },
+    {
+      "image": "F450_A_0025.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.698,
+      "iou": 0.511,
+      "correct": true
+    },
+    {
+      "image": "F450_A_0025.jpg",
+      "ground_truth": "cw_propeller",
+      "prediction": "cw_propeller",
+      "confidence": 0.698,
+      "iou": 0.459,
+      "correct": false
+    }
+  ],
+  "cw_ccw_summary": {
+    "cw_propeller": {
+      "tested": 10,
+      "correct": 6
+    },
+    "ccw_propeller": {
+      "tested": 10,
+      "correct": 3
+    }
+  },
+  "format_comparison": [
+    {
+      "variant": "original",
+      "bytes": 266605,
+      "encode_ms": 0.0,
+      "model_inference_ms": 40.7,
+      "local_predict_total_ms": 50.5,
+      "detections": [
+        {
+          "class": "frame_arm",
+          "confidence": 0.966,
+          "box": [
+            824.8920288085938,
+            449.93408203125,
+            1113.5966796875,
+            637.365478515625
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.925,
+          "box": [
+            1128.6427001953125,
+            470.8926696777344,
+            1215.478271484375,
+            631.3981323242188
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.885,
+          "box": [
+            311.039794921875,
+            460.2861633300781,
+            400.08819580078125,
+            632.2727661132812
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.845,
+          "box": [
+            457.0809020996094,
+            198.51695251464844,
+            537.03076171875,
+            308.8526611328125
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.817,
+          "box": [
+            449.2049255371094,
+            272.9477233886719,
+            658.747802734375,
+            397.44415283203125
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.694,
+          "box": [
+            832.942138671875,
+            293.655029296875,
+            983.4814453125,
+            380.68994140625
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.685,
+          "box": [
+            0.24157263338565826,
+            745.2949829101562,
+            83.94435119628906,
+            981.0516967773438
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.545,
+          "box": [
+            337.8161315917969,
+            186.9832000732422,
+            650.311279296875,
+            262.44903564453125
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.525,
+          "box": [
+            345.6086730957031,
+            448.9567565917969,
+            669.1663208007812,
+            634.7108764648438
+          ]
+        },
+        {
+          "class": "gps_compass",
+          "confidence": 0.517,
+          "box": [
+            643.049072265625,
+            198.43528747558594,
+            753.9840087890625,
+            404.32275390625
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.452,
+          "box": [
+            971.7425537109375,
+            209.4437713623047,
+            1016.9325561523438,
+            312.9099426269531
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.427,
+          "box": [
+            884.2238159179688,
+            191.21080017089844,
+            1083.5634765625,
+            298.818603515625
+          ]
+        },
+        {
+          "class": "ccw_propeller",
+          "confidence": 0.319,
+          "box": [
+            885.51513671875,
+            188.33958435058594,
+            1080.4423828125,
+            295.5845947265625
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.294,
+          "box": [
+            522.2453002929688,
+            306.1268005371094,
+            664.1429443359375,
+            406.52703857421875
+          ]
+        },
+        {
+          "class": "flight_controller",
+          "confidence": 0.293,
+          "box": [
+            720.3480834960938,
+            367.3808898925781,
+            780.5462036132812,
+            422.2322692871094
+          ]
+        },
+        {
+          "class": "ccw_propeller",
+          "confidence": 0.275,
+          "box": [
+            934.82470703125,
+            389.0198974609375,
+            1477.0,
+            670.3388671875
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.258,
+          "box": [
+            930.9353637695312,
+            389.29498291015625,
+            1477.0,
+            679.8751831054688
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "jpeg_640x480_q75",
+      "bytes": 40551,
+      "encode_ms": 51.7,
+      "model_inference_ms": 38.6,
+      "local_predict_total_ms": 48.8,
+      "detections": [
+        {
+          "class": "frame_arm",
+          "confidence": 0.958,
+          "box": [
+            357.52117919921875,
+            194.34732055664062,
+            483.16705322265625,
+            279.1388244628906
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.927,
+          "box": [
+            488.7562255859375,
+            203.67898559570312,
+            526.6058959960938,
+            273.9158630371094
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.874,
+          "box": [
+            134.88604736328125,
+            200.70907592773438,
+            173.45889282226562,
+            272.9474182128906
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.841,
+          "box": [
+            198.043212890625,
+            84.72976684570312,
+            230.60012817382812,
+            134.57252502441406
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.824,
+          "box": [
+            225.095947265625,
+            125.08744049072266,
+            285.835693359375,
+            171.92349243164062
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.743,
+          "box": [
+            360.55743408203125,
+            127.33848571777344,
+            422.77276611328125,
+            165.1753387451172
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.589,
+          "box": [
+            0.07255172729492188,
+            317.8624267578125,
+            36.57134246826172,
+            421.94635009765625
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.587,
+          "box": [
+            150.12237548828125,
+            194.54718017578125,
+            294.61444091796875,
+            278.62347412109375
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.521,
+          "box": [
+            147.4136962890625,
+            80.72023010253906,
+            281.47906494140625,
+            112.08963012695312
+          ]
+        },
+        {
+          "class": "gps_compass",
+          "confidence": 0.427,
+          "box": [
+            279.6806335449219,
+            86.50886535644531,
+            325.9348449707031,
+            172.0528106689453
+          ]
+        },
+        {
+          "class": "flight_controller",
+          "confidence": 0.364,
+          "box": [
+            313.135986328125,
+            158.21295166015625,
+            336.8792724609375,
+            181.74566650390625
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.336,
+          "box": [
+            385.0570068359375,
+            82.60702514648438,
+            468.4454345703125,
+            129.19207763671875
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.297,
+          "box": [
+            383.42578125,
+            82.53564453125,
+            469.43994140625,
+            128.19918823242188
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.276,
+          "box": [
+            420.2214660644531,
+            97.44720458984375,
+            441.1056823730469,
+            134.96730041503906
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "webp_640x480_q75",
+      "bytes": 24112,
+      "encode_ms": 202.3,
+      "model_inference_ms": 40.0,
+      "local_predict_total_ms": 56.4,
+      "detections": [
+        {
+          "class": "frame_arm",
+          "confidence": 0.943,
+          "box": [
+            356.57025146484375,
+            192.8953857421875,
+            482.58587646484375,
+            279.517822265625
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.922,
+          "box": [
+            489.312255859375,
+            203.935791015625,
+            526.0956420898438,
+            273.37042236328125
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.891,
+          "box": [
+            134.90179443359375,
+            198.18264770507812,
+            173.63177490234375,
+            273.7212219238281
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.887,
+          "box": [
+            197.8515625,
+            85.39994812011719,
+            232.0404052734375,
+            134.82569885253906
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.825,
+          "box": [
+            225.4326171875,
+            128.77005004882812,
+            286.304931640625,
+            172.01351928710938
+          ]
+        },
+        {
+          "class": "gps_compass",
+          "confidence": 0.723,
+          "box": [
+            280.11572265625,
+            85.8282241821289,
+            326.06732177734375,
+            172.78530883789062
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.719,
+          "box": [
+            357.17401123046875,
+            127.14314270019531,
+            423.17529296875,
+            168.30506896972656
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.625,
+          "box": [
+            0.08884811401367188,
+            322.93682861328125,
+            36.04981231689453,
+            423.69525146484375
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.549,
+          "box": [
+            146.9725341796875,
+            80.60350036621094,
+            280.46636962890625,
+            114.29444885253906
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.542,
+          "box": [
+            147.0198974609375,
+            194.05337524414062,
+            293.6228332519531,
+            274.8287353515625
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.418,
+          "box": [
+            421.298828125,
+            94.35385131835938,
+            440.49151611328125,
+            133.91986083984375
+          ]
+        },
+        {
+          "class": "cw_propeller",
+          "confidence": 0.404,
+          "box": [
+            383.421142578125,
+            82.71144104003906,
+            469.4376220703125,
+            128.4984130859375
+          ]
+        },
+        {
+          "class": "ccw_propeller",
+          "confidence": 0.344,
+          "box": [
+            384.4501953125,
+            81.9459228515625,
+            467.94830322265625,
+            127.0098876953125
+          ]
+        },
+        {
+          "class": "motor",
+          "confidence": 0.336,
+          "box": [
+            357.52288818359375,
+            0.6113052368164062,
+            372.93682861328125,
+            23.717449188232422
+          ]
+        },
+        {
+          "class": "ccw_propeller",
+          "confidence": 0.29,
+          "box": [
+            403.2642822265625,
+            168.71542358398438,
+            640.0,
+            293.5962829589844
+          ]
+        },
+        {
+          "class": "frame_arm",
+          "confidence": 0.286,
+          "box": [
+            231.4712677001953,
+            135.83670043945312,
+            286.70770263671875,
+            175.42340087890625
+          ]
+        }
+      ]
+    }
+  ]
+}
