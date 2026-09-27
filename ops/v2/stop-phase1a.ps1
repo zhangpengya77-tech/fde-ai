@@ -18,7 +18,7 @@ $stopped = @()
 
 foreach ($service in @(
     [pscustomobject]@{ Name = 'live_backend'; Pid = $state.live_pid; Owned = $state.live_owned; Pattern = 'uvicorn.*app\.main:app' },
-    [pscustomobject]@{ Name = 'vision'; Pid = $state.vision_pid; Owned = $state.vision_owned; Pattern = 'yolo_server\.py' }
+    [pscustomobject]@{ Name = 'vision'; Pid = $state.vision_pid; Owned = $state.vision_owned; Pattern = 'vision_snapshot_server\.py' }
 )) {
   if (-not $service.Owned -or -not $service.Pid) { continue }
   $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($service.Pid)" -ErrorAction SilentlyContinue

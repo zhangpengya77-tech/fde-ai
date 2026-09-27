@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $LiveRoot = Join-Path $ProjectRoot 'live_backend'
+$VisionEntryPoint = Join-Path $LiveRoot 'dev\vision_snapshot_server.py'
 $RuntimeRoot = Join-Path $ProjectRoot '.test-temp\phase1a-runtime'
 $LogRoot = Join-Path $RuntimeRoot 'logs'
 if (-not $StateFile) { $StateFile = Join-Path $RuntimeRoot 'services.json' }
@@ -20,7 +21,7 @@ if ($DryRun) {
   [ordered]@{
     mode = 'dry_run'
     live_backend = [ordered]@{ url = $LiveUrl; working_directory = $LiveRoot }
-    vision = [ordered]@{ url = $VisionUrl; working_directory = $YoloRoot }
+    vision = [ordered]@{ url = $VisionUrl; working_directory = $LiveRoot; entrypoint = $VisionEntryPoint }
     production_worker_updated = $false
     tunnel_started = $false
   } | ConvertTo-Json -Depth 4 -Compress
@@ -29,6 +30,7 @@ if ($DryRun) {
 
 if (-not (Test-Path -LiteralPath $Python)) { throw "Python executable not found: $Python" }
 if (-not (Test-Path -LiteralPath (Join-Path $LiveRoot 'app\main.py'))) { throw 'Live Backend source was not found.' }
+if (-not (Test-Path -LiteralPath $VisionEntryPoint)) { throw 'Phase 1A vision wrapper was not found.' }
 if (-not (Test-Path -LiteralPath (Join-Path $YoloRoot 'yolo_server.py'))) { throw 'Existing YOLO server was not found.' }
 New-Item -ItemType Directory -Force -Path $RuntimeRoot, $LogRoot | Out-Null
 
@@ -59,8 +61,8 @@ $state = [ordered]@{
 
 if (-not (Test-Http "$VisionUrl/api/health")) {
   $visionProcess = Start-Process -FilePath $Python `
-    -ArgumentList @('yolo_server.py', '--host', '127.0.0.1', '--port', "$VisionPort") `
-    -WorkingDirectory $YoloRoot -WindowStyle Hidden -PassThru `
+    -ArgumentList @($VisionEntryPoint, '--source-root', $YoloRoot, '--host', '127.0.0.1', '--port', "$VisionPort") `
+    -WorkingDirectory $LiveRoot -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput (Join-Path $LogRoot 'vision.out.log') `
     -RedirectStandardError (Join-Path $LogRoot 'vision.err.log')
   $state.vision_pid = $visionProcess.Id
