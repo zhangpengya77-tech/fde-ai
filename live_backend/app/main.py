@@ -139,6 +139,7 @@ def create_app(
                 "detections": result.detections,
                 "metrics": {
                     "vision_upstream_ms": result.upstream_ms,
+                    **(result.timings or {}),
                     "backend_ms": round((time.perf_counter() - started) * 1000, 1),
                 },
             }
