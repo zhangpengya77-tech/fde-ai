@@ -1,0 +1,43 @@
+import unittest
+from starlette.testclient import TestClient
+from app.main import create_app
+from app.sessions import InMemorySessionStore
+
+class OfflineVision:
+    async def health(self): return False
+
+class Phase2ApiTests(unittest.TestCase):
+    def make_client(self, dev_mode=True):
+        return TestClient(create_app(vision_adapter=OfflineVision(), session_store=InMemorySessionStore(), dev_mode=dev_mode))
+
+    def test_mock_full_workflow_and_authoritative_routes(self):
+        client = self.make_client()
+        created = client.post("/api/live/sessions", json={"mode":"demo","vision_source":"MOCK_VISION"}).json()
+        sid = created["session_id"]
+        wrong = client.post(f"/api/live/sessions/{sid}/simulate", json={"scenario":"frame_arm","frame_id":"f1"})
+        self.assertEqual(wrong.json()["sop"]["status"], "NG")
+        for scenario in ("motor","frame_arm","flight_controller"):
+            result = client.post(f"/api/live/sessions/{sid}/simulate", json={"scenario":scenario,"frame_id":f"f-{scenario}"})
+            self.assertEqual(result.json()["sop"]["status"], "PASS_CANDIDATE")
+            confirmed = client.post(f"/api/live/sessions/{sid}/confirm", json={})
+        self.assertEqual(confirmed.json()["session"]["state"], "TASK_COMPLETED")
+        state = client.get(f"/api/live/sessions/{sid}")
+        events = client.get(f"/api/live/sessions/{sid}/events")
+        self.assertEqual(state.status_code, 200)
+        self.assertEqual([e["sequence"] for e in events.json()["events"]], list(range(1, len(events.json()["events"])+1)))
+
+    def test_mock_is_rejected_when_dev_mode_is_off(self):
+        client = self.make_client(False)
+        created = client.post("/api/live/sessions", json={}).json()
+        response = client.post(f"/api/live/sessions/{created['session_id']}/simulate", json={"scenario":"motor"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "dev_only")
+
+    def test_confirmation_requires_pass_candidate_and_cannot_replay(self):
+        client = self.make_client()
+        created = client.post("/api/live/sessions", json={"vision_source":"MOCK_VISION"}).json()
+        sid = created["session_id"]
+        self.assertEqual(client.post(f"/api/live/sessions/{sid}/confirm", json={}).status_code, 409)
+        client.post(f"/api/live/sessions/{sid}/simulate", json={"scenario":"motor","frame_id":"f1"})
+        self.assertEqual(client.post(f"/api/live/sessions/{sid}/confirm", json={}).status_code, 200)
+        self.assertEqual(client.post(f"/api/live/sessions/{sid}/confirm", json={}).status_code, 409)

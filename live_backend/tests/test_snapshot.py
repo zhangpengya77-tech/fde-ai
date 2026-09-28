@@ -61,7 +61,8 @@ class SnapshotApiTests(unittest.TestCase):
         self.assertEqual(payload["detections"][0]["class"], "ccw_propeller")
         self.assertEqual(payload["metrics"]["vision_upstream_ms"], 18.5)
         self.assertGreaterEqual(payload["metrics"]["backend_ms"], 0)
-        for forbidden in ("status", "PASS", "NG", "annotatedImage", "ai_response"):
+        self.assertEqual(payload["sop"]["status"], "NG")
+        for forbidden in ("annotatedImage", "ai_response", "student_id", "teacher"):
             self.assertNotIn(forbidden, response.text)
 
     def test_rejects_missing_session_invalid_image_and_oversized_image(self):
