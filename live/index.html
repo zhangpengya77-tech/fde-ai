@@ -25,6 +25,7 @@
       <button id="confirmStep" type="button" disabled>确认并进入下一步</button>
     </section>
     <section class="workflow-panel" aria-label="手动 AI 检测流程"><ol><li><strong>Step 1</strong><span>启动摄像头</span></li><li><strong>Step 2</strong><span>将 F450 零件放入画面</span></li><li><strong>Step 3</strong><span>点击「立即 AI 检测」</span></li><li><strong>Step 4</strong><span>查看 Vision 与 SOP 结果</span></li></ol></section>
+    <section class="mode-panel"><label><input id="manualMode" type="radio" name="coachMode" checked> Manual 手动检测</label><label><input id="autoMode" type="radio" name="coachMode"> Auto 自动陪做</label><button id="startCoach" type="button">开始 AI 陪做</button><button id="stopCoach" type="button" disabled>停止 AI 陪做</button><output id="autoMetrics">1 FPS · Requests 0 · Skipped 0 · Max in-flight 0 · Queue 0</output></section>
     <section class="camera-panel">
       <div class="camera-config"><label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label><div><span>Resolution</span><strong id="cameraResolution">—</strong></div></div>
       <div class="preview" aria-label="摄像机预览与辨识框"><video id="cameraPreview" playsinline muted></video><img id="uploadPreview" alt="上传图片预览" hidden><canvas id="detectionOverlay" aria-hidden="true"></canvas><canvas id="captureCanvas" hidden></canvas><p id="cameraHint">Camera not started</p></div>
@@ -35,6 +36,7 @@
     <section id="devSimulator" class="dev-panel" hidden><h2>Developer Simulation · DEV ONLY</h2><div class="controls"><button data-scenario="motor">Simulate motor</button><button data-scenario="frame_arm">Simulate frame_arm</button><button data-scenario="flight_controller">Simulate flight_controller</button><button data-scenario="wrong_class">Simulate wrong class</button><button data-scenario="no_detection">Simulate no detection</button><button data-scenario="low_confidence">Simulate low confidence</button></div></section>
     <aside><strong>MODEL_ACCURACY_PENDING</strong><p>REAL_VISION 仅产生 PASS_CANDIDATE；正式步骤由 Backend Confirm 推进。Mock Vision 仅限 Dev/Test。</p></aside>
   </main>
-  <script src="live.js?v=phase2-task1"></script>
+  <script src="auto-observation.js?v=phase2-auto1"></script>
+  <script src="live.js?v=phase2-auto1"></script>
 </body>
 </html>

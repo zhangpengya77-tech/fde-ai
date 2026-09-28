@@ -232,6 +232,8 @@
     elements.confirm.disabled = session.state !== 'PASS_CANDIDATE';
   }
 
+  function autoStartError(cameraActive, sessionId) { if (!cameraActive) return 'camera_required'; if (!sessionId) return 'session_required'; return null; }
+
   function createController({ documentRef = document, navigatorRef = navigator, fetchImpl = fetch } = {}) {
     const elements = {
       health: documentRef.querySelector('#backendStatus'),
@@ -255,11 +257,13 @@
       message: documentRef.querySelector('#liveMessage'),
       course: documentRef.querySelector('#courseTitle'), task: documentRef.querySelector('#taskTitle'), progress: documentRef.querySelector('#taskProgress'),
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
-      sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator')
+      sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
+      startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
     };
     let stream = null;
     let sessionId = null;
     let cameras = [];
+    let autoScheduler = null;
 
     function setCameraState(state, dataState = "") {
       elements.cameraStatus.textContent = state;
@@ -431,16 +435,46 @@
       setMessage('攝影機已停止。');
     }
 
+
+    async function startAutoObservation() {
+      if (!stream) await startCamera();
+      const id = await ensureSession();
+      const error = autoStartError(Boolean(stream), id);
+      if (error) { setMessage(error === 'camera_required' ? '请先启动摄像头。' : 'Session 尚未建立。'); return false; }
+      if (!globalThis.FdeAutoObservation) throw new Error('auto_scheduler_unavailable');
+      if (!autoScheduler) autoScheduler = globalThis.FdeAutoObservation.createAutoObservationScheduler({
+        intervalMs: 1000,
+        captureAndSend: capture,
+        onMetrics: (metrics) => { elements.autoMetrics.textContent = `1 FPS · Requests ${metrics.requestCount} · Skipped ${metrics.skippedFrameCount} · Max in-flight ${metrics.maxInFlight} · Queue ${metrics.queueLength}`; },
+        onError: (failure) => setMessage(`自动观察失败：${failure.message}`)
+      });
+      autoScheduler.start();
+      elements.autoMode.checked = true;
+      elements.startCoach.disabled = true;
+      elements.stopCoach.disabled = false;
+      setMessage('AI 自动观察已启动（1 FPS）。');
+      return true;
+    }
+
+    function stopAutoObservation() {
+      autoScheduler?.stop();
+      elements.startCoach.disabled = false;
+      elements.stopCoach.disabled = true;
+      setMessage('AI 自动观察已停止；摄像头保持当前状态。');
+    }
+
     elements.start.addEventListener('click', startCamera);
     elements.capture.addEventListener('click', capture);
     elements.stop.addEventListener('click', stopCamera);
     elements.upload.addEventListener('click', () => triggerFilePicker(elements.file, devLog));
     elements.file.addEventListener('change', (event) => performUploadInteraction(event.target.files?.[0], useFile, devLog).catch((error) => setMessage(`图片检测失败：${error.message}`)));
 
+    elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
+    elements.stopCoach.addEventListener('click', stopAutoObservation);
     elements.confirm.addEventListener('click', async () => { const result = await confirmStep(fetchImpl, await ensureSession()); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
     elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const result = await simulateVision(fetchImpl, await ensureSession(), button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { ...result, task: state }); }));
 
-    return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera };
+    return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera, startAutoObservation, stopAutoObservation };
   }
 
   function escapeHtml(value) {
@@ -462,6 +496,7 @@
   }
 
   return {
+    autoStartError,
     renderTaskState,
     confirmStep,
     simulateVision,

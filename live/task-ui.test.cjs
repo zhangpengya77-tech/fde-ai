@@ -46,3 +46,13 @@ test('phase2 markup keeps manual detect and adds task and dev controls', () => {
   assert.match(html, /Simulate motor/);
   assert.match(html, /立即 AI 检测/);
 });
+
+test('auto mode requires camera and session and exposes start stop controls', () => {
+  assert.equal(live.autoStartError(false, 'sid'), 'camera_required');
+  assert.equal(live.autoStartError(true, ''), 'session_required');
+  assert.equal(live.autoStartError(true, 'sid'), null);
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  for (const id of ['startCoach','stopCoach','manualMode','autoMode','autoMetrics']) assert.match(html, new RegExp(`id=["']${id}["']`));
+  assert.match(html, /auto-observation\.js/);
+});
+
