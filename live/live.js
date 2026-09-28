@@ -12,6 +12,20 @@
     };
   }
 
+  function cameraConstraintsForDevices(devices = [], selectedDeviceId = '', preferEnvironment = false) {
+    const cameras = devices.filter((device) => device.kind === 'videoinput');
+    if (selectedDeviceId) return { video: { deviceId: { exact: selectedDeviceId } }, audio: false };
+    if (cameras.length === 1) return { video: { deviceId: { exact: cameras[0].deviceId } }, audio: false };
+    if (preferEnvironment) return cameraConstraints();
+    return { video: true, audio: false };
+  }
+
+  function cameraErrorState(error = {}) {
+    if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') return { state: 'NO CAMERA', message: '找不到可用摄像头。' };
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') return { state: 'PERMISSION REQUIRED', message: '请允许浏览器使用摄像头。' };
+    return { state: 'CAMERA ERROR', message: '摄像头错误：' + (error.message || error.name || 'unknown') };
+  }
+
   async function checkHealth(fetchImpl = fetch, endpoint = '/api/live/health') {
     try {
       const response = await fetchImpl(endpoint, { cache: 'no-store' });
@@ -132,6 +146,10 @@
     const elements = {
       health: documentRef.querySelector('#backendStatus'),
       vision: documentRef.querySelector('#visionStatus'),
+      cameraStatus: documentRef.querySelector('#cameraStatus'),
+      cameraDevice: documentRef.querySelector('#cameraDevice'),
+      cameraResolution: documentRef.querySelector('#cameraResolution'),
+      cameraHint: documentRef.querySelector('#cameraHint'),
       video: documentRef.querySelector('#cameraPreview'),
       captureCanvas: documentRef.querySelector('#captureCanvas'),
       overlay: documentRef.querySelector('#detectionOverlay'),
@@ -145,6 +163,23 @@
     };
     let stream = null;
     let sessionId = null;
+    let cameras = [];
+
+    function setCameraState(state, dataState = "") {
+      elements.cameraStatus.textContent = state;
+      elements.cameraStatus.dataset.state = dataState || (state === "CAMERA ACTIVE" || state === "CAMERA READY" ? "online" : state === "CAMERA ERROR" || state === "NO CAMERA" ? "offline" : "checking");
+    }
+
+    async function refreshCameraDevices() {
+      if (!navigatorRef.mediaDevices?.enumerateDevices) { setCameraState("NO CAMERA", "offline"); return []; }
+      cameras = (await navigatorRef.mediaDevices.enumerateDevices()).filter((device) => device.kind === "videoinput");
+      const previous = elements.cameraDevice.value;
+      elements.cameraDevice.innerHTML = cameras.length ? cameras.map((device, index) => `<option value="${escapeHtml(device.deviceId)}">${escapeHtml(device.label || `Camera ${index + 1}`)}</option>`).join("") : `<option value="">No camera found</option>`;
+      if (cameras.some((device) => device.deviceId === previous)) elements.cameraDevice.value = previous;
+      elements.cameraDevice.disabled = cameras.length < 2;
+      if (!stream) setCameraState(cameras.length ? (cameras[0].label ? "CAMERA READY" : "CAMERA FOUND") : "NO CAMERA");
+      return cameras;
+    }
 
     function setMessage(message) {
       elements.message.textContent = message;
@@ -177,22 +212,32 @@
         return;
       }
       try {
-        stream = await navigatorRef.mediaDevices.getUserMedia(cameraConstraints());
+        await refreshCameraDevices();
+        setCameraState("PERMISSION REQUIRED");
+        const mobile = /Android|iPhone|iPad|iPod/i.test(navigatorRef.userAgent || "");
+        stream = await navigatorRef.mediaDevices.getUserMedia(cameraConstraintsForDevices(cameras, elements.cameraDevice.value, mobile));
         elements.video.srcObject = stream;
         await elements.video.play();
+        await refreshCameraDevices();
         await ensureSession();
         elements.start.disabled = true;
         elements.stop.disabled = false;
         elements.capture.disabled = false;
+        const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
+        elements.cameraResolution.textContent = String(settings.width || elements.video.videoWidth) + " × " + String(settings.height || elements.video.videoHeight);
+        elements.cameraHint.hidden = true;
+        setCameraState('CAMERA ACTIVE', 'online');
         setMessage('攝影機已開啟；按「擷取一張並辨識」。');
-      } catch {
+      } catch (error) {
         stopStream(stream);
         stream = null;
-        setMessage('無法取得攝影機權限；教材與圖片測試仍可使用。');
+        const mapped = cameraErrorState(error);
+        setCameraState(mapped.state);
+        setMessage(mapped.message);
       }
     }
 
-    async function sendImage(imageData, captureMs, sourceWidth, sourceHeight) {
+    async function sendImage(imageData, captureMs, sourceWidth, sourceHeight, encodeMs = 0) {
       const id = await ensureSession();
       const frameId = `frame-${Date.now()}`;
       setMessage('正在傳送單張影像…');
@@ -210,8 +255,12 @@
           ).join('')
         : '<li>本張影像沒有偵測結果。</li>';
       elements.metrics.textContent = [
+        `Resolution ${sourceWidth}×${sourceHeight}`,
+        `Snapshot ${Math.round((imageData.length - imageData.indexOf(",") - 1) * 0.75)} bytes`,
         `Capture ${captureMs.toFixed(1)} ms`,
+        `Encode ${encodeMs.toFixed(1)} ms`,
         `Upload/response ${result.uploadMs.toFixed(1)} ms`,
+        `Inference ${Number(result.payload.metrics.model_inference_ms || 0).toFixed(1)} ms`,
         `Vision upstream ${result.payload.metrics.vision_upstream_ms.toFixed(1)} ms`,
         `Total ${totalMs.toFixed(1)} ms`,
         `Response ${result.responseBytes} bytes`
@@ -222,7 +271,7 @@
     async function capture() {
       try {
         const captured = captureFrame(elements.video, elements.captureCanvas);
-        await sendImage(captured.imageData, captured.captureMs, elements.video.videoWidth, elements.video.videoHeight);
+        await sendImage(captured.imageData, captured.captureMs, captured.width, captured.height, captured.encodeMs);
       } catch (error) {
         setMessage(`辨識失敗：${error.message}`);
       }
@@ -246,6 +295,9 @@
       elements.start.disabled = false;
       elements.capture.disabled = true;
       elements.stop.disabled = true;
+      elements.cameraResolution.textContent = "—";
+      elements.cameraHint.hidden = false;
+      setCameraState(cameras.length ? "CAMERA READY" : "NO CAMERA");
       if (sessionId) {
         const oldSession = sessionId;
         sessionId = null;
@@ -263,7 +315,7 @@
     elements.stop.addEventListener('click', stopCamera);
     elements.file.addEventListener('change', (event) => useFile(event.target.files?.[0]).catch((error) => setMessage(`圖片辨識失敗：${error.message}`)));
 
-    return { refreshHealth, startCamera, capture, stopCamera };
+    return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera };
   }
 
   function escapeHtml(value) {
@@ -279,12 +331,15 @@
     document.addEventListener('DOMContentLoaded', () => {
       const controller = createController();
       controller.refreshHealth();
+      controller.refreshCameraDevices();
       window.addEventListener('pagehide', () => controller.stopCamera());
     });
   }
 
   return {
     cameraConstraints,
+    cameraConstraintsForDevices,
+    cameraErrorState,
     captureFrame,
     checkHealth,
     createController,

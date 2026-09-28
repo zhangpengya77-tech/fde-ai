@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131f">
   <title>FDE-AI Live Coach MVP</title>
-  <link rel="stylesheet" href="live.css">
+  <link rel="stylesheet" href="live.css?v=phase1a2-usb1">
 </head>
 <body>
   <main>
@@ -18,16 +18,22 @@
     <section class="status-panel" aria-label="服務狀態">
       <div><span>Live Backend</span><strong id="backendStatus" data-state="checking">CHECKING</strong></div>
       <div><span>Vision</span><strong id="visionStatus">CHECKING</strong></div>
+      <div><span>Camera</span><strong id="cameraStatus" data-state="checking">CHECKING</strong></div>
     </section>
 
     <section class="camera-panel">
+      <div class="camera-config">
+        <label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label>
+        <div><span>Resolution</span><strong id="cameraResolution">—</strong></div>
+      </div>
       <div class="preview" aria-label="攝影機預覽與辨識框">
         <video id="cameraPreview" playsinline muted></video>
         <canvas id="detectionOverlay" aria-hidden="true"></canvas>
         <canvas id="captureCanvas" hidden></canvas>
+        <p id="cameraHint">Camera not started</p>
       </div>
       <div class="controls">
-        <button id="startCamera" type="button">開啟後鏡頭</button>
+        <button id="startCamera" type="button">Start Camera</button>
         <button id="captureFrame" type="button" disabled>擷取一張並辨識</button>
         <button id="stopCamera" type="button" disabled>停止 Camera</button>
         <label class="file-button">或選擇圖片<input id="imageFile" type="file" accept="image/*"></label>
@@ -46,6 +52,6 @@
       <p>這不是 PASS／NG 判定，也不會寫入正式學習紀錄。Live Backend 離線時，既有 FDE 教材與 Photo Check 不受影響。</p>
     </aside>
   </main>
-  <script src="live.js"></script>
+  <script src="live.js?v=phase1a2-usb1"></script>
 </body>
 </html>
