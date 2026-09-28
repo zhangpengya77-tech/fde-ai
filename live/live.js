@@ -12,18 +12,39 @@
     };
   }
 
-  function cameraConstraintsForDevices(devices = [], selectedDeviceId = '', preferEnvironment = false) {
+  function cameraConstraintCandidates(devices = [], selectedDeviceId = '', preferEnvironment = false) {
     const cameras = devices.filter((device) => device.kind === 'videoinput');
-    if (selectedDeviceId) return { video: { deviceId: { exact: selectedDeviceId } }, audio: false };
-    if (cameras.length === 1) return { video: { deviceId: { exact: cameras[0].deviceId } }, audio: false };
-    if (preferEnvironment) return cameraConstraints();
-    return { video: true, audio: false };
+    const deviceId = selectedDeviceId || (cameras.length === 1 ? cameras[0].deviceId : '');
+    const ideals = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
+    if (deviceId) return [{ video: { deviceId: { exact: deviceId }, ...ideals }, audio: false }, { video: { deviceId: { exact: deviceId } }, audio: false }, { video: true, audio: false }];
+    if (preferEnvironment) return [{ video: { facingMode: { ideal: 'environment' }, ...ideals }, audio: false }, { video: { facingMode: { ideal: 'environment' } }, audio: false }, { video: true, audio: false }];
+    return [{ video: { ...ideals }, audio: false }, { video: true, audio: false }];
+  }
+
+  function cameraConstraintsForDevices(devices = [], selectedDeviceId = '', preferEnvironment = false) {
+    return cameraConstraintCandidates(devices, selectedDeviceId, preferEnvironment)[0];
+  }
+
+  async function openCameraWithFallback(mediaDevices, candidates, onFallback = () => {}) {
+    const failedAttempts = [];
+    for (let index = 0; index < candidates.length; index += 1) {
+      try {
+        const stream = await mediaDevices.getUserMedia(candidates[index]);
+        return { stream, fallbackUsed: index > 0, failedAttempts, constraintIndex: index };
+      } catch (error) {
+        failedAttempts.push({ name: error.name || 'Error', message: error.message || '', constraint: error.constraint || '' });
+        if (index < candidates.length - 1) onFallback(failedAttempts[failedAttempts.length - 1], index + 1);
+        else { error.failedAttempts = failedAttempts; throw error; }
+      }
+    }
+    throw new Error('camera_candidates_empty');
   }
 
   function cameraErrorState(error = {}) {
-    if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') return { state: 'NO CAMERA', message: '找不到可用摄像头。' };
-    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') return { state: 'PERMISSION REQUIRED', message: '请允许浏览器使用摄像头。' };
-    return { state: 'CAMERA ERROR', message: '摄像头错误：' + (error.message || error.name || 'unknown') };
+    const detail = { name: error.name || 'Error', message: error.message || error.name || 'unknown', constraint: error.constraint || '' };
+    if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') return { state: 'NO CAMERA', ...detail };
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') return { state: 'PERMISSION REQUIRED', ...detail };
+    return { state: 'CAMERA ERROR', ...detail };
   }
 
   async function checkHealth(fetchImpl = fetch, endpoint = '/api/live/health') {
@@ -150,6 +171,7 @@
       cameraDevice: documentRef.querySelector('#cameraDevice'),
       cameraResolution: documentRef.querySelector('#cameraResolution'),
       cameraHint: documentRef.querySelector('#cameraHint'),
+      cameraDiagnostics: documentRef.querySelector('#cameraDiagnostics'),
       video: documentRef.querySelector('#cameraPreview'),
       captureCanvas: documentRef.querySelector('#captureCanvas'),
       overlay: documentRef.querySelector('#detectionOverlay'),
@@ -207,15 +229,16 @@
     }
 
     async function startCamera() {
-      if (!navigatorRef.mediaDevices?.getUserMedia) {
-        setMessage('此瀏覽器不支援攝影機；仍可選擇一張圖片測試。');
-        return;
-      }
+      if (!navigatorRef.mediaDevices?.getUserMedia) { setMessage('此瀏覽器不支援攝影機；仍可選擇一張圖片測試。'); return; }
+      stopStream(stream);
+      stream = null;
+      elements.video.srcObject = null;
       try {
         await refreshCameraDevices();
-        setCameraState("PERMISSION REQUIRED");
-        const mobile = /Android|iPhone|iPad|iPod/i.test(navigatorRef.userAgent || "");
-        stream = await navigatorRef.mediaDevices.getUserMedia(cameraConstraintsForDevices(cameras, elements.cameraDevice.value, mobile));
+        const mobile = /Android|iPhone|iPad|iPod/i.test(navigatorRef.userAgent || '');
+        setCameraState(cameras.some((device) => device.label) ? 'OPENING CAMERA' : 'PERMISSION REQUIRED');
+        const opened = await openCameraWithFallback(navigatorRef.mediaDevices, cameraConstraintCandidates(cameras, elements.cameraDevice.value, mobile), () => setCameraState('CAMERA FALLBACK'));
+        stream = opened.stream;
         elements.video.srcObject = stream;
         await elements.video.play();
         await refreshCameraDevices();
@@ -224,16 +247,22 @@
         elements.stop.disabled = false;
         elements.capture.disabled = false;
         const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
-        elements.cameraResolution.textContent = String(settings.width || elements.video.videoWidth) + " × " + String(settings.height || elements.video.videoHeight);
+        const supported = navigatorRef.mediaDevices.getSupportedConstraints?.() || {};
+        elements.cameraResolution.textContent = String(settings.width || elements.video.videoWidth) + ' × ' + String(settings.height || elements.video.videoHeight);
         elements.cameraHint.hidden = true;
+        elements.cameraDiagnostics.hidden = false;
+        elements.cameraDiagnostics.textContent = 'Device: ' + (stream.getVideoTracks()[0]?.label || elements.cameraDevice.selectedOptions[0]?.textContent || 'unknown') + ' | Supported: ' + Object.keys(supported).filter((key) => supported[key]).join(', ');
         setCameraState('CAMERA ACTIVE', 'online');
-        setMessage('攝影機已開啟；按「擷取一張並辨識」。');
+        setMessage(opened.fallbackUsed ? '攝影機已開啟（Compatibility Fallback）；按「擷取一張並辨識」。' : '攝影機已開啟；按「擷取一張並辨識」。');
       } catch (error) {
         stopStream(stream);
         stream = null;
+        elements.video.srcObject = null;
         const mapped = cameraErrorState(error);
         setCameraState(mapped.state);
-        setMessage(mapped.message);
+        elements.cameraDiagnostics.hidden = false;
+        elements.cameraDiagnostics.textContent = 'Camera Error: ' + mapped.name + ' | Message: ' + mapped.message + ' | Failed Constraint: ' + (mapped.constraint || 'unknown');
+        setMessage(mapped.state === 'PERMISSION REQUIRED' ? '请允许浏览器使用摄像头。' : '摄像头开启失败，请查看诊断信息。');
       }
     }
 
@@ -338,7 +367,9 @@
 
   return {
     cameraConstraints,
+    cameraConstraintCandidates,
     cameraConstraintsForDevices,
+    openCameraWithFallback,
     cameraErrorState,
     captureFrame,
     checkHealth,

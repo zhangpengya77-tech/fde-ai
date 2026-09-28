@@ -36,6 +36,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 #detectionResults { display: grid; gap: 8px; padding: 0; list-style: none; }
 #detectionResults li { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 12px; border-radius: 9px; background: #081c2c; }
 #detectionResults code { grid-column: 1 / -1; color: #8feaff; }
+#cameraDiagnostics { padding: 10px; border-radius: 8px; background: #081c2c; color: #8feaff; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .78rem; overflow-wrap: anywhere; }
 #timingMetrics { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .83rem; }
 aside strong { color: #ffcb64; }
 

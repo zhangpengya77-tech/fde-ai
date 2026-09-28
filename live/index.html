@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131f">
   <title>FDE-AI Live Coach MVP</title>
-  <link rel="stylesheet" href="live.css?v=phase1a2-usb1">
+  <link rel="stylesheet" href="live.css?v=phase1a2-webcam2">
 </head>
 <body>
   <main>
@@ -39,6 +39,7 @@
         <label class="file-button">或選擇圖片<input id="imageFile" type="file" accept="image/*"></label>
       </div>
       <p id="liveMessage" role="status">正在檢查 Live Backend…</p>
+      <p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
     </section>
 
     <section class="results-panel">
@@ -52,6 +53,6 @@
       <p>這不是 PASS／NG 判定，也不會寫入正式學習紀錄。Live Backend 離線時，既有 FDE 教材與 Photo Check 不受影響。</p>
     </aside>
   </main>
-  <script src="live.js?v=phase1a2-usb1"></script>
+  <script src="live.js?v=phase1a2-webcam2"></script>
 </body>
 </html>
