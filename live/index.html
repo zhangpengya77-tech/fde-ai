@@ -4,68 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131f">
-  <title>FDE-AI Live Coach MVP</title>
-  <link rel="stylesheet" href="live.css?v=phase1a2-interaction3">
+  <title>FDE-AI Live Coach Phase 2</title>
+  <link rel="stylesheet" href="live.css?v=phase2-task1">
 </head>
 <body>
   <main>
-    <header>
-      <p class="eyebrow">FDE-AI-UAS v2.0 · Phase 1A</p>
-      <h1>Live Coach MVP</h1>
-      <p>手動擷取一張影像，送到本機 YOLO，僅顯示 Detection Facts。</p>
-    </header>
-
-    <section class="status-panel" aria-label="服務狀態">
+    <header><p class="eyebrow">FDE-AI-UAS v2.0 · Phase 2</p><h1>Live Coach</h1><p>Camera、Vision Facts、SOP 教学判断与确定性指引。</p></header>
+    <section class="status-panel" aria-label="服务状态">
       <div><span>Live Backend</span><strong id="backendStatus" data-state="checking">CHECKING</strong></div>
       <div><span>Vision</span><strong id="visionStatus">CHECKING</strong></div>
       <div><span>Camera</span><strong id="cameraStatus" data-state="checking">CHECKING</strong></div>
     </section>
-
-        <section class="workflow-panel" aria-label="手动 AI 检测流程">
-      <ol>
-        <li><strong>Step 1</strong><span>启动摄像头</span></li>
-        <li><strong>Step 2</strong><span>将 F450 零件放入画面</span></li>
-        <li><strong>Step 3</strong><span>点击「立即 AI 检测」</span></li>
-        <li><strong>Step 4</strong><span>查看 AI 识别结果</span></li>
-      </ol>
+    <section class="task-panel" aria-label="当前教学任务">
+      <div><span>Course</span><strong id="courseTitle">F450 基础组装</strong></div>
+      <div><span>Task</span><strong id="taskTitle">零件辨识与准备</strong></div>
+      <div><span>Progress</span><strong id="taskProgress">— / 3</strong></div>
+      <div><span>Current Step</span><strong id="currentStep">等待启动</strong></div>
+      <p id="taskInstruction">启动摄像头与教学 Session 后显示步骤指引。</p>
+      <dl class="coach-results"><div><dt>Vision</dt><dd id="visionResult">—</dd></div><div><dt>SOP</dt><dd id="sopResult">READY</dd></div><div><dt>AI Guidance</dt><dd id="coachGuidance">—</dd></div></dl>
+      <button id="confirmStep" type="button" disabled>确认并进入下一步</button>
     </section>
-<section class="camera-panel">
-      <div class="camera-config">
-        <label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label>
-        <div><span>Resolution</span><strong id="cameraResolution">—</strong></div>
-      </div>
-      <div class="preview" aria-label="攝影機預覽與辨識框">
-        <video id="cameraPreview" playsinline muted></video>
-        <img id="uploadPreview" alt="上传图片预览" hidden>
-        <canvas id="detectionOverlay" aria-hidden="true"></canvas>
-        <canvas id="captureCanvas" hidden></canvas>
-        <p id="cameraHint">Camera not started</p>
-      </div>
-      <div class="controls">
-        <button id="startCamera" type="button">启动摄像头</button>
-        <div class="detect-action">
-          <button id="captureFrame" class="primary-action" type="button" disabled>立即 AI 检测</button>
-          <small>截取当前画面并送至 YOLO 辨识</small>
-        </div>
-        <button id="stopCamera" type="button" disabled>停止摄像头</button>
-        <button id="uploadImage" class="secondary-action" type="button">备用：上传图片测试</button>
-        <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-      </div>
-      <p id="liveMessage" role="status">正在檢查 Live Backend…</p>
-      <p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
+    <section class="workflow-panel" aria-label="手动 AI 检测流程"><ol><li><strong>Step 1</strong><span>启动摄像头</span></li><li><strong>Step 2</strong><span>将 F450 零件放入画面</span></li><li><strong>Step 3</strong><span>点击「立即 AI 检测」</span></li><li><strong>Step 4</strong><span>查看 Vision 与 SOP 结果</span></li></ol></section>
+    <section class="camera-panel">
+      <div class="camera-config"><label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label><div><span>Resolution</span><strong id="cameraResolution">—</strong></div></div>
+      <div class="preview" aria-label="摄像机预览与辨识框"><video id="cameraPreview" playsinline muted></video><img id="uploadPreview" alt="上传图片预览" hidden><canvas id="detectionOverlay" aria-hidden="true"></canvas><canvas id="captureCanvas" hidden></canvas><p id="cameraHint">Camera not started</p></div>
+      <div class="controls"><button id="startCamera" type="button">启动摄像头</button><div class="detect-action"><button id="captureFrame" class="primary-action" type="button" disabled>立即 AI 检测</button><small>Manual Mode · 截取当前画面并送至 YOLO 辨识</small></div><button id="stopCamera" type="button" disabled>停止摄像头</button><button id="uploadImage" class="secondary-action" type="button">备用：上传图片测试</button><input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden></div>
+      <p id="liveMessage" role="status">正在检查 Live Backend…</p><p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
     </section>
-
-    <section class="results-panel">
-      <h2>Detection Facts</h2>
-      <ul id="detectionResults"><li>尚未執行辨識。</li></ul>
-      <p id="timingMetrics">Capture、Upload、Vision、Total 與 Response Size 會顯示在這裡。</p>
-    </section>
-
-    <aside>
-      <strong>Phase 1A 限制</strong>
-      <p>這不是 PASS／NG 判定，也不會寫入正式學習紀錄。Live Backend 離線時，既有 FDE 教材與 Photo Check 不受影響。</p>
-    </aside>
+    <section class="results-panel"><h2>Detection Facts</h2><ul id="detectionResults"><li>尚未执行辨识。</li></ul><p id="timingMetrics">Capture、Vision 与 Round Trip 会显示在这里。</p></section>
+    <section id="devSimulator" class="dev-panel" hidden><h2>Developer Simulation · DEV ONLY</h2><div class="controls"><button data-scenario="motor">Simulate motor</button><button data-scenario="frame_arm">Simulate frame_arm</button><button data-scenario="flight_controller">Simulate flight_controller</button><button data-scenario="wrong_class">Simulate wrong class</button><button data-scenario="no_detection">Simulate no detection</button><button data-scenario="low_confidence">Simulate low confidence</button></div></section>
+    <aside><strong>MODEL_ACCURACY_PENDING</strong><p>REAL_VISION 仅产生 PASS_CANDIDATE；正式步骤由 Backend Confirm 推进。Mock Vision 仅限 Dev/Test。</p></aside>
   </main>
-  <script src="live.js?v=phase1a2-interaction3"></script>
+  <script src="live.js?v=phase2-task1"></script>
 </body>
 </html>

@@ -203,6 +203,35 @@
       `<li><strong>${escapeHtml(item.class)}</strong><span>${(item.confidence * 100).toFixed(1)}%</span><code>[${item.box.join(', ')}]</code></li>`
     ).join('');
   }
+  async function parseJsonResponse(response) {
+    const body = await response.json();
+    if (!response.ok) { const error = new Error(body?.error?.message || 'request_failed'); error.status = response.status; error.code = body?.error?.code; throw error; }
+    return body;
+  }
+
+  async function confirmStep(fetchImpl, sessionId) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
+  }
+
+  async function simulateVision(fetchImpl, sessionId, scenario) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/simulate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario }) }));
+  }
+
+  function renderTaskState(elements, payload = {}) {
+    const session = payload.session || payload;
+    const task = payload.task || payload;
+    if (task.course_title) elements.course.textContent = task.course_title;
+    if (task.task_title) elements.task.textContent = task.task_title;
+    if (task.progress) elements.progress.textContent = `${task.progress.current} / ${task.progress.total}`;
+    if (task.step) { elements.step.textContent = task.step.title; elements.instruction.textContent = task.step.instruction; }
+    else if (session.state === 'TASK_COMPLETED') { elements.step.textContent = 'TASK COMPLETED'; elements.instruction.textContent = '基础零件准备完成。'; }
+    if (payload.detection) elements.visionResult.textContent = `${payload.detection.class} ${(payload.detection.confidence * 100).toFixed(1)}%`;
+    if (payload.sop) elements.sopResult.textContent = payload.sop.status;
+    else if (session.state) elements.sopResult.textContent = session.state;
+    if (payload.guidance) elements.guidance.textContent = payload.guidance.text;
+    elements.confirm.disabled = session.state !== 'PASS_CANDIDATE';
+  }
+
   function createController({ documentRef = document, navigatorRef = navigator, fetchImpl = fetch } = {}) {
     const elements = {
       health: documentRef.querySelector('#backendStatus'),
@@ -223,7 +252,10 @@
       uploadPreview: documentRef.querySelector('#uploadPreview'),
       results: documentRef.querySelector('#detectionResults'),
       metrics: documentRef.querySelector('#timingMetrics'),
-      message: documentRef.querySelector('#liveMessage')
+      message: documentRef.querySelector('#liveMessage'),
+      course: documentRef.querySelector('#courseTitle'), task: documentRef.querySelector('#taskTitle'), progress: documentRef.querySelector('#taskProgress'),
+      step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
+      sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator')
     };
     let stream = null;
     let sessionId = null;
@@ -266,7 +298,11 @@
         body: JSON.stringify({ mode: 'demo' })
       });
       if (!response.ok) throw new Error('session_create_failed');
-      sessionId = (await response.json()).session_id;
+      const created = await response.json();
+      sessionId = created.session_id;
+      elements.devPanel.hidden = !created.dev_mode;
+      const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`));
+      renderTaskState(elements, state);
       return sessionId;
     }
 
@@ -333,6 +369,8 @@
         `Inference ${Number(result.payload.metrics.model_inference_ms || 0).toFixed(1)} ms`,
         `Round Trip ${totalMs.toFixed(1)} ms`
       ].join(' · ');
+      const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`));
+      renderTaskState(elements, { ...result.payload, task: state });
       setMessage('检测完成');
     }
 
@@ -399,6 +437,9 @@
     elements.upload.addEventListener('click', () => triggerFilePicker(elements.file, devLog));
     elements.file.addEventListener('change', (event) => performUploadInteraction(event.target.files?.[0], useFile, devLog).catch((error) => setMessage(`图片检测失败：${error.message}`)));
 
+    elements.confirm.addEventListener('click', async () => { const result = await confirmStep(fetchImpl, await ensureSession()); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
+    elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const result = await simulateVision(fetchImpl, await ensureSession(), button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { ...result, task: state }); }));
+
     return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera };
   }
 
@@ -421,6 +462,9 @@
   }
 
   return {
+    renderTaskState,
+    confirmStep,
+    simulateVision,
     performCaptureInteraction,
     triggerFilePicker,
     performUploadInteraction,

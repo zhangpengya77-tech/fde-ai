@@ -52,3 +52,7 @@ aside strong { color: #ffcb64; }
   main { width: min(100% - 18px, 900px); padding-top: 20px; }
   .status-panel, .controls, .camera-config, .workflow-panel ol { grid-template-columns: 1fr; }
 }
+
+.task-panel,.dev-panel{background:rgba(9,31,48,.9);border:1px solid rgba(69,224,255,.25);border-radius:16px;padding:18px;margin:16px 0}
+.task-panel>div{display:grid;grid-template-columns:120px 1fr;gap:12px;margin:6px 0}
+.task-panel span,.coach-results dt{color:#8aa9bc}.coach-results{display:grid;gap:8px}.coach-results div{display:grid;grid-template-columns:120px 1fr}.coach-results dd{margin:0}.dev-panel{border-color:#f5a623}.dev-panel h2{color:#f5a623}
