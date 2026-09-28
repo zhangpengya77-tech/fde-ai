@@ -1,0 +1,159 @@
+{
+  "status": "MODEL_NOT_QUALIFIED",
+  "independent_test_set_size": 0,
+  "manifest_errors": [],
+  "thresholds": {
+    "0.50": {
+      "threshold": 0.5,
+      "cw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "ccw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "overall_accuracy": 0.0,
+      "mutual_misclassification_rate": 0.0,
+      "confusion_matrix": {
+        "cw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        },
+        "ccw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        }
+      },
+      "error_categories": {
+        "CW_TO_CCW": 0,
+        "CCW_TO_CW": 0,
+        "PROPELLER_TO_OTHER": 0,
+        "NO_DETECTION": 0,
+        "LOW_CONFIDENCE": 0
+      },
+      "qualification": "MODEL_NOT_QUALIFIED",
+      "records": []
+    },
+    "0.60": {
+      "threshold": 0.6,
+      "cw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "ccw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "overall_accuracy": 0.0,
+      "mutual_misclassification_rate": 0.0,
+      "confusion_matrix": {
+        "cw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        },
+        "ccw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        }
+      },
+      "error_categories": {
+        "CW_TO_CCW": 0,
+        "CCW_TO_CW": 0,
+        "PROPELLER_TO_OTHER": 0,
+        "NO_DETECTION": 0,
+        "LOW_CONFIDENCE": 0
+      },
+      "qualification": "MODEL_NOT_QUALIFIED",
+      "records": []
+    },
+    "0.70": {
+      "threshold": 0.7,
+      "cw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "ccw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "overall_accuracy": 0.0,
+      "mutual_misclassification_rate": 0.0,
+      "confusion_matrix": {
+        "cw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        },
+        "ccw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        }
+      },
+      "error_categories": {
+        "CW_TO_CCW": 0,
+        "CCW_TO_CW": 0,
+        "PROPELLER_TO_OTHER": 0,
+        "NO_DETECTION": 0,
+        "LOW_CONFIDENCE": 0
+      },
+      "qualification": "MODEL_NOT_QUALIFIED",
+      "records": []
+    },
+    "0.80": {
+      "threshold": 0.8,
+      "cw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "ccw": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "tested": 0
+      },
+      "overall_accuracy": 0.0,
+      "mutual_misclassification_rate": 0.0,
+      "confusion_matrix": {
+        "cw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        },
+        "ccw_propeller": {
+          "cw_propeller": 0,
+          "ccw_propeller": 0,
+          "other": 0,
+          "not_detected": 0
+        }
+      },
+      "error_categories": {
+        "CW_TO_CCW": 0,
+        "CCW_TO_CW": 0,
+        "PROPELLER_TO_OTHER": 0,
+        "NO_DETECTION": 0,
+        "LOW_CONFIDENCE": 0
+      },
+      "qualification": "MODEL_NOT_QUALIFIED",
+      "records": []
+    }
+  }
+}
