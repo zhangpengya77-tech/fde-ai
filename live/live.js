@@ -324,7 +324,8 @@
         elements.video.srcObject = stream;
         await elements.video.play();
         await refreshCameraDevices();
-        await ensureSession();
+        const activeSession = await ensureSession();
+        await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(activeSession)}/camera/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
         elements.start.disabled = true;
         elements.start.textContent = '相机已启动';
         elements.video.hidden = false;
@@ -449,6 +450,7 @@
         onError: (failure) => setMessage(`自动观察失败：${failure.message}`)
       });
       autoScheduler.start();
+      await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/auto/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
       elements.autoMode.checked = true;
       elements.startCoach.disabled = true;
       elements.stopCoach.disabled = false;
@@ -458,6 +460,7 @@
 
     function stopAutoObservation() {
       autoScheduler?.stop();
+      if (sessionId) fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/auto/stop`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
       elements.startCoach.disabled = false;
       elements.stopCoach.disabled = true;
       setMessage('AI 自动观察已停止；摄像头保持当前状态。');

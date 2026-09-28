@@ -135,6 +135,22 @@ def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout
         except KeyError: return error_response("session_not_found", "Live session was not found.", 404)
         return json_response({"events": values})
 
+
+    async def camera_started(request):
+        try: event = sessions.append_event(request.path_params["session_id"], "CAMERA_STARTED")
+        except KeyError: return error_response("session_not_found", "Live session was not found.", 404)
+        return json_response({"event": event})
+
+    async def auto_started(request):
+        try: event = sessions.append_event(request.path_params["session_id"], "AUTO_OBSERVATION_STARTED")
+        except KeyError: return error_response("session_not_found", "Live session was not found.", 404)
+        return json_response({"event": event})
+
+    async def auto_stopped(request):
+        try: event = sessions.append_event(request.path_params["session_id"], "AUTO_OBSERVATION_STOPPED")
+        except KeyError: return error_response("session_not_found", "Live session was not found.", 404)
+        return json_response({"event": event})
+
     async def delete_session(request):
         if not sessions.delete(request.path_params["session_id"]): return error_response("session_not_found", "Live session was not found.", 404)
         return json_response({"deleted": True})
@@ -147,6 +163,9 @@ def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout
         Route("/api/live/sessions/{session_id}/confirm", confirm, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/events", events, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/simulate", simulate, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/camera/start", camera_started, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/auto/start", auto_started, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/auto/stop", auto_stopped, methods=["POST"]),
         Route("/api/live/sessions/{session_id}", delete_session, methods=["DELETE"]),
         Mount("/live", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "live"), html=True), name="live"),
     ]
