@@ -40,3 +40,11 @@ Vision Facts -> Coach Orchestrator -> SOP Engine -> Session/Event State
 - `live/auto-observation.js`: 1 FPS scheduler with at most one in-flight request and no queue.
 
 REAL_VISION can produce `PASS_CANDIDATE` only and requires backend confirmation. Safety-gated definitions produce `TEACHER_CHECK` and ordinary student confirmation is rejected. Production configuration returns `dev_only` for Mock Vision calls.
+# Phase 3A: Contextual RAG Guidance
+
+```text
+Camera → Vision Fact → SOP Engine → Session → Deterministic Guidance → immediate response
+                                      └→ async RAG Context → RAG :8770 → Session explanation/event
+```
+
+Live Backend is the only RAG caller. RAG explanation is display-only, deduplicated by session/step/result/error/detected class, protected by request/context versions, and discarded when stale. `TEACHER_CHECK` cannot be overridden.

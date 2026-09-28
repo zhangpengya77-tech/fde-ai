@@ -26,3 +26,6 @@ The first configurable task is `F450_BASIC_ASSEMBLY / PARTS_PREPARATION` with `p
 The frontend retains Manual AI Detect and adds a 1 FPS Automatic Observation scheduler with one-in-flight, latest-frame capture, stale completion suppression, and zero request queue.
 
 Still excluded: Production deployment, real RAG/LLM, Realtime Voice AI, production Learning Record, Teacher Dashboard, WebSocket, model retraining, and model replacement. Model status is `MODEL_ACCURACY_PENDING`.
+# Phase 3A RAG Contextual Guidance
+
+Phase 3A adds backend-only contextual RAG explanations through the existing local service at `127.0.0.1:8770`. SOP and deterministic guidance remain authoritative and immediate. RAG runs asynchronously after Session update, is deduplicated by teaching context, and cannot change step or safety state.

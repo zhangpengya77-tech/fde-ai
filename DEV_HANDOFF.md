@@ -57,3 +57,15 @@ Verification evidence:
 - Model status remains `MODEL_ACCURACY_PENDING`; `best.pt` and thresholds were not modified.
 
 Do not proceed to real RAG, Realtime Voice AI, production Learning Record, Teacher Dashboard, or Production deployment without a new authorization.
+# Phase 3A Handoff — 2026-09-29
+
+- Async Backend RAG Adapter maps `/api/rag/health` and `/api/rag/ask` at `127.0.0.1:8770`.
+- Snapshot/SOP responses do not await RAG; deterministic guidance remains available during offline, timeout, no-hit, and invalid responses.
+- Backend-only context includes current course/task/step, expected/detected class, confidence, SOP/error, and the newest five error events.
+- Dedup prevents 1 FPS frames from becoming 1 RAG query/second.
+- Request ID, step ID, context version, and latest-request checks drop stale explanations.
+- UI separates SOP Result, AI Guidance, AI Explanation, Knowledge Source, RAG Status, and RAG Latency.
+- Verification: Live Backend 53 passed; JavaScript/Worker/Phase suites 68 passed; Django 238 passed with 22 skipped; Python compile passed.
+- Local RAG measurement: health 4.7 ms; sample query 259.5 ms and returned `source_type=refuse`, correctly handled as no hit.
+- RAG Corpus was not modified; health reported version `f450_v1`, 1,105 documents, index loaded.
+- Known issue remains `MODEL_ACCURACY_PENDING`.
