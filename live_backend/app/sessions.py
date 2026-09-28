@@ -37,6 +37,18 @@ class LiveSession:
     started_at: str = ""
     updated_at: str = ""
     completed_at: str | None = None
+    context_version: int = 1
+    rag_explanation: dict = field(default_factory=lambda: {
+        "status": "idle",
+        "explanation": None,
+        "reference_summary": None,
+        "sources": None,
+        "latency_ms": None,
+        "hit": False,
+        "error_code": None,
+        "request_id": None,
+        "context_version": 1,
+    })
     _step_index: int = field(default=0, repr=False)
     _events: list[dict] = field(default_factory=list, repr=False)
 
@@ -161,6 +173,18 @@ class InMemorySessionStore:
             session.last_confidence = None
             session.last_frame_id = None
             session.pass_candidate_count = 0
+            session.context_version += 1
+            session.rag_explanation = {
+                "status": "idle",
+                "explanation": None,
+                "reference_summary": None,
+                "sources": None,
+                "latency_ms": None,
+                "hit": False,
+                "error_code": None,
+                "request_id": None,
+                "context_version": session.context_version,
+            }
             self._append(session, "STEP_STARTED")
             return session
 
