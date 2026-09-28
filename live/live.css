@@ -13,7 +13,7 @@ header, section, aside { margin-bottom: 18px; }
 h1 { margin: 8px 0; font-size: clamp(2rem, 8vw, 4rem); }
 h2 { margin-top: 0; }
 p { color: #b7cad8; line-height: 1.65; }
-.status-panel, .camera-panel, .results-panel, aside { border: 1px solid rgba(91, 217, 255, .3); border-radius: 16px; background: rgba(5, 20, 33, .88); padding: 18px; }
+.status-panel, .workflow-panel, .camera-panel, .results-panel, aside { border: 1px solid rgba(91, 217, 255, .3); border-radius: 16px; background: rgba(5, 20, 33, .88); padding: 18px; }
 .status-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .status-panel div { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 10px; background: #081c2c; }
 .status-panel strong { color: #ffcb64; }
@@ -26,8 +26,16 @@ p { color: #b7cad8; line-height: 1.65; }
 #cameraHint { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; background: radial-gradient(circle, rgba(18,56,84,.65), rgba(1,4,7,.92)); color: #8feaff; font-weight: 700; }
 #cameraHint[hidden] { display: none; }
 .preview { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: #010407; }
-.preview video, .preview #detectionOverlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.preview video, .preview #uploadPreview, .preview #detectionOverlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 #detectionOverlay { pointer-events: none; }
+.workflow-panel ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.workflow-panel li { display: grid; gap: 5px; padding: 10px; border-radius: 9px; background: #081c2c; color: #b7cad8; }
+.workflow-panel strong { color: #5fe2ff; }
+.detect-action { display: grid; gap: 5px; }
+.detect-action small { color: #b7cad8; text-align: center; }
+.primary-action { background: #0b9bc1; box-shadow: 0 0 18px rgba(69,224,255,.2); }
+.secondary-action { background: transparent; color: #b7cad8; }
+#imageFile { display: none; }
 .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 button, .file-button { min-height: 48px; display: flex; align-items: center; justify-content: center; border: 1px solid #51dfff; border-radius: 9px; background: #0e7696; color: white; font: inherit; font-weight: 750; cursor: pointer; }
 button:disabled { opacity: .45; cursor: not-allowed; }
@@ -42,5 +50,5 @@ aside strong { color: #ffcb64; }
 
 @media (max-width: 560px) {
   main { width: min(100% - 18px, 900px); padding-top: 20px; }
-  .status-panel, .controls, .camera-config { grid-template-columns: 1fr; }
+  .status-panel, .controls, .camera-config, .workflow-panel ol { grid-template-columns: 1fr; }
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131f">
   <title>FDE-AI Live Coach MVP</title>
-  <link rel="stylesheet" href="live.css?v=phase1a2-webcam2">
+  <link rel="stylesheet" href="live.css?v=phase1a2-interaction3">
 </head>
 <body>
   <main>
@@ -21,22 +21,35 @@
       <div><span>Camera</span><strong id="cameraStatus" data-state="checking">CHECKING</strong></div>
     </section>
 
-    <section class="camera-panel">
+        <section class="workflow-panel" aria-label="手动 AI 检测流程">
+      <ol>
+        <li><strong>Step 1</strong><span>启动摄像头</span></li>
+        <li><strong>Step 2</strong><span>将 F450 零件放入画面</span></li>
+        <li><strong>Step 3</strong><span>点击「立即 AI 检测」</span></li>
+        <li><strong>Step 4</strong><span>查看 AI 识别结果</span></li>
+      </ol>
+    </section>
+<section class="camera-panel">
       <div class="camera-config">
         <label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label>
         <div><span>Resolution</span><strong id="cameraResolution">—</strong></div>
       </div>
       <div class="preview" aria-label="攝影機預覽與辨識框">
         <video id="cameraPreview" playsinline muted></video>
+        <img id="uploadPreview" alt="上传图片预览" hidden>
         <canvas id="detectionOverlay" aria-hidden="true"></canvas>
         <canvas id="captureCanvas" hidden></canvas>
         <p id="cameraHint">Camera not started</p>
       </div>
       <div class="controls">
-        <button id="startCamera" type="button">Start Camera</button>
-        <button id="captureFrame" type="button" disabled>擷取一張並辨識</button>
-        <button id="stopCamera" type="button" disabled>停止 Camera</button>
-        <label class="file-button">或選擇圖片<input id="imageFile" type="file" accept="image/*"></label>
+        <button id="startCamera" type="button">启动摄像头</button>
+        <div class="detect-action">
+          <button id="captureFrame" class="primary-action" type="button" disabled>立即 AI 检测</button>
+          <small>截取当前画面并送至 YOLO 辨识</small>
+        </div>
+        <button id="stopCamera" type="button" disabled>停止摄像头</button>
+        <button id="uploadImage" class="secondary-action" type="button">备用：上传图片测试</button>
+        <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
       </div>
       <p id="liveMessage" role="status">正在檢查 Live Backend…</p>
       <p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
@@ -53,6 +66,6 @@
       <p>這不是 PASS／NG 判定，也不會寫入正式學習紀錄。Live Backend 離線時，既有 FDE 教材與 Photo Check 不受影響。</p>
     </aside>
   </main>
-  <script src="live.js?v=phase1a2-webcam2"></script>
+  <script src="live.js?v=phase1a2-interaction3"></script>
 </body>
 </html>

@@ -154,7 +154,10 @@
       throw new Error('invalid_server_response');
     }
     if (!response.ok) {
-      throw new Error(body?.error?.code || 'snapshot_failed');
+      const error = new Error(body?.error?.message || body?.error?.code || 'snapshot_failed');
+      error.status = response.status;
+      error.code = body?.error?.code || 'snapshot_failed';
+      throw error;
     }
     return {
       payload: body,
@@ -163,6 +166,43 @@
     };
   }
 
+  function devLog(event, detail = {}) {
+    if (typeof console !== 'undefined' && console.info) console.info(event, detail);
+  }
+
+  async function performCaptureInteraction({ captureFrame, sendImage, setBusy, onError, log = devLog }) {
+    log('CAPTURE_CLICKED');
+    setBusy(true);
+    try {
+      const captured = captureFrame();
+      log('FRAME_CAPTURED', { width: captured.width, height: captured.height });
+      log('JPEG_ENCODED', { encode_ms: captured.encodeMs, bytes: Math.round((captured.imageData.length - captured.imageData.indexOf(',') - 1) * 0.75) });
+      await sendImage(captured);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function triggerFilePicker(fileInput, log = devLog) {
+    log('UPLOAD_CLICKED');
+    fileInput.click();
+  }
+
+  async function performUploadInteraction(file, useFile, log = devLog) {
+    if (!file) return false;
+    log('FILE_SELECTED', { name: file.name || '', type: file.type || '' });
+    await useFile(file);
+    return true;
+  }
+
+  function detectionResultHtml(detections) {
+    if (!detections.length) return '<li class="empty-result">未识别到目标零件</li>';
+    return detections.map((item) =>
+      `<li><strong>${escapeHtml(item.class)}</strong><span>${(item.confidence * 100).toFixed(1)}%</span><code>[${item.box.join(', ')}]</code></li>`
+    ).join('');
+  }
   function createController({ documentRef = document, navigatorRef = navigator, fetchImpl = fetch } = {}) {
     const elements = {
       health: documentRef.querySelector('#backendStatus'),
@@ -179,6 +219,8 @@
       capture: documentRef.querySelector('#captureFrame'),
       stop: documentRef.querySelector('#stopCamera'),
       file: documentRef.querySelector('#imageFile'),
+      upload: documentRef.querySelector('#uploadImage'),
+      uploadPreview: documentRef.querySelector('#uploadPreview'),
       results: documentRef.querySelector('#detectionResults'),
       metrics: documentRef.querySelector('#timingMetrics'),
       message: documentRef.querySelector('#liveMessage')
@@ -244,6 +286,9 @@
         await refreshCameraDevices();
         await ensureSession();
         elements.start.disabled = true;
+        elements.start.textContent = '相机已启动';
+        elements.video.hidden = false;
+        elements.uploadPreview.hidden = true;
         elements.stop.disabled = false;
         elements.capture.disabled = false;
         const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
@@ -252,8 +297,8 @@
         elements.cameraHint.hidden = true;
         elements.cameraDiagnostics.hidden = false;
         elements.cameraDiagnostics.textContent = 'Device: ' + (stream.getVideoTracks()[0]?.label || elements.cameraDevice.selectedOptions[0]?.textContent || 'unknown') + ' | Supported: ' + Object.keys(supported).filter((key) => supported[key]).join(', ');
-        setCameraState('CAMERA ACTIVE', 'online');
-        setMessage(opened.fallbackUsed ? '攝影機已開啟（Compatibility Fallback）；按「擷取一張並辨識」。' : '攝影機已開啟；按「擷取一張並辨識」。');
+        setCameraState('ACTIVE', 'online');
+        setMessage(opened.fallbackUsed ? '摄像头已启动（Compatibility Fallback），请点击「立即 AI 检测」。' : '摄像头已启动，请点击「立即 AI 检测」。');
       } catch (error) {
         stopStream(stream);
         stream = null;
@@ -269,51 +314,59 @@
     async function sendImage(imageData, captureMs, sourceWidth, sourceHeight, encodeMs = 0) {
       const id = await ensureSession();
       const frameId = `frame-${Date.now()}`;
-      setMessage('正在傳送單張影像…');
       const totalStarted = performance.now();
+      devLog('SNAPSHOT_REQUEST_SENT', { frame_id: frameId });
       const result = await submitSnapshot(fetchImpl, id, {
         frame_id: frameId,
         file_name: `${frameId}.jpg`,
         image_data: imageData
       });
+      devLog('SNAPSHOT_RESPONSE_RECEIVED', { frame_id: frameId });
       const totalMs = Number((performance.now() - totalStarted + captureMs).toFixed(1));
       drawDetectionOverlay(elements.overlay, result.payload.detections, sourceWidth, sourceHeight);
-      elements.results.innerHTML = result.payload.detections.length
-        ? result.payload.detections.map((item) =>
-            `<li><strong>${escapeHtml(item.class)}</strong><span>${(item.confidence * 100).toFixed(1)}%</span><code>[${item.box.join(', ')}]</code></li>`
-          ).join('')
-        : '<li>本張影像沒有偵測結果。</li>';
+      elements.results.innerHTML = detectionResultHtml(result.payload.detections);
+      devLog('OVERLAY_RENDERED', { detections: result.payload.detections.length });
       elements.metrics.textContent = [
         `Resolution ${sourceWidth}×${sourceHeight}`,
-        `Snapshot ${Math.round((imageData.length - imageData.indexOf(",") - 1) * 0.75)} bytes`,
-        `Capture ${captureMs.toFixed(1)} ms`,
+        `JPEG ${Math.round((imageData.length - imageData.indexOf(',') - 1) * 0.75)} bytes`,
         `Encode ${encodeMs.toFixed(1)} ms`,
-        `Upload/response ${result.uploadMs.toFixed(1)} ms`,
         `Inference ${Number(result.payload.metrics.model_inference_ms || 0).toFixed(1)} ms`,
-        `Vision upstream ${result.payload.metrics.vision_upstream_ms.toFixed(1)} ms`,
-        `Total ${totalMs.toFixed(1)} ms`,
-        `Response ${result.responseBytes} bytes`
+        `Round Trip ${totalMs.toFixed(1)} ms`
       ].join(' · ');
-      setMessage('單張辨識完成。');
+      setMessage('检测完成');
     }
 
     async function capture() {
-      try {
-        const captured = captureFrame(elements.video, elements.captureCanvas);
-        await sendImage(captured.imageData, captured.captureMs, captured.width, captured.height, captured.encodeMs);
-      } catch (error) {
-        setMessage(`辨識失敗：${error.message}`);
-      }
+      await performCaptureInteraction({
+        captureFrame: () => captureFrame(elements.video, elements.captureCanvas),
+        sendImage: (captured) => sendImage(captured.imageData, captured.captureMs, captured.width, captured.height, captured.encodeMs),
+        setBusy: (busy) => {
+          elements.capture.disabled = busy;
+          elements.capture.textContent = busy ? 'AI 检测中…' : '立即 AI 检测';
+          if (busy) setMessage('AI 检测中...');
+        },
+        onError: (error) => {
+          const status = error.status ? `HTTP ${error.status} ` : '';
+          const code = error.code ? `${error.code}: ` : '';
+          setMessage(`检测失败：${status}${code}${error.message}`);
+        },
+        log: devLog
+      });
     }
 
     async function useFile(file) {
-      if (!file || !file.type.startsWith('image/')) return;
+      if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return;
       const image = await createImageBitmap(file);
       elements.captureCanvas.width = image.width;
       elements.captureCanvas.height = image.height;
       elements.captureCanvas.getContext('2d').drawImage(image, 0, 0);
-      const imageData = elements.captureCanvas.toDataURL('image/jpeg', 0.82);
-      await sendImage(imageData, 0, image.width, image.height);
+      const encodeStarted = performance.now();
+      const imageData = elements.captureCanvas.toDataURL('image/jpeg', 0.75);
+      const encodeMs = Number((performance.now() - encodeStarted).toFixed(1));
+      elements.uploadPreview.src = imageData;
+      elements.uploadPreview.hidden = false;
+      elements.video.hidden = true;
+      await sendImage(imageData, 0, image.width, image.height, encodeMs);
       image.close();
     }
 
@@ -322,11 +375,12 @@
       stream = null;
       elements.video.srcObject = null;
       elements.start.disabled = false;
+      elements.start.textContent = '启动摄像头';
       elements.capture.disabled = true;
       elements.stop.disabled = true;
       elements.cameraResolution.textContent = "—";
       elements.cameraHint.hidden = false;
-      setCameraState(cameras.length ? "CAMERA READY" : "NO CAMERA");
+      setCameraState(cameras.length ? 'STOPPED' : 'ERROR', cameras.length ? 'checking' : 'offline');
       if (sessionId) {
         const oldSession = sessionId;
         sessionId = null;
@@ -342,7 +396,8 @@
     elements.start.addEventListener('click', startCamera);
     elements.capture.addEventListener('click', capture);
     elements.stop.addEventListener('click', stopCamera);
-    elements.file.addEventListener('change', (event) => useFile(event.target.files?.[0]).catch((error) => setMessage(`圖片辨識失敗：${error.message}`)));
+    elements.upload.addEventListener('click', () => triggerFilePicker(elements.file, devLog));
+    elements.file.addEventListener('change', (event) => performUploadInteraction(event.target.files?.[0], useFile, devLog).catch((error) => setMessage(`图片检测失败：${error.message}`)));
 
     return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera };
   }
@@ -366,6 +421,10 @@
   }
 
   return {
+    performCaptureInteraction,
+    triggerFilePicker,
+    performUploadInteraction,
+    detectionResultHtml,
     cameraConstraints,
     cameraConstraintCandidates,
     cameraConstraintsForDevices,
