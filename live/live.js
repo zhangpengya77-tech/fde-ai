@@ -230,6 +230,14 @@
     if (payload.sop) elements.sopResult.textContent = payload.sop.status;
     else if (session.state) elements.sopResult.textContent = session.state;
     if (payload.guidance) elements.guidance.textContent = payload.guidance.text;
+    const rag = payload.rag_explanation || session.rag_explanation;
+    if (rag && elements.ragExplanation) {
+      const explanation = rag.explanation || (rag.status === 'pending' ? '正在查询教学知识…' : '目前知识库说明暂时不可用。');
+      elements.ragExplanation.textContent = rag.safety_notice ? `${rag.safety_notice} ${explanation}` : explanation;
+      elements.ragSource.textContent = rag.source_type || rag.reference_summary ? 'FDE-AI RAG' : '—';
+      elements.ragStatus.textContent = String(rag.status || 'idle').toUpperCase();
+      elements.ragLatency.textContent = Number.isFinite(Number(rag.latency_ms)) ? `${Number(rag.latency_ms).toFixed(1)} ms` : '—';
+    }
     elements.confirm.disabled = session.state !== 'PASS_CANDIDATE';
   }
 
@@ -259,12 +267,14 @@
       course: documentRef.querySelector('#courseTitle'), task: documentRef.querySelector('#taskTitle'), progress: documentRef.querySelector('#taskProgress'),
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
+      ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
     };
     let stream = null;
     let sessionId = null;
     let cameras = [];
     let autoScheduler = null;
+    let ragPollGeneration = 0;
 
     function setCameraState(state, dataState = "") {
       elements.cameraStatus.textContent = state;
@@ -316,6 +326,17 @@
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`));
       renderTaskState(elements, state);
       return sessionId;
+    }
+
+    async function refreshRagExplanation(id) {
+      const token = ++ragPollGeneration;
+      for (let attempt = 0; attempt < 12 && token === ragPollGeneration && id === sessionId; attempt += 1) {
+        const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`));
+        renderTaskState(elements, state);
+        if (state.rag_explanation?.status !== 'pending') return state.rag_explanation;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      return null;
     }
 
     async function startCamera() {
@@ -384,6 +405,7 @@
       ].join(' · ');
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`));
       renderTaskState(elements, { ...result.payload, task: state });
+      if (result.payload.rag_explanation?.status === 'pending') void refreshRagExplanation(id);
       setMessage('检测完成');
     }
 
@@ -437,6 +459,7 @@
         const oldSession = sessionId;
         sessionId = null;
         sessionVisionSource = null;
+        ragPollGeneration += 1;
         try {
           await fetchImpl(`/api/live/sessions/${encodeURIComponent(oldSession)}`, { method: 'DELETE' });
         } catch {
@@ -485,7 +508,7 @@
     elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
     elements.stopCoach.addEventListener('click', stopAutoObservation);
     elements.confirm.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
-    elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const result = await simulateVision(fetchImpl, await ensureSession('MOCK_VISION'), button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { ...result, task: state }); }));
+    elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const id = await ensureSession('MOCK_VISION'); const result = await simulateVision(fetchImpl, id, button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { ...result, task: state }); if (result.rag_explanation?.status === 'pending') void refreshRagExplanation(id); }));
 
     return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera, startAutoObservation, stopAutoObservation };
   }

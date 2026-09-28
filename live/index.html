@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131f">
-  <title>FDE-AI Live Coach Phase 2</title>
+  <title>FDE-AI Live Coach Phase 3A</title>
   <link rel="stylesheet" href="live.css?v=phase2-task1">
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">FDE-AI-UAS v2.0 · Phase 2</p><h1>Live Coach MVP</h1><p>Camera、Vision Facts、SOP 教学判断与确定性指引。</p></header>
+    <header><p class="eyebrow">FDE-AI-UAS v2.0 · Phase 3A</p><h1>Live Coach MVP</h1><p>Camera、Vision Facts、SOP 教学判断、确定性指引与上下文知识解释。</p></header>
     <section class="status-panel" aria-label="服务状态">
       <div><span>Live Backend</span><strong id="backendStatus" data-state="checking">CHECKING</strong></div>
       <div><span>Vision</span><strong id="visionStatus">CHECKING</strong></div>
@@ -21,7 +21,7 @@
       <div><span>Progress</span><strong id="taskProgress">— / 3</strong></div>
       <div><span>Current Step</span><strong id="currentStep">等待启动</strong></div>
       <p id="taskInstruction">启动摄像头与教学 Session 后显示步骤指引。</p>
-      <dl class="coach-results"><div><dt>Vision</dt><dd id="visionResult">—</dd></div><div><dt>SOP</dt><dd id="sopResult">READY</dd></div><div><dt>AI Guidance</dt><dd id="coachGuidance">—</dd></div></dl>
+      <dl class="coach-results"><div><dt>Vision</dt><dd id="visionResult">—</dd></div><div><dt>SOP</dt><dd id="sopResult">READY</dd></div><div><dt>AI Guidance</dt><dd id="coachGuidance">—</dd></div><div class="rag-explanation-row"><dt>AI 教学解释</dt><dd id="ragExplanation">尚未查询教学知识。</dd></div><div><dt>Knowledge Source</dt><dd id="ragSource">—</dd></div><div><dt>RAG 状态</dt><dd id="ragStatus">IDLE</dd></div><div><dt>RAG 延迟</dt><dd id="ragLatency">—</dd></div></dl>
       <button id="confirmStep" type="button" disabled>确认并进入下一步</button>
     </section>
     <section class="workflow-panel" aria-label="手动 AI 检测流程"><ol><li><strong>Step 1</strong><span>启动摄像头</span></li><li><strong>Step 2</strong><span>将 F450 零件放入画面</span></li><li><strong>Step 3</strong><span>点击「立即 AI 检测」</span></li><li><strong>Step 4</strong><span>查看 Vision 与 SOP 结果</span></li></ol></section>

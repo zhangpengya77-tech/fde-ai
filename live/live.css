@@ -56,5 +56,6 @@ aside strong { color: #ffcb64; }
 .task-panel,.dev-panel{background:rgba(9,31,48,.9);border:1px solid rgba(69,224,255,.25);border-radius:16px;padding:18px;margin:16px 0}
 .task-panel>div{display:grid;grid-template-columns:120px 1fr;gap:12px;margin:6px 0}
 .task-panel span,.coach-results dt{color:#8aa9bc}.coach-results{display:grid;gap:8px}.coach-results div{display:grid;grid-template-columns:120px 1fr}.coach-results dd{margin:0}.dev-panel{border-color:#f5a623}.dev-panel h2{color:#f5a623}
+.coach-results .rag-explanation-row{margin-top:8px;padding-top:12px;border-top:1px solid rgba(69,224,255,.2)}#ragExplanation{color:#d9f6ff;line-height:1.6}#ragStatus{color:#8feaff}
 
 .mode-panel{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:rgba(9,31,48,.9);padding:14px;border-radius:14px;margin:16px 0}.mode-panel output{margin-left:auto;color:#8fe8ff}
