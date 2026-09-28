@@ -1,6 +1,6 @@
 # Windows USB Webcam Verification
 
-Status: **PARTIAL PASS — real camera chain verified; normal-browser permission and F450 target box require user confirmation**
+Status: **CAMERA PIPELINE PASS — model accuracy remains unqualified**
 
 Automated diagnostic date: 2026-09-28
 
@@ -19,16 +19,36 @@ Automated diagnostic date: 2026-09-28
 - Stop: PASS; srcObject cleared and controls reset
 - Restart: PASS; track returned to live at 640×480
 - Snapshot API / detection JSON: PASS; current scene returned zero detections
-- F450 part detection and visible bounding box: NOT TESTED (no physical part was placed in view)
-- Normal user-profile camera permission: NOT TESTED (isolated diagnostic Chrome auto-granted camera access)
+- Normal Chrome camera preview: PASS (user-confirmed physical test)
+- Detect interaction / Snapshot request / Detection result: PASS (user-confirmed physical test)
+- Camera → HTTPS → Live Backend → Vision → best.pt → Detection result: PASS
+- Model accuracy: NOT PASSED; the first real motor sample was misclassified as `frame_arm`
+
+## Real F450 physical model validation
+
+This table records physical-object model behavior separately from the camera pipeline. A successful request proves the transport and inference chain, but does not prove classification accuracy.
+
+| Trial | Expected | Detected | Confidence | Detection chain | Classification | Bounding box aligned |
+|---|---|---|---:|---|---|---|
+| 1 | `motor` | `frame_arm` | 38.9% | PASS | MODEL MISCLASSIFICATION | Not reported |
+| 2 | `frame_arm` | Pending | Pending | Pending | Pending | Pending |
+| 3 | `flight_controller` | Pending | Pending | Pending | Pending | Pending |
+
+Current conclusions:
+
+- `PHASE_1A2_CAMERA_PIPELINE = PASS`
+- `MODEL_ACCURACY = NOT PASSED / EVALUATION INCOMPLETE`
+- Do not modify `best.pt` or lower the confidence threshold. Track accuracy as `MODEL_ACCURACY_PENDING`; Phase 2 architecture may proceed independently using DEV-only Mock Vision.
 
 Manual completion:
 
 1. Open the Dev-only HTTPS URL in the normal browser profile.
 2. Click **Start Camera**, then click **Allow** when Chrome asks for camera access.
 3. Confirm the selector shows **Logi C310 HD WebCam** and preview is live.
-4. Place one supported F450 part (motor, frame_arm, flight_controller, gps_compass, receiver, or battery) in view.
-5. Click **Capture / Detect** and confirm a detection row and aligned bounding box.
+4. Test the remaining objects one at a time in this order: `motor`, `frame_arm`, `flight_controller`.
+5. Click **立即 AI 检测** for each object and record detected class, confidence, and whether the bounding box is aligned.
 6. Click **Stop Camera**, confirm the camera indicator turns off, then start it again.
 
-Final manual result: NOT TESTED / PASS / FAIL: __________
+Final camera pipeline result: PASS
+
+Final model accuracy result: PENDING THREE-OBJECT REVIEW
