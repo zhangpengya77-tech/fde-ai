@@ -1,6 +1,7 @@
 import unittest
 
-from app.guidance import CoachMessage, DeterministicGuidanceProvider, GuidanceProvider, RAGGuidanceProvider
+from app.guidance import CoachMessage, DeterministicGuidanceProvider, GuidanceProvider
+from app.rag_guidance import RAGGuidanceProvider
 from app.sop import SopDecision
 
 
@@ -20,7 +21,7 @@ class GuidanceTests(unittest.TestCase):
             "PASS_CANDIDATE": "已识别到当前步骤需要的零件，请确认后继续。",
             "STEP_COMPLETED": "步骤完成，进入下一步。",
             "TASK_COMPLETED": "零件辨识与准备任务已完成。",
-            "TEACHER_CHECK": "此步骤属于安全节点，需要教师确认。",
+            "TEACHER_CHECK": "此步骤涉及安全操作，必须由教师确认后才能继续。",
         }
         for status, expected in cases.items():
             with self.subTest(status=status):
@@ -28,10 +29,9 @@ class GuidanceTests(unittest.TestCase):
                 self.assertIsInstance(message, CoachMessage)
                 self.assertEqual(message.text, expected)
 
-    def test_rag_is_interface_only(self):
-        self.assertTrue(issubclass(RAGGuidanceProvider, GuidanceProvider))
-        with self.assertRaises(NotImplementedError):
-            RAGGuidanceProvider().get_guidance(self.session, self.decision("NG", "frame_arm"), None)
+    def test_rag_provider_is_separate_from_deterministic_control_guidance(self):
+        self.assertFalse(issubclass(RAGGuidanceProvider, GuidanceProvider))
+        self.assertTrue(hasattr(RAGGuidanceProvider, "explain"))
 
 
 if __name__ == "__main__":

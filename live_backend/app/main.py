@@ -17,6 +17,9 @@ from .errors import error_response, json_response
 from .guidance import DeterministicGuidanceProvider
 from .mock_vision import MockVision
 from .orchestrator import CoachOrchestrator
+from .rag import RAGAdapter
+from .rag_context import RAGContextBuilder
+from .rag_guidance import ContextualGuidanceCoordinator, RAGGuidanceProvider
 from .sessions import InMemorySessionStore, InvalidSessionTransition
 from .sop import SopDecision, SopEngine
 from .vision import VisionAdapter, VisionResponseError, VisionUnavailable
@@ -39,12 +42,18 @@ def _decode_image_data(image_data: object, max_image_bytes: int) -> tuple[bytes 
     return decoded, None
 
 
-def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None) -> Starlette:
+def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None) -> Starlette:
     config = LiveConfig.from_environment()
     adapter = vision_adapter or VisionAdapter(config.yolo_base_url, timeout_seconds=config.vision_request_timeout_seconds)
     sessions = session_store or InMemorySessionStore()
     development = config.dev_mode if dev_mode is None else bool(dev_mode)
-    orchestrator = CoachOrchestrator(sessions, SopEngine(), DeterministicGuidanceProvider())
+    rag_client = rag_adapter or RAGAdapter(config.rag_base_url, timeout_seconds=config.rag_timeout_seconds)
+    rag_coordinator = ContextualGuidanceCoordinator(
+        sessions, RAGContextBuilder(), RAGGuidanceProvider(rag_client)
+    )
+    orchestrator = CoachOrchestrator(
+        sessions, SopEngine(), DeterministicGuidanceProvider(), rag_coordinator
+    )
     mock_vision = MockVision()
     health_timeout = config.vision_health_timeout_seconds if vision_health_timeout_seconds is None else vision_health_timeout_seconds
     image_limit = config.max_image_bytes if max_image_bytes is None else max_image_bytes
@@ -79,6 +88,7 @@ def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout
         payload["task_title"] = sessions.task.title
         payload["step"] = None if step is None else {"step_id": step.step_id, "title": step.title, "instruction": step.instruction, "expected_classes": list(step.expected_classes)}
         payload["progress"] = {"current": session._step_index + 1, "total": len(sessions.task.steps)}
+        payload["rag_explanation"] = session.rag_explanation
         return json_response(payload)
 
     async def snapshot(request):
@@ -175,6 +185,7 @@ def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout
     app.state.vision_adapter = adapter
     app.state.session_store = sessions
     app.state.dev_mode = development
+    app.state.rag_coordinator = rag_coordinator
     return app
 
 

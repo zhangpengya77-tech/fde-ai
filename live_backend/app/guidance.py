@@ -31,11 +31,6 @@ class GuidanceProvider(ABC):
         raise NotImplementedError
 
 
-class RAGGuidanceProvider(GuidanceProvider):
-    def get_guidance(self, session: dict, decision: SopDecision, error_code: str | None) -> CoachMessage:
-        raise NotImplementedError("RAG integration is outside Phase 2")
-
-
 class DeterministicGuidanceProvider(GuidanceProvider):
     def get_guidance(self, session: dict, decision: SopDecision, error_code: str | None) -> CoachMessage:
         status = decision.status
@@ -48,7 +43,7 @@ class DeterministicGuidanceProvider(GuidanceProvider):
             "PASS_CANDIDATE": "已识别到当前步骤需要的零件，请确认后继续。",
             "STEP_COMPLETED": "步骤完成，进入下一步。",
             "TASK_COMPLETED": "零件辨识与准备任务已完成。",
-            "TEACHER_CHECK": "此步骤属于安全节点，需要教师确认。",
+            "TEACHER_CHECK": "此步骤涉及安全操作，必须由教师确认后才能继续。",
             "OFFLINE": "视觉服务暂时无法使用，请稍后重试。",
         }
         return CoachMessage(messages.get(status, "请依照当前步骤继续操作。"), status)

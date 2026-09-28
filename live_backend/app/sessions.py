@@ -49,6 +49,19 @@ class LiveSession:
         "request_id": None,
         "context_version": 1,
     })
+    rag_metrics: dict = field(default_factory=lambda: {
+        "request_count": 0,
+        "success_count": 0,
+        "fallback_count": 0,
+        "timeout_count": 0,
+        "no_hit_count": 0,
+        "stale_drop_count": 0,
+        "last_latency_ms": None,
+        "average_latency_ms": 0,
+    })
+    _rag_dedup_key: str | None = field(default=None, repr=False)
+    _latest_rag_request_id: str | None = field(default=None, repr=False)
+    _rag_latency_total: float = field(default=0, repr=False)
     _step_index: int = field(default=0, repr=False)
     _events: list[dict] = field(default_factory=list, repr=False)
 
@@ -56,6 +69,9 @@ class LiveSession:
         value = asdict(self)
         value.pop("_step_index", None)
         value.pop("_events", None)
+        value.pop("_rag_dedup_key", None)
+        value.pop("_latest_rag_request_id", None)
+        value.pop("_rag_latency_total", None)
         return value
 
 
@@ -119,6 +135,98 @@ class InMemorySessionStore:
                 raise KeyError(session_id)
             return self._append(session, event_type, data)
 
+    def begin_rag_request(self, session_id: str, dedup_key: str, request_id: str, context) -> bool:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None or session._rag_dedup_key == dedup_key:
+                return False
+            session._rag_dedup_key = dedup_key
+            session._latest_rag_request_id = request_id
+            session.rag_metrics["request_count"] += 1
+            session.rag_explanation = {
+                "status": "pending",
+                "explanation": "正在查询教学知识…",
+                "reference_summary": None,
+                "sources": None,
+                "latency_ms": None,
+                "hit": False,
+                "error_code": None,
+                "request_id": request_id,
+                "context_version": context.context_version,
+            }
+            self._append(session, "RAG_REQUESTED", {
+                "request_id": request_id,
+                "context_version": context.context_version,
+                "sop_result": context.sop_result,
+                "error_code": context.error_code,
+            })
+            return True
+
+    def complete_rag_request(
+        self,
+        session_id: str,
+        step_id: str,
+        context_version: int,
+        request_id: str,
+        sop_result: str,
+        result: dict,
+    ) -> bool:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+            if (
+                session.current_step_id != step_id
+                or session.context_version != context_version
+                or session._latest_rag_request_id != request_id
+                or session.state == "TASK_COMPLETED"
+            ):
+                session.rag_metrics["stale_drop_count"] += 1
+                self._append(session, "RAG_STALE_DROPPED", {"request_id": request_id})
+                return False
+            status = result.get("status", "error")
+            latency = result.get("latency_ms")
+            if isinstance(latency, (int, float)):
+                session._rag_latency_total += float(latency)
+                session.rag_metrics["last_latency_ms"] = float(latency)
+                completed = (
+                    session.rag_metrics["success_count"]
+                    + session.rag_metrics["fallback_count"]
+                    + 1
+                )
+                session.rag_metrics["average_latency_ms"] = round(session._rag_latency_total / completed, 1)
+            if status == "online":
+                session.rag_metrics["success_count"] += 1
+                event_type = "RAG_COMPLETED"
+                explanation = result.get("explanation")
+            else:
+                session.rag_metrics["fallback_count"] += 1
+                if status == "timeout":
+                    session.rag_metrics["timeout_count"] += 1
+                    event_type = "RAG_TIMEOUT"
+                elif status == "no_hit":
+                    session.rag_metrics["no_hit_count"] += 1
+                    event_type = "RAG_NO_HIT"
+                elif status == "offline":
+                    event_type = "RAG_FALLBACK"
+                else:
+                    event_type = "RAG_ERROR"
+                explanation = "目前知识库说明暂时不可用。"
+            session.rag_explanation = {
+                **result,
+                "explanation": explanation,
+                "safety_notice": (
+                    "此步骤涉及安全操作，必须由教师确认后才能继续。"
+                    if sop_result == "TEACHER_CHECK" else None
+                ),
+            }
+            self._append(session, event_type, {
+                "request_id": request_id,
+                "status": status,
+                "latency_ms": latency,
+            })
+            return True
+
     def events(self, session_id: str) -> list[dict]:
         with self._lock:
             session = self._sessions.get(session_id)
@@ -174,6 +282,8 @@ class InMemorySessionStore:
             session.last_frame_id = None
             session.pass_candidate_count = 0
             session.context_version += 1
+            session._rag_dedup_key = None
+            session._latest_rag_request_id = None
             session.rag_explanation = {
                 "status": "idle",
                 "explanation": None,
