@@ -85,6 +85,7 @@ def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout
         sid = request.path_params["session_id"]
         session = sessions.get(sid)
         if session is None: return error_response("session_not_found", "Live session was not found.", 404)
+        if session.vision_source != "REAL_VISION": return error_response("vision_source_mismatch", "Snapshot requires a REAL_VISION session.", 409)
         try: payload = await request.json()
         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be a JSON object.", 400)
         if not isinstance(payload, dict): return error_response("invalid_json", "Request body must be a JSON object.", 400)
@@ -113,6 +114,7 @@ def create_app(*, vision_adapter=None, session_store=None, vision_health_timeout
         sid = request.path_params["session_id"]
         session = sessions.get(sid)
         if session is None: return error_response("session_not_found", "Live session was not found.", 404)
+        if session.vision_source != "MOCK_VISION": return error_response("vision_source_mismatch", "Simulation requires a MOCK_VISION session.", 409)
         try: payload = await request.json()
         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be a JSON object.", 400)
         frame_id = str(payload.get("frame_id") or uuid4())

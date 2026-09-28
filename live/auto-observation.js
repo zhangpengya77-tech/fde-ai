@@ -23,6 +23,7 @@
     let skippedFrameCount = 0;
     let totalRoundTripMs = 0;
     let maxInFlight = 0;
+    let errorCount = 0;
 
     function metrics() {
       return {
@@ -32,6 +33,7 @@
         skippedFrameCount,
         averageRoundTripMs: requestCount ? Number((totalRoundTripMs / requestCount).toFixed(1)) : 0,
         maxInFlight,
+        errorCount,
         queueLength: 0
       };
     }
@@ -52,9 +54,11 @@
       if (inFlight) {
         skippedFrameCount += 1;
         report();
+        schedule(token);
         return false;
       }
       inFlight = true;
+      schedule(token);
       maxInFlight = Math.max(maxInFlight, 1);
       const started = clock();
       report();
@@ -64,11 +68,11 @@
         totalRoundTripMs += Math.max(0, clock() - started);
         if (running && token === generation) onResult(value);
       } catch (error) {
+        errorCount += 1;
         if (running && token === generation) onError(error);
       } finally {
         inFlight = false;
         report();
-        schedule(token);
       }
       return true;
     }

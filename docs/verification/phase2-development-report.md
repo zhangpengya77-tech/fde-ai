@@ -20,7 +20,7 @@ MOCK_VISION provides motor, frame_arm, flight_controller, wrong class, no detect
 
 ## Manual and automatic observation
 
-Manual AI Detect remains available. Auto mode runs at 1 FPS using one-in-flight and no queue. Busy ticks are skipped. A generation token prevents late responses after stop from updating UI or scheduling more work.
+Manual AI Detect remains available. Auto mode attempts capture on a fixed 1 FPS cadence using one-in-flight and no queue. Busy ticks are skipped, so the next available tick captures the latest camera frame. A generation token prevents late responses after stop from updating UI or scheduling more work. Failed snapshots increment an error counter and are not counted as successful requests.
 
 Scheduler verification metrics:
 
@@ -45,8 +45,8 @@ No arbitrary PASS or client-controlled step-advance API exists.
 
 ## Verification
 
-- Live Backend: 37 passed
-- JavaScript, Worker, Phase 1/1A.2/2: 61 passed
+- Live Backend: 38 passed
+- JavaScript, Worker, Phase 1/1A.2/2: 65 passed
 - Django: 238 passed, 22 skipped
 - Django system check: no issues
 - Python compile: passed

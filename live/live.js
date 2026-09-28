@@ -180,6 +180,7 @@
       await sendImage(captured);
     } catch (error) {
       onError(error);
+      throw error;
     } finally {
       setBusy(false);
     }
@@ -294,16 +295,23 @@
       return health;
     }
 
-    async function ensureSession() {
-      if (sessionId) return sessionId;
+    let sessionVisionSource = null;
+
+    async function ensureSession(visionSource = 'REAL_VISION') {
+      if (sessionId && sessionVisionSource === visionSource) return sessionId;
+      if (sessionId) {
+        try { await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }); } catch {}
+        sessionId = null;
+      }
       const response = await fetchImpl('/api/live/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'demo' })
+        body: JSON.stringify({ mode: 'demo', vision_source: visionSource })
       });
       if (!response.ok) throw new Error('session_create_failed');
       const created = await response.json();
       sessionId = created.session_id;
+      sessionVisionSource = visionSource;
       elements.devPanel.hidden = !created.dev_mode;
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`));
       renderTaskState(elements, state);
@@ -414,6 +422,7 @@
     }
 
     async function stopCamera() {
+      stopAutoObservation();
       stopStream(stream);
       stream = null;
       elements.video.srcObject = null;
@@ -427,6 +436,7 @@
       if (sessionId) {
         const oldSession = sessionId;
         sessionId = null;
+        sessionVisionSource = null;
         try {
           await fetchImpl(`/api/live/sessions/${encodeURIComponent(oldSession)}`, { method: 'DELETE' });
         } catch {
@@ -449,8 +459,8 @@
         onMetrics: (metrics) => { elements.autoMetrics.textContent = `1 FPS · Requests ${metrics.requestCount} · Skipped ${metrics.skippedFrameCount} · Max in-flight ${metrics.maxInFlight} · Queue ${metrics.queueLength}`; },
         onError: (failure) => setMessage(`自动观察失败：${failure.message}`)
       });
-      autoScheduler.start();
       await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/auto/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
+      autoScheduler.start();
       elements.autoMode.checked = true;
       elements.startCoach.disabled = true;
       elements.stopCoach.disabled = false;
@@ -474,8 +484,8 @@
 
     elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
     elements.stopCoach.addEventListener('click', stopAutoObservation);
-    elements.confirm.addEventListener('click', async () => { const result = await confirmStep(fetchImpl, await ensureSession()); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
-    elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const result = await simulateVision(fetchImpl, await ensureSession(), button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { ...result, task: state }); }));
+    elements.confirm.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
+    elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const result = await simulateVision(fetchImpl, await ensureSession('MOCK_VISION'), button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`)); renderTaskState(elements, { ...result, task: state }); }));
 
     return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera, startAutoObservation, stopAutoObservation };
   }

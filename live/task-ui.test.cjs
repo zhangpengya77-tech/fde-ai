@@ -47,6 +47,21 @@ test('phase2 markup keeps manual detect and adds task and dev controls', () => {
   assert.match(html, /立即 AI 检测/);
 });
 
+test('dev simulation keeps its mock session through confirm', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'live.js'), 'utf8');
+  assert.match(source, /ensureSession\('MOCK_VISION'\)/);
+  assert.match(source, /const id = sessionId \|\| await ensureSession\(\)/);
+});
+
+test('auto scheduler starts only after backend acceptance and stops with camera', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'live.js'), 'utf8');
+  const backendStart = source.indexOf('/auto/start');
+  const schedulerStart = source.indexOf('autoScheduler.start()', backendStart);
+  assert.ok(backendStart >= 0 && schedulerStart > backendStart);
+  const stopCamera = source.slice(source.indexOf('async function stopCamera()'), source.indexOf('async function startAutoObservation()'));
+  assert.match(stopCamera, /stopAutoObservation\(\)/);
+});
+
 test('auto mode requires camera and session and exposes start stop controls', () => {
   assert.equal(live.autoStartError(false, 'sid'), 'camera_required');
   assert.equal(live.autoStartError(true, ''), 'session_required');

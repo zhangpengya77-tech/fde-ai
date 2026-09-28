@@ -55,13 +55,13 @@ test('selected image invokes detection flow while cancel is a no-op', async () =
 test('capture failure restores button and exposes a visible error', async () => {
   const states = [];
   const errors = [];
-  await performCaptureInteraction({
+  await assert.rejects(() => performCaptureInteraction({
     captureFrame: () => { throw new Error('camera_not_ready'); },
     sendImage: async () => {},
     setBusy: (busy) => states.push(busy),
     onError: (error) => errors.push(error.message),
     log: () => {}
-  });
+  }), /camera_not_ready/);
   assert.deepEqual(states, [true, false]);
   assert.deepEqual(errors, ['camera_not_ready']);
 });

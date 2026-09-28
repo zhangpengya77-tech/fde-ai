@@ -48,11 +48,11 @@ Phase 2A and the Phase 2B Automatic Observation foundation are complete on `fde-
 
 Verification evidence:
 
-- Live Backend: 37 tests passed.
-- All JavaScript/Worker/Phase suites: 61 tests passed.
+- Live Backend: 38 tests passed.
+- All JavaScript/Worker/Phase suites: 65 tests passed.
 - Django: 238 tests passed, 22 skipped; system check clean.
 - Python compileall: passed.
-- Scheduler test evidence: max in-flight 1; queue length 0; a busy tick increments skipped frames without a second request.
+- Scheduler test evidence: fixed 1 FPS attempt cadence; max in-flight 1; queue length 0; a busy tick increments skipped frames without a second request; failed snapshots are reported and excluded from successful request metrics.
 - Physical Phase 1A.2 camera pipeline remains PASS.
 - Model status remains `MODEL_ACCURACY_PENDING`; `best.pt` and thresholds were not modified.
 

@@ -5,6 +5,7 @@ from app.sessions import InMemorySessionStore
 
 class OfflineVision:
     async def health(self): return False
+    async def detect(self, *_args): raise AssertionError("wrong vision route")
 
 class Phase2ApiTests(unittest.TestCase):
     def make_client(self, dev_mode=True):
@@ -41,3 +42,14 @@ class Phase2ApiTests(unittest.TestCase):
         client.post(f"/api/live/sessions/{sid}/simulate", json={"scenario":"motor","frame_id":"f1"})
         self.assertEqual(client.post(f"/api/live/sessions/{sid}/confirm", json={}).status_code, 200)
         self.assertEqual(client.post(f"/api/live/sessions/{sid}/confirm", json={}).status_code, 409)
+
+    def test_vision_routes_enforce_session_source(self):
+        client = self.make_client()
+        real = client.post("/api/live/sessions", json={"vision_source":"REAL_VISION"}).json()["session_id"]
+        mock = client.post("/api/live/sessions", json={"vision_source":"MOCK_VISION"}).json()["session_id"]
+        simulated = client.post(f"/api/live/sessions/{real}/simulate", json={"scenario":"motor"})
+        self.assertEqual(simulated.status_code, 409)
+        self.assertEqual(simulated.json()["error"]["code"], "vision_source_mismatch")
+        snapshot = client.post(f"/api/live/sessions/{mock}/snapshot", json={"image_data":"data:image/jpeg;base64,YQ=="})
+        self.assertEqual(snapshot.status_code, 409)
+        self.assertEqual(snapshot.json()["error"]["code"], "vision_source_mismatch")

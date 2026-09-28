@@ -43,6 +43,40 @@ test('one-in-flight drops busy ticks without queueing requests', async () => {
   assert.equal(scheduler.getMetrics().requestCount, 1);
 });
 
+test('fixed cadence schedules the next sample before inference completes', async () => {
+  const pending = deferred();
+  const scheduled = [];
+  const scheduler = createAutoObservationScheduler({
+    captureAndSend: () => pending.promise,
+    setTimeoutImpl: (fn, ms) => { scheduled.push({ fn, ms }); return scheduled.length; },
+    clearTimeoutImpl: () => {}
+  });
+  scheduler.start();
+  const firstTimer = scheduled.shift();
+  const request = firstTimer.fn();
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].ms, 1000);
+  await scheduled[0].fn();
+  assert.equal(scheduler.getMetrics().skippedFrameCount, 1);
+  pending.resolve({ ok: true });
+  await request;
+});
+
+test('failed inference reports an error and is not counted as a successful request', async () => {
+  const errors = [];
+  const scheduler = createAutoObservationScheduler({
+    captureAndSend: async () => { throw new Error('snapshot_failed'); },
+    setTimeoutImpl: () => 1,
+    clearTimeoutImpl: () => {},
+    onError: (error) => errors.push(error.message)
+  });
+  scheduler.start();
+  await scheduler.tick();
+  assert.deepEqual(errors, ['snapshot_failed']);
+  assert.equal(scheduler.getMetrics().requestCount, 0);
+  assert.equal(scheduler.getMetrics().errorCount, 1);
+});
+
 test('stop ignores stale completion and prevents reschedule', async () => {
   const pending = deferred();
   const scheduled = [];
