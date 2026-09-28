@@ -1,4 +1,4 @@
-# FDE-AI-UAS v2.0 Phase 1A.1 — Development Handoff
+# FDE-AI-UAS v2.0 Phase 2 — Development Handoff
 
 ## Workspace and services
 
@@ -31,3 +31,29 @@ Full object-level and per-format records: `docs/verification/phase1a1-benchmark.
 - Keep `best.pt` and the configured threshold unchanged. Track model quality as `MODEL_ACCURACY_PENDING`; Phase 2 architecture may proceed with DEV-only Mock Vision while qualification remains separate.
 
 Do not enter Phase 1B until physical device tests and an acceptable CW/CCW acceptance threshold are approved.
+
+## Phase 2 implementation
+
+Phase 2A and the Phase 2B Automatic Observation foundation are complete on `fde-ai-v2.0-dev`.
+
+- Demo course/task: `F450_BASIC_ASSEMBLY / PARTS_PREPARATION`.
+- Steps: `prepare_motor` -> `prepare_frame_arm` -> `prepare_flight_controller` -> `TASK_COMPLETED`.
+- SOP decisions: `NO_DETECTION`, `UNCERTAIN`, `NG`, `PASS_CANDIDATE`, and `TEACHER_CHECK`.
+- REAL_VISION never automatically completes a step; backend `POST /confirm` is required.
+- MOCK_VISION is rejected unless explicit Dev/Test mode is enabled.
+- Session state, counters, confirmation, completion, and event sequence are backend authoritative.
+- Manual AI Detect remains available.
+- Auto Observation defaults to 1 FPS with one-in-flight, current-frame capture, busy-tick dropping, late-response suppression, max in-flight 1, and queue length 0.
+- RAG and Voice boundaries are interfaces only; there is no network integration or API key.
+
+Verification evidence:
+
+- Live Backend: 37 tests passed.
+- All JavaScript/Worker/Phase suites: 61 tests passed.
+- Django: 238 tests passed, 22 skipped; system check clean.
+- Python compileall: passed.
+- Scheduler test evidence: max in-flight 1; queue length 0; a busy tick increments skipped frames without a second request.
+- Physical Phase 1A.2 camera pipeline remains PASS.
+- Model status remains `MODEL_ACCURACY_PENDING`; `best.pt` and thresholds were not modified.
+
+Do not proceed to real RAG, Realtime Voice AI, production Learning Record, Teacher Dashboard, or Production deployment without a new authorization.

@@ -1,4 +1,4 @@
-# FDE-AI-UAS v2.0 Architecture — Phase 1A.1
+# FDE-AI-UAS v2.0 Architecture — Phase 2
 
 ## Actual vision architecture
 
@@ -23,3 +23,20 @@ New browser captures are bounded within 640×480 and default to JPEG quality 0.7
 
 Demo sessions are in-memory and do not write Django data. The browser cannot assert identity, permissions, or PASS/NG. Phase 1A.1 does not deploy Cloudflare changes or modify production origins.
 
+## Phase 2 Backend Modular Authority
+
+```text
+Vision Facts -> Coach Orchestrator -> SOP Engine -> Session/Event State
+                                  -> Guidance Provider
+                                  -> Authoritative API -> Live Coach UI
+```
+
+- `app/sop.py`: configurable course/task/step schema and the only teaching-decision engine.
+- `app/sessions.py`: authoritative in-memory state machine, counters, confirmation, and monotonic events.
+- `app/guidance.py`: deterministic guidance plus non-network RAG/Voice interfaces.
+- `app/orchestrator.py`: coordination only; it cannot bypass SOP or confirm steps.
+- `app/mock_vision.py`: Dev/Test-only deterministic Detection Facts.
+- `app/main.py`: compatible Snapshot API plus session, confirm, events, simulate, and lifecycle routes.
+- `live/auto-observation.js`: 1 FPS scheduler with at most one in-flight request and no queue.
+
+REAL_VISION can produce `PASS_CANDIDATE` only and requires backend confirmation. Safety-gated definitions produce `TEACHER_CHECK` and ordinary student confirmation is rejected. Production configuration returns `dev_only` for Mock Vision calls.
