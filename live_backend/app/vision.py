@@ -38,7 +38,7 @@ class VisionAdapter:
         self.transport = transport
 
     def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=self.transport, timeout=self.timeout_seconds)
+        return httpx.AsyncClient(transport=self.transport, timeout=self.timeout_seconds, trust_env=False)
 
     async def health(self) -> bool:
         try:
@@ -98,4 +98,3 @@ class VisionAdapter:
         if not isinstance(box, list) or len(box) != 4 or any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in box):
             raise ValueError("invalid detection box")
         return {"class": class_name, "confidence": round(float(confidence), 3), "box": [round(float(value)) for value in box]}
-
