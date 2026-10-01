@@ -109,3 +109,64 @@ test('auto mode requires camera and session and exposes start stop controls', ()
   assert.match(html, /auto-observation\.js/);
 });
 
+test('renders twelve-task student training state with human-facing safety content', () => {
+  const e = {};
+  for (const name of ['trainingProgress','trainingTaskNumber','trainingTitle','trainingObjective','trainingAction','trainingWhy','trainingSafety','trainingSteps','trainingStatus','trainingEvidence','trainingReflection','trainingTeacher','trainingGrowth','trainingPrerequisite','cameraWaiting']) e[name] = { textContent: '', innerHTML: '' };
+  live.renderTrainingState(e, {
+    progress: '2 / 12', current_task_id: 'TASK_03', task_state: 'IN_PROGRESS', prerequisite_state: 'READY',
+    evidence_count: 1, reflection_state: 'available', teacher_review_state: 'NOT_REQUIRED',
+    task: {
+      order: 3, title: 'F450 机架 + 马达安装', objective: '组装机架并安装马达。', description: '完成结构安装。',
+      steps: [{ id: 'MOTOR_INSTALL', title: 'Motor Install', instruction: '安装四颗马达。', rationale: '先确认结构可靠。' }],
+      safety_reminders: [{ id: 'REM_MOTOR_SCREW_TOO_LONG', message: '过长的马达固定螺丝可能损伤马达内部结构。' }]
+    }
+  });
+  assert.equal(e.trainingProgress.textContent, '2 / 12');
+  assert.equal(e.trainingTaskNumber.textContent, 'Task 03 / 12');
+  assert.match(e.trainingSafety.innerHTML, /⚠/);
+  assert.match(e.trainingSafety.innerHTML, /过长/);
+  assert.doesNotMatch(e.trainingSafety.innerHTML, /REM_MOTOR/);
+  assert.equal(e.cameraWaiting.textContent, 'ACTIVE / WAITING');
+});
+
+test('maps internal connector and error ids to student language', () => {
+  assert.equal(live.studentFacingLabel('FC_MAIN_OUT_1'), '飞控 MAIN OUT 1（1号电机输出接口）');
+  assert.equal(live.studentFacingLabel('ERR_POWER_POLARITY'), '电源正负极需要重新确认。');
+});
+
+test('vision only triggers for explicit or configured checks', () => {
+  const noVision = { task: { vision_tasks: [] } };
+  const configured = { task: { vision_tasks: ['component_class'] } };
+  assert.equal(live.shouldTriggerVision(noVision, 'camera_waiting'), false);
+  assert.equal(live.shouldTriggerVision(configured, 'camera_waiting'), false);
+  assert.equal(live.shouldTriggerVision(configured, 'sop_vision_check'), true);
+  assert.equal(live.shouldTriggerVision(noVision, 'student_request'), true);
+});
+
+test('student task renderer markup provides one unified twelve-task layout', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  for (const id of ['trainingTaskList','trainingProgress','trainingTaskNumber','trainingTitle','trainingObjective','trainingAction','trainingWhy','trainingSafety','trainingSteps','trainingEvidence','reflectionOriginal','reflectionAssisted','trainingTeacher','trainingStatus','trainingGrowth','cameraWaiting']) assert.match(html, new RegExp(`id=["']${id}["']`));
+  assert.match(html, /我的学习总结/);
+  assert.match(html, /学习证据/);
+  assert.match(html, /教师复核/);
+});
+
+test('student evidence and reflection use backend-owned training APIs', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([url, init]); return { ok: true, json: async () => ({ training: { evidence_count: 1 } }) }; };
+  await live.saveTrainingEvidence(fetchImpl, 'sid', { task_id: 'F450_01', evidence_type: 'PHOTO', file_reference: 'dev-upload://parts.jpg' });
+  await live.saveTrainingReflection(fetchImpl, 'sid', { task_id: 'F450_01', original_text: '我辨认了零件。', source_type: 'TEXT' });
+  assert.equal(calls[0][0], '/api/live/sessions/sid/training/evidence');
+  assert.equal(calls[1][0], '/api/live/sessions/sid/training/reflection');
+  assert.equal(JSON.parse(calls[1][1].body).original_text, '我辨认了零件。');
+});
+
+test('teacher action sends explicit role and development identity headers', async () => {
+  let request;
+  const fetchImpl = async (url, init) => { request = { url, init }; return { ok: true, json: async () => ({ development_identity: true }) }; };
+  await live.submitTeacherReview(fetchImpl, 'sid', 'APPROVE', '已现场复核');
+  assert.match(request.url, /teacher-review$/);
+  assert.equal(request.init.headers['X-FDE-Role'], 'teacher');
+  assert.equal(request.init.headers['X-FDE-Teacher-ID'], 'MOCK_TEACHER');
+});
+

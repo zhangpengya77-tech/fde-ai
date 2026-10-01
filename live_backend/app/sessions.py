@@ -85,6 +85,9 @@ class LiveSession:
         value.pop("_rag_dedup_key", None)
         value.pop("_latest_rag_request_id", None)
         value.pop("_rag_latency_total", None)
+        if self.training_track is None:
+            for key in ("training_track", "hardware_profile", "current_task_id", "task_state", "prerequisite_state", "safety_state", "teacher_review_state", "evidence_count", "reflection_state"):
+                value.pop(key, None)
         return value
 
 
