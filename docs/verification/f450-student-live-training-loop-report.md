@@ -9,7 +9,7 @@ The F450 twelve-task data foundation is connected to the existing Live Session, 
 ## Implemented loop
 
 1. A session created with `training_track=F450_TWELVE_TASK` receives the `F450_PIXHAWK248` hardware profile and backend-owned Task context.
-2. The student page renders all twelve tasks through one shared renderer. Future tasks remain viewable while Backend prerequisite state controls whether they are actionable or completable.
+2. The student page renders all twelve tasks through one shared renderer. Future Task material can be opened through a read-only Backend view without changing the current Task; Backend prerequisite state separately controls whether it is actionable or completable.
 3. Task 01 requires a linked Evidence record and non-empty original student Reflection before completion.
 4. Task 02 completion becomes `PENDING_TEACHER_REVIEW`. Student approval is rejected; explicit development `MOCK_TEACHER` approval completes Task 02 and unlocks Task 03. Rejection produces `NEED_REWORK`.
 5. Growth Record 05 reports F450 progress as `x / 12` with `PENDING_SYNC`; it does not write the v1.5C database.
@@ -24,9 +24,9 @@ The F450 twelve-task data foundation is connected to the existing Live Session, 
 
 ## Verification
 
-- Live Backend: 95 passed.
-- JavaScript, Worker, and Phase suites: 79 passed.
-- Focused student task UI: 17 passed.
+- Live Backend: 96 passed.
+- JavaScript, Worker, and Phase suites: 80 passed.
+- Focused student task UI: 18 passed.
 - Django: 238 passed, 22 skipped; system check clean.
 - Phase 1 Python helper tests: 4 passed.
 - Python compile: passed.

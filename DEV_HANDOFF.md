@@ -91,6 +91,7 @@ Do not proceed to real RAG, Realtime Voice AI, production Learning Record, Teach
 - Task 01 completion requires Evidence and original student Reflection. Task 02 enters `PENDING_TEACHER_REVIEW`; teacher approval completes it and unlocks Task 03. Teacher rejection produces `NEED_REWORK`.
 - Vision remains demand-driven: Camera waiting does not cause inference; student request, SOP Vision checks, or configured Auto Observation may trigger Vision.
 - `PendingSyncGrowthRecordAdapter` remains development-only and maps the route to Growth Record 05 without writing v1.5C data.
-- Verification: Live Backend 95/95; JavaScript/Worker/Phase 79/79; Django 238 passed with 22 skipped and system check clean; Phase 1 Python helpers 4/4; Python compile passed.
+- Future Task material is read-only navigable without changing `current_task_id`; Backend separately reports whether the viewed Task is actionable and which prerequisites are missing.
+- Verification: Live Backend 96/96; JavaScript/Worker/Phase 80/80; Django 238 passed with 22 skipped and system check clean; Phase 1 Python helpers 4/4; Python compile passed.
 - Real Motor, ESC, soldering, multimeter, first power, outdoor GPS, Arm, and flight remain `NOT_TESTED` / `PENDING_TEACHER_REVIEW`.
 - Flight Health internals and the externally dirty v1.5C directory were not modified.
