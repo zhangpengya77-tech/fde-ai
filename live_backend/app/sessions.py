@@ -162,6 +162,7 @@ class InMemorySessionStore:
         progress = self.training_progress(session_id)
         current = next(item for item in progress.course.tasks if item.id == session.current_task_id)
         current_progress = progress.task(current.id)
+        current_step = next((step for step in current.steps if step.step_id == current_progress.current_training_step_id), None)
         missing = tuple(item for item in current.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED)
         tasks = [{
             "task_id": item.id, "order": item.order, "short_name": item.short_name,
@@ -173,7 +174,9 @@ class InMemorySessionStore:
             "training_track": session.training_track,
             "hardware_profile": session.hardware_profile,
             "current_task_id": current.id,
-            "current_step_id": current.steps[0].id,
+            "current_step_id": current_step.step_id if current_step else None,
+            "current_training_step_id": current_progress.current_training_step_id,
+            "training_step_progress": current_progress.training_step_progress,
             "task_state": current_progress.status.value,
             "prerequisite_state": "BLOCKED" if missing else "READY",
             "missing_prerequisites": list(missing),
@@ -182,11 +185,14 @@ class InMemorySessionStore:
             "evidence_count": len(self._evidence[session_id]),
             "reflection_state": session.reflection_state,
             "progress": progress.summary,
+            "overall_progress": progress.summary,
+            "actionable": not missing,
+            "current_step": self._training_step_payload(current_step, current_progress) if current_step else None,
             "tasks": tasks,
             "task": {
                 "id": current.id, "order": current.order, "title": current.title,
                 "description": current.description, "objective": current.objective,
-                "steps": [{"id": step.id, "title": step.title, "instruction": step.instruction, "rationale": step.rationale, "vision_task": step.vision_task} for step in current.steps],
+                "steps": [self._training_step_payload(step, current_progress) for step in current.steps],
                 "safety_reminders": [{"id": item, "message": SAFETY_REMINDERS[item].message} for item in current.safety_reminders],
                 "vision_tasks": list(current.vision_tasks),
                 "teacher_review_required": current.teacher_review_required,
@@ -194,15 +200,29 @@ class InMemorySessionStore:
             "context": {
                 "course_id": progress.course.course_id,
                 "task_id": current.id,
-                "step_id": current.steps[0].id,
+                "step_id": current_step.step_id if current_step else None,
                 "hardware_profile": session.hardware_profile,
-                "expected_action": current.steps[0].instruction,
+                "expected_action": current_step.expected_action if current_step else None,
                 "component_ids": list(current.component_ids),
                 "connector_ids": list(current.connector_ids),
                 "safety_reminders": list(current.safety_reminders),
                 "teacher_gate": current.teacher_review_required,
                 "evidence_state": len(self._evidence[session_id]),
             },
+        }
+
+    @staticmethod
+    def _training_step_payload(step, progress) -> dict:
+        state = progress.training_step_progress.get(step.step_id, {})
+        return {
+            "step_id": step.step_id, "id": step.step_id, "order": step.order,
+            "title": step.title, "student_instruction": step.student_instruction,
+            "instruction": step.student_instruction, "why_it_matters": step.why_it_matters,
+            "rationale": step.why_it_matters, "expected_action": step.expected_action,
+            "completion_type": step.completion_type, "teacher_gate": step.teacher_gate,
+            "vision_task": step.vision_task, "evidence_required": list(step.evidence_required),
+            "safety_reminders": [{"id": item, "message": SAFETY_REMINDERS[item].message} for item in step.safety_reminders],
+            "progress": state,
         }
 
     def training_task_view(self, session_id: str, task_id: str) -> dict:
@@ -221,12 +241,27 @@ class InMemorySessionStore:
             "task": {
                 "id": task.id, "order": task.order, "title": task.title,
                 "description": task.description, "objective": task.objective,
-                "steps": [{"id": step.id, "title": step.title, "instruction": step.instruction, "rationale": step.rationale, "vision_task": step.vision_task} for step in task.steps],
+                "steps": [self._training_step_payload(step, progress.task(task.id)) for step in task.steps],
                 "safety_reminders": [{"id": item, "message": SAFETY_REMINDERS[item].message} for item in task.safety_reminders],
                 "vision_tasks": list(task.vision_tasks),
                 "teacher_review_required": task.teacher_review_required,
             },
         }
+
+    def record_training_step_fact(self, session_id: str, step_id: str, fact: str) -> dict:
+        task_id = self._sessions[session_id].current_task_id
+        self.training_progress(session_id).record_step_fact(task_id, step_id, fact)
+        return self.training_state(session_id)
+
+    def acknowledge_training_step_safety(self, session_id: str, step_id: str) -> dict:
+        task_id = self._sessions[session_id].current_task_id
+        self.training_progress(session_id).acknowledge_step_safety(task_id, step_id)
+        return self.training_state(session_id)
+
+    def review_training_step(self, session_id: str, task_id: str, step_id: str, decision: str, teacher_id: str, note: str) -> dict:
+        self.training_progress(session_id).review_step(task_id, step_id, decision, teacher_id, note=note)
+        self._sync_training_session(session_id, task_id)
+        return self.training_state(session_id)
 
     def start_training_task(self, session_id: str, task_id: str) -> dict:
         self.training_progress(session_id).start_task(task_id)

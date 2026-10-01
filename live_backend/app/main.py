@@ -116,6 +116,21 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         except TaskTransitionError as error: return error_response(str(error), str(error), 409)
         return json_response({"training": state})
 
+    async def training_step_fact(request):
+        sid, step_id = request.path_params["session_id"], request.path_params["step_id"]
+        try:
+            payload = await request.json()
+            state = sessions.record_training_step_fact(sid, step_id, str(payload["fact"]))
+        except KeyError: return error_response("invalid_step_fact", "Session or fact is missing.", 400)
+        except TaskTransitionError as error: return error_response("invalid_step_transition", str(error), 409)
+        return json_response({"training": state})
+
+    async def training_step_safety_ack(request):
+        try: state = sessions.acknowledge_training_step_safety(request.path_params["session_id"], request.path_params["step_id"])
+        except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+        except TaskTransitionError as error: return error_response("invalid_step_transition", str(error), 409)
+        return json_response({"training": state})
+
     async def training_evidence(request):
         sid = request.path_params["session_id"]
         try: payload = await request.json()
@@ -154,6 +169,11 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         if development and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
         try: payload = await request.json()
         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+        if payload.get("step_id"):
+            try: state = sessions.review_training_step(sid, str(payload["task_id"]), str(payload["step_id"]), str(payload["decision"]), teacher_id, str(payload.get("note") or ""))
+            except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+            except TaskTransitionError as error: return error_response("invalid_teacher_review", str(error), 409)
+            return json_response({"review": {"task_id": payload["task_id"], "step_id": payload["step_id"], "decision": payload["decision"], "teacher_id": teacher_id, "note": payload.get("note") or "", "development_identity": bool(development)}, "training": state})
         try: review = sessions.review_training_task(sid, str(payload["task_id"]), str(payload["decision"]), teacher_id, str(payload.get("note") or ""))
         except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
         except TaskTransitionError as error: return error_response("invalid_teacher_review", str(error), 409)
@@ -255,6 +275,8 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/start", training_start_task, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}", training_view_task, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/complete", training_complete_task, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/steps/{step_id}/facts", training_step_fact, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/steps/{step_id}/safety-ack", training_step_safety_ack, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/evidence", training_evidence, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/reflection", training_reflection, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/teacher-review", training_teacher_review, methods=["POST"]),
