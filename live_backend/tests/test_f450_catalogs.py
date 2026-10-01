@@ -8,6 +8,7 @@ from app.identifiers import (
     validate_identifier,
 )
 from app.safety import SAFETY_REMINDERS
+from app.hardware_profiles import get_hardware_profile
 
 
 class F450CatalogTests(unittest.TestCase):
@@ -66,6 +67,32 @@ class F450CatalogTests(unittest.TestCase):
 
     def test_known_identifier_is_accepted(self):
         self.assertIsNone(validate_identifier("connector", "FC_GPS"))
+
+    def test_f450_pixhawk_profile_contains_required_equipment(self):
+        profile = get_hardware_profile("F450_PIXHAWK248")
+        self.assertEqual(profile.profile_id, "F450_PIXHAWK248")
+        self.assertEqual(profile.airframe, "F450")
+        self.assertEqual(profile.flight_controller, "Pixhawk 2.4.8")
+        self.assertEqual(profile.motor, "2212")
+        self.assertEqual(profile.esc, "30A")
+        self.assertTrue({"PIXHAWK_248", "MOTOR_2212", "ESC_30A"} <= profile.component_ids)
+
+    def test_hardware_profile_marks_unverified_pinouts_instead_of_guessing(self):
+        profile = get_hardware_profile("F450_PIXHAWK248")
+        self.assertEqual(set(profile.connector_mapping), CONNECTOR_IDS | POWER_IDS)
+        self.assertTrue(all(item.verification_status == "REQUIRES_HARDWARE_VERIFICATION" for item in profile.connector_mapping.values()))
+        self.assertEqual(profile.orientation_rules["PIXHAWK_248"], "VEHICLE_FORWARD")
+        self.assertEqual(profile.orientation_rules["GPS_COMPASS"], "REQUIRES_HARDWARE_VERIFICATION")
+
+    def test_hardware_profile_exposes_vision_tasks_and_safety_notes(self):
+        profile = get_hardware_profile("F450_PIXHAWK248")
+        self.assertIn("component_class", profile.supported_vision_tasks)
+        self.assertIn("pixhawk_orientation_assist", profile.supported_vision_tasks)
+        self.assertIn("REM_FC_FORWARD", profile.safety_notes)
+
+    def test_unknown_hardware_profile_is_rejected(self):
+        with self.assertRaisesRegex(KeyError, "UNKNOWN_PROFILE"):
+            get_hardware_profile("UNKNOWN_PROFILE")
 
 
 if __name__ == "__main__":
