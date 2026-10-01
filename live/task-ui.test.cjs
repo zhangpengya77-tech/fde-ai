@@ -183,6 +183,20 @@ test('teacher action sends explicit role and development identity headers', asyn
   assert.equal(request.init.headers['X-FDE-Teacher-ID'], 'MOCK_TEACHER');
 });
 
+test('step teacher action includes the backend current training step id', async () => {
+  let body;
+  const fetchImpl = async (_url, init) => { body = JSON.parse(init.body); return { ok: true, json: async () => ({ training: {} }) }; };
+  await live.submitTeacherReview(fetchImpl, 'sid', 'APPROVE', 'checked', 'TASK_02', 'T02_PREPOWER_TEACHER');
+  assert.equal(body.step_id, 'T02_PREPOWER_TEACHER');
+});
+
+test('task map renders backend status rather than a nonexistent state field', () => {
+  const e = { trainingTaskList: { innerHTML: '' } };
+  live.renderTrainingState(e, { task: {}, tasks: [{ task_id: 'TASK_01', order: 1, title: '零件识别', status: 'COMPLETED' }] });
+  assert.match(e.trainingTaskList.innerHTML, /COMPLETED/);
+  assert.doesNotMatch(e.trainingTaskList.innerHTML, /undefined/);
+});
+
 test('future task navigation fetches a read-only view without starting the task', async () => {
   let request;
   const fetchImpl = async (url, init) => { request = { url, init }; return { ok: true, json: async () => ({ training_task_view: { task: { id: 'TASK_07' }, actionable: false } }) }; };
