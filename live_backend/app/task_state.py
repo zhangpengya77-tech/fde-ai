@@ -21,6 +21,8 @@ class TaskProgress:
     block_reason: str | None = None
     missing_prerequisites: tuple[str, ...] = ()
     evidence: list[dict] = field(default_factory=list)
+    current_training_step_id: str | None = None
+    training_step_progress: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -41,7 +43,10 @@ class TrainingProgress:
         self.student_id = student_id
         self.course = course
         self._definitions = {task.id: task for task in course.tasks}
-        self._tasks = {task.id: TaskProgress(task.id) for task in course.tasks}
+        self._tasks = {}
+        for task in course.tasks:
+            steps = {step.step_id: {"status": "NOT_STARTED", "facts": [], "safety_acknowledged": False, "teacher_decision": None} for step in task.steps}
+            self._tasks[task.id] = TaskProgress(task.id, current_training_step_id=(task.steps[0].step_id if task.steps else None), training_step_progress=steps)
         self.teacher_reviews: list[TeacherReview] = []
         self.events: list[dict] = []
 
@@ -78,6 +83,53 @@ class TrainingProgress:
         progress = self.task(task_id)
         progress.evidence.append({"evidence_type": evidence_type, "reference": reference, "created_at": _now()})
         self._event("EVIDENCE_RECORDED", task_id, {"evidence_type": evidence_type})
+
+    def _step_definition(self, task_id: str, step_id: str):
+        try:
+            return next(step for step in self._definitions[task_id].steps if step.step_id == step_id)
+        except StopIteration as error:
+            raise TaskTransitionError(f"unknown_training_step:{step_id}") from error
+
+    def _advance_step(self, task_id: str, step_id: str) -> None:
+        progress = self.task(task_id)
+        definition = self._step_definition(task_id, step_id)
+        progress.training_step_progress[step_id]["status"] = "COMPLETED"
+        progress.current_training_step_id = definition.next_step
+        self._event("TRAINING_STEP_COMPLETED", task_id, {"step_id": step_id, "next_step": definition.next_step})
+
+    def record_step_fact(self, task_id: str, step_id: str, fact: str) -> None:
+        progress = self.task(task_id)
+        if progress.status is not TaskStatus.IN_PROGRESS or progress.current_training_step_id != step_id:
+            raise TaskTransitionError("training_step_not_current")
+        definition = self._step_definition(task_id, step_id)
+        state = progress.training_step_progress[step_id]
+        state["facts"].append({"fact": fact, "timestamp": _now()})
+        self._event("TRAINING_STEP_FACT_RECORDED", task_id, {"step_id": step_id, "fact": fact})
+        if definition.teacher_gate and state["teacher_decision"] != "APPROVE":
+            state["status"] = "PENDING_TEACHER_REVIEW"
+            raise TaskTransitionError("teacher_step_approval_required")
+        self._advance_step(task_id, step_id)
+
+    def acknowledge_step_safety(self, task_id: str, step_id: str) -> None:
+        self._step_definition(task_id, step_id)
+        self.task(task_id).training_step_progress[step_id]["safety_acknowledged"] = True
+        self._event("SAFETY_ACKNOWLEDGED", task_id, {"step_id": step_id})
+
+    def review_step(self, task_id: str, step_id: str, decision: str, teacher_id: str, *, actor_role: str = "teacher", note: str = "") -> None:
+        if actor_role != "teacher":
+            raise TaskTransitionError("teacher_authority_required")
+        definition = self._step_definition(task_id, step_id)
+        if not definition.teacher_gate or decision not in {"APPROVE", "REJECT_REWORK"}:
+            raise TaskTransitionError("invalid_step_review")
+        state = self.task(task_id).training_step_progress[step_id]
+        state["teacher_decision"] = decision
+        state["teacher_id"] = teacher_id
+        state["teacher_note"] = note
+        self._event("TRAINING_STEP_TEACHER_REVIEWED", task_id, {"step_id": step_id, "decision": decision, "teacher_id": teacher_id})
+        if decision == "APPROVE":
+            self._advance_step(task_id, step_id)
+        else:
+            state["status"] = "NEED_REWORK"
 
     def request_completion(self, task_id: str, *, actor: str) -> TaskProgress:
         progress = self.task(task_id)
