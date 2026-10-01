@@ -16,9 +16,23 @@
     const cameras = devices.filter((device) => device.kind === 'videoinput');
     const deviceId = selectedDeviceId || (cameras.length === 1 ? cameras[0].deviceId : '');
     const ideals = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
+    if (preferEnvironment) return [
+      { video: { facingMode: { ideal: 'environment' }, ...ideals }, audio: false },
+      { video: { facingMode: { ideal: 'environment' } }, audio: false },
+      { video: { facingMode: { ideal: 'user' } }, audio: false },
+      { video: true, audio: false }
+    ];
     if (deviceId) return [{ video: { deviceId: { exact: deviceId }, ...ideals }, audio: false }, { video: { deviceId: { exact: deviceId } }, audio: false }, { video: true, audio: false }];
-    if (preferEnvironment) return [{ video: { facingMode: { ideal: 'environment' }, ...ideals }, audio: false }, { video: { facingMode: { ideal: 'environment' } }, audio: false }, { video: true, audio: false }];
     return [{ video: { ...ideals }, audio: false }, { video: true, audio: false }];
+  }
+
+  function mobileFacingCandidates(facingMode = 'environment') {
+    const ideals = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
+    return [
+      { video: { facingMode: { exact: facingMode }, ...ideals }, audio: false },
+      { video: { facingMode: { ideal: facingMode } }, audio: false },
+      { video: true, audio: false }
+    ];
   }
 
   function cameraConstraintsForDevices(devices = [], selectedDeviceId = '', preferEnvironment = false) {
@@ -38,6 +52,58 @@
       }
     }
     throw new Error('camera_candidates_empty');
+  }
+
+  async function replaceCameraStream(mediaDevices, currentStream, candidates, restoreCandidates = []) {
+    stopStream(currentStream);
+    try {
+      return await openCameraWithFallback(mediaDevices, candidates);
+    } catch (switchError) {
+      if (!restoreCandidates.length) throw switchError;
+      const restored = await openCameraWithFallback(mediaDevices, restoreCandidates);
+      return { ...restored, restored: true, switchError };
+    }
+  }
+
+  function bindPushToTalk(button, options = {}) {
+    const { recognitionFactory = null, onState = () => {}, onResult = () => {}, onError = () => {}, onUnavailable = () => {} } = options;
+    let recognition = null;
+    let listening = false;
+    function setState(state, label) {
+      button.dataset.state = state.toLowerCase();
+      button.setAttribute('aria-pressed', state === 'LISTENING' ? 'true' : 'false');
+      button.textContent = label;
+      onState(state);
+    }
+    function reset() { listening = false; recognition = null; setState('READY', '按住说话'); }
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('contextmenu', (event) => event.preventDefault());
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      if (!recognitionFactory) { const message = '语音功能暂未启用，请先使用文字问 AI。'; onUnavailable(message); reset(); return; }
+      try {
+        recognition = recognitionFactory();
+        recognition.onresult = (resultEvent) => {
+          const transcript = Array.from(resultEvent.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
+          if (transcript) onResult(transcript);
+        };
+        recognition.onerror = (errorEvent) => onError(errorEvent.error || 'voice_input_failed');
+        recognition.start();
+        listening = true;
+        setState('LISTENING', '🎙 正在听……');
+      } catch (error) { onError(error.message || 'voice_input_failed'); reset(); }
+    });
+    function finish(event, cancelled) {
+      event.preventDefault();
+      if (!listening || !recognition) return;
+      listening = false;
+      if (cancelled && typeof recognition.abort === 'function') recognition.abort();
+      else if (typeof recognition.stop === 'function') recognition.stop();
+      setState('PROCESSING', '处理中……');
+    }
+    button.addEventListener('pointerup', (event) => finish(event, false));
+    button.addEventListener('pointercancel', (event) => finish(event, true));
+    return { reset };
   }
 
   function cameraErrorState(error = {}) {
@@ -378,6 +444,8 @@
       captureCanvas: documentRef.querySelector('#captureCanvas'),
       overlay: documentRef.querySelector('#detectionOverlay'),
       start: documentRef.querySelector('#startCamera'),
+      switchCamera: documentRef.querySelector('#switchCamera'),
+      currentCameraFacing: documentRef.querySelector('#currentCameraFacing'),
       capture: documentRef.querySelector('#captureFrame'),
       stop: documentRef.querySelector('#stopCamera'),
       file: documentRef.querySelector('#imageFile'),
@@ -390,6 +458,7 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
+      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'),
       trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
@@ -401,6 +470,9 @@
     let ragPollGeneration = 0;
     let currentTrainingTaskId = 'F450_01';
     let currentTrainingStepId = null;
+    const mobileDevice = /Android|iPhone|iPad|iPod/i.test(navigatorRef.userAgent || '');
+    let currentFacingMode = 'environment';
+    let currentDeviceId = '';
 
     function setCameraState(state, dataState = "") {
       elements.cameraStatus.textContent = state;
@@ -414,8 +486,22 @@
       elements.cameraDevice.innerHTML = cameras.length ? cameras.map((device, index) => `<option value="${escapeHtml(device.deviceId)}">${escapeHtml(device.label || `Camera ${index + 1}`)}</option>`).join("") : `<option value="">No camera found</option>`;
       if (cameras.some((device) => device.deviceId === previous)) elements.cameraDevice.value = previous;
       elements.cameraDevice.disabled = cameras.length < 2;
+      if (elements.switchCamera && !stream) elements.switchCamera.disabled = true;
       if (!stream) setCameraState(cameras.length ? (cameras[0].label ? "CAMERA READY" : "CAMERA FOUND") : "NO CAMERA");
       return cameras;
+    }
+
+    function updateCameraSourceLabel(requestedFacing = '') {
+      const track = stream?.getVideoTracks?.()[0];
+      const settings = track?.getSettings?.() || {};
+      currentDeviceId = settings.deviceId || currentDeviceId;
+      if (mobileDevice) {
+        currentFacingMode = settings.facingMode || requestedFacing || currentFacingMode;
+        elements.currentCameraFacing.textContent = currentFacingMode === 'user' ? '前置镜头' : '后置镜头';
+      } else {
+        elements.currentCameraFacing.textContent = track?.label || elements.cameraDevice.selectedOptions?.[0]?.textContent || '摄像头';
+      }
+      if (elements.switchCamera) elements.switchCamera.disabled = !stream || (!mobileDevice && cameras.length < 2);
     }
 
     function setMessage(message) {
@@ -475,9 +561,8 @@
       elements.video.srcObject = null;
       try {
         await refreshCameraDevices();
-        const mobile = /Android|iPhone|iPad|iPod/i.test(navigatorRef.userAgent || '');
         setCameraState(cameras.some((device) => device.label) ? 'OPENING CAMERA' : 'PERMISSION REQUIRED');
-        const opened = await openCameraWithFallback(navigatorRef.mediaDevices, cameraConstraintCandidates(cameras, elements.cameraDevice.value, mobile), () => setCameraState('CAMERA FALLBACK'));
+        const opened = await openCameraWithFallback(navigatorRef.mediaDevices, cameraConstraintCandidates(cameras, mobileDevice ? '' : elements.cameraDevice.value, mobileDevice), () => setCameraState('CAMERA FALLBACK'));
         stream = opened.stream;
         elements.video.srcObject = stream;
         await elements.video.play();
@@ -491,6 +576,7 @@
         elements.stop.disabled = false;
         elements.capture.disabled = false;
         const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
+        updateCameraSourceLabel(opened.constraintIndex === 2 ? 'user' : 'environment');
         const supported = navigatorRef.mediaDevices.getSupportedConstraints?.() || {};
         elements.cameraResolution.textContent = String(settings.width || elements.video.videoWidth) + ' × ' + String(settings.height || elements.video.videoHeight);
         elements.cameraHint.hidden = true;
@@ -508,6 +594,56 @@
         elements.cameraDiagnostics.hidden = false;
         elements.cameraDiagnostics.textContent = 'Camera Error: ' + mapped.name + ' | Message: ' + mapped.message + ' | Failed Constraint: ' + (mapped.constraint || 'unknown');
         setMessage(mapped.state === 'PERMISSION REQUIRED' ? '请允许浏览器使用摄像头。' : '摄像头开启失败，请查看诊断信息。');
+      }
+    }
+
+    async function switchCameraSource() {
+      if (!stream) { setMessage('请先打开摄像头。'); return false; }
+      const previousFacing = currentFacingMode;
+      const previousDeviceId = currentDeviceId || elements.cameraDevice.value;
+      let targetFacing = previousFacing === 'user' ? 'environment' : 'user';
+      let targetCandidates;
+      let restoreCandidates;
+      if (mobileDevice) {
+        targetCandidates = mobileFacingCandidates(targetFacing);
+        restoreCandidates = mobileFacingCandidates(previousFacing);
+      } else {
+        const currentIndex = Math.max(0, cameras.findIndex((device) => device.deviceId === previousDeviceId));
+        const nextDevice = cameras[(currentIndex + 1) % cameras.length];
+        if (!nextDevice || nextDevice.deviceId === previousDeviceId) return false;
+        targetCandidates = cameraConstraintCandidates(cameras, nextDevice.deviceId, false);
+        restoreCandidates = cameraConstraintCandidates(cameras, previousDeviceId, false);
+      }
+      elements.switchCamera.disabled = true;
+      setCameraState('OPENING CAMERA');
+      elements.video.srcObject = null;
+      try {
+        const opened = await replaceCameraStream(navigatorRef.mediaDevices, stream, targetCandidates, restoreCandidates);
+        stream = opened.stream;
+        elements.video.srcObject = stream;
+        await elements.video.play();
+        await refreshCameraDevices();
+        if (opened.restored) {
+          currentFacingMode = previousFacing;
+          setMessage('无法切换到该镜头，请确认浏览器已允许摄像头权限。已恢复原镜头。');
+        } else {
+          currentFacingMode = targetFacing;
+          setMessage(`已切换到${targetFacing === 'user' ? '前置镜头' : '后置镜头'}。`);
+        }
+        updateCameraSourceLabel(currentFacingMode);
+        setCameraState('ACTIVE', 'online');
+        if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
+        elements.capture.disabled = false;
+        elements.stop.disabled = false;
+        return !opened.restored;
+      } catch (error) {
+        stream = null;
+        elements.video.srcObject = null;
+        elements.currentCameraFacing.textContent = '切换失败';
+        elements.switchCamera.disabled = true;
+        setCameraState('CAMERA ERROR', 'offline');
+        setMessage('无法切换到该镜头，请确认浏览器已允许摄像头权限。');
+        return false;
       }
     }
 
@@ -580,6 +716,8 @@
       elements.video.srcObject = null;
       elements.start.disabled = false;
       elements.start.textContent = '启动摄像头';
+      elements.currentCameraFacing.textContent = '尚未开启';
+      elements.switchCamera.disabled = true;
       elements.capture.disabled = true;
       elements.stop.disabled = true;
       elements.cameraResolution.textContent = "—";
@@ -631,10 +769,28 @@
     }
 
     elements.start.addEventListener('click', startCamera);
+    elements.switchCamera?.addEventListener('click', () => switchCameraSource());
     elements.capture.addEventListener('click', capture);
     elements.stop.addEventListener('click', stopCamera);
     elements.upload.addEventListener('click', () => triggerFilePicker(elements.file, devLog));
     elements.file.addEventListener('change', (event) => performUploadInteraction(event.target.files?.[0], useFile, devLog).catch((error) => setMessage(`图片检测失败：${error.message}`)));
+
+    const SpeechRecognitionCtor = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+    let voiceControl = null;
+    voiceControl = bindPushToTalk(elements.pushToTalk, {
+      recognitionFactory: SpeechRecognitionCtor ? () => { const recognition = new SpeechRecognitionCtor(); recognition.lang = 'zh-CN'; recognition.interimResults = false; recognition.continuous = false; return recognition; } : null,
+      onState: (state) => { elements.voiceStatus.textContent = state === 'LISTENING' ? '正在听，请说出你的问题。' : state === 'PROCESSING' ? '正在处理语音…' : elements.voiceStatus.textContent; },
+      onResult: (transcript) => { elements.askAiPanel.hidden = false; elements.askAiInput.value = transcript; elements.voiceStatus.textContent = '已转换成文字。AI 问答服务暂未连接。'; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; voiceControl?.reset(); },
+      onError: () => { elements.voiceStatus.textContent = '语音输入失败，请先使用文字问 AI。'; voiceControl?.reset(); },
+      onUnavailable: (message) => { elements.voiceStatus.textContent = message; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; elements.askAiPanel.hidden = false; }
+    });
+    elements.textAskAi?.addEventListener('click', () => { elements.askAiPanel.hidden = false; elements.askAiInput.focus(); });
+    elements.submitAskAi?.addEventListener('click', () => {
+      const question = elements.askAiInput.value.trim();
+      if (!question) { elements.askAiResponse.textContent = '请先输入问题。'; return; }
+      elements.askAiResponse.textContent = 'AI 问答服务暂未连接。问题已保留，请先依照当前步骤或询问教师。';
+      elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED';
+    });
 
     elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
     elements.stopCoach.addEventListener('click', stopAutoObservation);
@@ -650,7 +806,7 @@
     elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', 'Development teacher requested rework', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
     elements.trainingTaskList?.addEventListener('click', async (event) => { const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask; if (!taskId) return; const id = await ensureSession(); const result = await fetchTrainingTaskView(fetchImpl, id, taskId); renderTrainingState(elements, { ...result.training_task_view, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' }); setMessage(result.training_task_view.actionable ? '此任务目前可执行。' : `教材可阅读；正式执行仍被前置条件阻挡：${result.training_task_view.missing_prerequisites.join(', ')}`); });
 
-    return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera, startAutoObservation, stopAutoObservation };
+    return { refreshHealth, refreshCameraDevices, startCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation };
   }
 
   function escapeHtml(value) {
@@ -693,8 +849,11 @@
     detectionResultHtml,
     cameraConstraints,
     cameraConstraintCandidates,
+    mobileFacingCandidates,
     cameraConstraintsForDevices,
     openCameraWithFallback,
+    replaceCameraStream,
+    bindPushToTalk,
     cameraErrorState,
     captureFrame,
     checkHealth,

@@ -86,6 +86,12 @@ aside strong { color: #ffcb64; }
 .coach-card{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;border:1px solid rgba(110,255,180,.28)}
 .coach-card h3,.student-camera h3{margin:0}.coach-card p{margin:6px 0}.coach-explanation{font-size:.92rem}
 .ask-actions{display:grid;gap:8px}.ask-actions button{margin:0}
+.push-to-talk{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.push-to-talk[data-state="listening"]{background:#bf3654;border-color:#ff8da4;transform:scale(.98);box-shadow:0 0 0 4px rgba(255,77,116,.16)}
+.push-to-talk[data-state="processing"]{background:#765a17;border-color:#ffcb64}
+.voice-status{grid-column:1/-1;margin:0;color:#8aa9bc;font-size:.9rem}
+.ask-ai-panel{grid-column:1/-1;padding:14px;border:1px solid rgba(91,217,255,.24);border-radius:12px;background:rgba(3,15,25,.55)}
+.ask-ai-panel[hidden]{display:none}.ask-ai-panel button{width:100%;margin:0}.ask-ai-panel p{margin:10px 0 0}
 .student-camera{border:1px solid rgba(91,217,255,.28)}.section-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.section-heading span{color:#8aa9bc}
 .student-camera .preview{margin-top:14px}.student-camera-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
 .completion-card,.evidence-card,.reflection-card,.teacher-card{border:1px solid rgba(91,217,255,.18)}
