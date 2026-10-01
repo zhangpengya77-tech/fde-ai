@@ -256,6 +256,46 @@
     return STUDENT_LABELS[identifier] || String(identifier).replaceAll('_', ' ').toLowerCase();
   }
 
+  const STUDENT_TASK_STATUS = Object.freeze({
+    NOT_STARTED: '未开始',
+    IN_PROGRESS: '进行中',
+    PENDING_TEACHER_REVIEW: '待教师确认',
+    NEED_REWORK: '需重新检查',
+    COMPLETED: '已完成',
+    BLOCKED: '尚未解锁'
+  });
+
+  function studentTaskStatus(status) {
+    return STUDENT_TASK_STATUS[status] || '准备中';
+  }
+
+  function studentCoachMessage(state, teacherRequired = false) {
+    const messages = {
+      NO_DETECTION: '目前没有清楚看到目标零件，请把零件完整放到镜头中央。',
+      UNCERTAIN: 'AI 目前看不清楚，请调整角度或请老师确认。',
+      NG: '目前看到的内容与这一步不符，请依照提示调整后再试一次。',
+      PASS_CANDIDATE: 'AI 初步检查没有发现明显问题。',
+      TEACHER_CHECK: '此步骤涉及安全操作，必须由教师确认后才能继续。',
+      TASK_COMPLETED: '这个任务已经完成，可以准备下一项任务。'
+    };
+    const base = messages[state] || 'AI 助教已准备好，可以在需要时帮你检查。';
+    return teacherRequired && state !== 'TEACHER_CHECK' ? `${base} 下一步请等待教师复核。` : base;
+  }
+
+  function studentTeacherStatus(status) {
+    const labels = {
+      NOT_REQUIRED: '当前步骤无需教师确认',
+      REQUIRED: '此步骤需要教师确认',
+      PENDING: '等待教师确认',
+      PENDING_TEACHER_REVIEW: '等待教师确认',
+      APPROVE: '教师已确认',
+      APPROVED: '教师已确认',
+      REJECT_REWORK: '教师要求重新检查',
+      NEED_REWORK: '需依照教师意见重新检查'
+    };
+    return labels[status] || '当前步骤无需教师确认';
+  }
+
   function shouldTriggerVision(training, reason) {
     if (reason === 'student_request') return true;
     if (!['sop_vision_check', 'auto_observation'].includes(reason)) return false;
@@ -287,14 +327,14 @@
     if (elements.trainingCompletionConditions) elements.trainingCompletionConditions.innerHTML = conditions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     if (elements.acknowledgeTrainingSafety) elements.acknowledgeTrainingSafety.hidden = !step.safety_reminders?.length;
     if (elements.confirmTrainingStep) elements.confirmTrainingStep.disabled = !training.current_training_step_id || step.teacher_gate;
-    if (elements.trainingStatus) elements.trainingStatus.textContent = training.task_state || 'NOT_STARTED';
+    if (elements.trainingStatus) elements.trainingStatus.textContent = studentTaskStatus(training.task_state || 'NOT_STARTED');
     if (elements.trainingEvidence) elements.trainingEvidence.textContent = String(training.evidence_count || 0);
-    if (elements.trainingReflection) elements.trainingReflection.textContent = training.reflection_state || 'missing';
-    if (elements.trainingTeacher) elements.trainingTeacher.textContent = training.teacher_review_state || 'NOT_REQUIRED';
-    if (elements.trainingGrowth) elements.trainingGrowth.textContent = `${training.progress || '0 / 12'} · PENDING_SYNC`;
-    if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.prerequisite_state || 'READY';
+    if (elements.trainingReflection) elements.trainingReflection.textContent = training.reflection_state === 'available' ? '学习总结已保存' : '尚未填写';
+    if (elements.trainingTeacher) elements.trainingTeacher.textContent = studentTeacherStatus(training.teacher_review_state || 'NOT_REQUIRED');
+    if (elements.trainingGrowth) elements.trainingGrowth.textContent = `${training.progress || '0 / 12'} · 待同步`;
+    if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.actionable === false ? '尚未解锁，可先阅读' : '可以进行';
     if (elements.cameraWaiting && training.camera_active === true) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
-    if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => `<li data-state="${escapeHtml(item.status || 'NOT_STARTED')}"><button type="button" data-view-task="${escapeHtml(item.task_id)}"><span>${String(item.order).padStart(2, '0')}</span> ${escapeHtml(item.title)} · ${escapeHtml(item.status || 'NOT_STARTED')}</button></li>`).join('');
+    if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => `<li data-state="${escapeHtml(item.status || 'NOT_STARTED')}"><button type="button" data-view-task="${escapeHtml(item.task_id)}"><span>${String(item.order).padStart(2, '0')}</span><span>${escapeHtml(item.title)}</span><small>${escapeHtml(studentTaskStatus(item.status || 'NOT_STARTED'))}</small></button></li>`).join('');
   }
 
   function renderTaskState(elements, payload = {}) {
@@ -309,6 +349,7 @@
     if (payload.sop) elements.sopResult.textContent = payload.sop.status;
     else if (session.state) elements.sopResult.textContent = session.state;
     if (payload.guidance) elements.guidance.textContent = payload.guidance.text;
+    else if (elements.guidance && session.state) elements.guidance.textContent = studentCoachMessage(session.state, session.state === 'TEACHER_CHECK');
     const rag = payload.rag_explanation || session.rag_explanation;
     if (rag && elements.ragExplanation) {
       const explanation = rag.explanation || (rag.status === 'pending' ? '正在查询教学知识…' : '目前知识库说明暂时不可用。');
@@ -504,8 +545,8 @@
         sendImage: (captured) => sendImage(captured.imageData, captured.captureMs, captured.width, captured.height, captured.encodeMs),
         setBusy: (busy) => {
           elements.capture.disabled = busy;
-          elements.capture.textContent = busy ? 'AI 检测中…' : '立即 AI 检测';
-          if (busy) setMessage('AI 检测中...');
+          elements.capture.textContent = busy ? 'AI 正在检查…' : 'AI 帮我看一下';
+          if (busy) setMessage('AI 正在检查当前画面…');
         },
         onError: (error) => {
           const status = error.status ? `HTTP ${error.status} ` : '';
@@ -635,6 +676,8 @@
     renderTaskState,
     renderTrainingState,
     studentFacingLabel,
+    studentTaskStatus,
+    studentCoachMessage,
     shouldTriggerVision,
     confirmStep,
     simulateVision,

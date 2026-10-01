@@ -17,7 +17,8 @@ class LivePageTests(unittest.TestCase):
         response = client.get("/live/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Live Coach MVP", response.text)
+        self.assertIn("F450 AI 实训助教", response.text)
+        self.assertIn("AI 陪你一步一步完成 F450 实训", response.text)
         self.assertIn("live.js", response.text)
 
 

@@ -44,7 +44,7 @@ test('phase2 markup keeps manual detect and adds task and dev controls', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   for (const id of ['captureFrame','courseTitle','taskTitle','taskProgress','currentStep','taskInstruction','sopResult','coachGuidance','confirmStep','devSimulator']) assert.match(html, new RegExp(`id=["']${id}["']`));
   assert.match(html, /Simulate motor/);
-  assert.match(html, /立即 AI 检测/);
+  assert.match(html, /AI 帮我看一下/);
 });
 
 test('renders rag explanation separately from sop and deterministic guidance', () => {
@@ -139,7 +139,7 @@ test('snapshot refresh renders nested authoritative training state', () => {
   const e = elements();
   e.trainingStatus = { textContent: '' };
   live.renderTaskState(e, { session: { state: 'NG' }, task: { training: { task_state: 'IN_PROGRESS', task: {} } } });
-  assert.equal(e.trainingStatus.textContent, 'IN_PROGRESS');
+  assert.equal(e.trainingStatus.textContent, '进行中');
 });
 
 test('maps internal connector and error ids to student language', () => {
@@ -193,7 +193,8 @@ test('step teacher action includes the backend current training step id', async 
 test('task map renders backend status rather than a nonexistent state field', () => {
   const e = { trainingTaskList: { innerHTML: '' } };
   live.renderTrainingState(e, { task: {}, tasks: [{ task_id: 'TASK_01', order: 1, title: '零件识别', status: 'COMPLETED' }] });
-  assert.match(e.trainingTaskList.innerHTML, /COMPLETED/);
+  assert.match(e.trainingTaskList.innerHTML, /已完成/);
+  assert.doesNotMatch(e.trainingTaskList.innerHTML, />COMPLETED</);
   assert.doesNotMatch(e.trainingTaskList.innerHTML, /undefined/);
 });
 
@@ -221,5 +222,37 @@ test('mobile student UI provides current step and completion conditions', () => 
   for (const id of ['trainingStepNumber','trainingCompletionConditions','acknowledgeTrainingSafety','confirmTrainingStep','trainingStepList']) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
+});
+
+test('student mode leads with plain-language coaching actions', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  for (const text of ['F450 AI 实训助教', 'AI 陪你一步一步完成 F450 实训', '现在要做什么', '为什么要这样做', 'AI 助教', '打开摄像头', 'AI 帮我看一下', '问 AI', '完成这一步', '留下学习证据', '我的学习总结', '教师复核状态']) {
+    assert.match(html, new RegExp(text));
+  }
+});
+
+test('technical diagnostics remain available only inside collapsed dev mode', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  assert.match(html, /<details[^>]+id=["']devModePanel["'][^>]*>/);
+  assert.doesNotMatch(html, /<details[^>]+id=["']devModePanel["'][^>]*\sopen(?:\s|>)/);
+  const start = html.indexOf('id="devModePanel"');
+  const end = html.indexOf('</details>', start);
+  const devMarkup = html.slice(start, end);
+  for (const text of ['Detection Facts', 'MODEL_ACCURACY_PENDING', 'RAG 延迟', 'Device diagnostics']) assert.match(devMarkup, new RegExp(text));
+});
+
+test('internal coaching states translate to student language', () => {
+  assert.equal(live.studentCoachMessage('NO_DETECTION'), '目前没有清楚看到目标零件，请把零件完整放到镜头中央。');
+  assert.equal(live.studentCoachMessage('UNCERTAIN'), 'AI 目前看不清楚，请调整角度或请老师确认。');
+  assert.equal(live.studentCoachMessage('PASS_CANDIDATE'), 'AI 初步检查没有发现明显问题。');
+  assert.match(live.studentCoachMessage('PASS_CANDIDATE', true), /等待教师复核/);
+});
+
+test('task map renders student-facing status instead of raw backend state', () => {
+  assert.equal(live.studentTaskStatus('NOT_STARTED'), '未开始');
+  assert.equal(live.studentTaskStatus('IN_PROGRESS'), '进行中');
+  assert.equal(live.studentTaskStatus('PENDING_TEACHER_REVIEW'), '待教师确认');
+  assert.equal(live.studentTaskStatus('NEED_REWORK'), '需重新检查');
+  assert.equal(live.studentTaskStatus('COMPLETED'), '已完成');
 });
 

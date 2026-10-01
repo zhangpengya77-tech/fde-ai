@@ -71,9 +71,9 @@ test('zero detections render an explicit empty result message', () => {
 });
 test('manual snapshot UI exposes explicit detect and upload controls', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  assert.match(html, /id="captureFrame"[^>]*>立即 AI 检测</);
+  assert.match(html, /id="captureFrame"[^>]*>AI 帮我看一下</);
   assert.match(html, /id="uploadImage"/);
   assert.match(html, /id="imageFile"[^>]*accept="image\/jpeg,image\/png,image\/webp"/);
-  assert.match(html, /Step 1/);
-  assert.match(html, /截取当前画面并送至 YOLO 辨识/);
+  assert.match(html, /打开摄像头/);
+  assert.match(html, /需要时再请 AI 检查/);
 });
