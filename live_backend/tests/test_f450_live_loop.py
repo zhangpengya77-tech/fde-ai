@@ -97,6 +97,15 @@ class F450LiveLoopTests(unittest.TestCase):
         self.assertEqual(growth["progress_label"], "0 / 12")
         self.assertEqual(growth["sync_status"], "PENDING_SYNC")
 
+    def test_future_task_is_viewable_without_becoming_current_or_actionable(self):
+        response = self.client.get(f"/api/live/sessions/{self.sid}/training/tasks/TASK_07")
+        self.assertEqual(response.status_code, 200)
+        view = response.json()["training_task_view"]
+        self.assertEqual(view["task"]["id"], "TASK_07")
+        self.assertTrue(view["viewable"])
+        self.assertFalse(view["actionable"])
+        self.assertEqual(self.state()["current_task_id"], "TASK_01")
+
 
 if __name__ == "__main__":
     unittest.main()

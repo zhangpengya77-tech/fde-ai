@@ -183,3 +183,12 @@ test('teacher action sends explicit role and development identity headers', asyn
   assert.equal(request.init.headers['X-FDE-Teacher-ID'], 'MOCK_TEACHER');
 });
 
+test('future task navigation fetches a read-only view without starting the task', async () => {
+  let request;
+  const fetchImpl = async (url, init) => { request = { url, init }; return { ok: true, json: async () => ({ training_task_view: { task: { id: 'TASK_07' }, actionable: false } }) }; };
+  const result = await live.fetchTrainingTaskView(fetchImpl, 'sid', 'TASK_07');
+  assert.equal(request.url, '/api/live/sessions/sid/training/tasks/TASK_07');
+  assert.equal(request.init, undefined);
+  assert.equal(result.training_task_view.actionable, false);
+});
+

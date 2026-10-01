@@ -104,6 +104,11 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         except TaskTransitionError as error: return error_response("task_blocked", str(error), 409)
         return json_response({"training": state})
 
+    async def training_view_task(request):
+        try: view = sessions.training_task_view(request.path_params["session_id"], request.path_params["task_id"])
+        except KeyError: return error_response("training_task_not_found", "Training session or task was not found.", 404)
+        return json_response({"training_task_view": view})
+
     async def training_complete_task(request):
         sid, task_id = request.path_params["session_id"], request.path_params["task_id"]
         try: state = sessions.complete_training_task(sid, task_id)
@@ -248,6 +253,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         Route("/api/live/sessions/{session_id}/confirm", confirm, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/events", events, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/start", training_start_task, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/tasks/{task_id}", training_view_task, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/complete", training_complete_task, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/evidence", training_evidence, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/reflection", training_reflection, methods=["POST"]),

@@ -205,6 +205,29 @@ class InMemorySessionStore:
             },
         }
 
+    def training_task_view(self, session_id: str, task_id: str) -> dict:
+        progress = self.training_progress(session_id)
+        current_id = self._sessions[session_id].current_task_id
+        task = next((item for item in progress.course.tasks if item.id == task_id), None)
+        if task is None:
+            raise KeyError(task_id)
+        missing = [item for item in task.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED]
+        return {
+            "viewable": True,
+            "actionable": not missing,
+            "current_task_id": current_id,
+            "missing_prerequisites": missing,
+            "task_state": progress.task(task.id).status.value,
+            "task": {
+                "id": task.id, "order": task.order, "title": task.title,
+                "description": task.description, "objective": task.objective,
+                "steps": [{"id": step.id, "title": step.title, "instruction": step.instruction, "rationale": step.rationale, "vision_task": step.vision_task} for step in task.steps],
+                "safety_reminders": [{"id": item, "message": SAFETY_REMINDERS[item].message} for item in task.safety_reminders],
+                "vision_tasks": list(task.vision_tasks),
+                "teacher_review_required": task.teacher_review_required,
+            },
+        }
+
     def start_training_task(self, session_id: str, task_id: str) -> dict:
         self.training_progress(session_id).start_task(task_id)
         self._sync_training_session(session_id, task_id)

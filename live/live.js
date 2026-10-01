@@ -231,6 +231,10 @@
     return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/teacher-review`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' }, body: JSON.stringify({ task_id: taskId, decision, note }) }));
   }
 
+  async function fetchTrainingTaskView(fetchImpl, sessionId, taskId) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/tasks/${encodeURIComponent(taskId)}`));
+  }
+
   const STUDENT_LABELS = Object.freeze({
     FC_MAIN_OUT_1: '飞控 MAIN OUT 1（1号电机输出接口）',
     FC_MAIN_OUT_2: '飞控 MAIN OUT 2（2号电机输出接口）',
@@ -270,7 +274,7 @@
     if (elements.trainingGrowth) elements.trainingGrowth.textContent = `${training.progress || '0 / 12'} · PENDING_SYNC`;
     if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.prerequisite_state || 'READY';
     if (elements.cameraWaiting && training.camera_active === true) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
-    if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => `<li data-state="${escapeHtml(item.state || 'NOT_STARTED')}"><span>${String(item.order).padStart(2, '0')}</span> ${escapeHtml(item.title)} · ${escapeHtml(item.state)}</li>`).join('');
+    if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => `<li data-state="${escapeHtml(item.state || 'NOT_STARTED')}"><button type="button" data-view-task="${escapeHtml(item.task_id)}"><span>${String(item.order).padStart(2, '0')}</span> ${escapeHtml(item.title)} · ${escapeHtml(item.state)}</button></li>`).join('');
   }
 
   function renderTaskState(elements, payload = {}) {
@@ -579,6 +583,7 @@
     elements.saveReflection?.addEventListener('click', async () => { try { const id = await ensureSession(); const result = await saveTrainingReflection(fetchImpl, id, { task_id: currentTrainingTaskId, original_text: elements.reflectionOriginal.value, ai_assisted_text: elements.reflectionAssisted.value || null, source_type: 'TEXT' }); renderTrainingState(elements, result.training); setMessage('学生原始学习总结已保存。'); } catch (error) { setMessage(error.message === 'student_original_summary_required' ? '请先填写真实的学生学习总结。' : `学习总结保存失败：${error.message}`); } });
     elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', 'Development teacher review', currentTrainingTaskId); renderTrainingState(elements, result.training); });
     elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', 'Development teacher requested rework', currentTrainingTaskId); renderTrainingState(elements, result.training); });
+    elements.trainingTaskList?.addEventListener('click', async (event) => { const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask; if (!taskId) return; const id = await ensureSession(); const result = await fetchTrainingTaskView(fetchImpl, id, taskId); renderTrainingState(elements, { ...result.training_task_view, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' }); setMessage(result.training_task_view.actionable ? '此任务目前可执行。' : `教材可阅读；正式执行仍被前置条件阻挡：${result.training_task_view.missing_prerequisites.join(', ')}`); });
 
     return { refreshHealth, refreshCameraDevices, startCamera, capture, stopCamera, startAutoObservation, stopAutoObservation };
   }
@@ -612,6 +617,7 @@
     saveTrainingEvidence,
     saveTrainingReflection,
     submitTeacherReview,
+    fetchTrainingTaskView,
     performCaptureInteraction,
     triggerFilePicker,
     performUploadInteraction,
