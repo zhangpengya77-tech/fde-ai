@@ -105,9 +105,32 @@ class TrainingProgress:
         state = progress.training_step_progress[step_id]
         state["facts"].append({"fact": fact, "timestamp": _now()})
         self._event("TRAINING_STEP_FACT_RECORDED", task_id, {"step_id": step_id, "fact": fact})
+        if definition.safety_reminders and not state["safety_acknowledged"]:
+            raise TaskTransitionError("safety_acknowledgment_required")
+        if definition.evidence_required:
+            raise TaskTransitionError("evidence_required")
         if definition.teacher_gate and state["teacher_decision"] != "APPROVE":
             state["status"] = "PENDING_TEACHER_REVIEW"
             raise TaskTransitionError("teacher_step_approval_required")
+        self._advance_step(task_id, step_id)
+
+    def record_step_evidence(self, task_id: str, step_id: str, evidence_type: str) -> None:
+        progress = self.task(task_id)
+        if progress.current_training_step_id != step_id:
+            return
+        definition = self._step_definition(task_id, step_id)
+        if evidence_type not in definition.evidence_required:
+            raise TaskTransitionError("wrong_evidence_type")
+        progress.training_step_progress[step_id]["facts"].append({"fact": f"EVIDENCE:{evidence_type}", "timestamp": _now()})
+        self._advance_step(task_id, step_id)
+
+    def record_step_reflection(self, task_id: str, step_id: str) -> None:
+        progress = self.task(task_id)
+        if progress.current_training_step_id != step_id:
+            return
+        if not (step_id.endswith("REFLECTION") or step_id.endswith("RECORD")):
+            return
+        progress.training_step_progress[step_id]["facts"].append({"fact": "STUDENT_REFLECTION", "timestamp": _now()})
         self._advance_step(task_id, step_id)
 
     def acknowledge_step_safety(self, task_id: str, step_id: str) -> None:

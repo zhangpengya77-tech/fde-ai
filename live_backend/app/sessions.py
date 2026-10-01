@@ -269,11 +269,13 @@ class InMemorySessionStore:
         return self.training_state(session_id)
 
     def complete_training_task(self, session_id: str, task_id: str) -> dict:
-        if task_id == "TASK_01":
-            if not any(item.task_id == task_id for item in self._evidence[session_id]):
-                raise TaskTransitionError("evidence_required")
-            if not any(item.task_id == task_id for item in self._reflections[session_id]):
-                raise TaskTransitionError("reflection_required")
+        task_progress = self.training_progress(session_id).task(task_id)
+        if task_progress.current_training_step_id is not None:
+            raise TaskTransitionError("training_steps_incomplete")
+        if not any(item.task_id == task_id for item in self._evidence[session_id]):
+            raise TaskTransitionError("evidence_required")
+        if not any(item.task_id == task_id for item in self._reflections[session_id]):
+            raise TaskTransitionError("reflection_required")
         self.training_progress(session_id).request_completion(task_id, actor="student")
         self._sync_training_session(session_id, task_id)
         return self.training_state(session_id)
@@ -281,10 +283,15 @@ class InMemorySessionStore:
     def add_training_evidence(self, session_id: str, evidence: EvidenceRecord) -> None:
         self._evidence[session_id].append(evidence)
         self.training_progress(session_id).record_evidence(evidence.task_id, evidence.evidence_type.value, evidence.file_reference or evidence.evidence_id)
+        if evidence.step_id:
+            self.training_progress(session_id).record_step_evidence(evidence.task_id, evidence.step_id, evidence.evidence_type.value)
         self._sync_training_session(session_id, evidence.task_id)
 
     def add_training_reflection(self, session_id: str, reflection: StudentReflection) -> None:
         self._reflections[session_id].append(reflection)
+        current = self.training_progress(session_id).task(reflection.task_id).current_training_step_id
+        if current:
+            self.training_progress(session_id).record_step_reflection(reflection.task_id, current)
         self._sync_training_session(session_id, reflection.task_id)
 
     def review_training_task(self, session_id: str, task_id: str, decision: str, teacher_id: str, note: str):

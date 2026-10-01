@@ -49,11 +49,15 @@ class F450LiveLoopTests(unittest.TestCase):
             "ai_assisted_text": "学生完成主要零件检查，并记录待确认的接收机型号。", "source_type": "TEXT",
         })
         self.assertEqual(reflection.status_code, 201)
+        self.store.training_progress(self.sid).task("TASK_01").current_training_step_id = None
         complete1 = self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_01/complete", json={})
         self.assertEqual(complete1.status_code, 200)
         self.assertEqual(complete1.json()["training"]["progress"], "1 / 12")
 
         self.assertEqual(self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_02/start", json={}).status_code, 200)
+        self.store.training_progress(self.sid).task("TASK_02").current_training_step_id = None
+        self.client.post(f"/api/live/sessions/{self.sid}/training/evidence", json={"task_id": "TASK_02", "evidence_type": "CHECKLIST", "source": "DEV_STORAGE", "file_reference": "dev://task02"})
+        self.client.post(f"/api/live/sessions/{self.sid}/training/reflection", json={"task_id": "TASK_02", "original_text": "软件流程测试。", "source_type": "TEXT"})
         pending = self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_02/complete", json={})
         self.assertEqual(pending.json()["training"]["task_state"], "PENDING_TEACHER_REVIEW")
         self.assertEqual(self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_03/start", json={}).status_code, 409)
