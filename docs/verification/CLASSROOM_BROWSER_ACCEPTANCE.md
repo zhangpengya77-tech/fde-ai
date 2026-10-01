@@ -9,17 +9,19 @@ Automated tests prove software workflow only. Motor, ESC, soldering, continuity,
 
 | Check | Desktop Chrome | iPhone Safari | Android Chrome |
 |---|---|---|---|
-| 12 Task list and current task | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Current-step navigation | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Future task read-only / blocked message | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Camera permission/start/stop/WAITING | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Manual AI Check | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Evidence file selection/save | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Student reflection | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Teacher pending/approve/reject | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Progress x / 12 | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Task 06 release → Task 07 actionable | NOT_TESTED | NOT_TESTED | NOT_TESTED |
-| Touch targets and narrow layout | NOT_TESTED | NOT_TESTED | NOT_TESTED |
+| 12 Task list and current task | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Current-step navigation | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Future task read-only / blocked message | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Camera permission/start/stop/WAITING | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Manual AI Check | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Evidence file selection/save | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Student reflection | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Teacher pending/approve/reject | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Progress x / 12 | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Task 06 release → Task 07 actionable | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Touch targets and narrow layout | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+
+Desktop Chrome acceptance was deferred on 2026-10-01 because the user was away from the test computer. No automated result is counted as a real-browser PASS.
 
 ## Manual procedure
 
