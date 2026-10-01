@@ -4,6 +4,7 @@ import asyncio
 import base64
 import binascii
 import time
+from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,6 +22,8 @@ from .rag import RAGAdapter
 from .rag_context import RAGContextBuilder
 from .rag_guidance import ContextualGuidanceCoordinator, RAGGuidanceProvider
 from .sessions import InMemorySessionStore, InvalidSessionTransition
+from .task_state import TaskTransitionError
+from .training_records import EvidenceRecord, EvidenceType, ReflectionSource, StudentReflection
 from .sop import SopDecision, SopEngine
 from .vision import VisionAdapter, VisionResponseError, VisionUnavailable
 
@@ -75,7 +78,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         source = str(payload.get("vision_source", "REAL_VISION"))
         if source not in {"REAL_VISION", "MOCK_VISION"}: return error_response("invalid_vision_source", "Unknown vision source.", 400)
         if source == "MOCK_VISION" and not development: return error_response("dev_only", "Mock Vision is disabled.", 404)
-        created = sessions.create(vision_source=source).as_dict()
+        training_track = payload.get("training_track")
+        if training_track not in {None, "F450_TWELVE_TASK"}: return error_response("invalid_training_track", "Unknown training track.", 400)
+        created = sessions.create(vision_source=source, training_track=training_track).as_dict()
         created["dev_mode"] = development
         return json_response(created, status_code=201)
 
@@ -89,6 +94,74 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         payload["step"] = None if step is None else {"step_id": step.step_id, "title": step.title, "instruction": step.instruction, "expected_classes": list(step.expected_classes)}
         payload["progress"] = {"current": session._step_index + 1, "total": len(sessions.task.steps)}
         payload["rag_explanation"] = session.rag_explanation
+        if session.training_track == "F450_TWELVE_TASK": payload["training"] = sessions.training_state(session.session_id)
+        return json_response(payload)
+
+    async def training_start_task(request):
+        sid, task_id = request.path_params["session_id"], request.path_params["task_id"]
+        try: state = sessions.start_training_task(sid, task_id)
+        except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+        except TaskTransitionError as error: return error_response("task_blocked", str(error), 409)
+        return json_response({"training": state})
+
+    async def training_complete_task(request):
+        sid, task_id = request.path_params["session_id"], request.path_params["task_id"]
+        try: state = sessions.complete_training_task(sid, task_id)
+        except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+        except TaskTransitionError as error: return error_response(str(error), str(error), 409)
+        return json_response({"training": state})
+
+    async def training_evidence(request):
+        sid = request.path_params["session_id"]
+        try: payload = await request.json()
+        except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+        try:
+            evidence = EvidenceRecord.create(
+                f"dev-student:{sid}", sid, "F450_AI_TRAINING", str(payload["task_id"]), payload.get("step_id"),
+                EvidenceType(str(payload["evidence_type"])), str(payload.get("source") or "DEV_STORAGE"), payload.get("file_reference"),
+                payload.get("vision_result"), payload.get("check_result"), None, tuple(payload.get("error_codes") or ()),
+                tuple(payload.get("safety_reminders_acknowledged") or ()), dict(payload.get("metadata") or {}),
+            )
+            sessions.add_training_evidence(sid, evidence)
+        except KeyError: return error_response("invalid_evidence", "Required evidence field or session is missing.", 400)
+        except ValueError as error: return error_response("invalid_evidence", str(error), 400)
+        return json_response({"evidence": asdict(evidence), "training": sessions.training_state(sid)}, status_code=201)
+
+    async def training_reflection(request):
+        sid = request.path_params["session_id"]
+        try: payload = await request.json()
+        except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+        try:
+            reflection = StudentReflection.create(
+                f"dev-student:{sid}", str(payload["task_id"]), str(payload.get("original_text") or ""),
+                payload.get("ai_assisted_text"), ReflectionSource(str(payload.get("source_type") or "TEXT")),
+            )
+            sessions.add_training_reflection(sid, reflection)
+        except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+        except ValueError as error: return error_response(str(error), str(error), 400)
+        return json_response({"reflection": asdict(reflection), "training": sessions.training_state(sid)}, status_code=201)
+
+    async def training_teacher_review(request):
+        sid = request.path_params["session_id"]
+        role = request.headers.get("X-FDE-Role", "student")
+        teacher_id = request.headers.get("X-FDE-Teacher-ID", "")
+        if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+        if development and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
+        try: payload = await request.json()
+        except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+        try: review = sessions.review_training_task(sid, str(payload["task_id"]), str(payload["decision"]), teacher_id, str(payload.get("note") or ""))
+        except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+        except TaskTransitionError as error: return error_response("invalid_teacher_review", str(error), 409)
+        review_payload = asdict(review)
+        review_payload["development_identity"] = bool(development and teacher_id == "MOCK_TEACHER")
+        review_payload["previous_state"] = review.previous_state.value
+        review_payload["new_state"] = review.new_state.value
+        return json_response({"review": review_payload, "training": sessions.training_state(sid)})
+
+    async def training_growth_record(request):
+        sid = request.path_params["session_id"]
+        try: payload = asdict(sessions.growth_record(sid))
+        except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
         return json_response(payload)
 
     async def snapshot(request):
@@ -174,6 +247,12 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         Route("/api/live/sessions/{session_id}/snapshot", snapshot, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/confirm", confirm, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/events", events, methods=["GET"]),
+        Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/start", training_start_task, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/complete", training_complete_task, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/evidence", training_evidence, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/reflection", training_reflection, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/teacher-review", training_teacher_review, methods=["POST"]),
+        Route("/api/live/sessions/{session_id}/training/growth-record", training_growth_record, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/simulate", simulate, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/camera/start", camera_started, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/auto/start", auto_started, methods=["POST"]),

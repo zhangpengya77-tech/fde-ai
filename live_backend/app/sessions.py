@@ -6,6 +6,10 @@ from threading import RLock
 from uuid import uuid4
 
 from .sop import DetectionFact, SopCourse, SopDecision, SopStep, load_demo_course
+from .safety import SAFETY_REMINDERS
+from .task_catalog import TaskStatus, load_f450_course
+from .task_state import TaskTransitionError, TrainingProgress
+from .training_records import EvidenceRecord, PendingSyncGrowthRecordAdapter, StudentReflection
 
 
 def utc_now_iso() -> str:
@@ -38,6 +42,15 @@ class LiveSession:
     updated_at: str = ""
     completed_at: str | None = None
     context_version: int = 1
+    training_track: str | None = None
+    hardware_profile: str | None = None
+    current_task_id: str | None = None
+    task_state: str | None = None
+    prerequisite_state: str | None = None
+    safety_state: str | None = None
+    teacher_review_state: str | None = None
+    evidence_count: int = 0
+    reflection_state: str = "missing"
     rag_explanation: dict = field(default_factory=lambda: {
         "status": "idle",
         "explanation": None,
@@ -80,9 +93,12 @@ class InMemorySessionStore:
         self.course = course or load_demo_course()
         self.task = self.course.tasks[0]
         self._sessions: dict[str, LiveSession] = {}
+        self._training: dict[str, TrainingProgress] = {}
+        self._evidence: dict[str, list[EvidenceRecord]] = {}
+        self._reflections: dict[str, list[StudentReflection]] = {}
         self._lock = RLock()
 
-    def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo") -> LiveSession:
+    def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo", training_track: str | None = None) -> LiveSession:
         now = utc_now_iso()
         first = self.task.steps[0]
         session = LiveSession(
@@ -97,12 +113,126 @@ class InMemorySessionStore:
             expected_class=first.expected_classes[0],
             started_at=now,
             updated_at=now,
+            training_track=training_track,
+            hardware_profile="F450_PIXHAWK248" if training_track == "F450_TWELVE_TASK" else None,
+            current_task_id="TASK_01" if training_track == "F450_TWELVE_TASK" else None,
+            task_state=TaskStatus.NOT_STARTED.value if training_track == "F450_TWELVE_TASK" else None,
+            prerequisite_state="READY" if training_track == "F450_TWELVE_TASK" else None,
+            safety_state="ADVISORY" if training_track == "F450_TWELVE_TASK" else None,
+            teacher_review_state="NOT_REQUIRED" if training_track == "F450_TWELVE_TASK" else None,
         )
         with self._lock:
             self._sessions[session.session_id] = session
+            if training_track == "F450_TWELVE_TASK":
+                self._training[session.session_id] = TrainingProgress(session.session_id, f"dev-student:{session.session_id}", load_f450_course())
+                self._evidence[session.session_id] = []
+                self._reflections[session.session_id] = []
             self._append(session, "SESSION_STARTED")
             self._append(session, "STEP_STARTED")
         return session
+
+    def training_progress(self, session_id: str) -> TrainingProgress:
+        try:
+            return self._training[session_id]
+        except KeyError as error:
+            raise KeyError(session_id) from error
+
+    def _sync_training_session(self, session_id: str, task_id: str | None = None) -> LiveSession:
+        session = self._sessions[session_id]
+        progress = self.training_progress(session_id)
+        if task_id is not None:
+            session.current_task_id = task_id
+        current_id = session.current_task_id or "TASK_01"
+        current = progress.task(current_id)
+        definition = next(item for item in progress.course.tasks if item.id == current_id)
+        missing = tuple(item for item in definition.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED)
+        session.task_state = current.status.value
+        session.prerequisite_state = "BLOCKED" if missing else "READY"
+        session.safety_state = "TEACHER_GATE" if definition.safety_gate else "ADVISORY"
+        session.teacher_review_state = "PENDING" if current.status is TaskStatus.PENDING_TEACHER_REVIEW else ("REQUIRED" if definition.teacher_review_required else "NOT_REQUIRED")
+        session.evidence_count = len(self._evidence[session_id])
+        session.reflection_state = "available" if self._reflections[session_id] else "missing"
+        return session
+
+    def training_state(self, session_id: str) -> dict:
+        session = self._sync_training_session(session_id)
+        progress = self.training_progress(session_id)
+        current = next(item for item in progress.course.tasks if item.id == session.current_task_id)
+        current_progress = progress.task(current.id)
+        missing = tuple(item for item in current.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED)
+        tasks = [{
+            "task_id": item.id, "order": item.order, "short_name": item.short_name,
+            "title": item.title, "status": progress.task(item.id).status.value,
+            "viewable": True,
+            "actionable": not any(progress.task(req).status is not TaskStatus.COMPLETED for req in item.prerequisites),
+        } for item in progress.course.tasks]
+        return {
+            "training_track": session.training_track,
+            "hardware_profile": session.hardware_profile,
+            "current_task_id": current.id,
+            "current_step_id": current.steps[0].id,
+            "task_state": current_progress.status.value,
+            "prerequisite_state": "BLOCKED" if missing else "READY",
+            "missing_prerequisites": list(missing),
+            "safety_state": session.safety_state,
+            "teacher_review_state": session.teacher_review_state,
+            "evidence_count": len(self._evidence[session_id]),
+            "reflection_state": session.reflection_state,
+            "progress": progress.summary,
+            "tasks": tasks,
+            "task": {
+                "id": current.id, "order": current.order, "title": current.title,
+                "description": current.description, "objective": current.objective,
+                "steps": [{"id": step.id, "title": step.title, "instruction": step.instruction, "rationale": step.rationale, "vision_task": step.vision_task} for step in current.steps],
+                "safety_reminders": [{"id": item, "message": SAFETY_REMINDERS[item].message} for item in current.safety_reminders],
+                "vision_tasks": list(current.vision_tasks),
+                "teacher_review_required": current.teacher_review_required,
+            },
+            "context": {
+                "course_id": progress.course.course_id,
+                "task_id": current.id,
+                "step_id": current.steps[0].id,
+                "hardware_profile": session.hardware_profile,
+                "expected_action": current.steps[0].instruction,
+                "component_ids": list(current.component_ids),
+                "connector_ids": list(current.connector_ids),
+                "safety_reminders": list(current.safety_reminders),
+                "teacher_gate": current.teacher_review_required,
+                "evidence_state": len(self._evidence[session_id]),
+            },
+        }
+
+    def start_training_task(self, session_id: str, task_id: str) -> dict:
+        self.training_progress(session_id).start_task(task_id)
+        self._sync_training_session(session_id, task_id)
+        return self.training_state(session_id)
+
+    def complete_training_task(self, session_id: str, task_id: str) -> dict:
+        if task_id == "TASK_01":
+            if not any(item.task_id == task_id for item in self._evidence[session_id]):
+                raise TaskTransitionError("evidence_required")
+            if not any(item.task_id == task_id for item in self._reflections[session_id]):
+                raise TaskTransitionError("reflection_required")
+        self.training_progress(session_id).request_completion(task_id, actor="student")
+        self._sync_training_session(session_id, task_id)
+        return self.training_state(session_id)
+
+    def add_training_evidence(self, session_id: str, evidence: EvidenceRecord) -> None:
+        self._evidence[session_id].append(evidence)
+        self.training_progress(session_id).record_evidence(evidence.task_id, evidence.evidence_type.value, evidence.file_reference or evidence.evidence_id)
+        self._sync_training_session(session_id, evidence.task_id)
+
+    def add_training_reflection(self, session_id: str, reflection: StudentReflection) -> None:
+        self._reflections[session_id].append(reflection)
+        self._sync_training_session(session_id, reflection.task_id)
+
+    def review_training_task(self, session_id: str, task_id: str, decision: str, teacher_id: str, note: str):
+        review = self.training_progress(session_id).record_teacher_review(task_id, decision, teacher_id, note)
+        self._sync_training_session(session_id, task_id)
+        return review
+
+    def growth_record(self, session_id: str):
+        return PendingSyncGrowthRecordAdapter().build(self.training_progress(session_id), tuple(self._evidence[session_id]), tuple(self._reflections[session_id]))
 
     def get(self, session_id: str) -> LiveSession | None:
         with self._lock:
@@ -305,4 +435,7 @@ class InMemorySessionStore:
                 return False
             self._append(session, "SESSION_STOPPED")
             self._sessions.pop(session_id, None)
+            self._training.pop(session_id, None)
+            self._evidence.pop(session_id, None)
+            self._reflections.pop(session_id, None)
             return True
