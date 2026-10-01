@@ -69,3 +69,16 @@ Do not proceed to real RAG, Realtime Voice AI, production Learning Record, Teach
 - Local RAG measurement: health 4.7 ms; sample query 259.5 ms and returned `source_type=refuse`, correctly handled as no hit.
 - RAG Corpus was not modified; health reported version `f450_v1`, 1,105 documents, index loaded.
 - Known issue remains `MODEL_ACCURACY_PENDING`.
+
+## F450 12 Task Data Foundation — 2026-10-01
+
+- Canonical twelve-task route is now represented by validated backend configuration rather than UI conditionals.
+- Hardware profile: `F450_PIXHAWK248`; unknown pin definitions remain `REQUIRES_HARDWARE_VERIFICATION`.
+- Task status and SOP status remain separate. Top-level states include `NOT_STARTED`, `IN_PROGRESS`, `PENDING_TEACHER_REVIEW`, `NEED_REWORK`, `COMPLETED`, and `BLOCKED`.
+- Teacher-gated Tasks 02, 04, 06, 08, 10, 11, and 12 cannot be completed by learner confirmation.
+- Task 07 contains the complete Mission Planner configuration step skeleton; Task 08 verifies configuration; Task 09 is a QGC/SITL rehearsal and grants no real Arm authority.
+- Evidence and reflection use shared contracts. Original learner text is retained separately from AI-assisted text.
+- `PendingSyncGrowthRecordAdapter` maps all twelve task details into existing Growth Record 05; it performs no production database write.
+- Task 12 stores only an external `/flight-health/` capability reference. Flight Health internals remain out of scope and untouched.
+- Verification: Live Backend 90 passed; JavaScript/Worker/Phase 71 passed; Python compile passed; Django regression completed successfully in the existing isolated environment.
+- Physical high-risk actions remain untested and require real learner/teacher evidence.
