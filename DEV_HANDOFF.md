@@ -82,3 +82,15 @@ Do not proceed to real RAG, Realtime Voice AI, production Learning Record, Teach
 - Task 12 stores only an external `/flight-health/` capability reference. Flight Health internals remain out of scope and untouched.
 - Verification: Live Backend 90 passed; JavaScript/Worker/Phase 71 passed; Python compile passed; Django regression completed successfully in the existing isolated environment.
 - Physical high-risk actions remain untested and require real learner/teacher evidence.
+
+## F450 Student Live Training Loop — 2026-10-01
+
+- The existing Live Session now owns `F450_TWELVE_TASK` context, current task/state, prerequisites, safety/teacher state, Evidence count, and Reflection state. No second session system was created.
+- The `/live/` page provides one config-driven 12 Task renderer with student-facing wording, safety reminders, Camera waiting state, Evidence reference capture, separate original/AI-assisted Reflection fields, teacher-review status, and Growth Record 05 progress.
+- Backend APIs enforce Task start/completion, Evidence/Reflection linkage, and teacher authorization. Student requests cannot approve teacher-gated tasks; development approval requires the explicit `MOCK_TEACHER` identity and is audited as development-only.
+- Task 01 completion requires Evidence and original student Reflection. Task 02 enters `PENDING_TEACHER_REVIEW`; teacher approval completes it and unlocks Task 03. Teacher rejection produces `NEED_REWORK`.
+- Vision remains demand-driven: Camera waiting does not cause inference; student request, SOP Vision checks, or configured Auto Observation may trigger Vision.
+- `PendingSyncGrowthRecordAdapter` remains development-only and maps the route to Growth Record 05 without writing v1.5C data.
+- Verification: Live Backend 95/95; JavaScript/Worker/Phase 79/79; Django 238 passed with 22 skipped and system check clean; Phase 1 Python helpers 4/4; Python compile passed.
+- Real Motor, ESC, soldering, multimeter, first power, outdoor GPS, Arm, and flight remain `NOT_TESTED` / `PENDING_TEACHER_REVIEW`.
+- Flight Health internals and the externally dirty v1.5C directory were not modified.
