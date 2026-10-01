@@ -269,7 +269,7 @@
     if (elements.trainingTeacher) elements.trainingTeacher.textContent = training.teacher_review_state || 'NOT_REQUIRED';
     if (elements.trainingGrowth) elements.trainingGrowth.textContent = `${training.progress || '0 / 12'} · PENDING_SYNC`;
     if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.prerequisite_state || 'READY';
-    if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
+    if (elements.cameraWaiting && training.camera_active === true) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
     if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => `<li data-state="${escapeHtml(item.state || 'NOT_STARTED')}"><span>${String(item.order).padStart(2, '0')}</span> ${escapeHtml(item.title)} · ${escapeHtml(item.state)}</li>`).join('');
   }
 
@@ -294,7 +294,8 @@
       elements.ragLatency.textContent = Number.isFinite(Number(rag.latency_ms)) ? `${Number(rag.latency_ms).toFixed(1)} ms` : '—';
     }
     elements.confirm.disabled = session.state !== 'PASS_CANDIDATE';
-    if (payload.training) renderTrainingState(elements, payload.training);
+    const training = payload.training || task.training;
+    if (training) renderTrainingState(elements, training);
   }
 
   function autoStartError(cameraActive, sessionId) { if (!cameraActive) return 'camera_required'; if (!sessionId) return 'session_required'; return null; }
@@ -324,7 +325,7 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
-      trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#reflectionOriginal'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
+      trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
     };
@@ -429,6 +430,7 @@
         elements.cameraDiagnostics.hidden = false;
         elements.cameraDiagnostics.textContent = 'Device: ' + (stream.getVideoTracks()[0]?.label || elements.cameraDevice.selectedOptions[0]?.textContent || 'unknown') + ' | Supported: ' + Object.keys(supported).filter((key) => supported[key]).join(', ');
         setCameraState('ACTIVE', 'online');
+        if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
         setMessage(opened.fallbackUsed ? '摄像头已启动（Compatibility Fallback），请点击「立即 AI 检测」。' : '摄像头已启动，请点击「立即 AI 检测」。');
       } catch (error) {
         stopStream(stream);
@@ -516,6 +518,7 @@
       elements.cameraResolution.textContent = "—";
       elements.cameraHint.hidden = false;
       setCameraState(cameras.length ? 'STOPPED' : 'ERROR', cameras.length ? 'checking' : 'offline');
+      if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'STOPPED';
       if (sessionId) {
         const oldSession = sessionId;
         sessionId = null;

@@ -113,7 +113,7 @@ test('renders twelve-task student training state with human-facing safety conten
   const e = {};
   for (const name of ['trainingProgress','trainingTaskNumber','trainingTitle','trainingObjective','trainingAction','trainingWhy','trainingSafety','trainingSteps','trainingStatus','trainingEvidence','trainingReflection','trainingTeacher','trainingGrowth','trainingPrerequisite','cameraWaiting']) e[name] = { textContent: '', innerHTML: '' };
   live.renderTrainingState(e, {
-    progress: '2 / 12', current_task_id: 'TASK_03', task_state: 'IN_PROGRESS', prerequisite_state: 'READY',
+    progress: '2 / 12', current_task_id: 'TASK_03', task_state: 'IN_PROGRESS', prerequisite_state: 'READY', camera_active: true,
     evidence_count: 1, reflection_state: 'available', teacher_review_state: 'NOT_REQUIRED',
     task: {
       order: 3, title: 'F450 机架 + 马达安装', objective: '组装机架并安装马达。', description: '完成结构安装。',
@@ -127,6 +127,19 @@ test('renders twelve-task student training state with human-facing safety conten
   assert.match(e.trainingSafety.innerHTML, /过长/);
   assert.doesNotMatch(e.trainingSafety.innerHTML, /REM_MOTOR/);
   assert.equal(e.cameraWaiting.textContent, 'ACTIVE / WAITING');
+});
+
+test('task rendering does not claim camera active when camera is only waiting to start', () => {
+  const e = { cameraWaiting: { textContent: 'STOPPED' } };
+  live.renderTrainingState(e, { camera_active: false, task: {} });
+  assert.equal(e.cameraWaiting.textContent, 'STOPPED');
+});
+
+test('snapshot refresh renders nested authoritative training state', () => {
+  const e = elements();
+  e.trainingStatus = { textContent: '' };
+  live.renderTaskState(e, { session: { state: 'NG' }, task: { training: { task_state: 'IN_PROGRESS', task: {} } } });
+  assert.equal(e.trainingStatus.textContent, 'IN_PROGRESS');
 });
 
 test('maps internal connector and error ids to student language', () => {
