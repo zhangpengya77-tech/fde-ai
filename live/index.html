@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#07131f">
   <title>F450 AI 实训助教</title>
-  <link rel="stylesheet" href="live.css?v=student-mode2">
+  <link rel="stylesheet" href="live.css?v=student-step1">
 </head>
 <body>
   <main class="student-app">
@@ -25,20 +25,26 @@
       <div><span>摄像头</span><strong id="cameraStatus" data-state="checking">尚未开启</strong></div>
     </section>
 
-    <details class="task-map">
-      <summary>查看 12 项任务地图</summary>
-      <ol id="trainingTaskList"><li>正在载入 12 项任务…</li></ol>
-    </details>
+    <section id="taskMapScreen" class="task-map-home">
+      <div class="task-map-intro"><div><p class="section-kicker">F450 12 Task Map</p><h2>选择今天要学习的任务</h2></div><strong id="mapProgress">0 / 12</strong></div>
+      <p>从零件、组装、调参到真机测试，AI 协助学习，关键安全环节由教师复核。</p>
+      <ol id="trainingTaskList" class="task-map-grid"><li>正在载入 12 项任务…</li></ol>
+    </section>
 
-    <article class="training-task student-task">
+    <article id="taskDetailScreen" class="training-task student-task" hidden>
+      <button id="backToTaskMap" class="back-to-map secondary-action" type="button">← 返回任务地图</button>
       <div class="training-heading">
         <span id="trainingStepNumber">Step 0 / 0</span>
         <strong id="trainingStatus">未开始</strong>
       </div>
       <h2 id="trainingTitle">零件识别与检查</h2>
       <p id="trainingObjective" class="task-objective">认识 F450 主要组件并完成基础检查。</p>
+      <div class="group-progress-heading"><strong id="studentGroupCount">阶段 1 / 5</strong><span>一次完成一个阶段</span></div>
+      <ol id="studentGroupProgress" class="student-group-progress"><li data-state="CURRENT"><span>1</span><strong>准备</strong></li></ol>
 
-      <section class="instruction-card primary-card">
+      <section id="currentStepCard" class="instruction-card primary-card current-step-card">
+        <p class="current-step-label">当前步骤</p>
+        <h3 id="currentStepTitle">准备工作区域</h3>
         <p class="section-kicker">现在要做什么</p>
         <p id="trainingAction">先阅读任务说明，再按步骤准备零件。</p>
       </section>
@@ -46,11 +52,13 @@
         <p class="section-kicker">为什么要这样做</p>
         <p id="trainingWhy">先正确识别零件，后续组装与接线才有可靠基础。</p>
       </section>
-      <section class="safety-card">
+      <section id="safetyCard" class="safety-card student-tool" hidden>
         <h3>安全提醒</h3>
         <div id="trainingSafety">本步骤暂无额外安全提醒。</div>
       </section>
 
+      <details id="askAiDrawer" class="ask-ai-drawer">
+      <summary>问 AI</summary>
       <section class="coach-card">
         <div>
           <p class="section-kicker">AI 助教</p>
@@ -70,7 +78,10 @@
           <p id="askAiResponse" role="status"></p>
         </div>
       </section>
+      </details>
 
+      <details id="cameraTool" class="camera-tool student-tool" hidden>
+      <summary>让 AI 看一下</summary>
       <section class="camera-panel student-camera">
         <div class="section-heading">
           <div><p class="section-kicker">摄像头</p><h3>需要时再请 AI 检查</h3></div>
@@ -93,6 +104,7 @@
         </div>
         <p id="liveMessage" role="status">正在连接 AI 助教…</p>
       </section>
+      </details>
 
       <section class="completion-card">
         <h3>完成这一步</h3>
@@ -103,8 +115,10 @@
         <button id="startTrainingTask" type="button">开始当前任务</button>
         <button id="completeTrainingTask" type="button">提交任务完成条件</button>
       </section>
+      <section id="stepCompleteFeedback" class="completion-feedback" hidden><h3>✅ 这一步完成</h3><p>你已经完成当前步骤。</p><button id="continueTrainingStep" type="button">进入下一步</button></section>
+      <section id="taskCompleteFeedback" class="completion-feedback task-complete" hidden><h3>Task 已完成</h3><p>本任务的操作、证据与复核已记录。</p><button id="returnTaskMap" type="button">返回 12 Task 地图</button></section>
 
-      <section class="evidence-card">
+      <section id="evidenceCard" class="evidence-card student-tool" hidden>
         <h3>留下学习证据</h3>
         <p>依照当前任务拍照或选择文件。已保存：<strong id="trainingEvidence">0</strong></p>
         <label class="file-action">拍照 / 上传照片
@@ -113,7 +127,7 @@
         <button id="saveTrainingEvidence" type="button">保存学习证据</button>
       </section>
 
-      <section class="reflection-card">
+      <section id="reflectionCard" class="reflection-card student-tool" hidden>
         <h3>我的学习总结</h3>
         <p>用自己的话写下：做了什么、遇到什么问题、如何解决、学到了什么。</p>
         <p id="trainingReflectionState">尚未填写</p>
@@ -127,7 +141,7 @@
         <button id="saveTrainingReflection" type="button">保存学习总结</button>
       </section>
 
-      <section class="teacher-card">
+      <section id="teacherCard" class="teacher-card student-tool" hidden>
         <h3>教师复核状态</h3>
         <p id="trainingTeacher">当前步骤无需教师确认</p>
         <p>关键安全步骤必须由教师确认，AI 不会代替教师放行。</p>
@@ -177,6 +191,6 @@
     </details>
   </main>
   <script src="auto-observation.js?v=phase2-auto1"></script>
-  <script src="live.js?v=student-mode2"></script>
+  <script src="live.js?v=student-step1"></script>
 </body>
 </html>

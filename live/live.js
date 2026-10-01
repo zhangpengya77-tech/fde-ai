@@ -335,6 +335,17 @@
     return STUDENT_TASK_STATUS[status] || '准备中';
   }
 
+  const TASK_COMPLETION_POLICIES = Object.freeze({
+    TASK_01: 'AI_ASSISTED_COMPLETE', TASK_02: 'TEACHER_CONFIRM', TASK_03: 'AI_ASSISTED_COMPLETE',
+    TASK_04: 'TEACHER_CONFIRM', TASK_05: 'HYBRID_CONFIRM', TASK_06: 'TEACHER_CONFIRM',
+    TASK_07: 'HYBRID_CONFIRM', TASK_08: 'HYBRID_CONFIRM', TASK_09: 'AI_ASSISTED_COMPLETE',
+    TASK_10: 'TEACHER_CONFIRM', TASK_11: 'TEACHER_CONFIRM', TASK_12: 'TEACHER_CONFIRM'
+  });
+
+  function taskCompletionPolicy(taskId) { return TASK_COMPLETION_POLICIES[taskId] || 'LEARNER_COMPLETE'; }
+  function showTaskMap(elements) { if (elements.taskMapScreen) elements.taskMapScreen.hidden = false; if (elements.taskDetailScreen) elements.taskDetailScreen.hidden = true; }
+  function showTaskDetail(elements) { if (elements.taskMapScreen) elements.taskMapScreen.hidden = true; if (elements.taskDetailScreen) elements.taskDetailScreen.hidden = false; }
+
   function studentCoachMessage(state, teacherRequired = false) {
     const messages = {
       NO_DETECTION: '目前没有清楚看到目标零件，请把零件完整放到镜头中央。',
@@ -368,6 +379,53 @@
     return Boolean(training?.task?.vision_tasks?.length);
   }
 
+  const STUDENT_STEP_GROUP_DEFINITIONS = Object.freeze({
+    TASK_01: [['准备区域',['T01_WORKSPACE']],['认识零件',['T01_FRAME','T01_MOTORS','T01_ESC','T01_PIXHAWK','T01_GPS','T01_ACCESSORIES']],['完成清点',['T01_CHECKLIST']],['AI 辅助检查',[]],['证据与总结',['T01_EVIDENCE','T01_REFLECTION']]],
+    TASK_02: [['了解测试',['T02_PURPOSE','T02_NO_PROP']],['准备连接',['T02_TESTER','T02_CONNECT_SET1']],['教师确认',['T02_PREPOWER_TEACHER']],['测试四组',['T02_M1','T02_M2','T02_M3','T02_M4','T02_CROSS_TEST']],['复核与记录',['T02_FINAL_TEACHER','T02_RECORD']]],
+    TASK_03: [['准备机架',['T03_LAYOUT','T03_FORWARD','T03_ARMS','T03_FRAME_CHECK']],['确认位置',['T03_TESTED_MOTORS','T03_POSITIONS']],['安装马达',['T03_SCREW','T03_INSTALL']],['完成检查',['T03_MECHANICAL']],['证据与总结',['T03_EVIDENCE','T03_REFLECTION']]],
+    TASK_04: [['认识与规划',['T04_ESC_SIGNAL','T04_ROUTING']],['极性与绝缘',['T04_HEATSHRINK','T04_PDB_POLARITY','T04_XT60']],['焊接前确认',['T04_PRESOLDER_TEACHER']],['焊接与电气检查',['T04_SOLDER','T04_VISUAL','T04_CONTINUITY','T04_ELECTRICAL_APPROVAL']],['证据与总结',['T04_EVIDENCE','T04_REFLECTION']]],
+    TASK_05: [['安装飞控',['T05_PIXHAWK','T05_ARROW']],['连接马达输出',['T05_MAIN_OUT']],['安装 GPS',['T05_GPS_INSTALL','T05_GPS_DIRECTION','T05_GPS_CONNECT']],['连接外设',['T05_RECEIVER','T05_TELEMETRY','T05_POWER_MODULE']],['证据与复核',['T05_EVIDENCE','T05_REVIEW']]],
+    TASK_06: [['机械检查',['T06_MECHANICAL','T06_MOTOR_SCREW']],['电气检查',['T06_ESC_WIRING','T06_POLARITY']],['飞控与外设',['T06_FC','T06_GPS','T06_RADIO']],['证据与自检',['T06_EVIDENCE','T06_SELF_CHECK']],['教师放行与总结',['T06_TEACHER_RELEASE','T06_REFLECTION']]],
+    TASK_07: [['首次上电前确认',['T07_PREPOWER_REVIEW','T07_FIRST_POWER_TEACHER']],['连接 Mission Planner',['T07_MP_CONNECT']],['飞控与机架确认',['T07_FC_FIRMWARE_AIRFRAME']],['加速度计校准',['T07_ACCEL_PREP','T07_ACCEL_CALIBRATION']],['罗盘校准',['T07_COMPASS_PREP','T07_COMPASS_CALIBRATION']],['遥控器校准',['T07_RADIO_PREP','T07_RADIO_CALIBRATION']],['Receiver 状态',['T07_RECEIVER_STATUS']],['Motor 输出映射',['T07_MOTOR_OUTPUT_MAPPING']],['飞行模式',['T07_FLIGHT_MODES']],['失控保护',['T07_FAILSAFE']],['GPS 状态',['T07_GPS_STATUS']],['RTL 返航',['T07_RTL']],['基础参数',['T07_BASE_PARAMETERS']],['配置总复核',['T07_FINAL_CONFIG_REVIEW']],['证据与总结',['T07_EVIDENCE','T07_REFLECTION']]]
+  });
+
+  function studentStepGroupDefinitions(taskId) {
+    return (STUDENT_STEP_GROUP_DEFINITIONS[taskId] || []).map(([title, stepIds], index) => ({ id: `${taskId}_GROUP_${index + 1}`, title, step_ids: [...stepIds] }));
+  }
+
+  function studentStepGroups(taskId, steps = [], currentStepId = '', taskState = 'IN_PROGRESS') {
+    let definitions = studentStepGroupDefinitions(taskId);
+    if (!definitions.length) definitions = steps.map((step, index) => ({ id: `${taskId || 'TASK'}_GROUP_${index + 1}`, title: step.title || `步骤 ${index + 1}`, step_ids: [step.step_id || step.id] }));
+    const orderById = new Map(steps.map((step, index) => [step.step_id || step.id, index]));
+    const currentIndex = orderById.has(currentStepId) ? orderById.get(currentStepId) : 0;
+    return definitions.map((group, groupIndex) => {
+      const indices = group.step_ids.map((id) => orderById.get(id)).filter(Number.isInteger);
+      let state = 'FUTURE';
+      if (taskState === 'COMPLETED') state = 'COMPLETED';
+      else if (group.step_ids.includes(currentStepId) || (!group.step_ids.length && steps[currentIndex]?.vision_task)) state = 'CURRENT';
+      else if (indices.length && Math.max(...indices) < currentIndex) state = 'COMPLETED';
+      else if (!currentStepId && groupIndex === 0) state = 'CURRENT';
+      return { ...group, state };
+    });
+  }
+
+  function studentStepToolVisibility(step = {}) {
+    const stepId = step.step_id || step.id || '';
+    return {
+      camera: Boolean(step.vision_task),
+      evidence: Boolean(step.evidence_required?.length),
+      reflection: /REFLECTION$/.test(stepId) || /学习总结/.test(step.title || ''),
+      teacher: Boolean(step.teacher_gate),
+      safety: Boolean(step.safety_reminders?.length)
+    };
+  }
+
+  function trainingCompletionFeedback(previousStepId, currentStepId, taskState) {
+    if (taskState === 'COMPLETED') return { type: 'TASK', title: 'Task 已完成', canContinue: true };
+    if (previousStepId && currentStepId && previousStepId !== currentStepId) return { type: 'STEP', title: '✅ 这一步完成', canContinue: true };
+    return null;
+  }
+
   function renderTrainingState(elements, training = {}) {
     const task = training.task || {};
     const step = training.current_step || task.steps?.find((item) => item.step_id === training.current_training_step_id) || task.steps?.[0] || {};
@@ -375,14 +433,27 @@
     const reminders = task.safety_reminders || [];
     const steps = task.steps || [];
     if (elements.trainingProgress) elements.trainingProgress.textContent = training.progress || '0 / 12';
+    if (elements.mapProgress) elements.mapProgress.textContent = training.progress || '0 / 12';
     if (elements.trainingTaskNumber) elements.trainingTaskNumber.textContent = `Task ${String(order).padStart(2, '0')} / 12`;
     if (elements.trainingTitle) elements.trainingTitle.textContent = task.title || '等待任务资料';
     if (elements.trainingObjective) elements.trainingObjective.textContent = task.objective || '—';
     if (elements.trainingStepNumber) elements.trainingStepNumber.textContent = `Step ${step.order || 0} / ${steps.length}`;
     if (elements.trainingAction) elements.trainingAction.textContent = step.student_instruction || step.instruction || task.description || '—';
     if (elements.trainingWhy) elements.trainingWhy.textContent = step.why_it_matters || step.rationale || task.description || '—';
-    const stepReminders = step.safety_reminders?.length ? step.safety_reminders : reminders;
-    if (elements.trainingSafety) elements.trainingSafety.innerHTML = stepReminders.length ? stepReminders.map((item) => `<p>⚠ ${escapeHtml(item.message || studentFacingLabel(item.id))}</p>`).join('') : '<p>本步骤暂无额外安全提醒。</p>';
+    const taskId = task.id || task.task_id || training.current_task_id || `TASK_${String(order).padStart(2, '0')}`;
+    const groups = studentStepGroups(taskId, steps, training.current_training_step_id, training.task_state);
+    const activeGroup = groups.findIndex((group) => group.state === 'CURRENT');
+    const stepReminders = step.safety_reminders === undefined ? reminders : (step.safety_reminders || []);
+    const visibility = studentStepToolVisibility({ ...step, safety_reminders: stepReminders });
+    if (elements.currentStepTitle) elements.currentStepTitle.textContent = step.title || '等待当前步骤';
+    if (elements.studentGroupProgress) elements.studentGroupProgress.innerHTML = groups.map((group, index) => `<li data-state="${group.state}"><span>${group.state === 'COMPLETED' ? '✓' : index + 1}</span><strong>${escapeHtml(group.title)}</strong></li>`).join('');
+    if (elements.studentGroupCount) elements.studentGroupCount.textContent = `阶段 ${Math.max(0, activeGroup) + 1} / ${groups.length || 1}`;
+    if (elements.trainingSafety) elements.trainingSafety.innerHTML = stepReminders.map((item) => `<p>⚠ ${escapeHtml(item.message || studentFacingLabel(item.id))}</p>`).join('');
+    if (elements.safetyCard) elements.safetyCard.hidden = !visibility.safety;
+    if (elements.cameraTool) elements.cameraTool.hidden = !visibility.camera;
+    if (elements.evidenceCard) elements.evidenceCard.hidden = !visibility.evidence;
+    if (elements.reflectionCard) elements.reflectionCard.hidden = !visibility.reflection;
+    if (elements.teacherCard) elements.teacherCard.hidden = !visibility.teacher;
     if (elements.trainingSteps) elements.trainingSteps.innerHTML = step.title ? `<li><strong>${escapeHtml(step.title)}</strong><br>${escapeHtml(step.instruction || '')}</li>` : '<li>等待任务步骤。</li>';
     if (elements.trainingStepList) elements.trainingStepList.innerHTML = steps.map((item) => `<li data-state="${escapeHtml(item.progress?.status || 'NOT_STARTED')}">${escapeHtml(item.title)}</li>`).join('');
     const conditions = [];
@@ -400,7 +471,13 @@
     if (elements.trainingGrowth) elements.trainingGrowth.textContent = `${training.progress || '0 / 12'} · 待同步`;
     if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.actionable === false ? '尚未解锁，可先阅读' : '可以进行';
     if (elements.cameraWaiting && training.camera_active === true) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
-    if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => `<li data-state="${escapeHtml(item.status || 'NOT_STARTED')}"><button type="button" data-view-task="${escapeHtml(item.task_id)}"><span>${String(item.order).padStart(2, '0')}</span><span>${escapeHtml(item.title)}</span><small>${escapeHtml(studentTaskStatus(item.status || 'NOT_STARTED'))}</small></button></li>`).join('');
+    if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => {
+      const status = item.status || 'NOT_STARTED';
+      const blocked = status === 'BLOCKED' ? '可学习 / 当前不可正式执行' : studentTaskStatus(status);
+      const stepProgress = item.step_progress || item.progress || '';
+      return `<li data-state="${escapeHtml(status)}"><button type="button" data-view-task="${escapeHtml(item.task_id)}"><span class="task-number">${String(item.order).padStart(2, '0')}</span><strong>${escapeHtml(item.short_name || '')}</strong><span class="task-card-title">${escapeHtml(item.title)}</span>${stepProgress ? `<span class="task-step-count">${escapeHtml(stepProgress)}</span>` : ''}<small>${escapeHtml(blocked)}</small></button></li>`;
+    }).join('');
+    if (elements.taskCompleteFeedback) elements.taskCompleteFeedback.hidden = training.task_state !== 'COMPLETED';
   }
 
   function renderTaskState(elements, payload = {}) {
@@ -459,7 +536,8 @@
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
       pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'),
-      trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
+      trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), mapProgress: documentRef.querySelector('#mapProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
+      taskMapScreen: documentRef.querySelector('#taskMapScreen'), taskDetailScreen: documentRef.querySelector('#taskDetailScreen'), backToTaskMap: documentRef.querySelector('#backToTaskMap'), studentGroupProgress: documentRef.querySelector('#studentGroupProgress'), studentGroupCount: documentRef.querySelector('#studentGroupCount'), currentStepTitle: documentRef.querySelector('#currentStepTitle'), safetyCard: documentRef.querySelector('#safetyCard'), cameraTool: documentRef.querySelector('#cameraTool'), evidenceCard: documentRef.querySelector('#evidenceCard'), reflectionCard: documentRef.querySelector('#reflectionCard'), teacherCard: documentRef.querySelector('#teacherCard'), stepCompleteFeedback: documentRef.querySelector('#stepCompleteFeedback'), taskCompleteFeedback: documentRef.querySelector('#taskCompleteFeedback'), continueTrainingStep: documentRef.querySelector('#continueTrainingStep'), returnTaskMap: documentRef.querySelector('#returnTaskMap'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
     };
@@ -468,8 +546,9 @@
     let cameras = [];
     let autoScheduler = null;
     let ragPollGeneration = 0;
-    let currentTrainingTaskId = 'F450_01';
+    let currentTrainingTaskId = 'TASK_01';
     let currentTrainingStepId = null;
+    let pendingTrainingState = null;
     const mobileDevice = /Android|iPhone|iPad|iPod/i.test(navigatorRef.userAgent || '');
     let currentFacingMode = 'environment';
     let currentDeviceId = '';
@@ -506,6 +585,21 @@
 
     function setMessage(message) {
       elements.message.textContent = message;
+    }
+
+    function acceptTrainingMutation(training) {
+      const previousStepId = currentTrainingStepId;
+      const nextStepId = training.current_training_step_id;
+      const feedback = trainingCompletionFeedback(previousStepId, nextStepId, training.task_state);
+      currentTrainingStepId = nextStepId;
+      if (feedback?.type === 'STEP') {
+        pendingTrainingState = training;
+        if (elements.stepCompleteFeedback) elements.stepCompleteFeedback.hidden = false;
+        return;
+      }
+      pendingTrainingState = null;
+      if (elements.stepCompleteFeedback) elements.stepCompleteFeedback.hidden = true;
+      renderTrainingState(elements, training);
     }
 
     async function refreshHealth() {
@@ -797,16 +891,19 @@
     elements.confirm.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
     elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const id = await ensureSession('MOCK_VISION'); const result = await simulateVision(fetchImpl, id, button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { ...result, task: state }); if (result.rag_explanation?.status === 'pending') void refreshRagExplanation(id); }));
     elements.startTrainingTask?.addEventListener('click', async () => { const id = await ensureSession(); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/training/tasks/${encodeURIComponent(currentTrainingTaskId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })); currentTrainingStepId = state.training.current_training_step_id; renderTrainingState(elements, state.training); });
-    elements.confirmTrainingStep?.addEventListener('click', async () => { if (!currentTrainingStepId) return; const id = await ensureSession(); const result = await submitTrainingStepFact(fetchImpl, id, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
+    elements.confirmTrainingStep?.addEventListener('click', async () => { if (!currentTrainingStepId) return; const id = await ensureSession(); const result = await submitTrainingStepFact(fetchImpl, id, currentTrainingStepId); acceptTrainingMutation(result.training); });
     elements.acknowledgeTrainingSafety?.addEventListener('click', async () => { if (!currentTrainingStepId) return; const id = await ensureSession(); const result = await acknowledgeTrainingStepSafety(fetchImpl, id, currentTrainingStepId); renderTrainingState(elements, result.training); });
     elements.completeTrainingTask?.addEventListener('click', async () => { const id = await ensureSession(); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/training/tasks/${encodeURIComponent(currentTrainingTaskId)}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })); renderTrainingState(elements, state.training); });
-    elements.saveEvidence?.addEventListener('click', async () => { const file = elements.evidenceFile?.files?.[0]; if (!file) { setMessage('请先选择 Evidence 文件。'); return; } const id = await ensureSession(); const result = await saveTrainingEvidence(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, evidence_type: file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO', source: 'STUDENT_UPLOAD', file_reference: `dev-upload://${file.name}`, metadata: { name: file.name, size: file.size, type: file.type } }); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); setMessage('学习证据 Reference 已保存到 v2.0 Dev Storage。'); });
-    elements.saveReflection?.addEventListener('click', async () => { try { const id = await ensureSession(); const result = await saveTrainingReflection(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, original_text: elements.reflectionOriginal.value, ai_assisted_text: elements.reflectionAssisted.value || null, source_type: 'TEXT' }); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); setMessage('学生原始学习总结已保存。'); } catch (error) { setMessage(error.message === 'student_original_summary_required' ? '请先填写真实的学生学习总结。' : `学习总结保存失败：${error.message}`); } });
-    elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', 'Development teacher review', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
+    elements.saveEvidence?.addEventListener('click', async () => { const file = elements.evidenceFile?.files?.[0]; if (!file) { setMessage('请先选择 Evidence 文件。'); return; } const id = await ensureSession(); const result = await saveTrainingEvidence(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, evidence_type: file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO', source: 'STUDENT_UPLOAD', file_reference: `dev-upload://${file.name}`, metadata: { name: file.name, size: file.size, type: file.type } }); acceptTrainingMutation(result.training); setMessage('学习证据 Reference 已保存到 v2.0 Dev Storage。'); });
+    elements.saveReflection?.addEventListener('click', async () => { try { const id = await ensureSession(); const result = await saveTrainingReflection(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, original_text: elements.reflectionOriginal.value, ai_assisted_text: elements.reflectionAssisted.value || null, source_type: 'TEXT' }); acceptTrainingMutation(result.training); setMessage('学生原始学习总结已保存。'); } catch (error) { setMessage(error.message === 'student_original_summary_required' ? '请先填写真实的学生学习总结。' : `学习总结保存失败：${error.message}`); } });
+    elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', 'Development teacher review', currentTrainingTaskId, currentTrainingStepId); acceptTrainingMutation(result.training); });
     elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', 'Development teacher requested rework', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
-    elements.trainingTaskList?.addEventListener('click', async (event) => { const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask; if (!taskId) return; const id = await ensureSession(); const result = await fetchTrainingTaskView(fetchImpl, id, taskId); renderTrainingState(elements, { ...result.training_task_view, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' }); setMessage(result.training_task_view.actionable ? '此任务目前可执行。' : `教材可阅读；正式执行仍被前置条件阻挡：${result.training_task_view.missing_prerequisites.join(', ')}`); });
+    elements.trainingTaskList?.addEventListener('click', async (event) => { const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask; if (!taskId) return; const id = await ensureSession(); const result = await fetchTrainingTaskView(fetchImpl, id, taskId); currentTrainingTaskId = taskId; renderTrainingState(elements, { ...result.training_task_view, current_task_id: taskId, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' }); showTaskDetail(elements); setMessage(result.training_task_view.actionable ? '此任务目前可执行。' : `教材可阅读；正式执行仍被前置条件阻挡：${result.training_task_view.missing_prerequisites.join(', ')}`); });
+    elements.backToTaskMap?.addEventListener('click', () => showTaskMap(elements));
+    elements.continueTrainingStep?.addEventListener('click', () => { if (!pendingTrainingState) return; const training = pendingTrainingState; pendingTrainingState = null; elements.stepCompleteFeedback.hidden = true; renderTrainingState(elements, training); });
+    elements.returnTaskMap?.addEventListener('click', () => showTaskMap(elements));
 
-    return { refreshHealth, refreshCameraDevices, startCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation };
+    return { refreshHealth, refreshCameraDevices, initializeStudentMode: ensureSession, startCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation };
   }
 
   function escapeHtml(value) {
@@ -823,6 +920,7 @@
       const controller = createController();
       controller.refreshHealth();
       controller.refreshCameraDevices();
+      controller.initializeStudentMode().catch(() => {});
       window.addEventListener('pagehide', () => controller.stopCamera());
     });
   }
@@ -833,8 +931,15 @@
     renderTrainingState,
     studentFacingLabel,
     studentTaskStatus,
+    taskCompletionPolicy,
+    showTaskMap,
+    showTaskDetail,
     studentCoachMessage,
     shouldTriggerVision,
+    studentStepGroupDefinitions,
+    studentStepGroups,
+    studentStepToolVisibility,
+    trainingCompletionFeedback,
     confirmStep,
     simulateVision,
     saveTrainingEvidence,

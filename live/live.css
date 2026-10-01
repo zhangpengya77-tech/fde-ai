@@ -71,6 +71,8 @@ aside strong { color: #ffcb64; }
 .student-summary div{display:grid;gap:5px;padding:14px;border-radius:14px;background:rgba(3,15,25,.68)}
 .student-summary span{color:#8aa9bc;font-size:.86rem}.student-summary strong{color:#eaf7ff;font-size:1.15rem}
 .compact-status{padding:10px}.compact-status div{padding:9px 11px;font-size:.86rem}
+.task-map-home{padding:22px;border:1px solid rgba(91,217,255,.3);border-radius:20px;background:rgba(5,20,33,.92)}.task-map-intro{display:flex;justify-content:space-between;align-items:start;gap:16px}.task-map-intro h2{margin:0}.task-map-intro>strong{padding:10px 13px;border-radius:12px;background:#0b334b;color:#8feaff;white-space:nowrap}
+.task-map-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;list-style:none;margin:20px 0 0;padding:0}.task-map-grid li{min-width:0}.task-map-grid button{width:100%;min-height:150px;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto 1fr auto;align-content:start;text-align:left;gap:3px 8px;padding:14px;background:#111c25;border-color:#53606a}.task-map-grid .task-number{font-size:1.6rem;color:#9aa8b1}.task-map-grid button>strong{font-size:1.45rem}.task-card-title{grid-column:1/-1;color:#eaf7ff;font-size:.9rem}.task-step-count{grid-column:1/-1;color:#8aa9bc;font-size:.78rem}.task-map-grid small{grid-column:1/-1;align-self:end;color:#aab7bf}.task-map-grid li[data-state="NOT_STARTED"] button{background:#111c25;border-color:#53606a}.task-map-grid li[data-state="IN_PROGRESS"] button{background:#0c3f63;border-color:#41aee8}.task-map-grid li[data-state="PENDING_TEACHER_REVIEW"] button{background:#5a3c0d;border-color:#f5a623}.task-map-grid li[data-state="NEED_REWORK"] button{background:#5b2029;border-color:#ff6677}.task-map-grid li[data-state="COMPLETED"] button{background:#0c4836;border-color:#55dd9a}.task-map-grid li[data-state="BLOCKED"] button{background:#262c31;border-color:#6d7880}.back-to-map{width:max-content!important;margin:0!important;padding:0 16px}
 .task-map,.step-map,.dev-mode-panel{border:1px solid rgba(91,217,255,.28);border-radius:14px;background:rgba(5,20,33,.88);margin:16px 0;overflow:hidden}
 .task-map>summary,.step-map>summary,.dev-mode-panel>summary{padding:16px 18px;color:#8feaff;font-weight:800;cursor:pointer;list-style:none}
 .task-map>summary::after,.step-map>summary::after,.dev-mode-panel>summary::after{content:'＋';float:right}
@@ -80,6 +82,9 @@ aside strong { color: #ffcb64; }
 .task-map button>span:first-child{grid-row:1/3;color:#5fe2ff;font-size:1.1rem}.task-map button small{color:#8aa9bc}
 .student-task{display:grid;gap:14px;padding:22px}.student-task>h2{margin:0;font-size:clamp(1.6rem,5vw,2.3rem)}
 .task-objective{margin:-6px 0 4px}.student-task section{margin:0;padding:18px}
+.group-progress-heading{display:flex;justify-content:space-between;align-items:center;color:#8aa9bc}.group-progress-heading strong{color:#8feaff}
+.student-group-progress{display:flex;gap:6px;list-style:none;margin:0;padding:0;overflow-x:auto;scrollbar-width:none}.student-group-progress li{min-width:110px;display:grid;grid-template-columns:28px 1fr;align-items:center;gap:7px;padding:10px;border-radius:12px;background:#071827;color:#68879a}.student-group-progress li span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#102b3e}.student-group-progress li[data-state="CURRENT"]{color:#fff;background:#0d506c;box-shadow:0 0 0 2px rgba(95,226,255,.35)}.student-group-progress li[data-state="COMPLETED"]{color:#6effb4;background:#092b2a}.student-group-progress li strong{font-size:.82rem}
+.current-step-card{padding:22px!important;box-shadow:0 16px 40px rgba(0,0,0,.22)}.current-step-label{margin:0;color:#ffcb64;font-weight:850}.current-step-card h3{margin:5px 0 18px;font-size:1.42rem}
 .instruction-card{border:1px solid rgba(91,217,255,.18)}.primary-card{border-color:rgba(95,226,255,.55);background:linear-gradient(145deg,rgba(13,67,91,.85),rgba(8,28,44,.88))!important}
 .section-kicker{margin:0 0 8px;color:#5fe2ff;font-size:.78rem;font-weight:850;letter-spacing:.1em}
 .instruction-card p:last-child{margin:0;color:#f2fbff;font-size:1.12rem}
@@ -92,6 +97,8 @@ aside strong { color: #ffcb64; }
 .voice-status{grid-column:1/-1;margin:0;color:#8aa9bc;font-size:.9rem}
 .ask-ai-panel{grid-column:1/-1;padding:14px;border:1px solid rgba(91,217,255,.24);border-radius:12px;background:rgba(3,15,25,.55)}
 .ask-ai-panel[hidden]{display:none}.ask-ai-panel button{width:100%;margin:0}.ask-ai-panel p{margin:10px 0 0}
+.ask-ai-drawer,.camera-tool{border:1px solid rgba(91,217,255,.28);border-radius:14px;background:rgba(5,20,33,.88);overflow:hidden}.ask-ai-drawer>summary,.camera-tool>summary{padding:16px 18px;color:#8feaff;font-weight:850;cursor:pointer;list-style:none}.ask-ai-drawer>summary::after,.camera-tool>summary::after{content:'＋';float:right}.ask-ai-drawer[open]>summary::after,.camera-tool[open]>summary::after{content:'－'}
+.student-tool[hidden]{display:none!important}.completion-feedback{border:1px solid rgba(110,255,180,.55);background:linear-gradient(145deg,rgba(10,62,55,.88),rgba(8,28,44,.9))!important;text-align:center}.completion-feedback h3{color:#6effb4}.task-complete{padding:26px!important}
 .student-camera{border:1px solid rgba(91,217,255,.28)}.section-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.section-heading span{color:#8aa9bc}
 .student-camera .preview{margin-top:14px}.student-camera-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
 .completion-card,.evidence-card,.reflection-card,.teacher-card{border:1px solid rgba(91,217,255,.18)}
@@ -103,6 +110,7 @@ aside strong { color: #ffcb64; }
 .dev-mode-panel{margin-top:30px;border-color:rgba(245,166,35,.34)}.dev-mode-panel>summary{color:#f5a623}.dev-mode-content{padding:0 16px 16px}.dev-mode-content .task-panel,.dev-mode-content .results-panel{margin:12px 0}
 
 @media (max-width:700px){
+  .task-map-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.task-map-grid button{min-height:138px;padding:12px}.task-map-home{padding:14px}
   .student-app{width:min(100% - 16px,780px);padding-top:12px}
   .student-hero{padding:20px}.student-summary{grid-template-columns:1fr 1fr}
   .compact-status{grid-template-columns:1fr}.task-map ol{grid-template-columns:1fr 1fr}
@@ -113,6 +121,7 @@ aside strong { color: #ffcb64; }
 }
 
 @media (max-width:390px){
-  .student-summary,.task-map ol{grid-template-columns:1fr}
+  .student-summary{grid-template-columns:1fr}.task-map-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .student-hero h1{font-size:1.9rem}
+  .student-app{width:100%;padding:8px 8px 96px}.student-hero{padding:17px;border-radius:18px}.compact-status{display:none}.student-task{padding:10px;border-radius:18px}.student-group-progress li{min-width:92px;padding:8px}.student-group-progress li strong{font-size:.75rem}.current-step-card{min-height:260px;display:flex;flex-direction:column;justify-content:center}.current-step-card h3{font-size:1.55rem}.instruction-card:not(.current-step-card){padding:14px}.ask-ai-drawer{position:sticky;bottom:8px;z-index:10;box-shadow:0 12px 34px rgba(0,0,0,.48)}
 }
