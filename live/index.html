@@ -18,13 +18,14 @@
     <section class="training-shell" aria-label="F450 十二任务学生训练">
       <nav class="training-nav"><h2>F450 AI 实训助教</h2><p id="trainingProgress">0 / 12</p><ol id="trainingTaskList"><li>正在载入 12 Task…</li></ol></nav>
       <article class="training-task">
-        <div class="training-heading"><span id="trainingTaskNumber">Task 01 / 12</span><strong id="trainingStatus">NOT_STARTED</strong></div>
+        <div class="training-heading"><span id="trainingTaskNumber">Task 01 / 12</span><span id="trainingStepNumber">Step 0 / 0</span><strong id="trainingStatus">NOT_STARTED</strong></div>
         <h2 id="trainingTitle">零件识别与检查</h2>
         <section><h3>任务目的</h3><p id="trainingObjective">认识 F450 主要组件并完成基础检查。</p></section>
         <section><h3>现在要做什么</h3><p id="trainingAction">先阅读任务说明，再按步骤准备零件。</p></section>
         <section><h3>为什么</h3><p id="trainingWhy">先正确识别零件，后续组装与接线才有可靠基础。</p></section>
         <section class="safety-card"><h3>安全提醒</h3><div id="trainingSafety">本步骤暂无额外安全提醒。</div></section>
-        <section><h3>操作步骤</h3><ol id="trainingSteps"><li>等待 Backend 提供任务步骤。</li></ol></section>
+        <section><h3>当前步骤</h3><ol id="trainingSteps"><li>等待 Backend 提供任务步骤。</li></ol><details><summary>展开 Step Map</summary><ol id="trainingStepList"></ol></details></section>
+        <section><h3>完成条件</h3><ul id="trainingCompletionConditions"><li>等待 Backend 判断。</li></ul><button id="acknowledgeTrainingSafety" type="button" hidden>我已阅读安全提醒</button><button id="confirmTrainingStep" type="button" disabled>我已完成这一步</button></section>
         <section><h3>Camera / AI Check</h3><p>Camera：<strong id="cameraWaiting">STOPPED</strong></p><p>摄像头可以保持等待；仅在任务要求或学生主动检查时调用 Vision。</p></section>
         <section><h3>问 AI</h3><p>AI 助教会使用当前 Task、Step、硬件型号与安全状态回答；不会代替教师作安全放行。</p></section>
         <section><h3>学习证据</h3><p id="trainingEvidence">0</p><label>选择证据文件<input id="trainingEvidenceFile" type="file" accept="image/*,video/*,.pdf"></label><button id="saveTrainingEvidence" type="button">保存 Evidence Reference</button></section>

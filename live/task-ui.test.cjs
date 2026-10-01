@@ -192,3 +192,20 @@ test('future task navigation fetches a read-only view without starting the task'
   assert.equal(result.training_task_view.actionable, false);
 });
 
+test('training step facts and safety acknowledgments use backend-owned APIs', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([url, init]); return { ok: true, json: async () => ({ training: { current_training_step_id: 'T01_FRAME' } }) }; };
+  await live.submitTrainingStepFact(fetchImpl, 'sid', 'T01_WORKSPACE', 'LEARNER_CONFIRMED');
+  await live.acknowledgeTrainingStepSafety(fetchImpl, 'sid', 'T02_NO_PROP');
+  assert.match(calls[0][0], /training\/steps\/T01_WORKSPACE\/facts$/);
+  assert.deepEqual(JSON.parse(calls[0][1].body), { fact: 'LEARNER_CONFIRMED' });
+  assert.match(calls[1][0], /training\/steps\/T02_NO_PROP\/safety-ack$/);
+});
+
+test('mobile student UI provides current step and completion conditions', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  for (const id of ['trainingStepNumber','trainingCompletionConditions','acknowledgeTrainingSafety','confirmTrainingStep','trainingStepList']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+});
+

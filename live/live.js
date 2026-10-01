@@ -235,6 +235,14 @@
     return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/tasks/${encodeURIComponent(taskId)}`));
   }
 
+  async function submitTrainingStepFact(fetchImpl, sessionId, stepId, fact = 'LEARNER_CONFIRMED') {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/steps/${encodeURIComponent(stepId)}/facts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fact }) }));
+  }
+
+  async function acknowledgeTrainingStepSafety(fetchImpl, sessionId, stepId) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/steps/${encodeURIComponent(stepId)}/safety-ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
+  }
+
   const STUDENT_LABELS = Object.freeze({
     FC_MAIN_OUT_1: '飞控 MAIN OUT 1（1号电机输出接口）',
     FC_MAIN_OUT_2: '飞控 MAIN OUT 2（2号电机输出接口）',
@@ -256,6 +264,7 @@
 
   function renderTrainingState(elements, training = {}) {
     const task = training.task || {};
+    const step = training.current_step || task.steps?.find((item) => item.step_id === training.current_training_step_id) || task.steps?.[0] || {};
     const order = Number(task.order || 1);
     const reminders = task.safety_reminders || [];
     const steps = task.steps || [];
@@ -263,10 +272,21 @@
     if (elements.trainingTaskNumber) elements.trainingTaskNumber.textContent = `Task ${String(order).padStart(2, '0')} / 12`;
     if (elements.trainingTitle) elements.trainingTitle.textContent = task.title || '等待任务资料';
     if (elements.trainingObjective) elements.trainingObjective.textContent = task.objective || '—';
-    if (elements.trainingAction) elements.trainingAction.textContent = steps[0]?.instruction || task.description || '—';
-    if (elements.trainingWhy) elements.trainingWhy.textContent = steps[0]?.rationale || task.description || '—';
-    if (elements.trainingSafety) elements.trainingSafety.innerHTML = reminders.length ? reminders.map((item) => `<p>⚠ ${escapeHtml(item.message || studentFacingLabel(item.id))}</p>`).join('') : '<p>本步骤暂无额外安全提醒。</p>';
-    if (elements.trainingSteps) elements.trainingSteps.innerHTML = steps.length ? steps.map((step) => `<li><strong>${escapeHtml(step.title || studentFacingLabel(step.id))}</strong><br>${escapeHtml(step.instruction || '')}</li>`).join('') : '<li>等待任务步骤。</li>';
+    if (elements.trainingStepNumber) elements.trainingStepNumber.textContent = `Step ${step.order || 0} / ${steps.length}`;
+    if (elements.trainingAction) elements.trainingAction.textContent = step.student_instruction || step.instruction || task.description || '—';
+    if (elements.trainingWhy) elements.trainingWhy.textContent = step.why_it_matters || step.rationale || task.description || '—';
+    const stepReminders = step.safety_reminders?.length ? step.safety_reminders : reminders;
+    if (elements.trainingSafety) elements.trainingSafety.innerHTML = stepReminders.length ? stepReminders.map((item) => `<p>⚠ ${escapeHtml(item.message || studentFacingLabel(item.id))}</p>`).join('') : '<p>本步骤暂无额外安全提醒。</p>';
+    if (elements.trainingSteps) elements.trainingSteps.innerHTML = step.title ? `<li><strong>${escapeHtml(step.title)}</strong><br>${escapeHtml(step.instruction || '')}</li>` : '<li>等待任务步骤。</li>';
+    if (elements.trainingStepList) elements.trainingStepList.innerHTML = steps.map((item) => `<li data-state="${escapeHtml(item.progress?.status || 'NOT_STARTED')}">${escapeHtml(item.title)}</li>`).join('');
+    const conditions = [];
+    if (step.safety_reminders?.length) conditions.push(step.progress?.safety_acknowledged ? '☑ 已阅读安全提醒' : '□ 已阅读安全提醒');
+    if (step.evidence_required?.length) conditions.push(`□ Evidence：${step.evidence_required.join(', ')}`);
+    if (step.teacher_gate) conditions.push(step.progress?.teacher_decision === 'APPROVE' ? '☑ 教师已通过' : '□ 等待教师确认');
+    if (!conditions.length) conditions.push('□ 学生确认完成实际操作');
+    if (elements.trainingCompletionConditions) elements.trainingCompletionConditions.innerHTML = conditions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    if (elements.acknowledgeTrainingSafety) elements.acknowledgeTrainingSafety.hidden = !step.safety_reminders?.length;
+    if (elements.confirmTrainingStep) elements.confirmTrainingStep.disabled = !training.current_training_step_id || step.teacher_gate;
     if (elements.trainingStatus) elements.trainingStatus.textContent = training.task_state || 'NOT_STARTED';
     if (elements.trainingEvidence) elements.trainingEvidence.textContent = String(training.evidence_count || 0);
     if (elements.trainingReflection) elements.trainingReflection.textContent = training.reflection_state || 'missing';
@@ -329,7 +349,7 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
-      trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
+      trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
     };
@@ -339,6 +359,7 @@
     let autoScheduler = null;
     let ragPollGeneration = 0;
     let currentTrainingTaskId = 'F450_01';
+    let currentTrainingStepId = null;
 
     function setCameraState(state, dataState = "") {
       elements.cameraStatus.textContent = state;
@@ -390,6 +411,7 @@
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`));
       renderTaskState(elements, state);
       currentTrainingTaskId = state.training?.current_task_id || currentTrainingTaskId;
+      currentTrainingStepId = state.training?.current_training_step_id || null;
       if (elements.devTeacherControls) elements.devTeacherControls.hidden = !created.dev_mode;
       return sessionId;
     }
@@ -578,6 +600,8 @@
     elements.confirm.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
     elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const id = await ensureSession('MOCK_VISION'); const result = await simulateVision(fetchImpl, id, button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { ...result, task: state }); if (result.rag_explanation?.status === 'pending') void refreshRagExplanation(id); }));
     elements.startTrainingTask?.addEventListener('click', async () => { const id = await ensureSession(); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/training/tasks/${encodeURIComponent(currentTrainingTaskId)}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })); renderTrainingState(elements, state.training); });
+    elements.confirmTrainingStep?.addEventListener('click', async () => { if (!currentTrainingStepId) return; const id = await ensureSession(); const result = await submitTrainingStepFact(fetchImpl, id, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
+    elements.acknowledgeTrainingSafety?.addEventListener('click', async () => { if (!currentTrainingStepId) return; const id = await ensureSession(); const result = await acknowledgeTrainingStepSafety(fetchImpl, id, currentTrainingStepId); renderTrainingState(elements, result.training); });
     elements.completeTrainingTask?.addEventListener('click', async () => { const id = await ensureSession(); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/training/tasks/${encodeURIComponent(currentTrainingTaskId)}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })); renderTrainingState(elements, state.training); });
     elements.saveEvidence?.addEventListener('click', async () => { const file = elements.evidenceFile?.files?.[0]; if (!file) { setMessage('请先选择 Evidence 文件。'); return; } const id = await ensureSession(); const result = await saveTrainingEvidence(fetchImpl, id, { task_id: currentTrainingTaskId, evidence_type: file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO', source: 'STUDENT_UPLOAD', file_reference: `dev-upload://${file.name}`, metadata: { name: file.name, size: file.size, type: file.type } }); renderTrainingState(elements, result.training); setMessage('学习证据 Reference 已保存到 v2.0 Dev Storage。'); });
     elements.saveReflection?.addEventListener('click', async () => { try { const id = await ensureSession(); const result = await saveTrainingReflection(fetchImpl, id, { task_id: currentTrainingTaskId, original_text: elements.reflectionOriginal.value, ai_assisted_text: elements.reflectionAssisted.value || null, source_type: 'TEXT' }); renderTrainingState(elements, result.training); setMessage('学生原始学习总结已保存。'); } catch (error) { setMessage(error.message === 'student_original_summary_required' ? '请先填写真实的学生学习总结。' : `学习总结保存失败：${error.message}`); } });
@@ -618,6 +642,8 @@
     saveTrainingReflection,
     submitTeacherReview,
     fetchTrainingTaskView,
+    submitTrainingStepFact,
+    acknowledgeTrainingStepSafety,
     performCaptureInteraction,
     triggerFilePicker,
     performUploadInteraction,
