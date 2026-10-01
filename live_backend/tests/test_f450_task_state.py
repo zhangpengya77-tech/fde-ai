@@ -17,7 +17,7 @@ class F450TaskStateTests(unittest.TestCase):
             self.progress.record_teacher_review(task_id, "APPROVE", "teacher-dev", "verified")
 
     def _complete_through(self, last_order):
-        teacher_tasks = {"TASK_02", "TASK_04", "TASK_06", "TASK_08", "TASK_10", "TASK_11", "TASK_12"}
+        teacher_tasks = {"TASK_02", "TASK_04", "TASK_06", "TASK_07", "TASK_08", "TASK_10", "TASK_11", "TASK_12"}
         for order in range(1, last_order + 1):
             task_id = f"TASK_{order:02d}"
             evidence = "FLIGHT_LOG_REFERENCE" if task_id == "TASK_11" else None

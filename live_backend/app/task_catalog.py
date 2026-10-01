@@ -234,6 +234,39 @@ def _build_coach_steps():
     }
 
 
+def _mission_planner_steps():
+    fallback = "出现异常、状态不明确或结果与教材不符时不能继续，请停止操作并请教师确认。"
+
+    def row(code, title, instruction, why, expected, **options):
+        options.setdefault("guidance", instruction)
+        options.setdefault("fallback", fallback)
+        options["expected"] = expected
+        return (code, title, instruction, why, options)
+
+    return _build_task_steps(7, [
+        row("PREPOWER_REVIEW", "首次上电前确认", "确认 Task 06 教师安全放行已完成，并保持桨叶未安装。", "首次上电前必须确认机械、电气与极性检查已经放行。", "Task 06 已完成、教师放行记录存在、电池尚未连接。", reminders=("REM_FIRST_POWER_TEACHER_REQUIRED",)),
+        row("FIRST_POWER_TEACHER", "教师监督首次上电", "请教师现场确认电源连接后，由教师监督完成 Pixhawk 首次上电。", "首次上电可能暴露极性、短路或异常发热风险，AI 不能取代现场安全判断。", "飞控正常启动且无异常气味、发热或报警；真实结果由教师记录。", completion="TEACHER_CONFIRM", teacher=True, reminders=("REM_FIRST_POWER_TEACHER_REQUIRED",)),
+        row("MP_CONNECT", "连接 Mission Planner（任务规划软件）", "用数据线连接飞控，打开 Mission Planner，选择正确端口与波特率后由学生点击 Connect。", "建立稳定连接后才能读取飞控状态；AI 不会自动写入参数或替学生点击保存。", "Mission Planner 显示已连接、飞控型号与基本状态。", completion="EVIDENCE_UPLOAD", evidence=("SCREENSHOT",)),
+        row("FC_FIRMWARE_AIRFRAME", "确认飞控、固件与机架类型", "读取飞控型号、固件版本与 Frame Type（机架类型），对照 F450 教材。", "错误的固件或机架类型会影响输出逻辑；本步骤只核对。", "显示 Pixhawk 2.4.8 硬件信息与教师认可的四旋翼配置。"),
+        row("ACCEL_PREP", "准备加速度计校准", "移开震动源并准备按照 Mission Planner 图示摆放机体。", "Accelerometer Calibration（加速度计校准）需要稳定、平整且按提示改变姿态。", "机体未装桨、桌面稳定、学生理解各摆放方向。"),
+        row("ACCEL_CALIBRATION", "执行加速度计校准", "按照 Mission Planner 每个姿态提示摆放机体并确认。", "校准让飞控建立重力方向基准，影响姿态显示与飞行控制。", "Mission Planner 明确显示加速度计校准成功。", completion="EVIDENCE_UPLOAD", evidence=("MP_RESULT",)),
+        row("COMPASS_PREP", "准备罗盘校准", "确认 GPS / Compass 安装方向与周围磁性干扰，再阅读旋转动作说明。", "Compass Calibration（罗盘校准）容易受金属、电流与磁性物体影响。", "罗盘方向资料可靠，周围无明显磁性干扰。"),
+        row("COMPASS_CALIBRATION", "执行罗盘校准", "按照 Mission Planner 提示缓慢转动机体，观察各方向采样进度。", "完整采样用于建立罗盘偏差；室内成功不代表户外条件已验证。", "Mission Planner 显示罗盘校准成功且无明显异常偏移提示。", completion="EVIDENCE_UPLOAD", evidence=("MP_RESULT",)),
+        row("RADIO_PREP", "准备遥控器校准", "确认接收机连接、遥控器安全开启，并将摇杆与开关置于教师指定初始位置。", "Radio Calibration（遥控器校准）会记录通道范围和中位。", "Receiver（接收机）在线、通道条可响应且无持续跳动。"),
+        row("RADIO_CALIBRATION", "执行遥控器校准", "按 Mission Planner 指引移动全部摇杆与需要使用的开关，再回到中位。", "完整范围让飞控正确解释遥控器输入，不应遗漏模式开关。", "各通道范围、中位与方向合理，校准显示完成。", completion="EVIDENCE_UPLOAD", evidence=("MP_RESULT",)),
+        row("RECEIVER_STATUS", "检查 RC / Receiver 状态", "检查 Roll、Pitch、Throttle、Yaw 与模式通道是否对应且稳定。", "通道错误、抖动或失联都不能进入输出检查。", "各通道动作对应、数值稳定；异常由教师检查。", completion="TEACHER_CONFIRM", teacher=True),
+        row("MOTOR_OUTPUT_MAPPING", "检查 Motor / Output Mapping", "在无桨状态下查看 M1～M4 与 MAIN OUT 映射；输出测试必须由教师控制。", "Motor / Output Mapping（马达输出映射）错误会导致控制方向错误。", "M1～M4 与硬件配置一致；不得解锁、不得自动启动马达。", completion="TEACHER_CONFIRM", teacher=True, reminders=("REM_MOTOR_TEST_NO_PROP",)),
+        row("FLIGHT_MODES", "设置飞行模式", "依课程要求核对各开关位置对应的 Flight Mode（飞行模式）。", "学生必须理解各模式作用；AI 只解释而不自动保存参数。", "开关位置与指定模式对应，截图可清楚显示配置。", completion="EVIDENCE_UPLOAD", evidence=("SCREENSHOT",)),
+        row("FAILSAFE", "设置与验证失控保护", "按照教师方案核对 Radio Failsafe（遥控失控保护），不进行无人监督测试。", "Failsafe 决定信号中断时系统如何响应，错误配置可能产生严重风险。", "配置与教师方案一致；异常或行为不明确时保持停机。", completion="EVIDENCE_UPLOAD", evidence=("SCREENSHOT",), teacher=True),
+        row("GPS_STATUS", "检查 GPS 状态", "查看 GPS 是否被识别、基础状态与异常提示；室内不宣称完成 GPS Fix。", "GPS 状态影响定位、Home 与 RTL，室内检测不等于户外合格。", "设备被识别且无明显硬件错误；GPS Fix 留待户外验证。", completion="EVIDENCE_UPLOAD", evidence=("SCREENSHOT",), teacher=True),
+        row("RTL", "核对 RTL 返航设置", "阅读并核对 RTL（Return-to-Launch，返航）配置与前置条件。", "RTL 依赖正确定位、Home、高度与安全环境。", "配置与教师方案一致；不得宣称真实返航已验证。", completion="EVIDENCE_UPLOAD", evidence=("SCREENSHOT",), teacher=True),
+        row("BASE_PARAMETERS", "检查必要基础参数", "按课程 Checklist 读取基础参数，只记录差异，不让 AI 自动修改或保存。", "集中复核可发现遗漏并避免盲目更改参数。", "Checklist 项目均有记录；不确定差异保持原状。"),
+        row("FINAL_CONFIG_REVIEW", "教师配置总复核", "提交连接、校准、模式、Failsafe、GPS 与 RTL 证据给教师总复核。", "Task 07 完成不代表飞机已经可以飞行。", "教师完成配置 Checklist 并明确 APPROVE 或 REJECT_REWORK。", completion="EVIDENCE_UPLOAD", evidence=("CHECKLIST",), teacher=True),
+        row("EVIDENCE", "整理关键配置证据", "确认关键截图、校准结果、配置 Checklist 与教师复核引用均已归档。", "关键证据让 Task 08 验证配置结果，不要求每一步截图。", "Evidence 可从 Session 读取，未测硬件没有被标成 PASS。"),
+        row("REFLECTION", "完成学习总结", "用自己的话回答：我完成了哪些飞控配置、哪一步最容易出错、遇到什么问题、如何判断正常、哪些仍需要户外验证。", "Reflection 保留学生真实经验，AI 只能整理原文。", "student_original_summary 已保存；AI assisted 内容与原文分开。"),
+    ])
+
+
 def _task(order, short, title, objective, phase, prerequisites, completion_mode, verification_modes, steps, *, teacher=False, reminders=(), components=(), connectors=(), vision=(), evidence=(), integration=None):
     task_id = f"TASK_{order:02d}"
     return TaskDefinition(
@@ -263,7 +296,7 @@ def load_f450_course() -> F450CourseDefinition:
         _task(4, "焊", "ESC / 电源焊接 + 万用表", "完成电源焊接、绝缘与教师通断检查。", build, ("TASK_03",), CompletionMode.TEACHER_CONFIRM, (VerificationMode.EVIDENCE_UPLOAD, VerificationMode.TEACHER_CONFIRM), build_steps[4], teacher=True, reminders=("REM_CHECK_POWER_POLARITY", "REM_VERIFY_CONNECTOR_POLARITY", "REM_HEATSHRINK_BEFORE_SOLDER", "REM_SOLDER_TEACHER_CHECK", "REM_CONTINUITY_TEST_REQUIRED"), evidence=("PHOTO", "CHECKLIST", "TEACHER_REVIEW")),
         _task(5, "接", "飞控与外设安装", "安装 Pixhawk、GPS、接收机、数传与电源模块。", build, ("TASK_04",), CompletionMode.HYBRID, (VerificationMode.HYBRID, VerificationMode.VISION_ASSISTED), build_steps[5], reminders=("REM_RECEIVER_PINOUT", "REM_FC_FORWARD", "REM_GPS_FORWARD"), components=("PIXHAWK_248", "GPS_COMPASS", "RC_RECEIVER", "TELEMETRY_RADIO", "POWER_MODULE"), connectors=tuple(CONNECTOR_IDS), vision=("pixhawk_orientation_assist", "gps_orientation_assist"), evidence=("PHOTO",)),
         _task(6, "查", "全机无电安全检查", "在不连接电池的状态下完成全机安全复核。", build, ("TASK_03", "TASK_04", "TASK_05"), CompletionMode.TEACHER_CONFIRM, (VerificationMode.CHECKLIST if hasattr(VerificationMode, "CHECKLIST") else VerificationMode.HYBRID, VerificationMode.TEACHER_CONFIRM), build_steps[6], teacher=True, reminders=("REM_MOTOR_SCREW_TOO_LONG", "REM_CHECK_POWER_POLARITY", "REM_VERIFY_CONNECTOR_POLARITY", "REM_CONTINUITY_TEST_REQUIRED", "REM_RECEIVER_PINOUT", "REM_FC_FORWARD", "REM_GPS_FORWARD"), evidence=("CHECKLIST", "TEACHER_REVIEW")),
-        _task(7, "调", "Mission Planner 完整调参", "完成 F450 基本飞控配置，不允许 AI 自动修改参数。", setup, ("TASK_06",), CompletionMode.HYBRID, (VerificationMode.HYBRID, VerificationMode.TEACHER_CONFIRM), _steps("MP_CONNECT", "AIRFRAME_SETUP", "ACCEL_CALIBRATION", "COMPASS_CALIBRATION", "RADIO_CALIBRATION", "MOTOR_OUTPUT_SETUP", "FLIGHT_MODE_SETUP", "FAILSAFE_SETUP", "GPS_CHECK", "RTL_SETUP", "FINAL_CONFIG_REVIEW", mode=VerificationMode.HYBRID), reminders=("REM_FIRST_POWER_TEACHER_REQUIRED",), evidence=("SCREENSHOT", "MP_RESULT")),
+        _task(7, "调", "Mission Planner 完整调参", "完成 F450 基本飞控配置，不允许 AI 自动修改参数。", setup, ("TASK_06",), CompletionMode.HYBRID, (VerificationMode.HYBRID, VerificationMode.TEACHER_CONFIRM), _mission_planner_steps(), teacher=True, reminders=("REM_FIRST_POWER_TEACHER_REQUIRED", "REM_MOTOR_TEST_NO_PROP"), evidence=("SCREENSHOT", "MP_RESULT", "CHECKLIST", "TEACHER_REVIEW")),
         _task(8, "验", "调参后功能验证", "验证 Task 07 的 Radio、Motor、Mode、GPS、Failsafe 与 RTL 配置。", setup, ("TASK_07",), CompletionMode.HYBRID, (VerificationMode.HYBRID, VerificationMode.VISION_ASSISTED, VerificationMode.TEACHER_CONFIRM), _steps("RADIO_INPUT_VERIFY", "FLIGHT_MODE_VERIFY", "MOTOR_MAPPING_VERIFY", "MOTOR_DIRECTION_VERIFY", "PROP_ORIENTATION_VERIFY", "ATTITUDE_RESPONSE_VERIFY", "GPS_DETECTION_VERIFY", "RECEIVER_STATE_VERIFY", "FAILSAFE_VERIFY", "RTL_CONFIG_VERIFY", mode=VerificationMode.HYBRID), teacher=True, reminders=("REM_MOTOR_TEST_NO_PROP", "REM_FLIGHT_TEACHER_REQUIRED"), vision=("propeller_orientation_assist",), evidence=("CHECKLIST", "VISION_RESULT", "TEACHER_REVIEW")),
         _task(9, "演", "QGC 综合联调与模拟任务演练", "在 Simulation/SITL 中演练地面站与航线任务，不授权真实解锁。", setup, ("TASK_07", "TASK_08"), CompletionMode.HYBRID, (VerificationMode.HYBRID, VerificationMode.EVIDENCE_UPLOAD), _steps("QGC_BATTERY", "QGC_GPS_HOME_POSITION", "QGC_ATTITUDE_MODE_TELEMETRY", "QGC_ARM_DISARM_CONCEPT", "QGC_WAYPOINT_MISSION", "QGC_MISSION_SEQUENCE", "QGC_RTL_CONCEPT", "SITL_MISSION_REHEARSAL", mode=VerificationMode.HYBRID), evidence=("SCREENSHOT", "QGC_RESULT")),
         _task(10, "查", "飞行前最终上电检查", "完成 01～09 总检与户外 GPS/Home/RTL 条件确认。", setup, ("TASK_07", "TASK_08", "TASK_09"), CompletionMode.TEACHER_CONFIRM, (VerificationMode.HYBRID, VerificationMode.TEACHER_CONFIRM), _steps("MECHANICAL_PREFLIGHT", "ELECTRICAL_PREFLIGHT", "CONFIG_PREFLIGHT", "OUTDOOR_GPS_HOME_RTL", "TEACHER_FLIGHT_RELEASE", mode=VerificationMode.TEACHER_CONFIRM), teacher=True, reminders=("REM_FIRST_POWER_TEACHER_REQUIRED", "REM_FLIGHT_TEACHER_REQUIRED"), evidence=("CHECKLIST", "TEACHER_REVIEW")),

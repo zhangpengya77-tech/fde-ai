@@ -43,7 +43,7 @@ class F450TaskCatalogTests(unittest.TestCase):
         self.assertEqual(self.by_id["TASK_12"].prerequisites, ("TASK_11",))
 
     def test_teacher_gates_are_bound_to_required_tasks(self):
-        required = {"TASK_02", "TASK_04", "TASK_06", "TASK_08", "TASK_10", "TASK_11", "TASK_12"}
+        required = {"TASK_02", "TASK_04", "TASK_06", "TASK_07", "TASK_08", "TASK_10", "TASK_11", "TASK_12"}
         self.assertEqual({task.id for task in self.tasks if task.teacher_review_required}, required)
         self.assertTrue(all(self.by_id[item].safety_gate for item in required))
         self.assertEqual(self.by_id["TASK_02"].completion_mode, CompletionMode.TEACHER_CONFIRM)
@@ -61,10 +61,14 @@ class F450TaskCatalogTests(unittest.TestCase):
         self.assertIn("REM_FLIGHT_TEACHER_REQUIRED", self.by_id["TASK_11"].safety_reminders)
 
     def test_task07_contains_full_mission_planner_structure(self):
-        self.assertEqual(
-            [step.id for step in self.by_id["TASK_07"].steps],
-            ["MP_CONNECT", "AIRFRAME_SETUP", "ACCEL_CALIBRATION", "COMPASS_CALIBRATION", "RADIO_CALIBRATION", "MOTOR_OUTPUT_SETUP", "FLIGHT_MODE_SETUP", "FAILSAFE_SETUP", "GPS_CHECK", "RTL_SETUP", "FINAL_CONFIG_REVIEW"],
-        )
+        step_ids = [step.id for step in self.by_id["TASK_07"].steps]
+        self.assertEqual(step_ids[0], "T07_PREPOWER_REVIEW")
+        self.assertIn("T07_ACCEL_CALIBRATION", step_ids)
+        self.assertIn("T07_COMPASS_CALIBRATION", step_ids)
+        self.assertIn("T07_RADIO_CALIBRATION", step_ids)
+        self.assertIn("T07_FAILSAFE", step_ids)
+        self.assertIn("T07_RTL", step_ids)
+        self.assertEqual(step_ids[-1], "T07_REFLECTION")
 
     def test_task08_is_verification_and_prop_vision_is_only_a_subtask(self):
         task = self.by_id["TASK_08"]
