@@ -59,13 +59,15 @@ class LiveCoachAskService:
         rag = await self.rag_adapter.query(self._context_prompt(question, training, detections), str(uuid4()), 1)
         low_confidence = classification == "visual" and (not detections or max(float(item.get("confidence", 0)) for item in detections) < 0.5)
         if classification == "safety": return self._payload(classification, SAFETY_MESSAGE, rag.status, False, False, True)
-        if low_confidence or not rag.hit or not rag.explanation: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False)
         task = training.get("task") or {}
         step = training.get("current_step") or {}
         if classification == "step":
             lead = f"你现在在 Task {int(task.get('order') or 0):02d}「{task.get('title') or ''}」，当前步骤是「{step.get('title') or '尚未开始'}」。"
-            answer = f"{lead}{step.get('student_instruction') or step.get('instruction') or ''} {rag.explanation}".strip()
-        else: answer = rag.explanation
+            explanation = f" {rag.explanation}" if rag.hit and rag.explanation else ""
+            answer = f"{lead}{step.get('student_instruction') or step.get('instruction') or ''}{explanation}".strip()
+            return self._payload(classification, answer, rag.status, False, False, False)
+        if low_confidence or not rag.hit or not rag.explanation: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False)
+        answer = rag.explanation
         return self._payload(classification, answer, rag.status, vision_used, False, False)
 
     @staticmethod

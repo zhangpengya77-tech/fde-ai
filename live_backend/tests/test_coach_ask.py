@@ -56,6 +56,15 @@ class CoachAskTests(unittest.TestCase):
         self.assertEqual(self.vision.calls, 0)
         self.assertIn("T01_WORKSPACE", self.rag.questions[0])
 
+    def test_next_step_still_uses_sop_when_rag_has_no_hit(self):
+        client = TestClient(create_app(vision_adapter=FakeVision(), rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))
+        sid = client.post("/api/live/sessions", json={"mode": "demo", "vision_source": "REAL_VISION", "training_track": "F450_TWELVE_TASK"}).json()["session_id"]
+        body = client.post(f"/api/live/sessions/{sid}/ask", json={"question": "下一步呢？"}).json()
+        self.assertEqual(body["classification"], "step")
+        self.assertIn("Task 01", body["answer"])
+        self.assertIn("准备工作区域", body["answer"])
+        self.assertFalse(body["uncertainty"])
+
     def test_visual_question_uses_exactly_one_frame(self):
         image = "data:image/jpeg;base64," + base64.b64encode(b"image").decode()
         response = self.ask({"question": "我这个桨叶方向对不对？", "image_data": image})
