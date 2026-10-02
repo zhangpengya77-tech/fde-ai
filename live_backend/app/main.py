@@ -26,6 +26,7 @@ from .task_state import TaskTransitionError
 from .training_records import EvidenceRecord, EvidenceType, ReflectionSource, StudentReflection
 from .sop import SopDecision, SopEngine
 from .vision import VisionAdapter, VisionResponseError, VisionUnavailable
+from .coach_ask import LiveCoachAskService
 
 
 def _decode_image_data(image_data: object, max_image_bytes: int) -> tuple[bytes | None, str | None]:
@@ -54,6 +55,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
     rag_coordinator = ContextualGuidanceCoordinator(
         sessions, RAGContextBuilder(), RAGGuidanceProvider(rag_client)
     )
+    coach_ask = LiveCoachAskService(sessions, adapter, rag_client)
     orchestrator = CoachOrchestrator(
         sessions, SopEngine(), DeterministicGuidanceProvider(), rag_coordinator
     )
@@ -245,6 +247,23 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         except KeyError: return error_response("session_not_found", "Live session was not found.", 404)
         return json_response({"events": values})
 
+    async def ask_coach(request):
+        sid = request.path_params["session_id"]
+        if sessions.get(sid) is None: return error_response("session_not_found", "Live session was not found.", 404)
+        try: payload = await request.json()
+        except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+        question = str(payload.get("question") or "").strip() if isinstance(payload, dict) else ""
+        if not question: return error_response("question_required", "A student question is required.", 400)
+        image_data = payload.get("image_data")
+        if image_data is not None:
+            _decoded, image_error = _decode_image_data(image_data, image_limit)
+            if image_error: return error_response(image_error, "A valid image is required for a visual question.", 413 if image_error == "image_too_large" else 400)
+        try: result = await coach_ask.answer(sid, question, image_data)
+        except ValueError as error:
+            if str(error) == "visual_frame_required": return error_response("visual_frame_required", "Open the camera and capture one current frame.", 428)
+            raise
+        return json_response(result)
+
 
     async def camera_started(request):
         try: event = sessions.append_event(request.path_params["session_id"], "CAMERA_STARTED")
@@ -272,6 +291,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         Route("/api/live/sessions/{session_id}/snapshot", snapshot, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/confirm", confirm, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/events", events, methods=["GET"]),
+        Route("/api/live/sessions/{session_id}/ask", ask_coach, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/start", training_start_task, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}", training_view_task, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/training/tasks/{task_id}/complete", training_complete_task, methods=["POST"]),
