@@ -67,13 +67,15 @@ test('step and task completion feedback use explicit continue actions', () => {
   assert.deepEqual(live.trainingCompletionFeedback('T03_REFLECTION', null, 'COMPLETED'), { type: 'TASK', title: 'Task 已完成', canContinue: true });
 });
 
-test('mobile markup provides one-step shell, conditional tools, AI drawer, and collapsed dev mode', () => {
+test('mobile markup provides one-step shell, Live Coach, collapsed fallbacks, and collapsed dev mode', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   for (const id of ['studentGroupProgress','currentStepCard','cameraTool','evidenceCard','reflectionCard','teacherCard','stepCompleteFeedback','taskCompleteFeedback','aiTools','devModePanel']) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
   assert.match(html, /<div[^>]+id=["']cameraTool["']/);
-  assert.match(html, /<details[^>]+id=["']aiTools["']/);
+  assert.match(html, /<section[^>]+id=["']aiTools["'][^>]+live-coach-card/);
+  assert.match(html, /<details[^>]+id=["']fallbackMethods["']/);
+  assert.doesNotMatch(html, /<details[^>]+id=["']fallbackMethods["'][^>]*\sopen(?:\s|>)/);
   assert.doesNotMatch(html, /<details[^>]+id=["']devModePanel["'][^>]*\sopen(?:\s|>)/);
 });
 

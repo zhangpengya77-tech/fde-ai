@@ -137,6 +137,98 @@
     return { reset, releaseButton };
   }
 
+  function shouldAutoStartCamera({ taskSelected = false, permissionGranted = false, cameraActive = false } = {}) {
+    return Boolean(taskSelected && permissionGranted && !cameraActive);
+  }
+
+  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true } = {}) {
+    let enabled = false;
+    let recognition = null;
+    let transcriptDelivered = false;
+    function canListen() { return enabled && isPageActive() && !isBusy() && !recognition; }
+    function listen() {
+      if (!canListen() || !recognitionFactory) return false;
+      transcriptDelivered = false;
+      recognition = recognitionFactory();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'zh-TW';
+      recognition.onstart = () => onState('LISTENING');
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
+        if (!transcript || transcriptDelivered) return;
+        transcriptDelivered = true;
+        onState('ASKING');
+        onTranscript(transcript);
+      };
+      recognition.onerror = (event) => {
+        const code = event.error || 'voice_input_failed';
+        recognition = null;
+        onError(code);
+        onState('VOICE_STANDBY');
+      };
+      recognition.onend = () => {
+        recognition = null;
+        if (!enabled) return;
+        onState('VOICE_STANDBY');
+        if (!isBusy() && isPageActive()) listen();
+      };
+      try {
+        recognition.start();
+        return true;
+      } catch (error) {
+        recognition = null;
+        enabled = false;
+        onError(error);
+        onState('IDLE');
+        return false;
+      }
+    }
+    function stopCurrent() {
+      const active = recognition;
+      recognition = null;
+      if (active && typeof active.stop === 'function') active.stop();
+    }
+    function enable() { enabled = true; onState('VOICE_STANDBY'); return listen(); }
+    function pause() { enabled = false; stopCurrent(); onState('IDLE'); }
+    function suspend() { stopCurrent(); if (enabled) onState('VOICE_STANDBY'); }
+    function resumeAfterAnswer() { if (enabled) { onState('VOICE_STANDBY'); return listen(); } return false; }
+    function handleVisibilityChange() { if (!isPageActive()) suspend(); else if (enabled) resumeAfterAnswer(); }
+    return { enable, pause, suspend, resumeAfterAnswer, handleVisibilityChange, isEnabled: () => enabled };
+  }
+
+  function createLivePreviewMonitor(video, { onFrame = () => {}, onFrozen = () => {}, now = () => Date.now(), frozenAfterMs = 4000, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval } = {}) {
+    let frameRequest = null;
+    let watchdog = null;
+    let lastFrameAt = 0;
+    let running = false;
+    function frame(_timestamp, metadata = {}) {
+      if (!running) return;
+      lastFrameAt = now();
+      onFrame(lastFrameAt, metadata);
+      frameRequest = video.requestVideoFrameCallback?.(frame) ?? null;
+    }
+    function checkFrozen(at = now()) {
+      if (running && lastFrameAt && at - lastFrameAt > frozenAfterMs) onFrozen();
+    }
+    function start() {
+      if (running) return;
+      running = true;
+      frameRequest = video.requestVideoFrameCallback?.(frame) ?? null;
+      watchdog = setIntervalImpl(() => checkFrozen(), 1000);
+      watchdog?.unref?.();
+    }
+    function stop() {
+      running = false;
+      if (frameRequest !== null) video.cancelVideoFrameCallback?.(frameRequest);
+      if (watchdog !== null) clearIntervalImpl(watchdog);
+      frameRequest = null;
+      watchdog = null;
+      lastFrameAt = 0;
+    }
+    return { start, stop, checkFrozen, lastFrameTimestamp: () => lastFrameAt };
+  }
+
   const INTERACTION_TIMEOUTS = Object.freeze({ LISTENING: 15000, TRANSCRIBING: 5000, ASKING: 20000, CAPTURING_FRAME: 3000, VISION_PROCESSING: 20000, SPEAKING: 30000 });
 
   function createInteractionStateMachine({ onChange = () => {}, onTimeout = () => {}, timeouts = INTERACTION_TIMEOUTS, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout } = {}) {
@@ -733,7 +825,7 @@
 
   function autoStartError(cameraActive, sessionId) { if (!cameraActive) return 'camera_required'; if (!sessionId) return 'session_required'; return null; }
 
-  function createController({ documentRef = document, navigatorRef = navigator, fetchImpl = fetch } = {}) {
+  function createController({ documentRef = document, navigatorRef = navigator, fetchImpl = fetch, storage = null } = {}) {
     const elements = {
       health: documentRef.querySelector('#backendStatus'),
       vision: documentRef.querySelector('#visionStatus'),
@@ -760,11 +852,12 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
+      enableVoiceCoach: documentRef.querySelector('#enableVoiceCoach'), pauseVoiceCoach: documentRef.querySelector('#pauseVoiceCoach'), liveCoachStatus: documentRef.querySelector('#liveCoachStatus'), latestAiAnswer: documentRef.querySelector('#latestAiAnswer'), fallbackMethods: documentRef.querySelector('#fallbackMethods'),
       pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), assistantVisualAction: documentRef.querySelector('#assistantVisualAction'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), cancelAiInteraction: documentRef.querySelector('#cancelAiInteraction'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
       trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), mapProgress: documentRef.querySelector('#mapProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       taskMapScreen: documentRef.querySelector('#taskMapScreen'), taskDetailScreen: documentRef.querySelector('#taskDetailScreen'), backToTaskMap: documentRef.querySelector('#backToTaskMap'), studentGroupProgress: documentRef.querySelector('#studentGroupProgress'), studentGroupCount: documentRef.querySelector('#studentGroupCount'), currentStepTitle: documentRef.querySelector('#currentStepTitle'), currentStepHow: documentRef.querySelector('#currentStepHow'), currentStepDoneWhen: documentRef.querySelector('#currentStepDoneWhen'), safetyCard: documentRef.querySelector('#safetyCard'), cameraTool: documentRef.querySelector('#cameraTool'), evidenceCard: documentRef.querySelector('#evidenceCard'), reflectionCard: documentRef.querySelector('#reflectionCard'), teacherCard: documentRef.querySelector('#teacherCard'), completionCard: documentRef.querySelector('#completionCard'), stepCompleteFeedback: documentRef.querySelector('#stepCompleteFeedback'), taskCompleteFeedback: documentRef.querySelector('#taskCompleteFeedback'), continueTrainingStep: documentRef.querySelector('#continueTrainingStep'),
       browserCapabilityWarning: documentRef.querySelector('#browserCapabilityWarning'), browserCapabilityTitle: documentRef.querySelector('#browserCapabilityTitle'), browserCapabilityMessage: documentRef.querySelector('#browserCapabilityMessage'), copyCurrentLink: documentRef.querySelector('#copyCurrentLink'), capabilityCamera: documentRef.querySelector('#capabilityCamera'), capabilitySpeechInput: documentRef.querySelector('#capabilitySpeechInput'), capabilitySpeechOutput: documentRef.querySelector('#capabilitySpeechOutput'), capabilityBrowser: documentRef.querySelector('#capabilityBrowser'),
-      diagnosticVoiceState: documentRef.querySelector('#diagnosticVoiceState'), diagnosticTranscript: documentRef.querySelector('#diagnosticTranscript'), diagnosticAskRequest: documentRef.querySelector('#diagnosticAskRequest'), diagnosticAskLatency: documentRef.querySelector('#diagnosticAskLatency'), diagnosticFrame: documentRef.querySelector('#diagnosticFrame'), diagnosticVision: documentRef.querySelector('#diagnosticVision'), diagnosticRag: documentRef.querySelector('#diagnosticRag'), diagnosticTts: documentRef.querySelector('#diagnosticTts'), diagnosticLastError: documentRef.querySelector('#diagnosticLastError'),
+      diagnosticCameraFrameTimestamp: documentRef.querySelector('#diagnosticCameraFrameTimestamp'), diagnosticVoiceState: documentRef.querySelector('#diagnosticVoiceState'), diagnosticTranscript: documentRef.querySelector('#diagnosticTranscript'), diagnosticAskRequest: documentRef.querySelector('#diagnosticAskRequest'), diagnosticAskLatency: documentRef.querySelector('#diagnosticAskLatency'), diagnosticFrame: documentRef.querySelector('#diagnosticFrame'), diagnosticVision: documentRef.querySelector('#diagnosticVision'), diagnosticRag: documentRef.querySelector('#diagnosticRag'), diagnosticTts: documentRef.querySelector('#diagnosticTts'), diagnosticLastError: documentRef.querySelector('#diagnosticLastError'),
       safetyAcknowledgment: documentRef.querySelector('#safetyAcknowledgment'), primaryTrainingAction: documentRef.querySelector('#primaryTrainingAction'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
@@ -787,6 +880,10 @@
     let ttsStartWatchdog = null;
     let currentFacingMode = 'environment';
     let currentDeviceId = '';
+    let handsFreeVoice = null;
+    let previewMonitor = null;
+    const cameraPermissionKey = 'fde-live-camera-permission-granted';
+    if (!storage) { try { storage = globalThis.localStorage || null; } catch { storage = null; } }
 
     function renderInteraction(event) {
       const state = event.state;
@@ -798,9 +895,13 @@
       if (elements.pushToTalk) elements.pushToTalk.disabled = busy || state === 'SPEAKING';
       const labels = { LISTENING: '🎙 正在听……', TRANSCRIBING: '正在识别语音…', ASKING: 'AI 正在思考…', CAPTURING_FRAME: '正在读取当前画面…', VISION_PROCESSING: 'AI 正在看画面…', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答…' };
       if (labels[state] && elements.voiceStatus) elements.voiceStatus.textContent = labels[state];
+      const studentLabels = { LISTENING: '正在听', TRANSCRIBING: '正在听', ASKING: 'AI 正在回答', CAPTURING_FRAME: 'AI 正在看', VISION_PROCESSING: 'AI 正在看', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答', ERROR: '请再试一次' };
+      if (elements.liveCoachStatus && studentLabels[state]) elements.liveCoachStatus.textContent = studentLabels[state];
       if (state === 'IDLE') {
         const entry = voiceEntryState(capabilities.speechInput);
         if (elements.pushToTalk) { elements.pushToTalk.textContent = entry.label; elements.pushToTalk.disabled = false; }
+        if (elements.liveCoachStatus) elements.liveCoachStatus.textContent = handsFreeVoice?.isEnabled() ? 'AI 已待命' : 'AI 已待命';
+        if (handsFreeVoice?.isEnabled() && elements.voiceStatus && !event.recoveredFromTimeout) elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
         if (event.recoveredFromTimeout && elements.voiceStatus) elements.voiceStatus.textContent = event.recoveredFromTimeout === 'TRANSCRIBING' || event.recoveredFromTimeout === 'LISTENING' ? '这次语音没有成功处理，请再说一次，或使用文字问 AI。' : event.recoveredFromTimeout === 'VISION_PROCESSING' || event.recoveredFromTimeout === 'CAPTURING_FRAME' ? '这次画面分析没有完成，请重新试一次。' : 'AI 服务暂时没有回应，请稍后再试。';
       }
     }
@@ -951,6 +1052,35 @@
       return null;
     }
 
+    function startLivePreviewMonitor() {
+      previewMonitor?.stop();
+      previewMonitor = createLivePreviewMonitor(elements.video, {
+        onFrame: (timestamp) => {
+          if (elements.diagnosticCameraFrameTimestamp) elements.diagnosticCameraFrameTimestamp.textContent = new Date(timestamp).toISOString();
+          if (stream && elements.cameraHint && elements.cameraHint.classList?.contains('camera-frozen')) {
+            elements.cameraHint.classList.remove('camera-frozen');
+            elements.cameraHint.hidden = true;
+          }
+        },
+        onFrozen: () => {
+          if (!stream) return;
+          if (elements.cameraHint) { elements.cameraHint.textContent = '摄像头画面已暂停，请重新开启。'; elements.cameraHint.hidden = false; elements.cameraHint.classList?.add('camera-frozen'); }
+          setMessage('摄像头画面已暂停，请重新开启。');
+        }
+      });
+      previewMonitor.start();
+    }
+
+    function cameraPermissionGranted() {
+      try { return storage?.getItem(cameraPermissionKey) === 'true'; } catch { return false; }
+    }
+
+    async function maybeAutoStartCamera() {
+      if (!shouldAutoStartCamera({ taskSelected: !elements.taskDetailScreen?.hidden, permissionGranted: cameraPermissionGranted(), cameraActive: Boolean(stream) })) return false;
+      await startCamera();
+      return Boolean(stream);
+    }
+
     async function startCamera() {
       if (!navigatorRef.mediaDevices?.getUserMedia) { setMessage('此瀏覽器不支援攝影機；仍可選擇一張圖片測試。'); return; }
       stopStream(stream);
@@ -962,12 +1092,17 @@
         const opened = await openCameraWithFallback(navigatorRef.mediaDevices, cameraConstraintCandidates(cameras, mobileDevice ? '' : elements.cameraDevice.value, mobileDevice), () => setCameraState('CAMERA FALLBACK'));
         stream = opened.stream;
         elements.video.srcObject = stream;
+        elements.video.autoplay = true;
+        elements.video.muted = true;
+        elements.video.setAttribute?.('playsinline', '');
         await elements.video.play();
+        startLivePreviewMonitor();
         await refreshCameraDevices();
         const activeSession = await ensureSession();
         await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(activeSession)}/camera/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
         elements.start.disabled = true;
         elements.start.textContent = '相机已启动';
+        elements.start.hidden = true;
         elements.video.hidden = false;
         elements.uploadPreview.hidden = true;
         elements.stop.disabled = false;
@@ -980,13 +1115,16 @@
         elements.cameraDiagnostics.hidden = false;
         elements.cameraDiagnostics.textContent = 'Device: ' + (stream.getVideoTracks()[0]?.label || elements.cameraDevice.selectedOptions[0]?.textContent || 'unknown') + ' | Supported: ' + Object.keys(supported).filter((key) => supported[key]).join(', ');
         setCameraState('ACTIVE', 'online');
-        if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
+        if (elements.cameraWaiting) elements.cameraWaiting.textContent = '已开启';
+        try { storage?.setItem(cameraPermissionKey, 'true'); } catch {}
         updateAssistantVisualAction();
         setMessage(opened.fallbackUsed ? '摄像头已启动（兼容模式）。AI 不会持续分析画面，需要时点击「AI 看当前画面」或直接问 AI。' : '摄像头已开启。AI 不会持续分析画面，需要时点击「AI 看当前画面」或直接问 AI。');
       } catch (error) {
         stopStream(stream);
         stream = null;
         elements.video.srcObject = null;
+        previewMonitor?.stop();
+        if (elements.start) { elements.start.hidden = false; elements.start.disabled = false; elements.start.textContent = '开启实训摄像头'; }
         updateAssistantVisualAction();
         const mapped = cameraErrorState(error);
         setCameraState(mapped.state);
@@ -1031,7 +1169,7 @@
         }
         updateCameraSourceLabel(currentFacingMode);
         setCameraState('ACTIVE', 'online');
-        if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
+        if (elements.cameraWaiting) elements.cameraWaiting.textContent = '已开启';
         elements.capture.disabled = false;
         elements.stop.disabled = false;
         return !opened.restored;
@@ -1110,11 +1248,13 @@
 
     async function stopCamera() {
       stopAutoObservation();
+      previewMonitor?.stop();
       stopStream(stream);
       stream = null;
       elements.video.srcObject = null;
       elements.start.disabled = false;
-      elements.start.textContent = '启动摄像头';
+      elements.start.hidden = false;
+      elements.start.textContent = '开启实训摄像头';
       elements.currentCameraFacing.textContent = '尚未开启';
       elements.switchCamera.disabled = true;
       elements.capture.disabled = true;
@@ -1189,12 +1329,53 @@
       onError: (code) => { elements.voiceStatus.textContent = code === 'not-allowed' || code === 'service-not-allowed' ? '当前浏览器无法使用麦克风，请允许权限或使用文字问 AI。' : '没有听清楚，请再说一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`; },
       onUnavailable: (message) => { elements.voiceStatus.textContent = message; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; elements.askAiPanel.hidden = false; }
     });
+    handsFreeVoice = createHandsFreeVoiceCoach({
+      recognitionFactory: SpeechRecognitionCtor ? () => new SpeechRecognitionCtor() : null,
+      isBusy: () => !['IDLE', 'ANSWER_READY'].includes(interaction.state()),
+      isPageActive: () => !documentRef.hidden && !elements.taskDetailScreen?.hidden,
+      onState: (state) => {
+        if (state === 'LISTENING') interaction.transition('LISTENING');
+        else if (state === 'VOICE_STANDBY') {
+          if (elements.liveCoachStatus) elements.liveCoachStatus.textContent = 'AI 已待命';
+          if (elements.voiceStatus) elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
+        }
+      },
+      onTranscript: (transcript) => {
+        if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
+        void submitStudentQuestion(transcript, { source: 'VOICE', autoSpeak: true });
+      },
+      onError: (code) => {
+        if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`;
+        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+          handsFreeVoice?.pause();
+          if (elements.voiceStatus) elements.voiceStatus.textContent = '当前浏览器暂不支持免按键语音，可使用按住说话。';
+          if (elements.fallbackMethods) elements.fallbackMethods.open = true;
+        } else if (elements.voiceStatus) elements.voiceStatus.textContent = '没有听清楚，请继续说一次。';
+      }
+    });
+    elements.enableVoiceCoach?.addEventListener('click', () => {
+      if (!capabilities.speechInput || !handsFreeVoice.enable()) {
+        elements.voiceStatus.textContent = '当前浏览器暂不支持免按键语音，可使用按住说话。';
+        elements.fallbackMethods.open = true;
+        return;
+      }
+      elements.enableVoiceCoach.hidden = true;
+      elements.pauseVoiceCoach.hidden = false;
+      elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
+    });
+    elements.pauseVoiceCoach?.addEventListener('click', () => {
+      handsFreeVoice.pause();
+      elements.pauseVoiceCoach.hidden = true;
+      elements.enableVoiceCoach.hidden = false;
+      elements.voiceStatus.textContent = '语音助教已暂停。';
+    });
+    documentRef.addEventListener?.('visibilitychange', () => handsFreeVoice.handleVisibilityChange());
     elements.textAskAi?.addEventListener('click', () => { elements.askAiPanel.hidden = false; elements.askAiInput.focus(); });
     function speechCallbacks() {
       return {
         onStart: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); interaction.transition('SPEAKING'); if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'speaking'; elements.stopAiAnswer.hidden = false; },
-        onEnd: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = 'AI 回答完成'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'completed'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); },
-        onError: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = '语音播放失败，请阅读文字回答或点击播放。'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'error'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); }
+        onEnd: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = 'AI 回答完成'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'completed'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); },
+        onError: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = '语音播放失败，请阅读文字回答或点击播放。'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'error'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
       };
     }
     async function submitStudentQuestion(question, { autoSpeak = false, source = 'TEXT' } = {}) {
@@ -1228,6 +1409,7 @@
         const delivered = deliverAiAnswer(result.answer, { autoSpeak, speechReply, callbacks: speechCallbacks() });
         lastAiAnswer = delivered.text;
         elements.askAiResponse.textContent = delivered.text;
+        if (elements.latestAiAnswer) elements.latestAiAnswer.textContent = delivered.text;
         elements.voiceReplyControls.hidden = false;
         if (elements.diagnosticAskLatency) elements.diagnosticAskLatency.textContent = `${(performance.now() - started).toFixed(1)} ms`;
         if (elements.diagnosticVision) elements.diagnosticVision.textContent = result.vision_used ? 'one-frame completed' : 'not used';
@@ -1237,10 +1419,10 @@
             if (interaction.state() !== 'SPEAKING') {
               elements.voiceStatus.textContent = 'AI 已回答，请点击「播放回答」收听。';
               if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'autoplay blocked';
-              interaction.reset(); voiceControl?.releaseButton();
+              interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer();
             }
           }, 1500);
-        } else if (autoSpeak) { elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。'; interaction.reset(); voiceControl?.releaseButton(); }
+        } else if (autoSpeak) { elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。'; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
         else { elements.voiceStatus.textContent = 'AI 已回答，可点击播放回答。'; interaction.reset(); voiceControl?.releaseButton(); }
         elements.voiceStatus.dataset.code = result.vision_used ? 'VISION_SINGLE_FRAME' : 'CONTEXT_ANSWER';
       } catch (error) {
@@ -1249,7 +1431,7 @@
         else if (error.message === 'camera_not_ready' || error.message === 'camera_frame_required') elements.askAiResponse.textContent = '摄像头画面还没准备好，请稍等一秒再试。';
         else elements.askAiResponse.textContent = visual ? '这次没有成功读取画面，请重新检查镜头后再试。' : 'AI 服务暂时没有回应，请稍后再试。';
         if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = error.message || error.name;
-        interaction.transition('ERROR', { requestId, interactionId }); interaction.reset(); voiceControl?.releaseButton();
+        interaction.transition('ERROR', { requestId, interactionId }); interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer();
       } finally {
         if (currentAskController === askController) currentAskController = null;
       }
@@ -1307,13 +1489,30 @@
     });
     elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', 'Development teacher review', currentTrainingTaskId, currentTrainingStepId); acceptTrainingMutation(result.training); });
     elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', 'Development teacher requested rework', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
-    elements.trainingTaskList?.addEventListener('click', async (event) => { const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask; if (!taskId) return; const id = await ensureSession(); const result = await fetchTrainingTaskView(fetchImpl, id, taskId); currentTrainingTaskId = taskId; renderCurrentTraining({ ...result.training_task_view, current_task_id: taskId, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' }); showTaskDetail(elements); setMessage(result.training_task_view.unsafe_action_allowed === false ? '可以先学习；到危险操作时需要完成安全检查并由教师确认。' : '此任务可以开始学习。'); });
-    async function refreshMap() { const id = await ensureSession(); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderCurrentTraining(state.training); showTaskMap(elements); }
+    elements.trainingTaskList?.addEventListener('click', async (event) => {
+      const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask;
+      if (!taskId) return;
+      const id = await ensureSession();
+      const result = await fetchTrainingTaskView(fetchImpl, id, taskId);
+      currentTrainingTaskId = taskId;
+      renderCurrentTraining({ ...result.training_task_view, current_task_id: taskId, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' });
+      showTaskDetail(elements);
+      setMessage(result.training_task_view.unsafe_action_allowed === false ? '可以先学习；到危险操作时需要完成安全检查并由教师确认。' : '此任务可以开始学习。');
+      await maybeAutoStartCamera();
+    });
+    async function refreshMap() {
+      handsFreeVoice?.pause();
+      await stopCamera();
+      const id = await ensureSession();
+      const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`));
+      renderCurrentTraining(state.training);
+      showTaskMap(elements);
+    }
     bindTaskMapRetry(elements.trainingTaskList, () => refreshMap().catch(() => renderTaskMapLoadError(elements)));
     elements.backToTaskMap?.addEventListener('click', () => refreshMap().catch((error) => setMessage(`任务地图刷新失败：${error.message}`)));
     elements.continueTrainingStep?.addEventListener('click', () => { if (!pendingTrainingState) return; const training = pendingTrainingState; pendingTrainingState = null; elements.stepCompleteFeedback.hidden = true; if (elements.completionCard) elements.completionCard.hidden = false; renderCurrentTraining(training); });
 
-    return { refreshHealth, refreshCameraDevices, initializeStudentMode: ensureSession, startCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation };
+    return { refreshHealth, refreshCameraDevices, initializeStudentMode: ensureSession, startCamera, maybeAutoStartCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation, pauseVoiceCoach: () => handsFreeVoice?.pause() };
   }
 
   function escapeHtml(value) {
@@ -1331,7 +1530,7 @@
       controller.refreshHealth();
       controller.refreshCameraDevices();
       controller.initializeStudentMode().catch(() => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }));
-      window.addEventListener('pagehide', () => controller.stopCamera());
+      window.addEventListener('pagehide', () => { controller.pauseVoiceCoach(); controller.stopCamera(); });
     });
   }
 
@@ -1388,6 +1587,9 @@
     openCameraWithFallback,
     replaceCameraStream,
     bindPushToTalk,
+    shouldAutoStartCamera,
+    createHandsFreeVoiceCoach,
+    createLivePreviewMonitor,
     cameraErrorState,
     captureFrame,
     isCameraFrameReady,

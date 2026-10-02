@@ -73,37 +73,20 @@
         <div id="trainingSafety">本步骤暂无额外安全提醒。</div>
       </section>
 
-      <details id="aiTools" class="ask-ai-drawer" open>
-      <summary>AI 助教</summary>
-      <section class="coach-card">
-        <div>
-          <p class="section-kicker">AI 助教</p>
-          <h3>需要 AI 帮忙吗？</h3>
-          <p id="coachGuidance">你可以打开摄像头让 AI 看一下，或直接询问当前步骤。</p>
-          <p id="ragExplanation" class="coach-explanation">AI 会结合当前任务与安全状态回答。</p>
+      <section id="aiTools" class="live-coach-card">
+        <div class="live-coach-heading">
+          <div><p class="section-kicker">AI 实训助教</p><h3 id="liveCoachStatus">AI 已待命</h3></div>
+          <button id="enableVoiceCoach" type="button" class="primary-action">开启语音助教</button>
+          <button id="pauseVoiceCoach" type="button" class="secondary-action" hidden>暂停语音</button>
         </div>
-        <div class="ask-actions">
-          <button id="pushToTalk" type="button" class="secondary-action push-to-talk" aria-pressed="false">🎙 按住说话</button>
-          <button id="textAskAi" type="button" class="secondary-action">⌨️ 文字问 AI</button>
-          <button id="assistantVisualAction" type="button" class="primary-action">📷 打开摄像头</button>
-        </div>
-        <p id="voiceStatus" class="voice-status" role="status">按住按钮即可说话；若浏览器不支持，将自动提供文字输入。</p>
-        <div id="askAiPanel" class="ask-ai-panel" hidden>
-          <label for="askAiInput">想问 AI 什么？</label>
-          <textarea id="askAiInput" rows="3" placeholder="例如：下一步要做什么？"></textarea>
-          <button id="submitAskAi" type="button">发送问题</button>
-          <button id="cancelAiInteraction" type="button" class="secondary-action" hidden>取消</button>
-          <p id="askAiResponse" role="status"></p>
-          <div id="voiceReplyControls" class="voice-reply-controls" hidden>
-            <button id="playAiAnswer" type="button" class="secondary-action">🔊 播放回答</button>
-            <button id="stopAiAnswer" type="button" class="secondary-action" hidden>停止播放</button>
-          </div>
-        </div>
-      </section>
-      <div id="cameraTool" class="camera-tool student-tool">
-      <section class="camera-panel student-camera">
+        <p id="coachGuidance">有问题直接说，我会根据当前步骤和画面帮助你。</p>
+        <p id="ragExplanation" class="coach-explanation" hidden>AI 会结合当前任务与安全状态回答。</p>
+        <p id="voiceStatus" class="voice-status" role="status">语音助教尚未开启。</p>
+
+        <div id="cameraTool" class="camera-tool student-tool">
+        <section class="camera-panel student-camera">
         <div class="section-heading">
-          <div><p class="section-kicker">📷 摄像头</p><h3>工作区预览</h3></div>
+          <div><p class="section-kicker">📷 工作区实时画面</p><h3>实训摄像头</h3></div>
           <span>摄像头：<strong id="cameraWaiting">未开启</strong><br>镜头：<strong id="currentCameraFacing">尚未开启</strong></span>
         </div>
         <div class="preview" aria-label="摄像机预览与 AI 检查标记">
@@ -113,19 +96,42 @@
           <canvas id="captureCanvas" hidden></canvas>
           <p id="cameraHint">摄像头尚未开启</p>
         </div>
-        <div class="controls student-camera-actions">
-          <button id="startCamera" type="button">打开摄像头</button>
-          <button id="switchCamera" class="secondary-action" type="button" disabled>切换镜头</button>
-          <button id="captureFrame" class="primary-action" type="button" disabled hidden>🤖 AI 看当前画面</button>
-          <button id="stopCamera" type="button" disabled>关闭摄像头</button>
-          <button id="uploadImage" class="secondary-action" type="button">上传照片请 AI 看</button>
-          <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-        </div>
+        <button id="startCamera" type="button" class="primary-action">开启实训摄像头</button>
           <p id="liveMessage" role="status">正在连接 AI 助教…</p>
-          <p class="preview-note">摄像头只作本地预览，需要时再请 AI 检查。</p>
+          <p class="preview-note">画面只在本机实时预览；只有你提出视觉问题时，AI 才读取一张当前画面。</p>
+        </section>
+        </div>
+
+        <section class="latest-answer-card" aria-live="polite">
+          <p class="section-kicker">AI 最近回答</p>
+          <p id="latestAiAnswer">AI 正在旁边待命。</p>
+        </section>
+
+        <details id="fallbackMethods" class="fallback-methods">
+          <summary>更多方式 / 备用方式</summary>
+          <div class="fallback-actions">
+            <button id="pushToTalk" type="button" class="secondary-action push-to-talk" aria-pressed="false">🎙 按住说话</button>
+            <button id="textAskAi" type="button" class="secondary-action">⌨️ 文字问 AI</button>
+            <button id="assistantVisualAction" type="button" class="secondary-action">🤖 AI 看当前画面</button>
+            <button id="switchCamera" class="secondary-action" type="button" disabled>切换镜头</button>
+            <button id="stopCamera" class="secondary-action" type="button" disabled>关闭摄像头</button>
+            <button id="uploadImage" class="secondary-action" type="button">上传照片请 AI 看</button>
+            <button id="captureFrame" class="secondary-action" type="button" disabled hidden>🤖 AI 看当前画面</button>
+            <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          </div>
+          <div id="askAiPanel" class="ask-ai-panel" hidden>
+            <label for="askAiInput">想问 AI 什么？</label>
+            <textarea id="askAiInput" rows="3" placeholder="例如：下一步要做什么？"></textarea>
+            <button id="submitAskAi" type="button">发送问题</button>
+            <button id="cancelAiInteraction" type="button" class="secondary-action" hidden>取消</button>
+            <p id="askAiResponse" role="status"></p>
+            <div id="voiceReplyControls" class="voice-reply-controls" hidden>
+              <button id="playAiAnswer" type="button" class="secondary-action">🔊 播放回答</button>
+              <button id="stopAiAnswer" type="button" class="secondary-action" hidden>停止播放</button>
+            </div>
+          </div>
+        </details>
       </section>
-      </div>
-      </details>
 
       <section id="completionCard" class="completion-card">
         <h3>当前操作</h3>
@@ -183,7 +189,7 @@
       <summary>DEV MODE · 开发诊断</summary>
       <div class="dev-mode-content">
         <p>Device diagnostics</p>
-        <dl class="capability-diagnostics"><div><dt>Camera</dt><dd id="capabilityCamera">Checking</dd></div><div><dt>Speech Input</dt><dd id="capabilitySpeechInput">Checking</dd></div><div><dt>Speech Output</dt><dd id="capabilitySpeechOutput">Checking</dd></div><div><dt>Browser</dt><dd id="capabilityBrowser">Checking</dd></div><div><dt>Voice State</dt><dd id="diagnosticVoiceState">IDLE</dd></div><div><dt>Transcript</dt><dd id="diagnosticTranscript">—</dd></div><div><dt>Ask Request</dt><dd id="diagnosticAskRequest">—</dd></div><div><dt>Ask Latency</dt><dd id="diagnosticAskLatency">—</dd></div><div><dt>Frame</dt><dd id="diagnosticFrame">—</dd></div><div><dt>Vision</dt><dd id="diagnosticVision">idle</dd></div><div><dt>RAG</dt><dd id="diagnosticRag">—</dd></div><div><dt>TTS</dt><dd id="diagnosticTts">idle</dd></div><div><dt>Last Error</dt><dd id="diagnosticLastError">—</dd></div></dl>
+        <dl class="capability-diagnostics"><div><dt>Camera</dt><dd id="capabilityCamera">Checking</dd></div><div><dt>Camera Frame Timestamp</dt><dd id="diagnosticCameraFrameTimestamp">—</dd></div><div><dt>Speech Input</dt><dd id="capabilitySpeechInput">Checking</dd></div><div><dt>Speech Output</dt><dd id="capabilitySpeechOutput">Checking</dd></div><div><dt>Browser</dt><dd id="capabilityBrowser">Checking</dd></div><div><dt>Voice State</dt><dd id="diagnosticVoiceState">IDLE</dd></div><div><dt>Transcript</dt><dd id="diagnosticTranscript">—</dd></div><div><dt>Ask Request</dt><dd id="diagnosticAskRequest">—</dd></div><div><dt>Ask Latency</dt><dd id="diagnosticAskLatency">—</dd></div><div><dt>Frame</dt><dd id="diagnosticFrame">—</dd></div><div><dt>Vision</dt><dd id="diagnosticVision">idle</dd></div><div><dt>RAG</dt><dd id="diagnosticRag">—</dd></div><div><dt>TTS</dt><dd id="diagnosticTts">idle</dd></div><div><dt>Last Error</dt><dd id="diagnosticLastError">—</dd></div></dl>
         <div class="camera-config"><label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label><div><span>Resolution</span><strong id="cameraResolution">—</strong></div></div>
         <p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
         <section class="task-panel" aria-label="内部教学状态">

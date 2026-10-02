@@ -104,6 +104,7 @@ aside strong { color: #ffcb64; }
 .ask-ai-drawer,.camera-tool{border:1px solid rgba(91,217,255,.28);border-radius:14px;background:rgba(5,20,33,.88);overflow:hidden}.ask-ai-drawer>summary,.camera-tool>summary{padding:16px 18px;color:#8feaff;font-weight:850;cursor:pointer;list-style:none}.ask-ai-drawer>summary::after,.camera-tool>summary::after{content:'＋';float:right}.ask-ai-drawer[open]>summary::after,.camera-tool[open]>summary::after{content:'－'}
 .student-tool[hidden]{display:none!important}.completion-feedback{border:1px solid rgba(110,255,180,.55);background:linear-gradient(145deg,rgba(10,62,55,.88),rgba(8,28,44,.9))!important;text-align:center}.completion-feedback h3{color:#6effb4}.task-complete{padding:26px!important}
 .student-camera{border:1px solid rgba(91,217,255,.28)}.section-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.section-heading span{color:#8aa9bc}
+.live-coach-card{display:grid;gap:14px;padding:18px;border:1px solid rgba(91,217,255,.36);border-radius:18px;background:linear-gradient(145deg,rgba(5,28,44,.96),rgba(4,17,29,.96))}.live-coach-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.live-coach-heading h3{margin:3px 0 0;color:#79f0b0}.live-coach-heading #pauseVoiceCoach{grid-column:2}.live-coach-card>.voice-status{color:#b7cad8}.live-coach-card .camera-tool{margin:0}.latest-answer-card{padding:14px;border-radius:14px;background:rgba(91,217,255,.08);border:1px solid rgba(91,217,255,.22)}.latest-answer-card p{margin:0}.latest-answer-card #latestAiAnswer{margin-top:7px;line-height:1.6;color:#eefaff}.fallback-methods{border-top:1px solid rgba(91,217,255,.2);padding-top:10px}.fallback-methods>summary{cursor:pointer;color:#8aa9bc;font-weight:750;padding:8px 0}.fallback-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.live-coach-card .student-camera>#startCamera{width:100%;margin-top:12px}.camera-frozen{color:#ffcf70;font-weight:800}
 .student-camera .preview{margin-top:14px}.student-camera-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
 .completion-card,.evidence-card,.reflection-card,.teacher-card{border:1px solid rgba(91,217,255,.18)}
 .completion-card h3,.evidence-card h3,.reflection-card h3,.teacher-card h3{margin-top:0}
@@ -121,6 +122,7 @@ aside strong { color: #ffcb64; }
   .compact-status{grid-template-columns:1fr}.task-map ol{grid-template-columns:1fr 1fr}
   .student-task{padding:12px}.student-task section{padding:16px}
   .coach-card{grid-template-columns:1fr}.ask-actions,.student-camera-actions{grid-template-columns:1fr}
+  .live-coach-heading{grid-template-columns:1fr}.live-coach-heading #pauseVoiceCoach{grid-column:auto}.fallback-actions{grid-template-columns:1fr}
   .student-task button,.ask-actions button{width:100%;margin:5px 0}
   .section-heading{display:grid}.task-footer{display:grid}
 }
@@ -128,6 +130,6 @@ aside strong { color: #ffcb64; }
 @media (max-width:390px){
   .student-summary{grid-template-columns:1fr}.task-map-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .student-hero h1{font-size:1.9rem}
-  .student-app{width:100%;padding:8px 8px 96px}.student-hero{padding:17px;border-radius:18px}.compact-status{display:none}.student-task{padding:10px;border-radius:18px}.student-group-progress li{min-width:92px;padding:8px}.student-group-progress li strong{font-size:.75rem}.current-step-card{min-height:260px;display:flex;flex-direction:column;justify-content:center}.current-step-card h3{font-size:1.55rem}.instruction-card:not(.current-step-card){padding:14px}.ask-ai-drawer{position:sticky;bottom:8px;z-index:10;box-shadow:0 12px 34px rgba(0,0,0,.48)}
+  .student-app{width:100%;padding:8px 8px 96px}.student-hero{padding:17px;border-radius:18px}.compact-status{display:none}.student-task{padding:10px;border-radius:18px}.student-group-progress li{min-width:92px;padding:8px}.student-group-progress li strong{font-size:.75rem}.current-step-card{min-height:260px;display:flex;flex-direction:column;justify-content:center}.current-step-card h3{font-size:1.55rem}.instruction-card:not(.current-step-card){padding:14px}.live-coach-card{padding:14px;box-shadow:0 12px 34px rgba(0,0,0,.32)}
   .browser-warning{grid-template-columns:1fr}.browser-warning button{grid-column:auto;grid-row:auto;width:100%}.voice-reply-controls{grid-template-columns:1fr}
 }

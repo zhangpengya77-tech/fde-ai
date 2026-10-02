@@ -14,9 +14,12 @@ test('voice entry remains visible and reports unsupported capability', () => {
   assert.deepEqual(live.voiceEntryState(false), { label: '🎙 语音暂不可用', available: false });
 });
 
-test('student AI bar exposes voice text and visual actions without opening another panel', () => {
+test('Live Coach keeps the natural voice action visible and moves manual tools into fallback', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  assert.match(html, /<details id="aiTools"[^>]*\sopen/);
+  assert.match(html, /<section id="aiTools" class="live-coach-card">/);
+  assert.match(html, /id="enableVoiceCoach"[^>]*>开启语音助教</);
+  assert.match(html, /<details id="fallbackMethods"[^>]*>/);
+  assert.doesNotMatch(html, /<details id="fallbackMethods"[^>]*\sopen/);
   for (const id of ['pushToTalk', 'textAskAi', 'assistantVisualAction']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /🤖 AI 看当前画面|📷 打开摄像头/);
 });
