@@ -148,7 +148,7 @@ class InMemorySessionStore:
         current_id = session.current_task_id or "TASK_01"
         current = progress.task(current_id)
         definition = next(item for item in progress.course.tasks if item.id == current_id)
-        missing = tuple(item for item in definition.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED)
+        missing = progress.unsafe_step_missing(current_id, current.current_training_step_id)
         session.task_state = current.status.value
         session.prerequisite_state = "BLOCKED" if missing else "READY"
         session.safety_state = "TEACHER_GATE" if definition.safety_gate else "ADVISORY"
@@ -163,12 +163,12 @@ class InMemorySessionStore:
         current = next(item for item in progress.course.tasks if item.id == session.current_task_id)
         current_progress = progress.task(current.id)
         current_step = next((step for step in current.steps if step.step_id == current_progress.current_training_step_id), None)
-        missing = tuple(item for item in current.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED)
+        missing = progress.unsafe_step_missing(current.id, current_progress.current_training_step_id)
         tasks = [{
             "task_id": item.id, "order": item.order, "short_name": item.short_name,
             "title": item.title, "status": progress.task(item.id).status.value,
             "viewable": True,
-            "actionable": not any(progress.task(req).status is not TaskStatus.COMPLETED for req in item.prerequisites),
+            "actionable": True,
         } for item in progress.course.tasks]
         return {
             "training_track": session.training_track,
@@ -187,6 +187,8 @@ class InMemorySessionStore:
             "progress": progress.summary,
             "overall_progress": progress.summary,
             "actionable": not missing,
+            "completable": not missing,
+            "unsafe_action_allowed": not missing,
             "current_step": self._training_step_payload(current_step, current_progress) if current_step else None,
             "tasks": tasks,
             "task": {
@@ -231,11 +233,18 @@ class InMemorySessionStore:
         task = next((item for item in progress.course.tasks if item.id == task_id), None)
         if task is None:
             raise KeyError(task_id)
-        missing = [item for item in task.prerequisites if progress.task(item).status is not TaskStatus.COMPLETED]
+        task_progress = progress.task(task.id)
+        current_step = next((step for step in task.steps if step.step_id == task_progress.current_training_step_id), None)
+        missing = list(progress.unsafe_step_missing(task.id, task_progress.current_training_step_id))
         return {
             "viewable": True,
-            "actionable": not missing,
+            "actionable": True,
+            "completable": not missing,
+            "unsafe_action_allowed": not missing,
             "current_task_id": current_id,
+            "current_training_step_id": task_progress.current_training_step_id,
+            "current_step": self._training_step_payload(current_step, task_progress) if current_step else None,
+            "training_step_progress": task_progress.training_step_progress,
             "missing_prerequisites": missing,
             "task_state": progress.task(task.id).status.value,
             "task": {

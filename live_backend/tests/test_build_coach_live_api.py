@@ -42,7 +42,8 @@ class BuildCoachLiveApiTests(unittest.TestCase):
         ack = self.client.post(f"/api/live/sessions/{self.sid}/training/steps/T02_PREPOWER_TEACHER/safety-ack", json={})
         self.assertEqual(ack.status_code, 200)
         fact = self.client.post(f"/api/live/sessions/{self.sid}/training/steps/T02_PREPOWER_TEACHER/facts", json={"fact": "LEARNER_CONFIRMED"})
-        self.assertEqual(fact.status_code, 409)
+        self.assertEqual(fact.status_code, 200)
+        self.assertEqual(fact.json()["training"]["task_state"], "PENDING_TEACHER_REVIEW")
         self.assertEqual(task.current_training_step_id, "T02_PREPOWER_TEACHER")
 
     def test_step_teacher_review_requires_teacher_role(self):

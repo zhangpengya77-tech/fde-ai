@@ -33,29 +33,30 @@ test('unknown tasks fall back to one group per backend step', () => {
 });
 
 test('only tools required by the current backend step are visible', () => {
-  assert.deepEqual(live.studentStepToolVisibility({}), { camera: false, evidence: false, reflection: false, teacher: false, safety: false });
-  assert.deepEqual(live.studentStepToolVisibility({ step_id: 'T03_EVIDENCE', vision_task: 'motor_frame_presence', evidence_required: ['PHOTO'], teacher_gate: true, safety_reminders: [{ id: 'REM' }] }), { camera: true, evidence: true, reflection: false, teacher: true, safety: true });
+  assert.deepEqual(live.studentStepToolVisibility({}), { camera: true, aiCheck: false, evidence: false, reflection: false, teacher: false, safety: false });
+  assert.deepEqual(live.studentStepToolVisibility({ step_id: 'T03_EVIDENCE', vision_task: 'motor_frame_presence', evidence_required: ['PHOTO'], teacher_gate: true, safety_reminders: [{ id: 'REM' }] }), { camera: true, aiCheck: true, evidence: true, reflection: false, teacher: true, safety: true });
   assert.equal(live.studentStepToolVisibility({ step_id: 'T03_REFLECTION', title: '学习总结' }).reflection, true);
 });
 
 test('teacher gate blocks learner forward navigation', () => {
   const elements = {
-    confirmTrainingStep: { disabled: false }, safetyCard: { hidden: false }, cameraTool: { hidden: false },
+    primaryTrainingAction: { disabled: false, dataset: {} }, safetyCard: { hidden: false }, cameraTool: { hidden: false },
     evidenceCard: { hidden: false }, reflectionCard: { hidden: false }, teacherCard: { hidden: false }
   };
-  live.renderTrainingState(elements, { current_training_step_id: 'T04_CONTINUITY', task: { id: 'TASK_04', steps: [{ step_id: 'T04_CONTINUITY', teacher_gate: true }] } });
-  assert.equal(elements.confirmTrainingStep.disabled, true);
+  live.renderTrainingState(elements, { task_state: 'IN_PROGRESS', current_training_step_id: 'T04_CONTINUITY', task: { id: 'TASK_04', steps: [{ step_id: 'T04_CONTINUITY', teacher_gate: true }] } });
+  assert.equal(elements.primaryTrainingAction.dataset.action, 'TEACHER');
+  assert.equal(elements.primaryTrainingAction.textContent, '提交教师复核');
   assert.equal(elements.teacherCard.hidden, false);
 });
 
 test('empty safety and unrelated tools remain hidden', () => {
   const elements = {
     safetyCard: { hidden: false }, cameraTool: { hidden: false }, evidenceCard: { hidden: false },
-    reflectionCard: { hidden: false }, teacherCard: { hidden: false }, confirmTrainingStep: { disabled: false }
+    reflectionCard: { hidden: false }, teacherCard: { hidden: false }, primaryTrainingAction: { disabled: false, dataset: {} }
   };
-  live.renderTrainingState(elements, { current_training_step_id: 'T03_LAYOUT', task: { id: 'TASK_03', steps: [{ step_id: 'T03_LAYOUT' }] } });
+  live.renderTrainingState(elements, { task_state: 'IN_PROGRESS', current_training_step_id: 'T03_LAYOUT', task: { id: 'TASK_03', steps: [{ step_id: 'T03_LAYOUT' }] } });
   assert.equal(elements.safetyCard.hidden, true);
-  assert.equal(elements.cameraTool.hidden, true);
+  assert.equal(elements.cameraTool.hidden, false);
   assert.equal(elements.evidenceCard.hidden, true);
   assert.equal(elements.reflectionCard.hidden, true);
   assert.equal(elements.teacherCard.hidden, true);
@@ -68,11 +69,11 @@ test('step and task completion feedback use explicit continue actions', () => {
 
 test('mobile markup provides one-step shell, conditional tools, AI drawer, and collapsed dev mode', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  for (const id of ['studentGroupProgress','currentStepCard','cameraTool','evidenceCard','reflectionCard','teacherCard','stepCompleteFeedback','taskCompleteFeedback','askAiDrawer','devModePanel']) {
+  for (const id of ['studentGroupProgress','currentStepCard','cameraTool','evidenceCard','reflectionCard','teacherCard','stepCompleteFeedback','taskCompleteFeedback','aiTools','devModePanel']) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
-  assert.match(html, /<details[^>]+id=["']cameraTool["']/);
-  assert.match(html, /<details[^>]+id=["']askAiDrawer["']/);
+  assert.match(html, /<div[^>]+id=["']cameraTool["']/);
+  assert.match(html, /<details[^>]+id=["']aiTools["']/);
   assert.doesNotMatch(html, /<details[^>]+id=["']devModePanel["'][^>]*\sopen(?:\s|>)/);
 });
 

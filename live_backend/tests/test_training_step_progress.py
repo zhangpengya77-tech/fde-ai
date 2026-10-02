@@ -24,8 +24,10 @@ class TrainingStepProgressTests(unittest.TestCase):
         task.status = TaskStatus.IN_PROGRESS
         task.current_training_step_id = "T02_PREPOWER_TEACHER"
         self.progress.acknowledge_step_safety("TASK_02", "T02_PREPOWER_TEACHER")
-        with self.assertRaisesRegex(TaskTransitionError, "teacher_step_approval_required"):
-            self.progress.record_step_fact("TASK_02", "T02_PREPOWER_TEACHER", "LEARNER_CONFIRMED")
+        self.progress.record_step_fact("TASK_02", "T02_PREPOWER_TEACHER", "LEARNER_CONFIRMED")
+        self.assertEqual(task.status, TaskStatus.PENDING_TEACHER_REVIEW)
+        self.assertEqual(task.current_training_step_id, "T02_PREPOWER_TEACHER")
+        self.assertIsNone(task.training_step_progress["T02_PREPOWER_TEACHER"]["teacher_decision"])
 
     def test_teacher_can_approve_or_reject_step_gate(self):
         task = self.progress.task("TASK_02")

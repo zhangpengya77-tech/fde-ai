@@ -32,7 +32,7 @@ class F450LiveLoopTests(unittest.TestCase):
         self.assertEqual(state["progress"], "0 / 12")
         self.assertEqual(len(state["tasks"]), 12)
         self.assertTrue(state["tasks"][6]["viewable"])
-        self.assertFalse(state["tasks"][6]["actionable"])
+        self.assertTrue(state["tasks"][6]["actionable"])
         self.assertIn("expected_action", state["context"])
         self.assertIn("safety_reminders", state["context"])
 
@@ -60,7 +60,9 @@ class F450LiveLoopTests(unittest.TestCase):
         self.client.post(f"/api/live/sessions/{self.sid}/training/reflection", json={"task_id": "TASK_02", "original_text": "软件流程测试。", "source_type": "TEXT"})
         pending = self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_02/complete", json={})
         self.assertEqual(pending.json()["training"]["task_state"], "PENDING_TEACHER_REVIEW")
-        self.assertEqual(self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_03/start", json={}).status_code, 409)
+        out_of_order = self.client.post(f"/api/live/sessions/{self.sid}/training/tasks/TASK_03/start", json={})
+        self.assertEqual(out_of_order.status_code, 200)
+        self.assertEqual(out_of_order.json()["training"]["task_state"], "IN_PROGRESS")
 
         denied = self.client.post(f"/api/live/sessions/{self.sid}/training/teacher-review", json={"task_id": "TASK_02", "decision": "APPROVE", "note": "self approve"})
         self.assertEqual(denied.status_code, 403)
@@ -101,13 +103,13 @@ class F450LiveLoopTests(unittest.TestCase):
         self.assertEqual(growth["progress_label"], "0 / 12")
         self.assertEqual(growth["sync_status"], "PENDING_SYNC")
 
-    def test_future_task_is_viewable_without_becoming_current_or_actionable(self):
+    def test_future_task_is_viewable_and_actionable_without_becoming_current(self):
         response = self.client.get(f"/api/live/sessions/{self.sid}/training/tasks/TASK_07")
         self.assertEqual(response.status_code, 200)
         view = response.json()["training_task_view"]
         self.assertEqual(view["task"]["id"], "TASK_07")
         self.assertTrue(view["viewable"])
-        self.assertFalse(view["actionable"])
+        self.assertTrue(view["actionable"])
         self.assertEqual(self.state()["current_task_id"], "TASK_01")
 
 

@@ -23,15 +23,14 @@ class F450TaskStateTests(unittest.TestCase):
             evidence = "FLIGHT_LOG_REFERENCE" if task_id == "TASK_11" else None
             self._complete(task_id, teacher=task_id in teacher_tasks, evidence_type=evidence)
 
-    def test_task02_pending_teacher_review_blocks_task03(self):
+    def test_task02_pending_teacher_review_does_not_block_task03_learning(self):
         self._complete("TASK_01")
         self.progress.start_task("TASK_02")
         self.progress.request_completion("TASK_02", actor="student")
         self.assertEqual(self.progress.task("TASK_02").status, TaskStatus.PENDING_TEACHER_REVIEW)
-        with self.assertRaisesRegex(TaskTransitionError, "missing_prerequisites:TASK_02"):
-            self.progress.start_task("TASK_03")
-        self.assertEqual(self.progress.task("TASK_03").status, TaskStatus.BLOCKED)
-        self.assertEqual(self.progress.task("TASK_03").missing_prerequisites, ("TASK_02",))
+        self.progress.start_task("TASK_03")
+        self.assertEqual(self.progress.task("TASK_03").status, TaskStatus.IN_PROGRESS)
+        self.assertEqual(self.progress.task("TASK_03").missing_prerequisites, ())
 
     def test_teacher_approve_unlocks_next_task_and_records_audit(self):
         self._complete("TASK_01")
@@ -60,19 +59,26 @@ class F450TaskStateTests(unittest.TestCase):
             self.progress.record_teacher_review("TASK_02", "APPROVE", "student-1", "self approved", actor_role="student")
         self.assertEqual(self.progress.task("TASK_02").status, TaskStatus.PENDING_TEACHER_REVIEW)
 
-    def test_task07_is_blocked_without_task06_teacher_release(self):
+    def test_task07_learning_is_open_but_first_power_is_blocked_without_task06_release(self):
         self._complete_through(5)
         self.progress.start_task("TASK_06")
         self.progress.request_completion("TASK_06", actor="student")
-        with self.assertRaisesRegex(TaskTransitionError, "missing_prerequisites:TASK_06"):
-            self.progress.start_task("TASK_07")
+        task = self.progress.start_task("TASK_07")
+        self.assertEqual(task.status, TaskStatus.IN_PROGRESS)
+        task.current_training_step_id = "T07_FIRST_POWER_TEACHER"
+        self.progress.acknowledge_step_safety("TASK_07", "T07_FIRST_POWER_TEACHER")
+        with self.assertRaisesRegex(TaskTransitionError, "unsafe_step_prerequisites:TASK_06"):
+            self.progress.record_step_fact("TASK_07", "T07_FIRST_POWER_TEACHER", "LEARNER_CONFIRMED")
 
-    def test_task10_release_is_required_before_task11(self):
+    def test_task11_learning_is_open_but_controlled_flight_requires_task10_release(self):
         self._complete_through(9)
         self.progress.start_task("TASK_10")
         self.progress.request_completion("TASK_10", actor="student")
-        with self.assertRaisesRegex(TaskTransitionError, "missing_prerequisites:TASK_10"):
-            self.progress.start_task("TASK_11")
+        task = self.progress.start_task("TASK_11")
+        self.assertEqual(task.status, TaskStatus.IN_PROGRESS)
+        task.current_training_step_id = "TEACHER_CONTROLLED_FLIGHT"
+        with self.assertRaisesRegex(TaskTransitionError, "unsafe_step_prerequisites:TASK_10"):
+            self.progress.record_step_fact("TASK_11", "TEACHER_CONTROLLED_FLIGHT", "LEARNER_CONFIRMED")
 
     def test_task12_requires_real_flight_evidence(self):
         self._complete_through(10)

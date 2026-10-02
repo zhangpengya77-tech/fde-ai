@@ -28,6 +28,7 @@
     <section id="taskMapScreen" class="task-map-home">
       <div class="task-map-intro"><div><p class="section-kicker">F450 12 Task Map</p><h2>选择今天要学习的任务</h2></div><strong id="mapProgress">0 / 12</strong></div>
       <p>从零件、组装、调参到真机测试，AI 协助学习，关键安全环节由教师复核。</p>
+      <div class="task-status-legend" aria-label="任务状态图例"><span class="legend-gray">■ 灰色 未开始</span><span class="legend-blue">■ 蓝色 进行中</span><span class="legend-orange">■ 橙色 待教师确认</span><span class="legend-red">■ 红色 需重新检查</span><span class="legend-green">■ 绿色 已完成</span></div>
       <ol id="trainingTaskList" class="task-map-grid"><li>正在载入 12 项任务…</li></ol>
     </section>
 
@@ -57,8 +58,8 @@
         <div id="trainingSafety">本步骤暂无额外安全提醒。</div>
       </section>
 
-      <details id="askAiDrawer" class="ask-ai-drawer">
-      <summary>问 AI</summary>
+      <details id="aiTools" class="ask-ai-drawer">
+      <summary>AI 助教工具</summary>
       <section class="coach-card">
         <div>
           <p class="section-kicker">AI 助教</p>
@@ -78,10 +79,7 @@
           <p id="askAiResponse" role="status"></p>
         </div>
       </section>
-      </details>
-
-      <details id="cameraTool" class="camera-tool student-tool" hidden>
-      <summary>让 AI 看一下</summary>
+      <div id="cameraTool" class="camera-tool student-tool">
       <section class="camera-panel student-camera">
         <div class="section-heading">
           <div><p class="section-kicker">摄像头</p><h3>需要时再请 AI 检查</h3></div>
@@ -97,26 +95,24 @@
         <div class="controls student-camera-actions">
           <button id="startCamera" type="button">打开摄像头</button>
           <button id="switchCamera" class="secondary-action" type="button" disabled>切换镜头</button>
-          <button id="captureFrame" class="primary-action" type="button" disabled>AI 帮我看一下</button>
+          <button id="captureFrame" class="primary-action" type="button" disabled hidden>AI 帮我看一下</button>
           <button id="stopCamera" type="button" disabled>关闭摄像头</button>
           <button id="uploadImage" class="secondary-action" type="button">上传照片请 AI 看</button>
           <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
         </div>
         <p id="liveMessage" role="status">正在连接 AI 助教…</p>
       </section>
+      </div>
       </details>
 
-      <section class="completion-card">
-        <h3>完成这一步</h3>
+      <section id="completionCard" class="completion-card">
+        <h3>当前操作</h3>
         <ul id="trainingCompletionConditions"><li>等待系统载入完成条件。</li></ul>
-        <button id="acknowledgeTrainingSafety" type="button" hidden>我已阅读安全提醒</button>
-        <button id="confirmTrainingStep" type="button" disabled>我已经完成</button>
-        <button id="confirmStep" type="button" disabled hidden>确认并进入下一步</button>
-        <button id="startTrainingTask" type="button">开始当前任务</button>
-        <button id="completeTrainingTask" type="button">提交任务完成条件</button>
+        <label id="safetyAcknowledgment" class="safety-acknowledgment" hidden><input id="acknowledgeTrainingSafety" type="checkbox"> 我已阅读安全提醒</label>
+        <button id="primaryTrainingAction" type="button">开始任务</button>
       </section>
       <section id="stepCompleteFeedback" class="completion-feedback" hidden><h3>✅ 这一步完成</h3><p>你已经完成当前步骤。</p><button id="continueTrainingStep" type="button">进入下一步</button></section>
-      <section id="taskCompleteFeedback" class="completion-feedback task-complete" hidden><h3>Task 已完成</h3><p>本任务的操作、证据与复核已记录。</p><button id="returnTaskMap" type="button">返回 12 Task 地图</button></section>
+      <section id="taskCompleteFeedback" class="completion-feedback task-complete" hidden><h3>Task 已完成</h3><p>本任务的操作、证据与复核已记录。</p></section>
 
       <section id="evidenceCard" class="evidence-card student-tool" hidden>
         <h3>留下学习证据</h3>
@@ -124,7 +120,6 @@
         <label class="file-action">拍照 / 上传照片
           <input id="trainingEvidenceFile" type="file" accept="image/*,video/*,.pdf" capture="environment">
         </label>
-        <button id="saveTrainingEvidence" type="button">保存学习证据</button>
       </section>
 
       <section id="reflectionCard" class="reflection-card student-tool" hidden>
@@ -138,7 +133,6 @@
         <label class="assisted-summary">AI 帮我整理（不会取代原文）
           <textarea id="reflectionAssisted" rows="4" readonly placeholder="填写原始内容后可由 AI 协助整理"></textarea>
         </label>
-        <button id="saveTrainingReflection" type="button">保存学习总结</button>
       </section>
 
       <section id="teacherCard" class="teacher-card student-tool" hidden>
@@ -158,7 +152,7 @@
       </details>
 
       <footer class="task-footer">
-        <span>任务条件：<strong id="trainingPrerequisite">准备中</strong></span>
+        <span><strong id="trainingPrerequisite">可以开始学习</strong></span>
         <span>成长记录：<strong id="trainingGrowth">0 / 12 · 待同步</strong></span>
       </footer>
     </article>

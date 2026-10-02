@@ -84,17 +84,16 @@ class Task07MissionPlannerContentTests(unittest.TestCase):
         self.assertEqual(task.training_step_progress["T07_FAILSAFE"]["status"], "PENDING_TEACHER_REVIEW")
         self.assertIsNone(task.training_step_progress["T07_FAILSAFE"]["teacher_decision"])
 
-    def test_task08_stays_blocked_until_task07_final_teacher_review(self):
+    def test_task08_learning_can_start_before_task07_final_teacher_review(self):
         progress = TrainingProgress("session-07", "student-07", load_f450_course())
         progress.task("TASK_06").status = TaskStatus.COMPLETED
         progress.start_task("TASK_07")
         progress.task("TASK_07").status = TaskStatus.PENDING_TEACHER_REVIEW
 
-        with self.assertRaisesRegex(TaskTransitionError, "missing_prerequisites:TASK_07"):
-            progress.start_task("TASK_08")
+        self.assertEqual(progress.start_task("TASK_08").status, TaskStatus.IN_PROGRESS)
 
         progress.record_teacher_review("TASK_07", "APPROVE", "MOCK_TEACHER", "软件流程复核", actor_role="teacher")
-        self.assertEqual(progress.start_task("TASK_08").status, TaskStatus.IN_PROGRESS)
+        self.assertEqual(progress.task("TASK_08").status, TaskStatus.IN_PROGRESS)
 
 
 if __name__ == "__main__":

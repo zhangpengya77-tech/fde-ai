@@ -58,7 +58,9 @@ class BuildCoachE2ETests(unittest.TestCase):
             self.assertEqual(reviewed.status_code, 200, reviewed.text)
 
     def test_task01_through_task06_reach_six_of_twelve_and_unlock_task07(self):
-        self.assertFalse(self.client.get(f"/api/live/sessions/{self.sid}/training/tasks/TASK_07").json()["training_task_view"]["actionable"])
+        initial_view = self.client.get(f"/api/live/sessions/{self.sid}/training/tasks/TASK_07").json()["training_task_view"]
+        self.assertTrue(initial_view["actionable"])
+        self.assertTrue(initial_view["unsafe_action_allowed"])
         for number in range(1, 7):
             self.finish_task(f"TASK_{number:02d}")
         state = self.state()
