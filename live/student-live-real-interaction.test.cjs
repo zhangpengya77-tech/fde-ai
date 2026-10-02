@@ -44,6 +44,7 @@ test('question classifier captures only visual questions', () => {
   assert.equal(live.questionRequiresVision('为什么要做罗盘校准？'), false);
   assert.equal(live.questionRequiresVision('我这个桨叶方向对不对？'), true);
   assert.equal(live.questionRequiresVision('帮我看一下这个接收机接对了吗？'), true);
+  assert.equal(live.questionRequiresVision('帮我看一下，我现在可以安全上电吗？'), false);
 });
 
 test('camera preview policy never schedules continuous inference', () => {
