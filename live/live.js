@@ -346,6 +346,51 @@
   function showTaskMap(elements) { if (elements.taskMapScreen) elements.taskMapScreen.hidden = false; if (elements.taskDetailScreen) elements.taskDetailScreen.hidden = true; }
   function showTaskDetail(elements) { if (elements.taskMapScreen) elements.taskMapScreen.hidden = true; if (elements.taskDetailScreen) elements.taskDetailScreen.hidden = false; }
 
+  function initializeStudentTaskMap(elements, training) {
+    renderTrainingState(elements, training || {});
+    showTaskMap(elements);
+  }
+
+  function renderTaskMapLoadError(elements) {
+    if (elements.trainingTaskList) elements.trainingTaskList.innerHTML = '<li class="task-map-error">任务地图载入失败。<button type="button" data-retry-task-map>重新载入</button></li>';
+    showTaskMap(elements);
+  }
+
+  function bindTaskMapRetry(container, retry) {
+    container?.addEventListener('click', async (event) => {
+      if (!event.target.closest?.('[data-retry-task-map]')) return;
+      await retry();
+    });
+  }
+
+  async function handleVoiceTranscript(transcript, setInput, submit) {
+    const question = String(transcript || '').trim();
+    if (!question) return;
+    setInput(question);
+    await submit(question);
+  }
+
+  function questionRequiresVision(question = '') {
+    return /帮我看|看一下|画面|镜头|这个是什么|对不对|方向|接对|桨叶|螺旋桨/i.test(String(question));
+  }
+
+  function cameraPreviewPolicy() {
+    return { localPreview: true, continuousVision: false, captureMode: 'explicit_single_frame' };
+  }
+
+  async function askLiveCoach(fetchImpl, sessionId, question, captureCurrentFrame) {
+    const payload = { question: String(question || '').trim() };
+    if (questionRequiresVision(payload.question)) {
+      const captured = captureCurrentFrame?.();
+      if (!captured?.imageData) throw new Error('camera_frame_required');
+      payload.image_data = captured.imageData;
+    }
+    const response = await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/ask`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    return parseJsonResponse(response);
+  }
+
   function studentCoachMessage(state, teacherRequired = false) {
     const messages = {
       NO_DETECTION: '目前没有清楚看到目标零件，请把零件完整放到镜头中央。',
@@ -524,7 +569,7 @@
       elements.ragStatus.textContent = String(rag.status || 'idle').toUpperCase();
       elements.ragLatency.textContent = Number.isFinite(Number(rag.latency_ms)) ? `${Number(rag.latency_ms).toFixed(1)} ms` : '—';
     }
-    elements.confirm.disabled = session.state !== 'PASS_CANDIDATE';
+    if (elements.confirm) elements.confirm.disabled = session.state !== 'PASS_CANDIDATE';
     const training = payload.training || task.training;
     if (training) renderTrainingState(elements, training);
   }
@@ -668,6 +713,7 @@
       currentTrainingState = state.training || null;
       currentTrainingTaskId = state.training?.current_task_id || currentTrainingTaskId;
       currentTrainingStepId = state.training?.current_training_step_id || null;
+      initializeStudentTaskMap(elements, state.training);
       if (elements.devTeacherControls) elements.devTeacherControls.hidden = !created.dev_mode;
       return sessionId;
     }
@@ -909,21 +955,32 @@
     voiceControl = bindPushToTalk(elements.pushToTalk, {
       recognitionFactory: SpeechRecognitionCtor ? () => { const recognition = new SpeechRecognitionCtor(); recognition.lang = 'zh-CN'; recognition.interimResults = false; recognition.continuous = false; return recognition; } : null,
       onState: (state) => { elements.voiceStatus.textContent = state === 'LISTENING' ? '正在听，请说出你的问题。' : state === 'PROCESSING' ? '正在处理语音…' : elements.voiceStatus.textContent; },
-      onResult: (transcript) => { elements.askAiPanel.hidden = false; elements.askAiInput.value = transcript; elements.voiceStatus.textContent = '已转换成文字。AI 问答服务暂未连接。'; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; voiceControl?.reset(); },
+      onResult: (transcript) => {
+        elements.askAiPanel.hidden = false;
+        elements.voiceStatus.textContent = '已转换成文字，正在查询当前步骤。';
+        void handleVoiceTranscript(transcript, (value) => { elements.askAiInput.value = value; }, submitStudentQuestion);
+      },
       onError: () => { elements.voiceStatus.textContent = '语音输入失败，请先使用文字问 AI。'; voiceControl?.reset(); },
       onUnavailable: (message) => { elements.voiceStatus.textContent = message; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; elements.askAiPanel.hidden = false; }
     });
     elements.textAskAi?.addEventListener('click', () => { elements.askAiPanel.hidden = false; elements.askAiInput.focus(); });
-    elements.submitAskAi?.addEventListener('click', () => {
-      const question = elements.askAiInput.value.trim();
-      if (!question) { elements.askAiResponse.textContent = '请先输入问题。'; return; }
-      elements.askAiResponse.textContent = 'AI 问答服务暂未连接。问题已保留，请先依照当前步骤或询问教师。';
-      elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED';
-    });
+    async function submitStudentQuestion(question) {
+      if (!question.trim()) { elements.askAiResponse.textContent = '请先输入问题。'; return; }
+      elements.askAiResponse.textContent = 'AI 正在根据当前步骤查询教学知识…';
+      try {
+        const id = await ensureSession();
+        const result = await askLiveCoach(fetchImpl, id, question, () => stream ? captureFrame(elements.video, elements.captureCanvas) : null);
+        elements.askAiResponse.textContent = result.answer;
+        elements.voiceStatus.dataset.code = result.vision_used ? 'VISION_SINGLE_FRAME' : 'CONTEXT_ANSWER';
+      } catch (error) {
+        elements.askAiResponse.textContent = error.message === 'camera_frame_required' ? '请先打开摄像头，把目标放到画面中央后再问一次。' : '目前 AI 教学说明暂时不可用，请依照当前步骤或询问教师。';
+      } finally { voiceControl?.reset(); }
+    }
+    elements.submitAskAi?.addEventListener('click', () => void submitStudentQuestion(elements.askAiInput.value.trim()));
 
     elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
     elements.stopCoach.addEventListener('click', stopAutoObservation);
-    elements.confirm.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
+    elements.confirm?.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
     elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const id = await ensureSession('MOCK_VISION'); const result = await simulateVision(fetchImpl, id, button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { ...result, task: state }); if (result.rag_explanation?.status === 'pending') void refreshRagExplanation(id); }));
     elements.acknowledgeTrainingSafety?.addEventListener('change', async () => { if (!elements.acknowledgeTrainingSafety.checked || !currentTrainingStepId) return; const id = await ensureSession(); const result = await acknowledgeTrainingStepSafety(fetchImpl, id, currentTrainingStepId); renderCurrentTraining(result.training); });
     elements.primaryTrainingAction?.addEventListener('click', async () => {
@@ -963,6 +1020,7 @@
     elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', 'Development teacher requested rework', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
     elements.trainingTaskList?.addEventListener('click', async (event) => { const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask; if (!taskId) return; const id = await ensureSession(); const result = await fetchTrainingTaskView(fetchImpl, id, taskId); currentTrainingTaskId = taskId; renderCurrentTraining({ ...result.training_task_view, current_task_id: taskId, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' }); showTaskDetail(elements); setMessage(result.training_task_view.unsafe_action_allowed === false ? '可以先学习；到危险操作时需要完成安全检查并由教师确认。' : '此任务可以开始学习。'); });
     async function refreshMap() { const id = await ensureSession(); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderCurrentTraining(state.training); showTaskMap(elements); }
+    bindTaskMapRetry(elements.trainingTaskList, () => refreshMap().catch(() => renderTaskMapLoadError(elements)));
     elements.backToTaskMap?.addEventListener('click', () => refreshMap().catch((error) => setMessage(`任务地图刷新失败：${error.message}`)));
     elements.continueTrainingStep?.addEventListener('click', () => { if (!pendingTrainingState) return; const training = pendingTrainingState; pendingTrainingState = null; elements.stepCompleteFeedback.hidden = true; if (elements.completionCard) elements.completionCard.hidden = false; renderCurrentTraining(training); });
 
@@ -983,7 +1041,7 @@
       const controller = createController();
       controller.refreshHealth();
       controller.refreshCameraDevices();
-      controller.initializeStudentMode().catch(() => {});
+      controller.initializeStudentMode().catch(() => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }));
       window.addEventListener('pagehide', () => controller.stopCamera());
     });
   }
@@ -997,6 +1055,13 @@
     taskCompletionPolicy,
     showTaskMap,
     showTaskDetail,
+    initializeStudentTaskMap,
+    renderTaskMapLoadError,
+    bindTaskMapRetry,
+    handleVoiceTranscript,
+    questionRequiresVision,
+    cameraPreviewPolicy,
+    askLiveCoach,
     studentCoachMessage,
     shouldTriggerVision,
     studentStepGroupDefinitions,

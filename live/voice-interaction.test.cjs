@@ -56,8 +56,9 @@ test('voice and text ask controls are real interactive elements with scoped touc
   assert.match(css, /\.push-to-talk[^}]*-webkit-touch-callout:\s*none/s);
 });
 
-test('text ask UI states that provider is not configured instead of failing silently', () => {
+test('text ask uses the contextual backend while unavailable speech keeps an explicit fallback', () => {
   const source = fs.readFileSync(path.join(__dirname, 'live.js'), 'utf8');
-  assert.match(source, /AI 问答服务暂未连接/);
+  assert.match(source, /\/api\/live\/sessions\/\$\{encodeURIComponent\(sessionId\)\}\/ask/);
+  assert.match(source, /目前 AI 教学说明暂时不可用/);
   assert.match(source, /VOICE_PROVIDER_NOT_CONFIGURED/);
 });

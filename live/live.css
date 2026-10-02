@@ -25,6 +25,7 @@ p { color: #b7cad8; line-height: 1.65; }
 .camera-config strong { color: #8feaff; }
 #cameraHint { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; background: radial-gradient(circle, rgba(18,56,84,.65), rgba(1,4,7,.92)); color: #8feaff; font-weight: 700; }
 #cameraHint[hidden] { display: none; }
+[hidden] { display: none !important; }
 .preview { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: #010407; }
 .preview video, .preview #uploadPreview, .preview #detectionOverlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 #detectionOverlay { pointer-events: none; }
