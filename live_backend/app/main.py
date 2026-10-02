@@ -258,7 +258,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, vis
         if image_data is not None:
             _decoded, image_error = _decode_image_data(image_data, image_limit)
             if image_error: return error_response(image_error, "A valid image is required for a visual question.", 413 if image_error == "image_too_large" else 400)
-        try: result = await coach_ask.answer(sid, question, image_data)
+        request_id = str(payload.get("request_id") or "") or None
+        interaction_id = str(payload.get("interaction_id") or "") or None
+        try: result = await coach_ask.answer(sid, question, image_data, request_id=request_id, interaction_id=interaction_id)
         except ValueError as error:
             if str(error) == "visual_frame_required": return error_response("visual_frame_required", "Open the camera and capture one current frame.", 428)
             raise

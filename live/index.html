@@ -92,6 +92,7 @@
           <label for="askAiInput">想问 AI 什么？</label>
           <textarea id="askAiInput" rows="3" placeholder="例如：下一步要做什么？"></textarea>
           <button id="submitAskAi" type="button">发送问题</button>
+          <button id="cancelAiInteraction" type="button" class="secondary-action" hidden>取消</button>
           <p id="askAiResponse" role="status"></p>
           <div id="voiceReplyControls" class="voice-reply-controls" hidden>
             <button id="playAiAnswer" type="button" class="secondary-action">🔊 播放回答</button>
@@ -182,7 +183,7 @@
       <summary>DEV MODE · 开发诊断</summary>
       <div class="dev-mode-content">
         <p>Device diagnostics</p>
-        <dl class="capability-diagnostics"><div><dt>Camera</dt><dd id="capabilityCamera">Checking</dd></div><div><dt>Speech Input</dt><dd id="capabilitySpeechInput">Checking</dd></div><div><dt>Speech Output</dt><dd id="capabilitySpeechOutput">Checking</dd></div><div><dt>Browser</dt><dd id="capabilityBrowser">Checking</dd></div></dl>
+        <dl class="capability-diagnostics"><div><dt>Camera</dt><dd id="capabilityCamera">Checking</dd></div><div><dt>Speech Input</dt><dd id="capabilitySpeechInput">Checking</dd></div><div><dt>Speech Output</dt><dd id="capabilitySpeechOutput">Checking</dd></div><div><dt>Browser</dt><dd id="capabilityBrowser">Checking</dd></div><div><dt>Voice State</dt><dd id="diagnosticVoiceState">IDLE</dd></div><div><dt>Transcript</dt><dd id="diagnosticTranscript">—</dd></div><div><dt>Ask Request</dt><dd id="diagnosticAskRequest">—</dd></div><div><dt>Ask Latency</dt><dd id="diagnosticAskLatency">—</dd></div><div><dt>Frame</dt><dd id="diagnosticFrame">—</dd></div><div><dt>Vision</dt><dd id="diagnosticVision">idle</dd></div><div><dt>RAG</dt><dd id="diagnosticRag">—</dd></div><div><dt>TTS</dt><dd id="diagnosticTts">idle</dd></div><div><dt>Last Error</dt><dd id="diagnosticLastError">—</dd></div></dl>
         <div class="camera-config"><label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label><div><span>Resolution</span><strong id="cameraResolution">—</strong></div></div>
         <p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
         <section class="task-panel" aria-label="内部教学状态">

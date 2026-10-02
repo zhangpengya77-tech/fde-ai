@@ -42,7 +42,7 @@ class LiveCoachAskService:
             "请依据当前 SOP 与知识库，用简短中文解释；资料不足时明确要求教师确认。"
         )
 
-    async def answer(self, session_id: str, question: str, image_data: str | None = None) -> dict:
+    async def answer(self, session_id: str, question: str, image_data: str | None = None, *, request_id: str | None = None, interaction_id: str | None = None) -> dict:
         training = self.sessions.training_state(session_id)
         classification = self.classify(question)
         detections: list[dict] = []
@@ -53,23 +53,29 @@ class LiveCoachAskService:
                 try:
                     result = await self.vision_adapter.detect(image_data, "coach-question.jpg", 0.25)
                 except (VisionUnavailable, VisionResponseError):
-                    return self._payload(classification, UNCERTAIN_MESSAGE, "error", True, True, False)
+                    return self._payload(classification, UNCERTAIN_MESSAGE, "error", True, True, False, request_id, interaction_id)
             detections = result.detections
             vision_used = True
         rag = await self.rag_adapter.query(self._context_prompt(question, training, detections), str(uuid4()), 1)
         low_confidence = classification == "visual" and (not detections or max(float(item.get("confidence", 0)) for item in detections) < 0.5)
-        if classification == "safety": return self._payload(classification, SAFETY_MESSAGE, rag.status, False, False, True)
+        if classification == "safety": return self._payload(classification, SAFETY_MESSAGE, rag.status, False, False, True, request_id, interaction_id)
         task = training.get("task") or {}
         step = training.get("current_step") or {}
         if classification == "step":
             lead = f"你现在在 Task {int(task.get('order') or 0):02d}「{task.get('title') or ''}」，当前步骤是「{step.get('title') or '尚未开始'}」。"
             explanation = f" {rag.explanation}" if rag.hit and rag.explanation else ""
             answer = f"{lead}{step.get('student_instruction') or step.get('instruction') or ''}{explanation}".strip()
-            return self._payload(classification, answer, rag.status, False, False, False)
-        if low_confidence or not rag.hit or not rag.explanation: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False)
+            return self._payload(classification, answer, rag.status, False, False, False, request_id, interaction_id)
+        if low_confidence: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False, request_id, interaction_id)
+        if classification == "visual" and detections and (not rag.hit or not rag.explanation):
+            labels = {"motor": "马达", "esc": "电子调速器", "pixhawk": "飞控模块", "gps": "GPS / 罗盘模块", "frame_arm": "机臂"}
+            observed = "、".join(labels.get(str(item.get("class", "")).lower(), str(item.get("class") or "零件")) for item in detections[:3])
+            answer = f"目前画面中 AI 看到疑似{observed}。请结合当前步骤核对；如果涉及接电、马达或其他安全操作，仍需教师现场确认。"
+            return self._payload(classification, answer, rag.status, True, False, False, request_id, interaction_id)
+        if not rag.hit or not rag.explanation: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False, request_id, interaction_id)
         answer = rag.explanation
-        return self._payload(classification, answer, rag.status, vision_used, False, False)
+        return self._payload(classification, answer, rag.status, vision_used, False, False, request_id, interaction_id)
 
     @staticmethod
-    def _payload(classification, answer, rag_status, vision_used, uncertainty, teacher_required):
-        return {"classification": classification, "answer": answer, "rag_status": rag_status, "vision_used": vision_used, "teacher_required": teacher_required, "uncertainty": uncertainty}
+    def _payload(classification, answer, rag_status, vision_used, uncertainty, teacher_required, request_id=None, interaction_id=None):
+        return {"classification": classification, "answer": answer, "student_answer": answer, "rag_status": rag_status, "vision_used": vision_used, "teacher_required": teacher_required, "uncertainty": uncertainty, "request_id": request_id, "interaction_id": interaction_id}

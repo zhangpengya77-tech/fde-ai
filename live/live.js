@@ -66,32 +66,63 @@
   }
 
   function bindPushToTalk(button, options = {}) {
-    const { recognitionFactory = null, onState = () => {}, onResult = () => {}, onError = () => {}, onUnavailable = () => {} } = options;
+    const { recognitionFactory = null, onState = () => {}, onResult = () => {}, onError = () => {}, onNoResult = () => {}, onUnavailable = () => {}, stateMachine = null, readyLabel = '🎙 按住说话' } = options;
     let recognition = null;
     let listening = false;
+    let resultDelivered = false;
+    let latestTranscript = '';
     function setState(state, label) {
       button.dataset.state = state.toLowerCase();
       button.setAttribute('aria-pressed', state === 'LISTENING' ? 'true' : 'false');
       button.textContent = label;
       onState(state);
+      stateMachine?.transition(state);
     }
-    function reset() { listening = false; recognition = null; setState('READY', '按住说话'); }
+    function releaseButton() { listening = false; recognition = null; button.dataset.state = 'ready'; button.setAttribute('aria-pressed', 'false'); button.textContent = readyLabel; }
+    function reset() { releaseButton(); onState('IDLE'); stateMachine?.reset(); }
     button.setAttribute('aria-pressed', 'false');
     button.addEventListener('contextmenu', (event) => event.preventDefault());
     button.addEventListener('pointerdown', (event) => {
       event.preventDefault();
-      if (!recognitionFactory) { const message = '语音功能暂未启用，请先使用文字问 AI。'; onUnavailable(message); reset(); return; }
+      if (!recognitionFactory) { const message = '当前浏览器不支持语音输入。请使用 Safari 打开，或使用「文字问 AI」。'; reset(); onUnavailable(message); return; }
       try {
         recognition = recognitionFactory();
+        resultDelivered = false;
+        latestTranscript = '';
+        recognition.onstart = () => setState('LISTENING', '🎙 正在听……');
         recognition.onresult = (resultEvent) => {
-          const transcript = Array.from(resultEvent.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
-          if (transcript) onResult(transcript);
+          latestTranscript = Array.from(resultEvent.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
+          const finalSeen = Array.from(resultEvent.results || []).some((result) => result.isFinal !== false);
+          if (latestTranscript && finalSeen && !resultDelivered) {
+            resultDelivered = true;
+            listening = false;
+            setState('ASKING', 'AI 正在思考…');
+            onResult(latestTranscript);
+          }
         };
-        recognition.onerror = (errorEvent) => onError(errorEvent.error || 'voice_input_failed');
+        recognition.onspeechend = () => {
+          if (!resultDelivered && recognition && typeof recognition.stop === 'function') {
+            listening = false;
+            recognition.stop();
+            setState('TRANSCRIBING', '正在识别语音…');
+          }
+        };
+        recognition.onend = () => {
+          if (resultDelivered) return;
+          if (latestTranscript) {
+            resultDelivered = true;
+            setState('ASKING', 'AI 正在思考…');
+            onResult(latestTranscript);
+            return;
+          }
+          onNoResult();
+          reset();
+        };
+        recognition.onerror = (errorEvent) => { reset(); onError(errorEvent.error || 'voice_input_failed'); };
         recognition.start();
         listening = true;
         setState('LISTENING', '🎙 正在听……');
-      } catch (error) { onError(error.message || 'voice_input_failed'); reset(); }
+      } catch (error) { reset(); onError(error.message || 'voice_input_failed'); }
     });
     function finish(event, cancelled) {
       event.preventDefault();
@@ -99,11 +130,33 @@
       listening = false;
       if (cancelled && typeof recognition.abort === 'function') recognition.abort();
       else if (typeof recognition.stop === 'function') recognition.stop();
-      setState('PROCESSING', '处理中……');
+      if (!resultDelivered) setState('TRANSCRIBING', '正在识别语音…');
     }
     button.addEventListener('pointerup', (event) => finish(event, false));
     button.addEventListener('pointercancel', (event) => finish(event, true));
-    return { reset };
+    return { reset, releaseButton };
+  }
+
+  const INTERACTION_TIMEOUTS = Object.freeze({ LISTENING: 15000, TRANSCRIBING: 5000, ASKING: 20000, CAPTURING_FRAME: 3000, VISION_PROCESSING: 20000, SPEAKING: 30000 });
+
+  function createInteractionStateMachine({ onChange = () => {}, onTimeout = () => {}, timeouts = INTERACTION_TIMEOUTS, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout } = {}) {
+    let current = 'IDLE';
+    let timer = null;
+    function clearWatchdog() { if (timer !== null) clearTimeoutImpl(timer); timer = null; }
+    function emit(state, detail = {}) { current = state; onChange({ state, ...detail }); }
+    function transition(state, detail = {}) {
+      clearWatchdog();
+      emit(state, detail);
+      const timeout = timeouts[state];
+      if (timeout) timer = setTimeoutImpl(() => {
+        timer = null;
+        onTimeout({ state, ...detail });
+        emit('ERROR', { reason: `${state.toLowerCase()}_timeout` });
+        emit('IDLE', { recoveredFromTimeout: state });
+      }, timeout);
+    }
+    function reset(detail = {}) { clearWatchdog(); emit('IDLE', detail); }
+    return { transition, reset, state: () => current };
   }
 
   function cameraErrorState(error = {}) {
@@ -234,6 +287,12 @@
 
   function devLog(event, detail = {}) {
     if (typeof console !== 'undefined' && console.info) console.info(event, detail);
+  }
+
+  function isCameraFrameReady(stream, video) {
+    const track = stream?.getVideoTracks?.()[0];
+    const enoughData = video?.readyState === undefined || video.readyState >= 2;
+    return Boolean(track && track.readyState !== 'ended' && enoughData && video.videoWidth > 0 && video.videoHeight > 0);
   }
 
   async function performCaptureInteraction({ captureFrame, sendImage, setBusy, onError, log = devLog }) {
@@ -460,17 +519,30 @@
     return { text, spoken };
   }
 
-  async function askLiveCoach(fetchImpl, sessionId, question, captureCurrentFrame) {
-    const payload = { question: String(question || '').trim() };
+  async function askLiveCoach(fetchImpl, sessionId, question, captureCurrentFrame, options = {}) {
+    const requestId = options.requestId || `ask-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const interactionId = options.interactionId || requestId;
+    const payload = { question: String(question || '').trim(), request_id: requestId, interaction_id: interactionId };
     if (questionRequiresVision(payload.question)) {
       const captured = captureCurrentFrame?.();
       if (!captured?.imageData) throw new Error('camera_frame_required');
       payload.image_data = captured.imageData;
     }
-    const response = await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/ask`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    return parseJsonResponse(response);
+    const controller = options.controller || (typeof AbortController !== 'undefined' ? new AbortController() : null);
+    const timeoutMs = options.timeoutMs ?? 20000;
+    let timeout;
+    try {
+      const request = fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/ask`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FDE-Request-ID': requestId }, body: JSON.stringify(payload), signal: controller?.signal
+      });
+      const response = await Promise.race([
+        request,
+        new Promise((_, reject) => { timeout = setTimeout(() => { controller?.abort(); reject(new Error('ask_timeout')); }, timeoutMs); })
+      ]);
+      return parseJsonResponse(response);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   function studentCoachMessage(state, teacherRequired = false) {
@@ -688,10 +760,11 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
-      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), assistantVisualAction: documentRef.querySelector('#assistantVisualAction'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
+      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), assistantVisualAction: documentRef.querySelector('#assistantVisualAction'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), cancelAiInteraction: documentRef.querySelector('#cancelAiInteraction'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
       trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), mapProgress: documentRef.querySelector('#mapProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       taskMapScreen: documentRef.querySelector('#taskMapScreen'), taskDetailScreen: documentRef.querySelector('#taskDetailScreen'), backToTaskMap: documentRef.querySelector('#backToTaskMap'), studentGroupProgress: documentRef.querySelector('#studentGroupProgress'), studentGroupCount: documentRef.querySelector('#studentGroupCount'), currentStepTitle: documentRef.querySelector('#currentStepTitle'), currentStepHow: documentRef.querySelector('#currentStepHow'), currentStepDoneWhen: documentRef.querySelector('#currentStepDoneWhen'), safetyCard: documentRef.querySelector('#safetyCard'), cameraTool: documentRef.querySelector('#cameraTool'), evidenceCard: documentRef.querySelector('#evidenceCard'), reflectionCard: documentRef.querySelector('#reflectionCard'), teacherCard: documentRef.querySelector('#teacherCard'), completionCard: documentRef.querySelector('#completionCard'), stepCompleteFeedback: documentRef.querySelector('#stepCompleteFeedback'), taskCompleteFeedback: documentRef.querySelector('#taskCompleteFeedback'), continueTrainingStep: documentRef.querySelector('#continueTrainingStep'),
       browserCapabilityWarning: documentRef.querySelector('#browserCapabilityWarning'), browserCapabilityTitle: documentRef.querySelector('#browserCapabilityTitle'), browserCapabilityMessage: documentRef.querySelector('#browserCapabilityMessage'), copyCurrentLink: documentRef.querySelector('#copyCurrentLink'), capabilityCamera: documentRef.querySelector('#capabilityCamera'), capabilitySpeechInput: documentRef.querySelector('#capabilitySpeechInput'), capabilitySpeechOutput: documentRef.querySelector('#capabilitySpeechOutput'), capabilityBrowser: documentRef.querySelector('#capabilityBrowser'),
+      diagnosticVoiceState: documentRef.querySelector('#diagnosticVoiceState'), diagnosticTranscript: documentRef.querySelector('#diagnosticTranscript'), diagnosticAskRequest: documentRef.querySelector('#diagnosticAskRequest'), diagnosticAskLatency: documentRef.querySelector('#diagnosticAskLatency'), diagnosticFrame: documentRef.querySelector('#diagnosticFrame'), diagnosticVision: documentRef.querySelector('#diagnosticVision'), diagnosticRag: documentRef.querySelector('#diagnosticRag'), diagnosticTts: documentRef.querySelector('#diagnosticTts'), diagnosticLastError: documentRef.querySelector('#diagnosticLastError'),
       safetyAcknowledgment: documentRef.querySelector('#safetyAcknowledgment'), primaryTrainingAction: documentRef.querySelector('#primaryTrainingAction'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
       startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
@@ -710,8 +783,35 @@
     const speechReply = createSpeechReply();
     const capabilities = detectBrowserCapabilities({ userAgent: navigatorRef.userAgent || '', mediaDevices: navigatorRef.mediaDevices, speechRecognition: SpeechRecognitionCtor, speechSynthesis: globalThis.speechSynthesis });
     let lastAiAnswer = '';
+    let currentAskController = null;
+    let ttsStartWatchdog = null;
     let currentFacingMode = 'environment';
     let currentDeviceId = '';
+
+    function renderInteraction(event) {
+      const state = event.state;
+      if (elements.diagnosticVoiceState) elements.diagnosticVoiceState.textContent = state;
+      const busy = ['ASKING', 'CAPTURING_FRAME', 'VISION_PROCESSING'].includes(state);
+      if (elements.cancelAiInteraction) elements.cancelAiInteraction.hidden = !busy;
+      if (elements.submitAskAi) elements.submitAskAi.disabled = busy;
+      if (elements.assistantVisualAction) elements.assistantVisualAction.disabled = busy;
+      if (elements.pushToTalk) elements.pushToTalk.disabled = busy || state === 'SPEAKING';
+      const labels = { LISTENING: '🎙 正在听……', TRANSCRIBING: '正在识别语音…', ASKING: 'AI 正在思考…', CAPTURING_FRAME: '正在读取当前画面…', VISION_PROCESSING: 'AI 正在看画面…', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答…' };
+      if (labels[state] && elements.voiceStatus) elements.voiceStatus.textContent = labels[state];
+      if (state === 'IDLE') {
+        const entry = voiceEntryState(capabilities.speechInput);
+        if (elements.pushToTalk) { elements.pushToTalk.textContent = entry.label; elements.pushToTalk.disabled = false; }
+        if (event.recoveredFromTimeout && elements.voiceStatus) elements.voiceStatus.textContent = event.recoveredFromTimeout === 'TRANSCRIBING' || event.recoveredFromTimeout === 'LISTENING' ? '这次语音没有成功处理，请再说一次，或使用文字问 AI。' : event.recoveredFromTimeout === 'VISION_PROCESSING' || event.recoveredFromTimeout === 'CAPTURING_FRAME' ? '这次画面分析没有完成，请重新试一次。' : 'AI 服务暂时没有回应，请稍后再试。';
+      }
+    }
+    const interaction = createInteractionStateMachine({
+      onChange: renderInteraction,
+      onTimeout: ({ state }) => {
+        currentAskController?.abort();
+        speechReply.stop();
+        if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `${state}_TIMEOUT`;
+      }
+    });
 
     if (elements.capabilityCamera) elements.capabilityCamera.textContent = capabilities.camera ? 'Supported' : 'Unsupported';
     if (elements.capabilitySpeechInput) elements.capabilitySpeechInput.textContent = capabilities.speechInput ? 'Supported' : 'Unsupported';
@@ -1078,46 +1178,89 @@
     let voiceControl = null;
     voiceControl = bindPushToTalk(elements.pushToTalk, {
       recognitionFactory: SpeechRecognitionCtor ? () => { const recognition = new SpeechRecognitionCtor(); recognition.lang = 'zh-CN'; recognition.interimResults = false; recognition.continuous = false; return recognition; } : null,
-      onState: (state) => { elements.voiceStatus.textContent = state === 'LISTENING' ? '正在听，请说出你的问题。' : state === 'PROCESSING' ? '正在处理语音…' : elements.voiceStatus.textContent; },
+      stateMachine: interaction,
+      readyLabel: voiceEntryState(capabilities.speechInput).label,
       onResult: (transcript) => {
         elements.askAiPanel.hidden = false;
-        elements.voiceStatus.textContent = '已转换成文字，正在查询当前步骤。';
-        void handleVoiceTranscript(transcript, (value) => { elements.askAiInput.value = value; }, (question) => submitStudentQuestion(question, true));
+        if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
+        void handleVoiceTranscript(transcript, (value) => { elements.askAiInput.value = value; }, (question) => submitStudentQuestion(question, { source: 'VOICE', autoSpeak: true }));
       },
-      onError: () => { elements.voiceStatus.textContent = '语音输入失败，请先使用文字问 AI。'; voiceControl?.reset(); },
+      onNoResult: () => { elements.voiceStatus.textContent = '没有听清楚，请再说一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = 'NO_SPEECH_RESULT'; },
+      onError: (code) => { elements.voiceStatus.textContent = code === 'not-allowed' || code === 'service-not-allowed' ? '当前浏览器无法使用麦克风，请允许权限或使用文字问 AI。' : '没有听清楚，请再说一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`; },
       onUnavailable: (message) => { elements.voiceStatus.textContent = message; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; elements.askAiPanel.hidden = false; }
     });
     elements.textAskAi?.addEventListener('click', () => { elements.askAiPanel.hidden = false; elements.askAiInput.focus(); });
     function speechCallbacks() {
       return {
-        onStart: () => { elements.voiceStatus.textContent = 'AI 正在回答…'; elements.stopAiAnswer.hidden = false; },
-        onEnd: () => { elements.voiceStatus.textContent = 'AI 回答完成'; elements.stopAiAnswer.hidden = true; },
-        onError: () => { elements.voiceStatus.textContent = '语音播放失败，请阅读文字回答。'; elements.stopAiAnswer.hidden = true; }
+        onStart: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); interaction.transition('SPEAKING'); if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'speaking'; elements.stopAiAnswer.hidden = false; },
+        onEnd: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = 'AI 回答完成'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'completed'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); },
+        onError: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = '语音播放失败，请阅读文字回答或点击播放。'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'error'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); }
       };
     }
-    async function submitStudentQuestion(question, autoSpeak = false) {
-      if (!question.trim()) { elements.askAiResponse.textContent = '请先输入问题。'; return; }
+    async function submitStudentQuestion(question, { autoSpeak = false, source = 'TEXT' } = {}) {
+      if (!question.trim()) { elements.askAiResponse.textContent = source === 'VOICE' ? '没有听清楚，请再说一次。' : '请先输入问题。'; interaction.reset(); return; }
+      currentAskController?.abort();
+      const askController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      currentAskController = askController;
+      const interactionId = `${source.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const requestId = `ask-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const visual = questionRequiresVision(question);
+      if (visual && !isCameraFrameReady(stream, elements.video)) {
+        elements.askAiResponse.textContent = stream ? '摄像头画面还没准备好，请稍等一秒再试。' : '请先打开摄像头，把目标放到画面中央后再问一次。';
+        if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = 'CAMERA_NOT_READY';
+        interaction.transition('ERROR'); interaction.reset(); voiceControl?.releaseButton(); return;
+      }
+      interaction.transition(visual ? 'CAPTURING_FRAME' : 'ASKING', { requestId, interactionId });
+      if (elements.diagnosticAskRequest) elements.diagnosticAskRequest.textContent = requestId;
       elements.askAiResponse.textContent = 'AI 正在根据当前步骤查询教学知识…';
+      const started = performance.now();
       try {
         const id = await ensureSession();
-        const result = await askLiveCoach(fetchImpl, id, question, () => stream ? captureFrame(elements.video, elements.captureCanvas) : null);
+        const captureCurrent = visual ? () => {
+          const frame = captureFrame(elements.video, elements.captureCanvas, performance.now.bind(performance), { maxWidth: 1280, maxHeight: 960, quality: 0.8 });
+          if (elements.diagnosticFrame) elements.diagnosticFrame.textContent = `${frame.width}×${frame.height} ${frame.mimeType}`;
+          interaction.transition('VISION_PROCESSING', { requestId, interactionId });
+          if (elements.diagnosticVision) elements.diagnosticVision.textContent = 'processing';
+          return frame;
+        } : null;
+        const result = await askLiveCoach(fetchImpl, id, question, captureCurrent, { timeoutMs: visual ? 20000 : 15000, requestId, interactionId, controller: askController });
+        interaction.transition('ANSWER_READY', { requestId, interactionId });
         const delivered = deliverAiAnswer(result.answer, { autoSpeak, speechReply, callbacks: speechCallbacks() });
         lastAiAnswer = delivered.text;
         elements.askAiResponse.textContent = delivered.text;
         elements.voiceReplyControls.hidden = false;
-        if (autoSpeak && !delivered.spoken) elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。';
-        else if (!autoSpeak) elements.voiceStatus.textContent = 'AI 已回答，可点击播放回答。';
+        if (elements.diagnosticAskLatency) elements.diagnosticAskLatency.textContent = `${(performance.now() - started).toFixed(1)} ms`;
+        if (elements.diagnosticVision) elements.diagnosticVision.textContent = result.vision_used ? 'one-frame completed' : 'not used';
+        if (elements.diagnosticRag) elements.diagnosticRag.textContent = result.rag_status || '—';
+        if (autoSpeak && delivered.spoken) {
+          ttsStartWatchdog = setTimeout(() => {
+            if (interaction.state() !== 'SPEAKING') {
+              elements.voiceStatus.textContent = 'AI 已回答，请点击「播放回答」收听。';
+              if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'autoplay blocked';
+              interaction.reset(); voiceControl?.releaseButton();
+            }
+          }, 1500);
+        } else if (autoSpeak) { elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。'; interaction.reset(); voiceControl?.releaseButton(); }
+        else { elements.voiceStatus.textContent = 'AI 已回答，可点击播放回答。'; interaction.reset(); voiceControl?.releaseButton(); }
         elements.voiceStatus.dataset.code = result.vision_used ? 'VISION_SINGLE_FRAME' : 'CONTEXT_ANSWER';
       } catch (error) {
-        elements.askAiResponse.textContent = error.message === 'camera_frame_required' ? '请先打开摄像头，把目标放到画面中央后再问一次。' : '目前 AI 教学说明暂时不可用，请依照当前步骤或询问教师。';
-      } finally { voiceControl?.reset(); }
+        if (error.name === 'AbortError') elements.askAiResponse.textContent = '已取消这次询问。';
+        else if (error.message === 'ask_timeout') elements.askAiResponse.textContent = visual ? '这次画面分析没有完成，请重新试一次。' : 'AI 服务暂时没有回应，请稍后再试。';
+        else if (error.message === 'camera_not_ready' || error.message === 'camera_frame_required') elements.askAiResponse.textContent = '摄像头画面还没准备好，请稍等一秒再试。';
+        else elements.askAiResponse.textContent = visual ? '这次没有成功读取画面，请重新检查镜头后再试。' : 'AI 服务暂时没有回应，请稍后再试。';
+        if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = error.message || error.name;
+        interaction.transition('ERROR', { requestId, interactionId }); interaction.reset(); voiceControl?.releaseButton();
+      } finally {
+        if (currentAskController === askController) currentAskController = null;
+      }
     }
-    elements.submitAskAi?.addEventListener('click', () => void submitStudentQuestion(elements.askAiInput.value.trim()));
+    elements.submitAskAi?.addEventListener('click', () => void submitStudentQuestion(elements.askAiInput.value.trim(), { source: 'TEXT' }));
     elements.assistantVisualAction?.addEventListener('click', () => {
       if (!stream) { void startCamera(); return; }
       elements.askAiPanel.hidden = false;
-      void submitStudentQuestion(genericVisualObservationQuestion());
+      void submitStudentQuestion(genericVisualObservationQuestion(), { source: 'VISUAL_BUTTON' });
     });
+    elements.cancelAiInteraction?.addEventListener('click', () => { currentAskController?.abort(); speechReply.stop(); interaction.reset(); voiceControl?.releaseButton(); elements.voiceStatus.textContent = '已取消这次询问。'; });
     elements.playAiAnswer?.addEventListener('click', () => {
       if (!lastAiAnswer) return;
       if (!speechReply.speak(lastAiAnswer, speechCallbacks())) elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。';
@@ -1217,6 +1360,7 @@
     createSpeechReply,
     voiceAnswerSummary,
     deliverAiAnswer,
+    createInteractionStateMachine,
     askLiveCoach,
     studentCoachMessage,
     shouldTriggerVision,
@@ -1246,6 +1390,7 @@
     bindPushToTalk,
     cameraErrorState,
     captureFrame,
+    isCameraFrameReady,
     checkHealth,
     createController,
     drawDetectionOverlay,

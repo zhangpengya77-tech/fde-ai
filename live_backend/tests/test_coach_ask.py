@@ -82,6 +82,16 @@ class CoachAskTests(unittest.TestCase):
         self.assertEqual(body["answer"], "目前资料不足，AI 无法可靠判断，请与线下教师确认。")
         self.assertTrue(body["uncertainty"])
 
+    def test_rag_miss_with_high_confidence_visual_fact_still_gives_basic_observation(self):
+        vision = FakeVision([{"class": "motor", "confidence": 0.91, "box": [0, 0, 10, 10]}])
+        client = TestClient(create_app(vision_adapter=vision, rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))
+        sid = client.post("/api/live/sessions", json={"mode": "demo", "vision_source": "REAL_VISION", "training_track": "F450_TWELVE_TASK"}).json()["session_id"]
+        image = "data:image/jpeg;base64," + base64.b64encode(b"image").decode()
+        body = client.post(f"/api/live/sessions/{sid}/ask", json={"question": "现在画面里有什么？", "image_data": image}).json()
+        self.assertTrue(body["vision_used"])
+        self.assertFalse(body["uncertainty"])
+        self.assertIn("马达", body["answer"])
+
     def test_safety_question_never_approves_teacher_gate(self):
         body = self.ask({"question": "我现在可以安全上电吗？"}).json()
         self.assertEqual(body["classification"], "safety")
