@@ -380,6 +380,22 @@
     return { localPreview: true, continuousVision: false, captureMode: 'explicit_single_frame' };
   }
 
+  function assistantVisualActionState(cameraActive) {
+    return cameraActive
+      ? { action: 'OBSERVE_FRAME', label: '🤖 AI 看当前画面' }
+      : { action: 'OPEN_CAMERA', label: '📷 打开摄像头' };
+  }
+
+  function voiceEntryState(supported) {
+    return supported
+      ? { label: '🎙 按住说话', available: true }
+      : { label: '🎙 语音暂不可用', available: false };
+  }
+
+  function genericVisualObservationQuestion() {
+    return '请看一下当前画面，并结合我正在学习的步骤，用简单的话告诉我看到了什么、现在是否需要调整。';
+  }
+
   function studentStepProgressLabel(step) {
     return step && Number(step.order) > 0 ? `当前第 ${Number(step.order)} 步` : '正在准备当前步骤…';
   }
@@ -581,7 +597,7 @@
     if (elements.trainingSafety) elements.trainingSafety.innerHTML = stepReminders.map((item) => `<p>⚠ ${escapeHtml(item.message || studentFacingLabel(item.id))}</p>`).join('');
     if (elements.safetyCard) elements.safetyCard.hidden = !visibility.safety;
     if (elements.cameraTool) elements.cameraTool.hidden = false;
-    if (elements.capture) elements.capture.hidden = !visibility.aiCheck;
+    if (elements.capture) elements.capture.hidden = true;
     if (elements.evidenceCard) elements.evidenceCard.hidden = !visibility.evidence;
     if (elements.reflectionCard) elements.reflectionCard.hidden = !visibility.reflection;
     if (elements.teacherCard) elements.teacherCard.hidden = !visibility.teacher;
@@ -672,7 +688,7 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
-      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
+      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), assistantVisualAction: documentRef.querySelector('#assistantVisualAction'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
       trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), mapProgress: documentRef.querySelector('#mapProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       taskMapScreen: documentRef.querySelector('#taskMapScreen'), taskDetailScreen: documentRef.querySelector('#taskDetailScreen'), backToTaskMap: documentRef.querySelector('#backToTaskMap'), studentGroupProgress: documentRef.querySelector('#studentGroupProgress'), studentGroupCount: documentRef.querySelector('#studentGroupCount'), currentStepTitle: documentRef.querySelector('#currentStepTitle'), currentStepHow: documentRef.querySelector('#currentStepHow'), currentStepDoneWhen: documentRef.querySelector('#currentStepDoneWhen'), safetyCard: documentRef.querySelector('#safetyCard'), cameraTool: documentRef.querySelector('#cameraTool'), evidenceCard: documentRef.querySelector('#evidenceCard'), reflectionCard: documentRef.querySelector('#reflectionCard'), teacherCard: documentRef.querySelector('#teacherCard'), completionCard: documentRef.querySelector('#completionCard'), stepCompleteFeedback: documentRef.querySelector('#stepCompleteFeedback'), taskCompleteFeedback: documentRef.querySelector('#taskCompleteFeedback'), continueTrainingStep: documentRef.querySelector('#continueTrainingStep'),
       browserCapabilityWarning: documentRef.querySelector('#browserCapabilityWarning'), browserCapabilityTitle: documentRef.querySelector('#browserCapabilityTitle'), browserCapabilityMessage: documentRef.querySelector('#browserCapabilityMessage'), copyCurrentLink: documentRef.querySelector('#copyCurrentLink'), capabilityCamera: documentRef.querySelector('#capabilityCamera'), capabilitySpeechInput: documentRef.querySelector('#capabilitySpeechInput'), capabilitySpeechOutput: documentRef.querySelector('#capabilitySpeechOutput'), capabilityBrowser: documentRef.querySelector('#capabilityBrowser'),
@@ -701,6 +717,11 @@
     if (elements.capabilitySpeechInput) elements.capabilitySpeechInput.textContent = capabilities.speechInput ? 'Supported' : 'Unsupported';
     if (elements.capabilitySpeechOutput) elements.capabilitySpeechOutput.textContent = capabilities.speechOutput ? 'Supported' : 'Unsupported';
     if (elements.capabilityBrowser) elements.capabilityBrowser.textContent = capabilities.browser;
+    const voiceEntry = voiceEntryState(capabilities.speechInput);
+    if (elements.pushToTalk) {
+      elements.pushToTalk.textContent = voiceEntry.label;
+      elements.pushToTalk.dataset.available = String(voiceEntry.available);
+    }
     if (elements.browserCapabilityWarning) elements.browserCapabilityWarning.hidden = !(capabilities.embedded || !capabilities.camera || !capabilities.speechInput || !capabilities.speechOutput);
     if (!capabilities.embedded && (!capabilities.camera || !capabilities.speechInput || !capabilities.speechOutput)) {
       if (elements.browserCapabilityTitle) elements.browserCapabilityTitle.textContent = '部分功能暂不可用';
@@ -731,6 +752,14 @@
       if (elements.switchCamera && !stream) elements.switchCamera.disabled = true;
       if (!stream) setCameraState(cameras.length ? (cameras[0].label ? "CAMERA READY" : "CAMERA FOUND") : "NO CAMERA");
       return cameras;
+    }
+
+    function updateAssistantVisualAction() {
+      const visualAction = assistantVisualActionState(Boolean(stream));
+      if (elements.assistantVisualAction) {
+        elements.assistantVisualAction.textContent = visualAction.label;
+        elements.assistantVisualAction.dataset.action = visualAction.action;
+      }
     }
 
     function updateCameraSourceLabel(requestedFacing = '') {
@@ -852,11 +881,13 @@
         elements.cameraDiagnostics.textContent = 'Device: ' + (stream.getVideoTracks()[0]?.label || elements.cameraDevice.selectedOptions[0]?.textContent || 'unknown') + ' | Supported: ' + Object.keys(supported).filter((key) => supported[key]).join(', ');
         setCameraState('ACTIVE', 'online');
         if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
-        setMessage(opened.fallbackUsed ? '摄像头已启动（Compatibility Fallback），请点击「立即 AI 检测」。' : '摄像头已启动，请点击「立即 AI 检测」。');
+        updateAssistantVisualAction();
+        setMessage(opened.fallbackUsed ? '摄像头已启动（兼容模式）。AI 不会持续分析画面，需要时点击「AI 看当前画面」或直接问 AI。' : '摄像头已开启。AI 不会持续分析画面，需要时点击「AI 看当前画面」或直接问 AI。');
       } catch (error) {
         stopStream(stream);
         stream = null;
         elements.video.srcObject = null;
+        updateAssistantVisualAction();
         const mapped = cameraErrorState(error);
         setCameraState(mapped.state);
         elements.cameraDiagnostics.hidden = false;
@@ -949,7 +980,7 @@
         sendImage: (captured) => sendImage(captured.imageData, captured.captureMs, captured.width, captured.height, captured.encodeMs),
         setBusy: (busy) => {
           elements.capture.disabled = busy;
-          elements.capture.textContent = busy ? 'AI 正在检查…' : 'AI 帮我看一下';
+          elements.capture.textContent = busy ? 'AI 正在检查…' : '🤖 AI 看当前画面';
           if (busy) setMessage('AI 正在检查当前画面…');
         },
         onError: (error) => {
@@ -992,6 +1023,7 @@
       elements.cameraHint.hidden = false;
       setCameraState(cameras.length ? 'STOPPED' : 'ERROR', cameras.length ? 'checking' : 'offline');
       if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'STOPPED';
+      updateAssistantVisualAction();
       if (sessionId) {
         const oldSession = sessionId;
         sessionId = null;
@@ -1081,6 +1113,11 @@
       } finally { voiceControl?.reset(); }
     }
     elements.submitAskAi?.addEventListener('click', () => void submitStudentQuestion(elements.askAiInput.value.trim()));
+    elements.assistantVisualAction?.addEventListener('click', () => {
+      if (!stream) { void startCamera(); return; }
+      elements.askAiPanel.hidden = false;
+      void submitStudentQuestion(genericVisualObservationQuestion());
+    });
     elements.playAiAnswer?.addEventListener('click', () => {
       if (!lastAiAnswer) return;
       if (!speechReply.speak(lastAiAnswer, speechCallbacks())) elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。';
@@ -1170,6 +1207,9 @@
     handleVoiceTranscript,
     questionRequiresVision,
     cameraPreviewPolicy,
+    assistantVisualActionState,
+    voiceEntryState,
+    genericVisualObservationQuestion,
     studentStepProgressLabel,
     studentCurrentStepView,
     detectBrowserCapabilities,

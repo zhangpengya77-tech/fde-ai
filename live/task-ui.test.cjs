@@ -44,7 +44,7 @@ test('phase2 markup keeps manual detect and adds task and dev controls', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   for (const id of ['captureFrame','courseTitle','taskTitle','taskProgress','currentStep','taskInstruction','sopResult','coachGuidance','primaryTrainingAction','devSimulator']) assert.match(html, new RegExp(`id=["']${id}["']`));
   assert.match(html, /Simulate motor/);
-  assert.match(html, /AI 帮我看一下/);
+  assert.match(html, /🤖 AI 看当前画面/);
 });
 
 test('renders rag explanation separately from sop and deterministic guidance', () => {
@@ -226,7 +226,7 @@ test('mobile student UI provides current step, safety acknowledgement, and one p
 
 test('student mode leads with plain-language coaching actions', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  for (const text of ['F450 AI 实训助教', 'AI 陪你一步一步完成 F450 实训', '现在要做什么', '为什么要这样做', 'AI 助教', '打开摄像头', 'AI 帮我看一下', '问 AI', '当前操作', '留下学习证据', '我的学习总结', '教师复核状态']) {
+  for (const text of ['F450 AI 实训助教', 'AI 陪你一步一步完成 F450 实训', '现在要做什么', '为什么要这样做', 'AI 助教', '打开摄像头', 'AI 看当前画面', '问 AI', '当前操作', '留下学习证据', '我的学习总结', '教师复核状态']) {
     assert.match(html, new RegExp(text));
   }
 });

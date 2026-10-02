@@ -73,7 +73,7 @@
         <div id="trainingSafety">本步骤暂无额外安全提醒。</div>
       </section>
 
-      <details id="aiTools" class="ask-ai-drawer">
+      <details id="aiTools" class="ask-ai-drawer" open>
       <summary>AI 助教</summary>
       <section class="coach-card">
         <div>
@@ -85,6 +85,7 @@
         <div class="ask-actions">
           <button id="pushToTalk" type="button" class="secondary-action push-to-talk" aria-pressed="false">🎙 按住说话</button>
           <button id="textAskAi" type="button" class="secondary-action">⌨️ 文字问 AI</button>
+          <button id="assistantVisualAction" type="button" class="primary-action">📷 打开摄像头</button>
         </div>
         <p id="voiceStatus" class="voice-status" role="status">按住按钮即可说话；若浏览器不支持，将自动提供文字输入。</p>
         <div id="askAiPanel" class="ask-ai-panel" hidden>
@@ -114,7 +115,7 @@
         <div class="controls student-camera-actions">
           <button id="startCamera" type="button">打开摄像头</button>
           <button id="switchCamera" class="secondary-action" type="button" disabled>切换镜头</button>
-          <button id="captureFrame" class="primary-action" type="button" disabled hidden>AI 帮我看一下</button>
+          <button id="captureFrame" class="primary-action" type="button" disabled hidden>🤖 AI 看当前画面</button>
           <button id="stopCamera" type="button" disabled>关闭摄像头</button>
           <button id="uploadImage" class="secondary-action" type="button">上传照片请 AI 看</button>
           <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
