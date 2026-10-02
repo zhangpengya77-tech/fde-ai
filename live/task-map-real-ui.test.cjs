@@ -6,9 +6,9 @@ const live = require('./live.js');
 
 test('student primary action exposes exactly one plain-language CTA', () => {
   assert.deepEqual(live.studentPrimaryAction({ task_state: 'NOT_STARTED' }), { kind: 'START', label: '开始任务' });
-  assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_step: { teacher_gate: true } }), { kind: 'TEACHER', label: '提交教师复核' });
+  assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_step: { teacher_gate: true } }), { kind: 'TEACHER', label: '请教师确认' });
   assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_step: { evidence_required: ['PHOTO'] } }), { kind: 'EVIDENCE', label: '保存学习证据' });
-  assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_training_step_id: 'STEP_1', current_step: {} }), { kind: 'STEP', label: '完成这一步' });
+  assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_training_step_id: 'STEP_1', current_step: {} }), { kind: 'STEP', label: '我完成了' });
   assert.deepEqual(live.studentPrimaryAction({ task_state: 'COMPLETED' }), { kind: 'MAP', label: '返回任务地图' });
 });
 

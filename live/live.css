@@ -99,6 +99,8 @@ aside strong { color: #ffcb64; }
 .voice-status{grid-column:1/-1;margin:0;color:#8aa9bc;font-size:.9rem}
 .ask-ai-panel{grid-column:1/-1;padding:14px;border:1px solid rgba(91,217,255,.24);border-radius:12px;background:rgba(3,15,25,.55)}
 .ask-ai-panel[hidden]{display:none}.ask-ai-panel button{width:100%;margin:0}.ask-ai-panel p{margin:10px 0 0}
+.browser-warning{border-color:rgba(255,189,85,.62);background:linear-gradient(145deg,rgba(82,54,8,.95),rgba(45,30,8,.92));display:grid;grid-template-columns:1fr auto;gap:4px 14px;align-items:center}.browser-warning strong{color:#ffdb8a;font-size:1.05rem}.browser-warning p{margin:0}.browser-warning button{grid-column:2;grid-row:1/3;margin:0;min-width:112px}
+.action-guide-card ol,.done-guide-card ul{margin:8px 0 0;padding-left:1.35rem;display:grid;gap:10px;color:#eefaff;line-height:1.55}.done-guide-card>p{margin:0;color:#b7cad8}.voice-reply-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.preview-note{font-size:.84rem;color:#8aa9bc;margin-bottom:0}
 .ask-ai-drawer,.camera-tool{border:1px solid rgba(91,217,255,.28);border-radius:14px;background:rgba(5,20,33,.88);overflow:hidden}.ask-ai-drawer>summary,.camera-tool>summary{padding:16px 18px;color:#8feaff;font-weight:850;cursor:pointer;list-style:none}.ask-ai-drawer>summary::after,.camera-tool>summary::after{content:'＋';float:right}.ask-ai-drawer[open]>summary::after,.camera-tool[open]>summary::after{content:'－'}
 .student-tool[hidden]{display:none!important}.completion-feedback{border:1px solid rgba(110,255,180,.55);background:linear-gradient(145deg,rgba(10,62,55,.88),rgba(8,28,44,.9))!important;text-align:center}.completion-feedback h3{color:#6effb4}.task-complete{padding:26px!important}
 .student-camera{border:1px solid rgba(91,217,255,.28)}.section-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.section-heading span{color:#8aa9bc}
@@ -127,4 +129,5 @@ aside strong { color: #ffcb64; }
   .student-summary{grid-template-columns:1fr}.task-map-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .student-hero h1{font-size:1.9rem}
   .student-app{width:100%;padding:8px 8px 96px}.student-hero{padding:17px;border-radius:18px}.compact-status{display:none}.student-task{padding:10px;border-radius:18px}.student-group-progress li{min-width:92px;padding:8px}.student-group-progress li strong{font-size:.75rem}.current-step-card{min-height:260px;display:flex;flex-direction:column;justify-content:center}.current-step-card h3{font-size:1.55rem}.instruction-card:not(.current-step-card){padding:14px}.ask-ai-drawer{position:sticky;bottom:8px;z-index:10;box-shadow:0 12px 34px rgba(0,0,0,.48)}
+  .browser-warning{grid-template-columns:1fr}.browser-warning button{grid-column:auto;grid-row:auto;width:100%}.voice-reply-controls{grid-template-columns:1fr}
 }

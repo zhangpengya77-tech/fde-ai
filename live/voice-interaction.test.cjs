@@ -51,7 +51,7 @@ test('voice and text ask controls are real interactive elements with scoped touc
   for (const id of ['pushToTalk','textAskAi','askAiPanel','askAiInput','submitAskAi','voiceStatus']) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
-  assert.match(html, /id="pushToTalk"[^>]*>按住说话</);
+  assert.match(html, /id="pushToTalk"[^>]*>(?:🎙 )?按住说话</);
   assert.match(css, /\.push-to-talk[^}]*user-select:\s*none/s);
   assert.match(css, /\.push-to-talk[^}]*-webkit-touch-callout:\s*none/s);
 });

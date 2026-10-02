@@ -45,7 +45,7 @@ test('teacher gate blocks learner forward navigation', () => {
   };
   live.renderTrainingState(elements, { task_state: 'IN_PROGRESS', current_training_step_id: 'T04_CONTINUITY', task: { id: 'TASK_04', steps: [{ step_id: 'T04_CONTINUITY', teacher_gate: true }] } });
   assert.equal(elements.primaryTrainingAction.dataset.action, 'TEACHER');
-  assert.equal(elements.primaryTrainingAction.textContent, '提交教师复核');
+  assert.equal(elements.primaryTrainingAction.textContent, '请教师确认');
   assert.equal(elements.teacherCard.hidden, false);
 });
 
