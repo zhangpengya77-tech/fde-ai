@@ -92,6 +92,15 @@ class CoachAskTests(unittest.TestCase):
         self.assertFalse(body["uncertainty"])
         self.assertIn("马达", body["answer"])
 
+    def test_image_payload_forces_visual_processing_for_traditional_chinese_intent(self):
+        vision = FakeVision([{"class": "motor", "confidence": 0.91, "box": [0, 0, 10, 10]}])
+        client = TestClient(create_app(vision_adapter=vision, rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))
+        sid = client.post("/api/live/sessions", json={"mode": "demo", "vision_source": "REAL_VISION", "training_track": "F450_TWELVE_TASK"}).json()["session_id"]
+        image = "data:image/jpeg;base64," + base64.b64encode(b"image").decode()
+        body = client.post(f"/api/live/sessions/{sid}/ask", json={"question": "請結合目前步驟觀察畫面。", "image_data": image}).json()
+        self.assertEqual(body["classification"], "visual")
+        self.assertTrue(body["vision_used"])
+
     def test_safety_question_never_approves_teacher_gate(self):
         body = self.ask({"question": "我现在可以安全上电吗？"}).json()
         self.assertEqual(body["classification"], "safety")
@@ -99,6 +108,13 @@ class CoachAskTests(unittest.TestCase):
         self.assertIn("教师", body["answer"])
         self.assertNotIn("可以安全上电", body["answer"])
         self.assertEqual(self.store.training_state(self.sid)["task_state"], "NOT_STARTED")
+
+    def test_traditional_chinese_and_motor_test_safety_questions_require_teacher(self):
+        for question in ("我現在可以上電嗎？", "現在可以 Motor Test 嗎？", "可以起飛嗎？"):
+            with self.subTest(question=question):
+                body = self.ask({"question": question}).json()
+                self.assertEqual(body["classification"], "safety")
+                self.assertTrue(body["teacher_required"])
 
 
 if __name__ == "__main__":

@@ -57,3 +57,9 @@ test('camera readiness rejects inactive or empty video without a request', () =>
   assert.equal(live.isCameraFrameReady({ getVideoTracks: () => [{ readyState: 'live' }] }, { readyState: 1, videoWidth: 640, videoHeight: 480 }), false);
   assert.equal(live.isCameraFrameReady({ getVideoTracks: () => [{ readyState: 'live' }] }, { readyState: 4, videoWidth: 640, videoHeight: 480 }), true);
 });
+
+test('traditional Chinese camera questions route to one-frame visual Ask', () => {
+  for (const question of ['請看目前畫面', '這個是什麼？', '鏡頭裡看到什麼？', '你幫我看一下']) {
+    assert.equal(live.questionRequiresVision(question), true, question);
+  }
+});

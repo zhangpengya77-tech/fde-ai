@@ -18,8 +18,8 @@ class LiveCoachAskService:
     @staticmethod
     def classify(question: str) -> str:
         normalized = question.lower()
-        safety_terms = ("上电", "通电", "解锁", "起飞", "马达测试", "电机测试", "failsafe", "prearm", "飞前", "放行", "真实飞行", "安全")
-        visual_terms = ("帮我看", "看一下", "画面", "镜头", "这个是什么", "对不对", "方向", "接对", "桨叶", "螺旋桨")
+        safety_terms = ("上电", "上電", "通电", "通電", "解锁", "解鎖", "起飞", "起飛", "马达测试", "馬達測試", "电机测试", "電機測試", "motor test", "failsafe", "prearm", "飞前", "飛前", "放行", "真实飞行", "真實飛行", "安全")
+        visual_terms = ("帮我看", "幫我看", "看一下", "画面", "畫面", "镜头", "鏡頭", "这个是什么", "這個是什麼", "对不对", "對不對", "方向", "接对", "接對", "桨叶", "槳葉", "螺旋桨", "螺旋槳")
         step_terms = ("下一步", "现在做什么", "接下来", "怎么继续")
         if any(term in normalized for term in safety_terms): return "safety"
         if any(term in normalized for term in visual_terms): return "visual"
@@ -44,7 +44,7 @@ class LiveCoachAskService:
 
     async def answer(self, session_id: str, question: str, image_data: str | None = None, *, request_id: str | None = None, interaction_id: str | None = None) -> dict:
         training = self.sessions.training_state(session_id)
-        classification = self.classify(question)
+        classification = "visual" if image_data else self.classify(question)
         detections: list[dict] = []
         vision_used = False
         if classification == "visual":

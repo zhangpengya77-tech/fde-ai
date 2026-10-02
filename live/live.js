@@ -432,7 +432,7 @@
   function questionRequiresVision(question = '') {
     const value = String(question);
     if (/上电|通电|解锁|起飞|马达测试|电机测试|failsafe|prearm|飞前|放行|真实飞行|安全/i.test(value)) return false;
-    return /帮我看|看一下|画面|镜头|这个是什么|对不对|方向|接对|桨叶|螺旋桨/i.test(value);
+    return /帮我看|幫我看|看一下|画面|畫面|镜头|鏡頭|这个是什么|這個是什麼|对不对|對不對|方向|接对|接對|桨叶|槳葉|螺旋桨|螺旋槳/i.test(value);
   }
 
   function cameraPreviewPolicy() {
