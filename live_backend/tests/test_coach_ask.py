@@ -6,7 +6,7 @@ from starlette.testclient import TestClient
 from app.main import create_app
 from app.rag import RAGResult
 from app.sessions import InMemorySessionStore
-from app.vision import VisionResult
+from app.vision import VisionResult, VisionUnavailable
 
 
 class FakeVision:
@@ -73,13 +73,27 @@ class CoachAskTests(unittest.TestCase):
         self.assertEqual(self.vision.calls, 1)
         self.assertIn("propeller_ccw", self.rag.questions[0])
 
+    def test_vision_unavailable_returns_reason_and_retry_action(self):
+        class OfflineVision(FakeVision):
+            async def detect(self, image_data, file_name, confidence):
+                raise VisionUnavailable("offline")
+
+        client = TestClient(create_app(vision_adapter=OfflineVision(), rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))
+        sid = client.post("/api/live/sessions", json={"mode": "demo", "vision_source": "REAL_VISION", "training_track": "F450_TWELVE_TASK"}).json()["session_id"]
+        image = "data:image/jpeg;base64," + base64.b64encode(b"image").decode()
+        body = client.post(f"/api/live/sessions/{sid}/ask", json={"question": "你现在看到什么？", "image_data": image}).json()
+        self.assertIn("无法可靠读取", body["answer"])
+        self.assertIn("画面中央", body["answer"])
+        self.assertTrue(body["uncertainty"])
     def test_no_hit_and_low_confidence_uses_fixed_uncertainty_fallback(self):
         vision = FakeVision([{"class": "propeller_ccw", "confidence": 0.2, "box": [0, 0, 10, 10]}])
         client = TestClient(create_app(vision_adapter=vision, rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))
         sid = client.post("/api/live/sessions", json={"mode": "demo", "vision_source": "REAL_VISION", "training_track": "F450_TWELVE_TASK"}).json()["session_id"]
         image = "data:image/jpeg;base64," + base64.b64encode(b"image").decode()
         body = client.post(f"/api/live/sessions/{sid}/ask", json={"question": "这个方向对不对？", "image_data": image}).json()
-        self.assertEqual(body["answer"], "目前资料不足，AI 无法可靠判断，请与线下教师确认。")
+        self.assertIn("画面", body["answer"])
+        self.assertIn("中央", body["answer"])
+        self.assertNotEqual(body["answer"], "目前资料不足，AI 无法可靠判断，请与线下教师确认。")
         self.assertTrue(body["uncertainty"])
 
     def test_rag_miss_with_high_confidence_visual_fact_still_gives_basic_observation(self):
@@ -92,6 +106,21 @@ class CoachAskTests(unittest.TestCase):
         self.assertFalse(body["uncertainty"])
         self.assertIn("马达", body["answer"])
 
+    def test_rag_miss_visual_facts_compose_observation_current_step_and_next_action(self):
+        vision = FakeVision([
+            {"class": "motor", "confidence": 0.92, "box": [0, 0, 10, 10]},
+            {"class": "frame_arm", "confidence": 0.88, "box": [10, 0, 20, 10]},
+        ])
+        client = TestClient(create_app(vision_adapter=vision, rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))
+        sid = client.post("/api/live/sessions", json={"mode": "demo", "vision_source": "REAL_VISION", "training_track": "F450_TWELVE_TASK"}).json()["session_id"]
+        client.get(f"/api/live/sessions/{sid}/training/tasks/TASK_01")
+        image = "data:image/jpeg;base64," + base64.b64encode(b"image").decode()
+        body = client.post(f"/api/live/sessions/{sid}/ask", json={"question": "你现在看到什么？", "image_data": image}).json()
+        self.assertIn("马达", body["answer"])
+        self.assertIn("机臂", body["answer"])
+        self.assertIn("准备工作区域", body["answer"])
+        self.assertIn("下一步", body["answer"])
+        self.assertNotIn("资料不足", body["answer"])
     def test_image_payload_forces_visual_processing_for_traditional_chinese_intent(self):
         vision = FakeVision([{"class": "motor", "confidence": 0.91, "box": [0, 0, 10, 10]}])
         client = TestClient(create_app(vision_adapter=vision, rag_adapter=FakeRAG(status="no_hit", answer=None), session_store=InMemorySessionStore(), dev_mode=True))

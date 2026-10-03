@@ -103,14 +103,35 @@ class F450LiveLoopTests(unittest.TestCase):
         self.assertEqual(growth["progress_label"], "0 / 12")
         self.assertEqual(growth["sync_status"], "PENDING_SYNC")
 
-    def test_future_task_is_viewable_and_actionable_without_becoming_current(self):
+    def test_opening_not_started_task_auto_starts_and_initializes_step_context(self):
+        response = self.client.get(f"/api/live/sessions/{self.sid}/training/tasks/TASK_03")
+        self.assertEqual(response.status_code, 200)
+        view = response.json()["training_task_view"]
+        self.assertEqual(view["task_state"], "IN_PROGRESS")
+        self.assertEqual(view["current_task_id"], "TASK_03")
+        self.assertIsNotNone(view["current_training_step_id"])
+        self.assertIsNotNone(view["current_step"])
+        state = self.store.training_state(self.sid)
+        self.assertEqual(state["task_state"], "IN_PROGRESS")
+        self.assertEqual(state["current_task_id"], "TASK_03")
+        self.assertEqual(state["context"]["main_task_id"], "TASK_03")
+        self.assertEqual(state["context"]["task_title"], state["task"]["title"])
+        self.assertEqual(state["context"]["current_training_step_id"], state["current_training_step_id"])
+        self.assertEqual(state["context"]["current_step_title"], state["current_step"]["title"])
+        self.assertEqual(state["context"]["current_step_instruction"], state["current_step"]["student_instruction"])
+        self.assertIsNotNone(state["context"]["next_step"])
+        self.assertEqual(state["context"]["hardware_profile"], state["hardware_profile"])
+        self.assertEqual(state["context"]["safety_state"], state["safety_state"])
+        self.assertTrue(state["current_step"]["student_instruction"])
+    def test_future_task_open_is_viewable_actionable_and_becomes_current(self):
         response = self.client.get(f"/api/live/sessions/{self.sid}/training/tasks/TASK_07")
         self.assertEqual(response.status_code, 200)
         view = response.json()["training_task_view"]
         self.assertEqual(view["task"]["id"], "TASK_07")
         self.assertTrue(view["viewable"])
         self.assertTrue(view["actionable"])
-        self.assertEqual(self.state()["current_task_id"], "TASK_01")
+        self.assertEqual(self.state()["current_task_id"], "TASK_07")
+        self.assertEqual(self.state()["task_state"], "IN_PROGRESS")
 
 
 if __name__ == "__main__":

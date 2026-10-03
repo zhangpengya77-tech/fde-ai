@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from .vision import VisionResponseError, VisionUnavailable
 
-UNCERTAIN_MESSAGE = "目前资料不足，AI 无法可靠判断，请与线下教师确认。"
+UNCERTAIN_MESSAGE = "目前无法可靠读取当前画面。请确认摄像头画面清楚，并把目标零件放到画面中央后再试一次；如果仍无法确认，请教师现场检查。"
 SAFETY_MESSAGE = "AI 可以提供教学说明，但不能取代教师的安全确认。当前操作必须由线下教师确认后才能继续。"
 
 class LiveCoachAskService:
@@ -61,18 +61,33 @@ class LiveCoachAskService:
         if classification == "safety": return self._payload(classification, SAFETY_MESSAGE, rag.status, False, False, True, request_id, interaction_id)
         task = training.get("task") or {}
         step = training.get("current_step") or {}
+        step_title = step.get("title") or "当前步骤"
+        step_action = step.get("student_instruction") or step.get("instruction") or ""
         if classification == "step":
-            lead = f"你现在在 Task {int(task.get('order') or 0):02d}「{task.get('title') or ''}」，当前步骤是「{step.get('title') or '尚未开始'}」。"
+            lead = f"你现在在 Task {int(task.get('order') or 0):02d}「{task.get('title') or ''}」，当前步骤是「{step_title}」。"
             explanation = f" {rag.explanation}" if rag.hit and rag.explanation else ""
-            answer = f"{lead}{step.get('student_instruction') or step.get('instruction') or ''}{explanation}".strip()
+            answer = f"{lead}{step_action}{explanation}".strip()
             return self._payload(classification, answer, rag.status, False, False, False, request_id, interaction_id)
-        if low_confidence: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False, request_id, interaction_id)
-        if classification == "visual" and detections and (not rag.hit or not rag.explanation):
-            labels = {"motor": "马达", "esc": "电子调速器", "pixhawk": "飞控模块", "gps": "GPS / 罗盘模块", "frame_arm": "机臂"}
-            observed = "、".join(labels.get(str(item.get("class", "")).lower(), str(item.get("class") or "零件")) for item in detections[:3])
-            answer = f"目前画面中 AI 看到疑似{observed}。请结合当前步骤核对；如果涉及接电、马达或其他安全操作，仍需教师现场确认。"
+        if low_confidence:
+            answer = "目前画面中的目标太小、被遮挡或角度不足，AI 无法可靠确认。请把要确认的零件单独放到画面中央，再让我看一次；如果仍无法确认，请教师现场检查。"
+            return self._payload(classification, answer, rag.status, vision_used, True, False, request_id, interaction_id)
+        if classification == "visual" and detections:
+            labels = {"motor": "马达", "esc": "电子调速器", "pixhawk": "飞控模块", "flight_controller": "飞控模块", "gps": "GPS / 罗盘模块", "gps_compass": "GPS / 罗盘模块", "receiver": "接收机", "frame_arm": "机臂"}
+            observed = "、".join(labels.get(str(item.get("class", "")).lower(), str(item.get("class") or "零件")) for item in detections[:4])
+            confidence = max(float(item.get("confidence", 0)) for item in detections)
+            certainty = "看到" if confidence >= 0.75 else "看到疑似"
+            answer = f"目前画面中 AI {certainty}{observed}。当前步骤是「{step_title}」。"
+            if step_action:
+                answer += f"下一步：{step_action}"
+            if rag.hit and rag.explanation:
+                answer += f" {rag.explanation}"
             return self._payload(classification, answer, rag.status, True, False, False, request_id, interaction_id)
-        if not rag.hit or not rag.explanation: return self._payload(classification, UNCERTAIN_MESSAGE, rag.status, vision_used, True, False, request_id, interaction_id)
+        if not rag.hit or not rag.explanation:
+            if step_action:
+                answer = f"当前步骤是「{step_title}」。现在先做：{step_action} 如果你要确认具体零件或接口，请把目标放到画面中央再问我。"
+                return self._payload(classification, answer, rag.status, vision_used, False, False, request_id, interaction_id)
+            answer = "目前缺少可核对的步骤或画面信息。请先打开具体任务，或把要确认的零件放到画面中央；如果涉及安全操作，请教师现场检查。"
+            return self._payload(classification, answer, rag.status, vision_used, True, False, request_id, interaction_id)
         answer = rag.explanation
         return self._payload(classification, answer, rag.status, vision_used, False, False, request_id, interaction_id)
 

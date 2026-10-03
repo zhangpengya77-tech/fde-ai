@@ -94,6 +94,12 @@ test('student page presents one Live Coach action and moves manual tools into co
   assert.doesNotMatch(html, /<details id="fallbackMethods"[^>]*\sopen/);
 });
 
+test('ready message stays separate from the last real answer', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  assert.match(html, /id="liveCoachStatus">AI 已待命</);
+  assert.match(html, /id="latestAiAnswer">尚无 AI 回答。/);
+  assert.doesNotMatch(html, /id="latestAiAnswer">AI 助教已准备好/);
+});
 test('Live Coach keeps preview local and Vision explicit single-frame', () => {
   assert.deepEqual(live.cameraPreviewPolicy(), { localPreview: true, continuousVision: false, captureMode: 'explicit_single_frame' });
 });

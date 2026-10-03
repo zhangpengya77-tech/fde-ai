@@ -198,7 +198,7 @@ test('task map renders backend status rather than a nonexistent state field', ()
   assert.doesNotMatch(e.trainingTaskList.innerHTML, /undefined/);
 });
 
-test('future task navigation fetches a read-only view without starting the task', async () => {
+test('task navigation uses the backend-authoritative task open endpoint', async () => {
   let request;
   const fetchImpl = async (url, init) => { request = { url, init }; return { ok: true, json: async () => ({ training_task_view: { task: { id: 'TASK_07' }, actionable: false } }) }; };
   const result = await live.fetchTrainingTaskView(fetchImpl, 'sid', 'TASK_07');

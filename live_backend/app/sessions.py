@@ -163,6 +163,7 @@ class InMemorySessionStore:
         current = next(item for item in progress.course.tasks if item.id == session.current_task_id)
         current_progress = progress.task(current.id)
         current_step = next((step for step in current.steps if step.step_id == current_progress.current_training_step_id), None)
+        next_step = next((step for step in current.steps if current_step and step.order == current_step.order + 1), None)
         missing = progress.unsafe_step_missing(current.id, current_progress.current_training_step_id)
         tasks = [{
             "task_id": item.id, "order": item.order, "short_name": item.short_name,
@@ -201,9 +202,20 @@ class InMemorySessionStore:
             },
             "context": {
                 "course_id": progress.course.course_id,
+                "main_task_id": current.id,
                 "task_id": current.id,
+                "task_title": current.title,
+                "current_training_step_id": current_step.step_id if current_step else None,
                 "step_id": current_step.step_id if current_step else None,
+                "current_step_title": current_step.title if current_step else None,
+                "current_step_instruction": current_step.student_instruction if current_step else None,
+                "next_step": None if next_step is None else {
+                    "step_id": next_step.step_id,
+                    "title": next_step.title,
+                    "student_instruction": next_step.student_instruction,
+                },
                 "hardware_profile": session.hardware_profile,
+                "safety_state": session.safety_state,
                 "expected_action": current_step.expected_action if current_step else None,
                 "component_ids": list(current.component_ids),
                 "connector_ids": list(current.connector_ids),
@@ -234,6 +246,11 @@ class InMemorySessionStore:
         if task is None:
             raise KeyError(task_id)
         task_progress = progress.task(task.id)
+        if task_progress.status is TaskStatus.NOT_STARTED:
+            progress.start_task(task.id)
+            self._sync_training_session(session_id, task.id)
+            task_progress = progress.task(task.id)
+            current_id = task.id
         current_step = next((step for step in task.steps if step.step_id == task_progress.current_training_step_id), None)
         missing = list(progress.unsafe_step_missing(task.id, task_progress.current_training_step_id))
         return {
