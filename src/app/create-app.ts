@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 
+import { loadF450 } from '../drone/load-f450';
+import type { FlightSnapshot, FlightState } from '../flight/types';
+import { SimpleFlightController } from '../flight/adapters/SimpleFlightController';
+import { KeyboardInputAdapter } from '../input/adapters/KeyboardInputAdapter';
 import { createRenderConfig } from './render-config';
 
 export interface AppHandle {
@@ -50,7 +54,9 @@ function createInterface(root: HTMLElement): HTMLElement {
               <strong>输电线路 · 基础环境</strong>
             </div>
             <div class="coordinates" aria-label="坐标状态">
-              <span>X 0.0</span><span>Y 0.0</span><span>Z 0.0</span>
+              <span>X <b data-position-x>0.0</b></span>
+              <span>Y <b data-position-y>0.0</b></span>
+              <span>Z <b data-position-z data-value="0">0.0</b></span>
             </div>
           </div>
           <div class="scene-mount" data-scene-mount></div>
@@ -79,10 +85,10 @@ function createInterface(root: HTMLElement): HTMLElement {
         <aside class="panel telemetry-panel">
           <p class="eyebrow">飞行状态</p>
           <div class="telemetry-grid">
-            <div><span>高度</span><strong>0.0 <small>m</small></strong></div>
+            <div><span>高度</span><strong><b data-altitude data-value="0">0.0</b> <small>m</small></strong></div>
             <div><span>速度</span><strong>0.0 <small>m/s</small></strong></div>
             <div><span>航向</span><strong>000 <small>°</small></strong></div>
-            <div><span>模式</span><strong>待机</strong></div>
+            <div><span>模式</span><strong data-flight-state>待机</strong></div>
           </div>
         </aside>
 
@@ -98,15 +104,15 @@ function createInterface(root: HTMLElement): HTMLElement {
 
       <footer class="control-deck" aria-label="飞行操作区">
         <div class="control-group">
-          <button type="button" disabled>解锁</button>
-          <button type="button" disabled>起飞</button>
-          <button type="button" disabled>悬停</button>
-          <button type="button" disabled>返航</button>
-          <button type="button" disabled>降落</button>
+          <button type="button" data-action="arm">解锁</button>
+          <button type="button" data-action="takeoff">起飞</button>
+          <button type="button" data-action="hover">悬停</button>
+          <button type="button" data-action="rtl">返航</button>
+          <button type="button" data-action="land">降落</button>
         </div>
         <div class="phase-status">
           <span>飞行控制器</span>
-          <strong>下一阶段接入</strong>
+          <strong data-flight-mode>悬停</strong>
         </div>
       </footer>
     </main>
@@ -184,6 +190,17 @@ export function createApp(root: HTMLElement): AppHandle {
   const scene = new THREE.Scene();
   addReferenceScene(scene);
 
+  const flightController = new SimpleFlightController();
+  const keyboard = new KeyboardInputAdapter();
+  let droneEntity: Awaited<ReturnType<typeof loadF450>>['entity'] | null = null;
+  void loadF450().then(({ entity, notice }) => {
+    droneEntity = entity;
+    scene.add(entity.group);
+    shell.dataset.droneReady = 'true';
+    shell.dataset.droneSource = entity.source;
+    shell.dataset.droneNotice = notice;
+  });
+
   const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 180);
   camera.position.set(18, 16, 24);
   camera.lookAt(0, 0, 0);
@@ -203,10 +220,80 @@ export function createApp(root: HTMLElement): AppHandle {
   const frameInterval = 1000 / config.targetFrameRate;
   let animationFrame = 0;
   let lastRender = 0;
+  let lastUpdate = performance.now();
   let disposed = false;
+
+  const stateLabels: Record<FlightState, string> = {
+    disarmed: '待机',
+    armed: '已解锁',
+    'taking-off': '起飞中',
+    flying: '飞行中',
+    landing: '降落中',
+    paused: '已暂停',
+    emergency: '紧急停止',
+  };
+
+  const readout = {
+    altitude: root.querySelector<HTMLElement>('[data-altitude]'),
+    state: root.querySelector<HTMLElement>('[data-flight-state]'),
+    mode: root.querySelector<HTMLElement>('[data-flight-mode]'),
+    x: root.querySelector<HTMLElement>('[data-position-x]'),
+    y: root.querySelector<HTMLElement>('[data-position-y]'),
+    z: root.querySelector<HTMLElement>('[data-position-z]'),
+  };
+
+  const updateReadout = (snapshot: FlightSnapshot): void => {
+    const x = snapshot.position.x.toFixed(1);
+    const y = snapshot.position.y.toFixed(1);
+    const z = snapshot.position.z.toFixed(1);
+    if (readout.altitude) {
+      readout.altitude.textContent = y;
+      readout.altitude.dataset.value = snapshot.position.y.toFixed(2);
+    }
+    if (readout.state) readout.state.textContent = stateLabels[snapshot.state];
+    if (readout.mode) readout.mode.textContent = snapshot.mode === 'manual' ? '手动' : snapshot.mode === 'mission' ? '任务' : '悬停';
+    if (readout.x) readout.x.textContent = x;
+    if (readout.y) readout.y.textContent = y;
+    if (readout.z) {
+      readout.z.textContent = z;
+      readout.z.dataset.value = snapshot.position.z.toFixed(2);
+    }
+  };
+
+  root.querySelector<HTMLElement>('[data-action="arm"]')?.addEventListener('click', () => {
+    flightController.arm();
+    updateReadout(flightController.snapshot());
+  });
+  root.querySelector<HTMLElement>('[data-action="takeoff"]')?.addEventListener('click', () => {
+    flightController.takeoff(3);
+    updateReadout(flightController.snapshot());
+  });
+  root.querySelector<HTMLElement>('[data-action="hover"]')?.addEventListener('click', () => {
+    keyboard.setHover(true);
+    updateReadout(flightController.update(keyboard.poll(), 0));
+  });
+  root.querySelector<HTMLElement>('[data-action="rtl"]')?.addEventListener('click', () => {
+    flightController.rtl();
+    updateReadout(flightController.snapshot());
+  });
+  root.querySelector<HTMLElement>('[data-action="land"]')?.addEventListener('click', () => {
+    flightController.land();
+    updateReadout(flightController.snapshot());
+  });
 
   const render = (timestamp: number): void => {
     if (disposed) return;
+    const deltaSeconds = Math.min(Math.max((timestamp - lastUpdate) / 1000, 0), 0.1);
+    lastUpdate = timestamp;
+    const snapshot = flightController.update(keyboard.poll(), deltaSeconds);
+    droneEntity?.update(snapshot, deltaSeconds);
+    updateReadout(snapshot);
+
+    if (droneEntity) {
+      const target = droneEntity.group.position;
+      camera.position.lerp(new THREE.Vector3(target.x + 12, target.y + 8, target.z + 15), 0.05);
+      camera.lookAt(target);
+    }
     if (timestamp - lastRender >= frameInterval) {
       renderer.render(scene, camera);
       lastRender = timestamp;
@@ -223,6 +310,8 @@ export function createApp(root: HTMLElement): AppHandle {
       disposed = true;
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+      keyboard.dispose();
+      droneEntity?.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();

@@ -26,8 +26,9 @@ test('opens the Chinese training simulator with a rendered Three.js scene', asyn
   expect(hasVisiblePixels).toBe(true);
   expect(pageErrors).toEqual([]);
 
+  // P1-2 evidence uses its own filename so the P1-1 screenshots stay intact.
   await page.screenshot({
-    path: `screenshots/p1-1-${testInfo.project.name}.png`,
+    path: `screenshots/p1-2-shell-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });
