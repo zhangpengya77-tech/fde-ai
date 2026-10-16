@@ -192,3 +192,54 @@ Notes:
 - One real defect was found by the P1-5 integration itself: a refused capture request set the HUD text, but the per-frame `updateMissionUI` immediately overwrote it with `未拍摄`. Fixed by keeping the refusal in state (`captureRefusal`) until the next real capture; covered by CASE1.
 - One test-robustness issue was found and fixed: teleporting while the aircraft was still `taking-off` let the climb target pull the pose back down (the takeoff vertical target overrides position until `flying`). The browser helper now waits for mode `飞行中` before teleporting; P1-1/P1-2/P1-4 specs never armed/took off, so their evidence was unaffected.
 - The gamepad gimbal mapping (right-stick camera control) is intentionally **reserved** (V1): only the reserved-brand-neutral channel path is claimed here, keeping the P1-3 acceptance intact.
+
+## P1-6 Teaching Score (ScoringEngine)
+
+Status: PASS
+
+Date: 2026-10-16
+
+TDD was followed per module. The scorer is pure and deterministic: `ScoringEngine` consumes one `ScoreSession` of **real recorded data** (collected by `SessionRecorder` from live telemetry, hazard episodes, capture attempts and stick-input statistics) and returns a transparent `MissionScoreResult`. No score is ever derived from UI text and nothing is random — the same recorded run always yields the same score, the same major issues and the same suggestions.
+
+| Verification | Result | Evidence |
+|---|---|---|
+| Unit `npm test` | PASS | Vitest: **17 files, 190 tests passed** — new `scoring-engine` (26) + `session-recorder` (14); the P1-1–P1-5 suites (150) stay green |
+| Browser `npm run test:browser` | PASS | Playwright: full suite green — new `score.spec.ts` CASE1–CASE5 × desktop-chrome + mobile-chrome (**10 passed**) plus all earlier specs unchanged; only skips remain the `PENDING_DEVICE_TEST` fixme |
+| Production build `npm run build` | PASS | `tsc -b` clean; Vite build ✓ (only the pre-existing three.js >500 kB chunk warning) |
+| Pure scorer | PASS | `ScoringEngine.score(session)` never touches the DOM, Three.js or randomness; unit-testable in plain Node |
+| Hard safety rule | PASS | COLLISION or mission FAILED caps the total at 59 (configurable): a collision can never produce a 90+ score; unit tests prove the cap with an otherwise-perfect run |
+| Weights configured, not hard-coded | PASS | Six dimensions (25/25/15/15/10/10 = 100) live in `DEFAULT_SCORE_CONFIG`; the UI renders `dimension.score / dimension.maxScore` from the engine result |
+| Suggestions deterministic | PASS | 1–3 teaching tips chosen by a fixed priority from real scoring reasons (collision → failed → DANGER → photo → efficiency → stability → positive); unit test proves identical output for identical input |
+| Input statistics | PASS | `SessionRecorder` counts full-stick **episodes** (not frames), cooldown-filtered input reversals, and hover-phase stick deviation from the real `PilotCommand` |
+| Hazard accounting | PASS | Continuous WARNING/DANGER/COLLISION stays are counted as episodes with durations (never frames); teleports (test seam) are excluded from the flown path |
+| UI | PASS | Mission-end score card (overlay): total, grade, six dimensions each with score + short reason, major issues and teaching suggestions; dismissible and re-openable from the checklist panel |
+
+Implemented modules:
+
+- `src/scoring/types.ts` — `ScoreSession`, `ScoreDimension`, `MissionScoreResult`, `ScoreConfig` (weights, penalties, grade bands, hard caps).
+- `src/scoring/config.ts` — `DEFAULT_SCORE_CONFIG`: weights 25/25/15/15/10/10, grade bands 90/70/60, `capCollisionTotal = capFailedTotal = 59`, per-episode/per-second hazard penalties, ideal photo geometry, path-ratio efficiency (simple baseline: climb + there-and-back horizontal, **no** optimal-path algorithm), stick-input thresholds.
+- `src/scoring/ScoringEngine.ts` — pure `scoreSession(session) -> MissionScoreResult` + exported `gradeForTotal()`; six dimension scorers, hard caps, `majorIssues` and deterministic `suggestions`.
+- `src/scoring/SessionRecorder.ts` — stateful recorder: path length (teleport-aware), max altitude, zone entry, hazard episodes, mission progress/completion/failure, indexed capture attempts, full-stick/reversal/hover statistics; `session()` is a non-mutating snapshot.
+
+Scoring rules (V1, teaching-tuned, **not** an official licence standard):
+
+- **任务完成 (25)**: inspection completed and landed → full; failed → 0 (significant deduction); otherwise partial by the furthest step reached toward `INSPECTION_COMPLETE` (e.g. stopped at 调整云台 → 25×4/8 = 12.5).
+- **飞行安全 (25)**: full when全程 SAFE; −25 per collision episode; −4 per DANGER episode and −0.5 per DANGER second (+−5 when DANGER time ≥ 5 s = severe violation); −1 per WARNING episode and −0.25 per WARNING second (light).
+- **巡检位置 (15)**: full for a valid in-zone capture at the ideal distance (2.4 m ± 1.0 m); off-ideal distance −3; attempted capture from a DANGER/COLLISION pose −3; entered the zone but no valid photo → 50%; never entered → 0.
+- **照片质量 (15)**: based on the **final valid** shot (failed attempts are kept on record and cost −1.5 each); −3 each for low coverage / large aim error / off-ideal distance; floor 60% for any valid photo; no valid photo → 0 with the real rejection reasons.
+- **飞行效率 (10)**: actual path ÷ basic path (max altitude + 2× horizontal home→target); full ≤ 1.6×, scales down to 20% at 3× (obvious detours); −2 beyond the 240 s teaching budget.
+- **操纵稳定性 (10)**: −1 per full-stick episode above 3, −0.5 per input reversal above 6, scaled deduction for hover stick deviation above 0.08.
+- **Hard caps**: COLLISION → total ≤ 59; mission FAILED → total ≤ 59. Grades: ≥90 EXCELLENT, ≥70 PASS, ≥60 NEEDS_PRACTICE, else FAIL.
+
+Screenshots (acceptance evidence; calibration panel folded via a test-only style):
+
+- A overview `screenshots/p1-6-score-overview-desktop-chrome.png` — 99/100 EXCELLENT after a completed inspection
+- B six-dimension detail `screenshots/p1-6-score-detail-desktop-chrome.png`
+- C DANGER deduction `screenshots/p1-6-score-warning-desktop-chrome.png` — flight safety 18.12/25 with DANGER/WARNING reasons
+- D COLLISION / FAIL `screenshots/p1-6-score-collision-desktop-chrome.png` — 28/100, FAIL, hard-cap issue and collision suggestion
+- (mobile-chrome copies of A/B/C/D also produced)
+
+Notes:
+
+- Two integration findings were fixed while wiring the scorer: (1) the programmatic F450's model group sits 0.5 m above the flight position, so the *real* capture distance is slightly larger than the pose implies — the ideal-distance tolerance was set to ±1.0 m around 2.4 m so the on-screen framing matches the teaching advice; (2) the 176 px checklist panel physically cannot show a six-dimension score — the score is therefore presented as a mission-summary overlay card (identical on desktop and mobile) instead of being silently clipped.
+- P1-6 scores the **teaching** loop only. No AI pilot-ability model, PID diagnosis, professional exam algorithm or official licence scoring is claimed; those stay out of scope by design. `PENDING_DEVICE_TEST` remains skipped and unclaimed.

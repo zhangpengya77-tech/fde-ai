@@ -20,6 +20,9 @@ import { ProjectionPhotoValidator, DEFAULT_PHOTO_VALIDATOR_CONFIG } from '../cam
 import type { PhotoSample } from '../camera/ProjectionPhotoValidator';
 import { MockInspectionAI } from '../ai/MockInspectionAI';
 import { resolveInspectionCaptureStore } from '../persistence/inspection-capture-store';
+import { ScoringEngine } from '../scoring/ScoringEngine';
+import { SessionRecorder } from '../scoring/SessionRecorder';
+import type { MissionScoreResult } from '../scoring/types';
 
 export interface AppHandle {
   dispose(): void;
@@ -71,8 +74,8 @@ function createInterface(root: HTMLElement): HTMLElement {
           </div>
           <p class="mission-hint" data-mission-hint>请解锁并起飞，飞向输电塔右侧绝缘子串。</p>
           <div class="phase-notice">
-            <strong>P1-5</strong>
-            <span>巡检任务闭环 · 拍照取证与模拟 AI 检测</span>
+            <strong>P1-6</strong>
+            <span>巡检任务闭环 · 教学评分</span>
           </div>
         </aside>
 
@@ -139,6 +142,7 @@ function createInterface(root: HTMLElement): HTMLElement {
             <p class="result-reasons" data-ai-detail></p>
             <div class="result-row"><span>任务状态</span><strong data-mission-state>待开始</strong></div>
           </div>
+          <button type="button" class="score-reopen" data-action="show-score" hidden>查看教学评分</button>
         </aside>
 
         <aside class="panel calibration-anchor" data-calibration-anchor aria-label="遥控器标定"></aside>
@@ -162,6 +166,54 @@ function createInterface(root: HTMLElement): HTMLElement {
           <strong data-input-source>键盘</strong>
         </div>
       </footer>
+
+      <div class="score-overlay" data-score-overlay hidden>
+        <div class="score-block" data-score-panel>
+          <div class="score-total">
+            <span class="score-total-label">教学评分</span>
+            <strong><b data-score-total>0</b> / 100</strong>
+            <em class="score-grade" data-score-grade>—</em>
+          </div>
+          <ul class="score-dimensions">
+            <li data-score-dimension="mission-completion" data-score-status>
+              <span class="score-dim-name">任务完成</span>
+              <b class="score-dim-value" data-score-value>—</b>
+              <p class="score-dim-reason" data-score-reason></p>
+            </li>
+            <li data-score-dimension="flight-safety" data-score-status>
+              <span class="score-dim-name">飞行安全</span>
+              <b class="score-dim-value" data-score-value>—</b>
+              <p class="score-dim-reason" data-score-reason></p>
+            </li>
+            <li data-score-dimension="inspection-position" data-score-status>
+              <span class="score-dim-name">巡检位置</span>
+              <b class="score-dim-value" data-score-value>—</b>
+              <p class="score-dim-reason" data-score-reason></p>
+            </li>
+            <li data-score-dimension="photo-quality" data-score-status>
+              <span class="score-dim-name">照片质量</span>
+              <b class="score-dim-value" data-score-value>—</b>
+              <p class="score-dim-reason" data-score-reason></p>
+            </li>
+            <li data-score-dimension="flight-efficiency" data-score-status>
+              <span class="score-dim-name">飞行效率</span>
+              <b class="score-dim-value" data-score-value>—</b>
+              <p class="score-dim-reason" data-score-reason></p>
+            </li>
+            <li data-score-dimension="control-stability" data-score-status>
+              <span class="score-dim-name">操纵稳定性</span>
+              <b class="score-dim-value" data-score-value>—</b>
+              <p class="score-dim-reason" data-score-reason></p>
+            </li>
+          </ul>
+          <p class="score-issues" data-score-issues hidden></p>
+          <div class="score-suggestions" data-score-suggestions hidden>
+            <p class="score-suggestions-title">教学建议</p>
+            <ul data-score-suggestion-list></ul>
+          </div>
+          <button type="button" class="score-close" data-action="close-score">知道了</button>
+        </div>
+      </div>
     </main>
   `;
 
@@ -211,6 +263,13 @@ export function createApp(root: HTMLElement): AppHandle {
 
   const mission = new MissionEngine();
   const gimbal = new GimbalCamera();
+  // P1-6 teaching score: the recorder collects real run data, the engine is
+  // pure. The UI never computes a number itself.
+  const sessionRecorder = new SessionRecorder();
+  const scoringEngine = new ScoringEngine();
+  let scoreResult: MissionScoreResult | null = null;
+  /** The trainee closed the score card; it can be re-opened from the checklist. */
+  let scoreDismissed = false;
   const photoValidator = new ProjectionPhotoValidator({
     ...DEFAULT_PHOTO_VALIDATOR_CONFIG,
   });
@@ -221,7 +280,9 @@ export function createApp(root: HTMLElement): AppHandle {
     maxAngleErrorDeg: DEFAULT_PHOTO_VALIDATOR_CONFIG.maxAngleErrorDeg,
   });
   const captureStore = resolveInspectionCaptureStore();
-  const missionId = `mission-${Date.now()}`;
+  let missionId = `mission-${Date.now()}`;
+  sessionRecorder.reset(missionId);
+  sessionRecorder.setSceneReference({ x: 0, y: 0, z: 0 }, TARGET_POS);
   let recordSeq = 0;
   let prevMissionState = mission.currentState;
   /** Set when a capture request was refused; shown until the next capture. */
@@ -408,7 +469,88 @@ export function createApp(root: HTMLElement): AppHandle {
       photoDataUrl,
     };
     void captureStore.save(record).catch(() => undefined);
+    sessionRecorder.recordCapture(record);
     updateMissionUI();
+  }
+
+  // --- P1-6 teaching score ---------------------------------------------------
+  const SCORE_DIMENSION_DOM_KEY: Record<keyof MissionScoreResult['dimensions'], string> = {
+    missionCompletion: 'mission-completion',
+    flightSafety: 'flight-safety',
+    inspectionPosition: 'inspection-position',
+    photoQuality: 'photo-quality',
+    flightEfficiency: 'flight-efficiency',
+    controlStability: 'control-stability',
+  };
+
+  function updateScoreUI(): void {
+    const overlay = root.querySelector<HTMLElement>('[data-score-overlay]');
+    const reopen = root.querySelector<HTMLElement>('[data-action="show-score"]');
+    if (!overlay) return;
+    if (!scoreResult) {
+      overlay.hidden = true;
+      if (reopen) reopen.hidden = true;
+      return;
+    }
+    overlay.hidden = scoreDismissed;
+    if (reopen) reopen.hidden = !scoreDismissed;
+
+    const panel = root.querySelector<HTMLElement>('[data-score-panel]');
+    if (!panel) return;
+
+    const setText = (selector: string, text: string): void => {
+      const element = panel.querySelector<HTMLElement>(selector);
+      if (element) element.textContent = text;
+    };
+
+    setText('[data-score-total]', String(scoreResult.totalScore));
+    setText('[data-score-grade]', scoringEngine.config.labels[scoreResult.grade]);
+
+    (Object.keys(scoreResult.dimensions) as Array<keyof MissionScoreResult['dimensions']>).forEach((key) => {
+      const dimension = scoreResult?.dimensions[key];
+      if (!dimension) return;
+      const row = panel.querySelector<HTMLElement>(`[data-score-dimension="${SCORE_DIMENSION_DOM_KEY[key]}"]`);
+      if (!row) return;
+      const value = row.querySelector<HTMLElement>('[data-score-value]');
+      const reason = row.querySelector<HTMLElement>('[data-score-reason]');
+      if (value) value.textContent = `${dimension.score} / ${dimension.maxScore}`;
+      if (reason) reason.textContent = dimension.reasons.join('；');
+      row.dataset.scoreStatus = dimension.status;
+    });
+
+    const issues = panel.querySelector<HTMLElement>('[data-score-issues]');
+    if (issues) {
+      const lines = [...(scoreResult.capReason ? [scoreResult.capReason] : []), ...scoreResult.majorIssues];
+      issues.hidden = lines.length === 0;
+      issues.textContent = lines.join('；');
+    }
+
+    const suggestionsBlock = panel.querySelector<HTMLElement>('[data-score-suggestions]');
+    const suggestionList = panel.querySelector<HTMLElement>('[data-score-suggestion-list]');
+    if (suggestionsBlock && suggestionList) {
+      suggestionsBlock.hidden = scoreResult.suggestions.length === 0;
+      suggestionList.textContent = '';
+      for (const suggestion of scoreResult.suggestions) {
+        const item = document.createElement('li');
+        item.textContent = suggestion;
+        suggestionList.append(item);
+      }
+    }
+  }
+
+  /**
+   * Score once per run, from real recorded data, when the run is over:
+   * mission COMPLETE / FAILED, or the trainee landed early without finishing.
+   */
+  function maybeComputeScore(): void {
+    if (scoreResult) return;
+    const state = mission.currentState;
+    const terminal = state === 'COMPLETE' || state === 'FAILED';
+    const landedEarly = lastSnapshot.state === 'armed' && lastSnapshot.position.y <= 0.1;
+    if (!terminal && !(landedEarly && sessionRecorder.hasReachedTakeoff())) return;
+    scoreResult = scoringEngine.score(sessionRecorder.session());
+    scoreDismissed = false;
+    updateScoreUI();
   }
 
   const MISSION_STATE_TEXT: Record<MissionState, string> = {
@@ -434,6 +576,14 @@ export function createApp(root: HTMLElement): AppHandle {
     // Drive the real flight controller from mission state edges.
     if (state === 'RETURN' && prevMissionState !== 'RETURN') flightController.rtl();
     if (state === 'LAND' && prevMissionState !== 'LAND') flightController.land();
+    // A fresh run after a scored one: clear the old score and recording.
+    if (state === 'READY' && prevMissionState !== 'READY' && scoreResult !== null) {
+      scoreResult = null;
+      scoreDismissed = false;
+      missionId = `mission-${Date.now()}`;
+      sessionRecorder.reset(missionId);
+      updateScoreUI();
+    }
     prevMissionState = state;
 
     const info = mission.stepInfo();
@@ -550,6 +700,9 @@ export function createApp(root: HTMLElement): AppHandle {
   };
   inspectionSeam.__fdeTeleport = (position) => {
     flightController.teleport(position);
+    // A teleport is a test-harness jump, not flown distance: keep it out of
+    // the scored path length.
+    sessionRecorder.noteTeleport();
   };
   inspectionSeam.__fdeInspection = {
     layout: transmissionScene.layout,
@@ -738,6 +891,16 @@ export function createApp(root: HTMLElement): AppHandle {
     void captureInspection();
   });
 
+  // P1-6 score card: dismiss after reading, re-open from the checklist panel.
+  root.querySelector<HTMLElement>('[data-action="close-score"]')?.addEventListener('click', () => {
+    scoreDismissed = true;
+    updateScoreUI();
+  });
+  root.querySelector<HTMLElement>('[data-action="show-score"]')?.addEventListener('click', () => {
+    scoreDismissed = false;
+    updateScoreUI();
+  });
+
   // Gimbal teaching controls (separate from the flight keyboard mapping, so the
   // P1-3 input chain is untouched): I/K pitch up/down, J/L yaw, C recentre.
   const handleGimbalKey = (event: KeyboardEvent): void => {
@@ -766,6 +929,20 @@ export function createApp(root: HTMLElement): AppHandle {
     updateInspectionReadout();
     mission.update(buildTelemetry());
     updateMissionUI();
+
+    // P1-6: feed the scorer real telemetry every frame (recording only).
+    sessionRecorder.sample({
+      position: snapshot.position,
+      safetyState: inspectionResult.safetyState,
+      insideInspectionZone: inspectionResult.insideInspectionZone,
+      flightState: snapshot.state,
+      horizontalSpeedMps: snapshot.horizontalSpeedMps,
+      command: input.command,
+      now: timestamp,
+    });
+    sessionRecorder.setSceneReference(snapshot.homePoint, TARGET_POS);
+    sessionRecorder.observeMission(mission.currentState, timestamp);
+    maybeComputeScore();
 
     if (droneEntity) {
       const target = droneEntity.group.position;

@@ -31,6 +31,7 @@ select {
   grid-template-rows: 64px minmax(0, 1fr) 76px;
   width: 100%;
   height: 100%;
+  position: relative;
   background: #111410;
 }
 
@@ -280,6 +281,176 @@ dd {
   color: #cfe6d4;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* --- P1-6 teaching score card -------------------------------------------- */
+
+/* Mission-summary overlay over the scene: the score needs more room than a
+   side panel can offer, and it must read identically on desktop and mobile. */
+.score-overlay {
+  position: absolute;
+  inset: 64px 0 76px 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 12, 9, 0.68);
+}
+
+.score-overlay[hidden] {
+  display: none;
+}
+
+.score-block {
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid #2f3a32;
+  border-radius: 12px;
+  background: #1a211c;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.score-total {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.score-total-label {
+  color: #9aa69a;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.score-total strong {
+  color: #f4ca68;
+  font: 700 22px "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.score-total strong b {
+  font-size: 26px;
+}
+
+.score-grade {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #243026;
+  color: #cfe6d4;
+  font: 700 12px "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-style: normal;
+}
+
+.score-dimensions {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.score-dimensions li {
+  padding: 8px 10px;
+  border-left: 3px solid #3d4a41;
+  border-radius: 6px;
+  background: #151b17;
+}
+
+.score-dimensions li[data-score-status="GOOD"] {
+  border-left-color: #67da94;
+}
+
+.score-dimensions li[data-score-status="CHECK"] {
+  border-left-color: #e3b84f;
+}
+
+.score-dimensions li[data-score-status="POOR"] {
+  border-left-color: #ff6b5e;
+}
+
+.score-dim-name {
+  color: #d7e2d8;
+  font-size: 13px;
+}
+
+.score-dim-value {
+  float: right;
+  color: #edf3ed;
+  font: 700 13px "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.score-dim-reason {
+  margin: 4px 0 0;
+  color: #9aa69a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.score-issues {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #2a1c1c;
+  color: #ff9c8a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.score-suggestions {
+  margin: 12px 0 0;
+}
+
+.score-suggestions-title {
+  margin: 0 0 4px;
+  color: #9aa69a;
+  font-size: 12px;
+}
+
+.score-suggestions ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.score-suggestions li {
+  color: #cfe6d4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.score-close {
+  margin-top: 14px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #3d4a41;
+  border-radius: 8px;
+  background: #243026;
+  color: #d7e2d8;
+  font: 700 13px "Segoe UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.score-close:hover {
+  background: #2d3b30;
+}
+
+.score-reopen {
+  margin-top: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #3d4a41;
+  border-radius: 8px;
+  background: transparent;
+  color: #cfe6d4;
+  font: 700 12px "Segoe UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.score-reopen[hidden] {
+  display: none;
 }
 
 .mission-result {
@@ -579,6 +750,12 @@ dd {
 
   .phase-status {
     display: none;
+  }
+
+  .score-overlay {
+    inset: 64px 0 0 0;
+    align-items: start;
+    padding: 16px 16px 170px;
   }
 }
 
