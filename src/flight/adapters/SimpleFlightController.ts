@@ -122,6 +122,24 @@ export class SimpleFlightController implements FlightControllerAdapter {
     return result(true, '返回 Home Point');
   }
 
+  /**
+   * Teaching/test seam: jump the aircraft to an absolute position without
+   * flying there. Used by the inspection browser tests to place the F450 at a
+   * known pose; production flight never calls this.
+   */
+  teleport(position: Vector3Like): OperationResult {
+    this.position = {
+      x: clamp(position.x, -1000, 1000),
+      y: clamp(position.y, 0, MAX_ALTITUDE_M),
+      z: clamp(position.z, -1000, 1000),
+    };
+    this.velocity = { x: 0, y: 0, z: 0 };
+    if (this.state === 'disarmed' || this.state === 'armed') {
+      this.homePoint = { ...this.position };
+    }
+    return result(true, '飞行器已跳转至指定坐标');
+  }
+
   pause(): OperationResult {
     if (!['flying', 'taking-off'].includes(this.state)) return result(false, '当前任务无法暂停');
     this.stateBeforePause = this.state;

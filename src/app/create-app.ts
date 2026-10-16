@@ -10,6 +10,9 @@ import { ControllerCalibrationPanel } from '../ui/controller-calibration';
 import { resolveProfileStore } from '../ui/profile-store';
 import type { DeviceProfile } from '../input/device-profile';
 import { createRenderConfig } from './render-config';
+import { SafetyDistanceEngine } from '../safety/SafetyEngine';
+import { createTransmissionScene } from '../scenes/transmission/create-transmission-scene';
+import type { SafetyState } from '../inspection/types';
 
 export interface AppHandle {
   dispose(): void;
@@ -38,17 +41,28 @@ function createInterface(root: HTMLElement): HTMLElement {
             <span class="step-number">01</span>
             <div>
               <p class="eyebrow">当前任务</p>
-              <h2>输电线路巡视</h2>
+              <h2>绝缘子缺片巡检</h2>
             </div>
           </div>
           <dl class="mission-facts">
-            <div><dt>训练模式</dt><dd>指定巡检</dd></div>
-            <div><dt>巡检目标</dt><dd>待装载</dd></div>
+            <div><dt>巡检目标</dt><dd data-inspection-target>待装载</dd></div>
+            <div><dt>距目标</dt><dd data-distance-target>— m</dd></div>
+            <div><dt>距障碍</dt><dd data-distance-obstacle>— m</dd></div>
             <div><dt>任务进度</dt><dd>0 / 1</dd></div>
           </dl>
+          <div class="safety-block">
+            <div class="safety-row">
+              <span>安全状态</span>
+              <strong data-safety-status class="safety-safe">安全</strong>
+            </div>
+            <div class="safety-row">
+              <span>巡检区</span>
+              <strong data-inspection-zone>区外</strong>
+            </div>
+          </div>
           <div class="phase-notice">
-            <strong>P1-1</strong>
-            <span>基础训练环境已就绪</span>
+            <strong>P1-4</strong>
+            <span>输电线路巡检场景 · 安全距离教学</span>
           </div>
         </aside>
 
@@ -56,7 +70,7 @@ function createInterface(root: HTMLElement): HTMLElement {
           <div class="scene-toolbar">
             <div>
               <span class="toolbar-label">场景</span>
-              <strong>输电线路 · 基础环境</strong>
+              <strong>输电线路 · 巡检环境</strong>
             </div>
             <div class="coordinates" aria-label="坐标状态">
               <span>X <b data-position-x>0.0</b></span>
@@ -134,51 +148,6 @@ function createInterface(root: HTMLElement): HTMLElement {
   return shell;
 }
 
-function addReferenceScene(scene: THREE.Scene): void {
-  scene.background = new THREE.Color(0xcbd8d1);
-  scene.fog = new THREE.Fog(0xcbd8d1, 35, 105);
-
-  const hemisphere = new THREE.HemisphereLight(0xf5fff9, 0x4e5e4a, 2.2);
-  scene.add(hemisphere);
-
-  const sun = new THREE.DirectionalLight(0xfff1ce, 3.2);
-  sun.position.set(18, 28, 12);
-  sun.castShadow = true;
-  scene.add(sun);
-
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(120, 120),
-    new THREE.MeshStandardMaterial({ color: 0x71856d, roughness: 0.95 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  const grid = new THREE.GridHelper(120, 60, 0x385845, 0x7e927b);
-  grid.position.y = 0.015;
-  scene.add(grid);
-
-  const routeMaterial = new THREE.MeshStandardMaterial({ color: 0xe3b84f, roughness: 0.55 });
-  const routeGeometry = new THREE.CylinderGeometry(0.12, 0.12, 0.7, 12);
-  for (const [x, z] of [[-9, 4], [0, -2], [11, 3]] as Array<[number, number]>) {
-    const marker = new THREE.Mesh(routeGeometry, routeMaterial);
-    marker.position.set(x, 0.35, z);
-    marker.castShadow = true;
-    scene.add(marker);
-  }
-
-  const boundary = new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-18, 0.04, -11),
-      new THREE.Vector3(18, 0.04, -11),
-      new THREE.Vector3(18, 0.04, 11),
-      new THREE.Vector3(-18, 0.04, 11),
-    ]),
-    new THREE.LineBasicMaterial({ color: 0x3bd18a }),
-  );
-  scene.add(boundary);
-}
-
 export function createApp(root: HTMLElement): AppHandle {
   const shell = createInterface(root);
   const mount = root.querySelector<HTMLElement>('[data-scene-mount]');
@@ -199,7 +168,15 @@ export function createApp(root: HTMLElement): AppHandle {
   mount.append(renderer.domElement);
 
   const scene = new THREE.Scene();
-  addReferenceScene(scene);
+
+  const transmissionScene = createTransmissionScene(scene);
+  shell.dataset.scene = 'transmission';
+  shell.dataset.towerCount = String(transmissionScene.towerCount);
+  shell.dataset.wireCount = String(transmissionScene.wireCount);
+  shell.dataset.targetSet = 'true';
+  shell.dataset.inspectionReady = 'true';
+
+  const safetyEngine = new SafetyDistanceEngine(transmissionScene.layout);
 
   const flightController = new SimpleFlightController();
   const keyboard = new KeyboardInputAdapter();
@@ -244,6 +221,28 @@ export function createApp(root: HTMLElement): AppHandle {
   void gamepad.connect().catch(() => undefined);
   calibrationPanel?.start();
 
+  // Test seams for the inspection browser tests (no production behaviour change):
+  //  - __fdeTeleport jumps the F450 to an absolute pose for deterministic checks.
+  //  - __fdeInspection exposes the layout, a pure evaluator, and the last result.
+  const inspectionSeam = window as unknown as {
+    __fdeTeleport?: (position: { x: number; y: number; z: number }) => void;
+    __fdeInspection?: {
+      layout: typeof transmissionScene.layout;
+      evaluate: (position: { x: number; y: number; z: number }) => ReturnType<SafetyDistanceEngine['evaluate']>;
+      lastResult: ReturnType<SafetyDistanceEngine['evaluate']> | null;
+    };
+  };
+  inspectionSeam.__fdeTeleport = (position) => {
+    flightController.teleport(position);
+  };
+  inspectionSeam.__fdeInspection = {
+    layout: transmissionScene.layout,
+    evaluate: (position) => safetyEngine.evaluate(position),
+    get lastResult() {
+      return inspectionResult;
+    },
+  };
+
   let droneEntity: Awaited<ReturnType<typeof loadF450>>['entity'] | null = null;
   void loadF450().then(({ entity, notice }) => {
     droneEntity = entity;
@@ -285,6 +284,9 @@ export function createApp(root: HTMLElement): AppHandle {
     emergency: '紧急停止',
   };
 
+  let lastSnapshot = flightController.snapshot();
+  let inspectionResult = safetyEngine.evaluate(lastSnapshot.position);
+
   const readout = {
     altitude: root.querySelector<HTMLElement>('[data-altitude]'),
     state: root.querySelector<HTMLElement>('[data-flight-state]'),
@@ -293,6 +295,25 @@ export function createApp(root: HTMLElement): AppHandle {
     x: root.querySelector<HTMLElement>('[data-position-x]'),
     y: root.querySelector<HTMLElement>('[data-position-y]'),
     z: root.querySelector<HTMLElement>('[data-position-z]'),
+    inspectionTarget: root.querySelector<HTMLElement>('[data-inspection-target]'),
+    distanceTarget: root.querySelector<HTMLElement>('[data-distance-target]'),
+    distanceObstacle: root.querySelector<HTMLElement>('[data-distance-obstacle]'),
+    safetyStatus: root.querySelector<HTMLElement>('[data-safety-status]'),
+    inspectionZone: root.querySelector<HTMLElement>('[data-inspection-zone]'),
+  };
+
+  const SAFETY_LABELS: Record<SafetyState, string> = {
+    SAFE: '安全',
+    WARNING: '警告',
+    DANGER: '危险',
+    COLLISION: '碰撞',
+  };
+
+  const SAFETY_CLASS: Record<SafetyState, string> = {
+    SAFE: 'safety-safe',
+    WARNING: 'safety-warning',
+    DANGER: 'safety-danger',
+    COLLISION: 'safety-collision',
   };
 
   const updateInputSource = (source: PilotInputSource): void => {
@@ -317,6 +338,29 @@ export function createApp(root: HTMLElement): AppHandle {
       readout.z.textContent = z;
       readout.z.dataset.value = snapshot.position.z.toFixed(2);
     }
+  };
+
+  // Per-frame inspection readout: real distances + safety classification only.
+  const updateInspectionReadout = (): void => {
+    const result = safetyEngine.evaluate(lastSnapshot.position);
+    inspectionResult = result;
+    if (readout.inspectionTarget) {
+      readout.inspectionTarget.textContent = transmissionScene.layout.target.label;
+    }
+    if (readout.distanceTarget) {
+      readout.distanceTarget.textContent = `${result.distanceToTarget.toFixed(1)} m`;
+    }
+    if (readout.distanceObstacle) {
+      readout.distanceObstacle.textContent = `${safetyEngine.nearestObstacleDistance(lastSnapshot.position).toFixed(1)} m`;
+    }
+    if (readout.safetyStatus) {
+      readout.safetyStatus.textContent = SAFETY_LABELS[result.safetyState];
+      readout.safetyStatus.className = SAFETY_CLASS[result.safetyState];
+    }
+    if (readout.inspectionZone) {
+      readout.inspectionZone.textContent = result.insideInspectionZone ? '已进入' : '区外';
+    }
+    transmissionScene.setZoneHighlight(result.safetyState);
   };
 
   root.querySelector<HTMLElement>('[data-action="arm"]')?.addEventListener('click', () => {
@@ -347,9 +391,11 @@ export function createApp(root: HTMLElement): AppHandle {
     lastUpdate = timestamp;
     const input = pipeline.poll();
     const snapshot = flightController.update(input.command, deltaSeconds);
+    lastSnapshot = snapshot;
     droneEntity?.update(snapshot, deltaSeconds);
     updateReadout(snapshot);
     updateInputSource(input.source);
+    updateInspectionReadout();
 
     if (droneEntity) {
       const target = droneEntity.group.position;
@@ -376,6 +422,7 @@ export function createApp(root: HTMLElement): AppHandle {
       gamepad.disconnect();
       calibrationPanel?.stop();
       droneEntity?.dispose();
+      transmissionScene.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();

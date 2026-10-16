@@ -223,6 +223,49 @@ dd {
   font-size: 13px;
 }
 
+.safety-block {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 12px;
+  border: 1px solid #30372f;
+  border-radius: 4px;
+  background: #1d221b;
+}
+
+.safety-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.safety-row span {
+  color: #9aa69a;
+}
+
+.safety-row strong {
+  font: 700 15px Consolas, monospace;
+  color: #edf3ed;
+}
+
+.safety-safe {
+  color: #3bd18a !important;
+}
+
+.safety-warning {
+  color: #e3b84f !important;
+}
+
+.safety-danger {
+  color: #ff8c42 !important;
+}
+
+.safety-collision {
+  color: #ff4d4d !important;
+}
+
 .scene-toolbar {
   position: absolute;
   z-index: 2;

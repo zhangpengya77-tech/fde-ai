@@ -93,3 +93,51 @@ Notes:
 
 - P1-3 delivers the input + calibration layer for Phase 1; it does **not** claim a complete teaching loop. The transmission-tower scene (P1-4), inspection loop and simulated AI (P1-5), scoring (P1-6) and the teacher-review persistence layer (P1-7) remain. P1-3's IndexedDB store is reused by P1-7.
 - Real hardware acceptance for RadioMaster EdgeTX / RadioLink AT9S / DJI FPV RC3 / CRSF-ELRS is recorded as `PENDING_DEVICE_TEST` (a skipped `test.fixme` in `gamepad.spec.ts`) and is **not** claimed as PASS. The simulated Gamepad API is a test double that proves wiring, wizard and lost-link fallback only.
+
+## P1-4 Transmission-Line Inspection Scene & SafetyDistanceEngine
+
+Status: PASS
+
+Date: 2026-10-16
+
+TDD was followed per module (failing test first, then implementation). The geometry and safety layers are deliberately Three.js-free so the business logic is unit-testable in plain Node and cannot silently drift from what the trainee sees.
+
+| Verification | Result | Evidence |
+|---|---|---|
+| Unit `npm test` | PASS | Vitest: **10 files, 116 tests passed** — new `transmission-layout` (14) + `safety-engine` (24); the P1-1/P1-2/P1-3 files (78) stay green |
+| Browser `npm run test:browser` | PASS | Playwright: **16 passed / 2 skipped** across desktop-chrome + mobile-chrome — new `transmission-scene.spec.ts` (CASE1–CASE4 × 2) plus existing `shell`/`flight`/`gamepad`; only skips are the `PENDING_DEVICE_TEST` fixme |
+| Production build `npm run build` | PASS | `tsc -b` clean; Vite: **23 modules** transformed, JS 540.60 kB (gzip 140.29 kB) |
+| Scene composition (CASE1) | PASS | Ground, road, ≥2 towers, ≥2 sagging wires, obstacle tree, one target, one defect all present (`data-tower-count=2`, `data-wire-count=2`, `data-target-set=true`, canvas non-blank, zero page errors) |
+| SAFE band (CASE2) | PASS | Pose far (≥10 m) from every hazard classifies `SAFE` and HUD shows `安全` |
+| WARNING/DANGER bands (CASE3) | PASS | West of tower 1 → `DANGER`; near conductor → `WARNING`; HUD shows `警告/危险`; `distanceToWire < 5 m` |
+| Inspection Zone (CASE4) | PASS | Teleport inside the 3.5 m radius flips HUD to `已进入`; at-target distance < 0.001 m; +6 m X offset stays `区外` |
+| Real distance math | PASS | `pointToPolylineDistance` over sampled sag gives `distanceToWire`; segment gives `distanceToTower`; point-to-point gives `distanceToTarget`; worst-case precedence `COLLISION > DANGER > WARNING > SAFE` |
+| Input chain intact | PASS | Keyboard + simulated Gamepad specs still pass; `PilotInputPipeline` untouched; brand-neutral flight core unchanged |
+
+New files:
+
+- `src/inspection/types.ts` — `Vec3`, `SafetyState` (`SAFE|WARNING|DANGER|COLLISION`), `InspectionGeometryResult`, `InspectionDefectType`.
+- `src/scenes/SceneDefinition.ts` — pure `buildTransmissionLayout()`, sagging-wire sampler `createSaggingWire()` (parabola `y -= sag·4t(1−t)`), and distance primitives (`distance`, `pointToSegmentDistance`, `pointToPolylineDistance`). Two towers (`T1` x=-9, `T2` x=11, height 12, cross-arm y=11), two sagging conductors, target `INS-T1-RIGHT` at `{x:-7.4,y:8,z:4}` (`MISSING_INSULATOR_DISC`), obstacle tree, zone radius 3.5 m.
+- `src/safety/SafetyEngine.ts` — `SafetyDistanceEngine.evaluate(position)` computes tower/wire/target distances + zone membership and worst-case safety state; `nearestObstacleDistance()` for the HUD. Teaching radii: tower {1.5/4/8}, wire {0.8/2/4}, target {0.5/1.2/3}, obstacle {1.0/2.5/5} (capsule/danger/warning).
+- `src/scenes/transmission/create-transmission-scene.ts` — Three.js scene: ground, road with dashes, lattice towers with cross arms, sagging wire tubes (same samples the engine measures), the right insulator string with a visible **missing-disc** defect + red marker, tree obstacle, translucent inspection-zone ring/volume and target marker beam.
+- `tests/unit/transmission-layout.test.ts`, `tests/unit/safety-engine.test.ts`, `tests/browser/transmission-scene.spec.ts`.
+
+Modified files:
+
+- `src/app/create-app.ts` — replaced the reference scene with the transmission scene, instantiated `SafetyDistanceEngine`, added the per-frame HUD (target, distance-to-target, distance-to-obstacle, colour-coded safety status, zone indicator) and zone highlight, and added two test seams: `window.__fdeTeleport` and `window.__fdeInspection` (`layout`/`evaluate`/`lastResult`).
+- `src/flight/adapters/SimpleFlightController.ts` — added `teleport(position)` (teaching/test seam only; production flight never calls it).
+- `src/styles.css` — safety-block + colour classes `safety-safe/warning/danger/collision`.
+- `docs/.../2026-10-16-phase-1-mvp.md` — Task 4 checkboxes and notes.
+
+Screenshots (acceptance evidence; calibration panel folded for clarity via a test-only style):
+
+- A panorama `screenshots/p1-4-panorama-desktop-chrome.png`
+- B inside zone `screenshots/p1-4-inzone-desktop-chrome.png`
+- C WARNING view `screenshots/p1-4-warning-desktop-chrome.png`
+- (mobile-chrome copies of A/B/C also produced)
+
+Notes:
+
+- P1-4 provides the inspection scene + real safety distance engine only. It does **not** claim the guided task loop, simulated AI (P1-5), scoring (P1-6) or teacher persistence (P1-7). The identify-first lesson is the **missing insulator disc**; it is a programmatic teaching defect with no real AI.
+- The simulated-Gamepad `PENDING_DEVICE_TEST` is unchanged and still **not** claimed PASS.
+- One pre-existing P1-3 type error in `tests/browser/gamepad.spec.ts` (`waitForAltitudeAbove` return annotation vs Playwright's `Promise<JSHandle<boolean>>`) blocked `tsc -b`. Fixed by letting TypeScript infer the real return type — a compile-only change with no assertion/skip/behaviour impact, required so `npm run build` passes for P1-4.

@@ -61,7 +61,7 @@ const waitForAltitudeAbove = (
   page: import('@playwright/test').Page,
   min: number,
   timeout: number,
-): Promise<void> =>
+) =>
   page.waitForFunction(
     (threshold: number) => {
       const el = document.querySelector('[data-altitude]');
