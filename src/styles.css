@@ -288,7 +288,7 @@ dd {
 /* Mission-summary overlay over the scene: the score needs more room than a
    side panel can offer, and it must read identically on desktop and mobile. */
 .score-overlay {
-  position: absolute;
+  position: fixed;
   inset: 64px 0 76px 0;
   z-index: 30;
   display: grid;
@@ -752,10 +752,13 @@ dd {
     display: none;
   }
 
+  /* 手机竖屏：留出底部操作区空间；浮层自身可滚动，评分内容永不被裁切 */
   .score-overlay {
     inset: 64px 0 0 0;
     align-items: start;
-    padding: 16px 16px 170px;
+    justify-items: stretch;
+    padding: 16px 16px 24px;
+    overflow-y: auto;
   }
 }
 
