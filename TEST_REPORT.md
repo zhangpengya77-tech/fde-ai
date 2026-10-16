@@ -141,3 +141,54 @@ Notes:
 - P1-4 provides the inspection scene + real safety distance engine only. It does **not** claim the guided task loop, simulated AI (P1-5), scoring (P1-6) or teacher persistence (P1-7). The identify-first lesson is the **missing insulator disc**; it is a programmatic teaching defect with no real AI.
 - The simulated-Gamepad `PENDING_DEVICE_TEST` is unchanged and still **not** claimed PASS.
 - One pre-existing P1-3 type error in `tests/browser/gamepad.spec.ts` (`waitForAltitudeAbove` return annotation vs Playwright's `Promise<JSHandle<boolean>>`) blocked `tsc -b`. Fixed by letting TypeScript infer the real return type — a compile-only change with no assertion/skip/behaviour impact, required so `npm run build` passes for P1-4.
+
+## P1-5 Inspection Mission Loop and Simulated AI
+
+Status: PASS
+
+Date: 2026-10-16
+
+TDD was followed per module (failing test first, then implementation). All new business logic is Three.js-free and DOM-free, so the mission state machine, gimbal limits, photo judging and the simulated AI are unit-testable in plain Node; the browser tests then exercise the same logic on **real** telemetry with **real** WebGL captures.
+
+| Verification | Result | Evidence |
+|---|---|---|
+| Unit `npm test` | PASS | Vitest: **15 files, 150 tests passed** — new `mission-engine` (12), `projection-photo-validator` (10), `gimbal-camera` (7), `mock-inspection-ai` (4), `inspection-capture-store` (1); P1-1–P1-4 suites (116) stay green |
+| Browser `npm run test:browser` | PASS | Playwright: **6 passed** for the new `inspection-mission.spec.ts` CASE1–CASE3 × desktop-chrome + mobile-chrome (this spec alone was run; P1-2/P1-4 screenshot evidence files untouched) |
+| Production build `npm run build` | PASS | `tsc -b` clean; Vite build ✓ (only the pre-existing three.js >500 kB chunk warning) |
+| Real photo capture | PASS | `renderCaptureToDataUrl()` renders the live scene from the **actual camera pose** (drone pose + heading + gimbal angles) into a `WebGLRenderTarget`, reads the pixels back and stores a PNG data URL; the browser test asserts the `<img data-photo-preview>` receives a `data:image/png;base64,...` payload > 2 kB |
+| Teaching core (retry loop) | PASS | A deliberately mis-aimed shot (pitch +20° vs 15° tolerance) is **accepted as a capture** but judged invalid — mission returns to `AIM_CAMERA`, HUD shows `照片不合格` + `云台方向偏差过大`; re-aiming and shooting again validates and reaches the AI |
+| Mission state machine | PASS | `IDLE→READY→TAKEOFF→FLY_TO_TARGET→POSITION_FOR_INSPECTION→AIM_CAMERA→CAPTURE→AI_INSPECTION→INSPECTION_COMPLETE→RETURN→LAND→COMPLETE`, each transition driven by real telemetry (never a timer); a real `COLLISION` aborts to `FAILED` |
+| Photo judging (projection only) | PASS | `ProjectionPhotoValidator` checks target-in-frustum, coverage ratio, distance band [0.8, 5] m, aim error ≤ 15°, zone membership and safety from geometry alone — it never inspects pixels and never calls the AI |
+| Simulated AI | PASS | `MockInspectionAI` returns the planted `MISSING_INSULATOR_DISC` defect deterministically (no `Math.random`; confidence from capture geometry, ∈ [0.5, 0.99]); the UI labels it `Mock AI（模拟）` and `来源：模拟 AI / 非真实模型` |
+| Capture gating | PASS | `requestCapture()` only succeeds from `AIM_CAMERA`; a refused request shows `无法拍摄` + reason and leaves the mission untouched (regression found and fixed: the per-frame UI update used to overwrite the refusal) |
+| Gimbal teaching keys | PASS | I/K pitch, J/L yaw, C recenter — separate window-level handler, the P1-3 input chain is untouched and flight keys W/A/S/D/Q/E/R/F are unaffected |
+| Input chain intact | PASS | Keyboard + simulated Gamepad paths unchanged; brand-neutral flight core untouched; `PilotInputPipeline` unchanged |
+| Persistence seam | PASS | `InspectionCaptureRecord` (pose, gimbal angles, distances, safety, photo validation, AI result, photo data URL) saved through `resolveInspectionCaptureStore()` (IndexedDB + in-memory fallback); failures never block the teaching loop |
+
+New files:
+
+- `src/mission/types.ts` / `src/mission/MissionEngine.ts` — ordered mission states, Chinese labels/hints, progress, and the pure state machine consuming real telemetry; externally-driven actions (`requestCapture` / `submitPhoto` / `submitAI` / `requestReturn` / `fail` / `reset`) are state-gated.
+- `src/camera/GimbalCamera.ts` — pure gimbal angle model (pitch −90…+20°, yaw ±135°, nudge/recenter), no Three.js.
+- `src/camera/ProjectionPhotoValidator.ts` — projection-based photo-quality judge (frustum test, coverage, distance, aim, zone, safety) with teaching-tunable config.
+- `src/ai/InspectionAIAdapter.ts` / `src/ai/MockInspectionAI.ts` — the AI contract and the deterministic, always-labelled-as-simulated mock; no model files, no network.
+- `src/persistence/inspection-capture-store.ts` — capture-record store (IndexedDB with in-memory fallback) prepared for P1-6 scoring and P1-7 teacher review.
+- `tests/unit/mission-engine.test.ts`, `tests/unit/gimbal-camera.test.ts`, `tests/unit/projection-photo-validator.test.ts`, `tests/unit/mock-inspection-ai.test.ts`, `tests/unit/inspection-capture-store.test.ts`, `tests/browser/inspection-mission.spec.ts`.
+
+Modified files:
+
+- `src/app/create-app.ts` — mission/gimbal/validator/AI wiring; real `WebGLRenderTarget` capture; task panel (step, progress, hint, gimbal readout), camera panel (photo preview), checklist panel (photo result + reasons, mock-AI result, mission state); capture button + gimbal keys; mission→flight edges (RETURN auto-RTL, LAND auto-land); new test seams `window.__fdeGimbal` and `window.__fdeMission` (test only — production behaviour never depends on them); `distanceToHome` is horizontal so RTL arrival is achievable.
+- `src/styles.css` — mission hint, result rows, photo preview/placeholder, capture button, gimbal key hint.
+- `src/inspection/types.ts` — `InspectionAIResult` / `InspectionAIInput` / `PhotoValidationResult` / `PhotoSample` / `InspectionCaptureRecord` shared contracts.
+
+Screenshots (acceptance evidence; calibration panel folded for clarity via a test-only style):
+
+- A validated capture `screenshots/p1-5-capture-desktop-chrome.png` — drone in the inspection zone (altitude 8.0 m, 3.2 m to target), photo preview showing the real capture, checklist 3/3
+- B completed mission `screenshots/p1-5-complete-desktop-chrome.png` — 12/12, landed and disarmed, evidence retained
+- (mobile-chrome copies of A/B also produced; the camera panel is intentionally hidden on the ≤920 px layout)
+
+Notes:
+
+- P1-5 delivers the complete teaching loop with a **simulated** AI. It does **not** claim a real defect-detection model, scoring (P1-6) or teacher review (P1-7).
+- One real defect was found by the P1-5 integration itself: a refused capture request set the HUD text, but the per-frame `updateMissionUI` immediately overwrote it with `未拍摄`. Fixed by keeping the refusal in state (`captureRefusal`) until the next real capture; covered by CASE1.
+- One test-robustness issue was found and fixed: teleporting while the aircraft was still `taking-off` let the climb target pull the pose back down (the takeoff vertical target overrides position until `flying`). The browser helper now waits for mode `飞行中` before teleporting; P1-1/P1-2/P1-4 specs never armed/took off, so their evidence was unaffected.
+- The gamepad gimbal mapping (right-stick camera control) is intentionally **reserved** (V1): only the reserved-brand-neutral channel path is claimed here, keeping the P1-3 acceptance intact.

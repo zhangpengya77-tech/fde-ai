@@ -185,6 +185,12 @@ h2 {
   margin: 22px 0 0;
 }
 
+.gimbal-keys {
+  margin: 12px 0 0;
+  color: #96a197;
+  font-size: 12px;
+}
+
 .mission-facts div,
 .camera-readout div {
   display: flex;
@@ -264,6 +270,63 @@ dd {
 
 .safety-collision {
   color: #ff4d4d !important;
+}
+
+.mission-hint {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid #67da94;
+  background: #16201a;
+  color: #cfe6d4;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mission-result {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #30372f;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.result-row span {
+  color: #9aa69a;
+}
+
+.result-row strong {
+  color: #edf3ed;
+  font: 700 13px "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.result-reasons {
+  margin: 0;
+  color: #ff8c42;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 1em;
+}
+
+.photo-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.capture-button {
+  border-color: #67da94 !important;
+  color: #9df0bd !important;
+  font-weight: 700;
 }
 
 .scene-toolbar {
