@@ -762,6 +762,497 @@ dd {
   }
 }
 
+/* --- P1-7 trainee mission report: history list + teacher view --------------- */
+
+.reports-button {
+  background: #2c3a30;
+  border-color: #3d4a41;
+}
+
+.reports-overlay {
+  position: fixed;
+  inset: 64px 0 76px 0;
+  z-index: 31;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 12, 9, 0.68);
+}
+
+.reports-overlay[hidden] {
+  display: none;
+}
+
+.reports-block {
+  width: min(680px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid #2f3a32;
+  border-radius: 12px;
+  background: #1a211c;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.reports-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reports-head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #eaf3ec;
+}
+
+.report-role-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0c120e;
+  background: #7fd6a3;
+  vertical-align: middle;
+}
+
+.report-role-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.role-tab {
+  padding: 6px 14px;
+  border: 1px solid #3d4a41;
+  border-radius: 8px;
+  background: transparent;
+  color: #cfe6d4;
+  font: 700 12px "Segoe UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.role-tab[aria-pressed="true"] {
+  background: #7fd6a3;
+  color: #0c120e;
+  border-color: #7fd6a3;
+}
+
+.report-teacher-note,
+.report-role-flag {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #2a2417;
+  color: #ecd9a8;
+  font-size: 12px;
+}
+
+.reports-list {
+  display: grid;
+  gap: 8px;
+}
+
+.reports-empty {
+  color: #9fb2a5;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.report-item {
+  display: grid;
+  grid-template-columns: 96px 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid #2f3a32;
+  border-radius: 10px;
+  background: #141a16;
+  color: #eaf3ec;
+  font: 500 13px "Segoe UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.report-item:hover {
+  border-color: #7fd6a3;
+}
+
+.report-item-date {
+  color: #9fb2a5;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-item-task {
+  font-weight: 700;
+}
+
+.report-item-score {
+  color: #cfe6d4;
+}
+
+.report-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.report-status-completed {
+  background: #1f4d33;
+  color: #9ff0c0;
+}
+
+.report-status-failed {
+  background: #4d1f1f;
+  color: #ff9f9f;
+}
+
+.report-status-incomplete {
+  background: #4d441f;
+  color: #f0d79f;
+}
+
+.report-collision {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #4d1f1f;
+  color: #ff9f9f;
+}
+
+.report-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.report-detail[hidden] {
+  display: none;
+}
+
+.report-back {
+  justify-self: start;
+  padding: 6px 12px;
+  border: 1px solid #3d4a41;
+  border-radius: 8px;
+  background: transparent;
+  color: #cfe6d4;
+  font: 700 12px "Segoe UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.report-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #eaf3ec;
+}
+
+.report-meta {
+  margin: 2px 0;
+  font-size: 12px;
+  color: #9fb2a5;
+}
+
+.report-section {
+  border: 1px solid #2f3a32;
+  border-radius: 10px;
+  padding: 12px;
+  background: #141a16;
+}
+
+.report-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #cfe6d4;
+}
+
+.report-note {
+  font-size: 12px;
+  color: #9fb2a5;
+  margin: 0 0 8px;
+}
+
+.report-empty {
+  font-size: 13px;
+  color: #9fb2a5;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.report-summary-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #2f3a32;
+  border-radius: 8px;
+  background: #141a16;
+}
+
+.report-summary-grid span {
+  font-size: 11px;
+  color: #9fb2a5;
+}
+
+.report-summary-grid b {
+  font-size: 14px;
+  color: #eaf3ec;
+}
+
+.report-control-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-control-table th,
+.report-control-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #2f3a32;
+  text-align: left;
+}
+
+.report-captures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.report-capture {
+  border: 1px solid #2f3a32;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #0f140f;
+}
+
+.report-capture.valid {
+  border-left: 3px solid #67da94;
+}
+
+.report-capture.invalid {
+  border-left: 3px solid #ff6b5e;
+}
+
+.report-capture-badge {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.report-capture.invalid .report-capture-badge {
+  color: #ff9f9f;
+}
+
+.report-capture.valid .report-capture-badge {
+  color: #9ff0c0;
+}
+
+.report-capture-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #9fb2a5;
+}
+
+.report-ai {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #bcdcfc;
+}
+
+.report-ai-warn {
+  color: #ecd9a8;
+  background: #2a2417;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.report-photo {
+  display: block;
+  max-width: 100%;
+  margin-top: 8px;
+  border-radius: 6px;
+  border: 1px solid #2f3a32;
+}
+
+.report-photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.report-hazards {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.hazard-collision {
+  color: #ff9f9f;
+}
+
+.hazard-danger {
+  color: #ffc46b;
+}
+
+.hazard-warning {
+  color: #f0d79f;
+}
+
+.report-dimensions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.report-dim {
+  border-left: 3px solid #3d4a41;
+  padding: 6px 10px;
+  background: #0f140f;
+  border-radius: 6px;
+}
+
+.report-dim[data-score-status="GOOD"] {
+  border-left-color: #67da94;
+}
+
+.report-dim[data-score-status="CHECK"] {
+  border-left-color: #e3b84f;
+}
+
+.report-dim[data-score-status="POOR"] {
+  border-left-color: #ff6b5e;
+}
+
+.report-dim-name {
+  font-weight: 700;
+  color: #eaf3ec;
+}
+
+.report-dim-value {
+  float: right;
+  color: #cfe6d4;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-dim-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #9fb2a5;
+}
+
+.report-issues {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #ffc46b;
+}
+
+.report-suggestions-block {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #cfe6d4;
+}
+
+.report-suggestions {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.report-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.report-export,
+.report-print-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #3d4a41;
+  font: 700 13px "Segoe UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.report-export {
+  background: #7fd6a3;
+  color: #0c120e;
+  border-color: #7fd6a3;
+}
+
+.report-print-btn {
+  background: transparent;
+  color: #cfe6d4;
+}
+
+@media (max-width: 920px) {
+  .reports-overlay {
+    inset: 64px 0 0 0;
+    align-items: start;
+    justify-items: stretch;
+    padding: 16px 16px 24px;
+    overflow-y: auto;
+  }
+
+  .report-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-item {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+/* Print: show only the open report detail. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .report-detail,
+  .report-detail * {
+    visibility: visible;
+  }
+
+  .reports-overlay,
+  .reports-block {
+    position: static;
+    inset: auto;
+    background: #fff !important;
+    box-shadow: none;
+    border: none;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .report-detail {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000;
+  }
+
+  .report-back,
+  .report-actions {
+    display: none;
+  }
+}
+
 @media (max-width: 520px) {
   .system-state {
     font-size: 0;

@@ -208,3 +208,63 @@ describe('SessionRecorder', () => {
     expect(session.durationMs).toBe(0);
   });
 });
+
+describe('SessionRecorder control trace (P1-7)', () => {
+  it('records nothing before takeoff (no clock started)', () => {
+    const recorder = new SessionRecorder();
+    sample(recorder, 0, { position: { x: 0, y: 0, z: 0 }, safetyState: 'SAFE', flightState: 'disarmed' });
+    sample(recorder, 50, { position: { x: 0, y: 0, z: 0 }, safetyState: 'SAFE', flightState: 'disarmed', command: { roll: 0.5 } });
+    expect(recorder.controlSamples()).toHaveLength(0);
+  });
+
+  it('samples Roll/Pitch/Yaw/Throttle on a fixed cadence after takeoff', () => {
+    const recorder = new SessionRecorder();
+    recorder.sample({
+      position: { x: 0, y: 3, z: 0 },
+      safetyState: 'SAFE',
+      insideInspectionZone: false,
+      flightState: 'flying',
+      horizontalSpeedMps: 0,
+      command: { roll: 0.1, pitch: -0.2, yaw: 0.3, throttle: 0.5 },
+      now: 0,
+    });
+    recorder.sample({
+      position: { x: 0, y: 3, z: 0 },
+      safetyState: 'SAFE',
+      insideInspectionZone: false,
+      flightState: 'flying',
+      horizontalSpeedMps: 0,
+      command: { roll: 0.2, pitch: -0.1, yaw: 0.4, throttle: 0.6 },
+      now: 100, // within the 200ms interval -> skipped
+    });
+    recorder.sample({
+      position: { x: 0, y: 3, z: 0 },
+      safetyState: 'SAFE',
+      insideInspectionZone: false,
+      flightState: 'flying',
+      horizontalSpeedMps: 0,
+      command: { roll: 0.3, pitch: 0, yaw: 0.5, throttle: 0.7 },
+      now: 300,
+    });
+    const samples = recorder.controlSamples();
+    expect(samples).toHaveLength(2);
+    expect(samples[0]).toMatchObject({ roll: 0.1, pitch: -0.2, yaw: 0.3, throttle: 0.5 });
+    expect(samples[1]).toMatchObject({ roll: 0.3, yaw: 0.5 });
+    expect(samples[1].t).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reset() clears the control trace too', () => {
+    const recorder = new SessionRecorder();
+    recorder.sample({
+      position: { x: 0, y: 3, z: 0 },
+      safetyState: 'SAFE',
+      insideInspectionZone: false,
+      flightState: 'flying',
+      horizontalSpeedMps: 0,
+      command: { roll: 0.1, pitch: 0, yaw: 0, throttle: 0.5 },
+      now: 0,
+    });
+    recorder.reset('mission-2');
+    expect(recorder.controlSamples()).toHaveLength(0);
+  });
+});

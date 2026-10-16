@@ -1,6 +1,16 @@
 import type { MissionState } from '../mission/types';
 import type { PhotoValidationResult, SafetyState, Vec3 } from '../inspection/types';
 
+/** One sampled frame of real stick input, used by the P1-7 trainee report. */
+export interface ControlSample {
+  /** Milliseconds since the mission start (recorder clock). */
+  t: number;
+  roll: number;
+  pitch: number;
+  yaw: number;
+  throttle: number;
+}
+
 /**
  * One continuous period spent in a non-safe state (WARNING / DANGER /
  * COLLISION), as recorded from real telemetry. A single continuous stay is

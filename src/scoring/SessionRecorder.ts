@@ -3,7 +3,21 @@ import type { MissionState } from '../mission/types';
 import type { FlightState } from '../flight/types';
 import type { InspectionCaptureRecord } from '../inspection/types';
 import type { SafetyState } from '../inspection/types';
-import type { ScoreCaptureAttempt, ScoreSession } from './types';
+import type { ScoreCaptureAttempt, ScoreSession, ControlSample } from './types';
+
+/** Teaching thresholds for the raw input statistics (V1 basics only). */
+const PATH_EPSILON_M = 0.02;
+const FULL_STICK_THRESHOLD = 0.9;
+const REVERSAL_THRESHOLD = 0.15;
+const REVERSAL_COOLDOWN_MS = 150;
+const HOVER_SPEED_MPS = 0.5;
+const HOVER_ALTITUDE_M = 0.5;
+/**
+ * P1-7 control trace: sample the stick input on a fixed cadence (not every
+ * frame) and cap the buffer so a long run never blows up the stored report.
+ */
+const CONTROL_SAMPLE_INTERVAL_MS = 200;
+const MAX_CONTROL_SAMPLES = 600;
 
 /** One frame of real telemetry, as fed by the render loop. */
 export interface RecorderSampleInput {
@@ -16,14 +30,6 @@ export interface RecorderSampleInput {
   /** Frame timestamp in ms (performance.now()). */
   now: number;
 }
-
-/** Teaching thresholds for the raw input statistics (V1 basics only). */
-const PATH_EPSILON_M = 0.02;
-const FULL_STICK_THRESHOLD = 0.9;
-const REVERSAL_THRESHOLD = 0.15;
-const REVERSAL_COOLDOWN_MS = 150;
-const HOVER_SPEED_MPS = 0.5;
-const HOVER_ALTITUDE_M = 0.5;
 
 /**
  * Collects the REAL data the ScoringEngine scores: flown path, hazard
@@ -63,6 +69,10 @@ export class SessionRecorder {
   private hoverDeviationSum = 0;
   private hoverSampleCount = 0;
 
+  /** P1-7 control trace: bounded Roll/Pitch/Yaw/Throttle time series. */
+  private controlSampleTrace: ControlSample[] = [];
+  private lastControlSampleAt = Number.NEGATIVE_INFINITY;
+
   reset(missionId: string): void {
     this.missionId = missionId;
     this.startTime = null;
@@ -87,6 +97,8 @@ export class SessionRecorder {
     this.inputReversalCount = 0;
     this.hoverDeviationSum = 0;
     this.hoverSampleCount = 0;
+    this.controlSampleTrace = [];
+    this.lastControlSampleAt = Number.NEGATIVE_INFINITY;
   }
 
   /** Mark that the next positional delta is a test-harness teleport, not flying. */
@@ -122,6 +134,7 @@ export class SessionRecorder {
     this.trackHazard(input.safetyState, input.now);
     this.trackStickInput(input.command, input.now);
     this.trackHover(input.command, input.horizontalSpeedMps, input.position.y);
+    this.trackControl(input.command, input.now);
   }
 
   observeMission(state: MissionState, now: number): void {
@@ -149,6 +162,25 @@ export class SessionRecorder {
   /** True once the mission got past takeoff (a real run happened). */
   hasReachedTakeoff(): boolean {
     return this.missionBestStepIndex >= MISSION_STEP_ORDER.indexOf('TAKEOFF');
+  }
+
+  /** Bounded Roll/Pitch/Yaw/Throttle trace for the P1-7 trainee report. */
+  controlSamples(): ReadonlyArray<ControlSample> {
+    return [...this.controlSampleTrace];
+  }
+
+  private trackControl(command: RecorderSampleInput['command'], now: number): void {
+    if (this.startTime === null) return;
+    if (now - this.lastControlSampleAt < CONTROL_SAMPLE_INTERVAL_MS) return;
+    this.lastControlSampleAt = now;
+    if (this.controlSampleTrace.length >= MAX_CONTROL_SAMPLES) return;
+    this.controlSampleTrace.push({
+      t: Math.max(now - this.startTime, 0),
+      roll: command.roll,
+      pitch: command.pitch,
+      yaw: command.yaw,
+      throttle: command.throttle,
+    });
   }
 
   session(): ScoreSession {

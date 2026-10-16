@@ -20,9 +20,13 @@ import { ProjectionPhotoValidator, DEFAULT_PHOTO_VALIDATOR_CONFIG } from '../cam
 import type { PhotoSample } from '../camera/ProjectionPhotoValidator';
 import { MockInspectionAI } from '../ai/MockInspectionAI';
 import { resolveInspectionCaptureStore } from '../persistence/inspection-capture-store';
+import { resolveMissionReportStore } from '../persistence/mission-report-store';
 import { ScoringEngine } from '../scoring/ScoringEngine';
 import { SessionRecorder } from '../scoring/SessionRecorder';
 import type { MissionScoreResult } from '../scoring/types';
+import { DEFAULT_SCORE_CONFIG } from '../scoring/config';
+import { buildMissionReport, serializeReport, formatDuration } from '../report/mission-report';
+import type { MissionReport, ReportCaptureEntry, ReportStatus } from '../report/types';
 
 export interface AppHandle {
   dispose(): void;
@@ -156,6 +160,7 @@ function createInterface(root: HTMLElement): HTMLElement {
           <button type="button" data-action="capture" class="capture-button">拍摄巡检照片</button>
           <button type="button" data-action="rtl">返航</button>
           <button type="button" data-action="land">降落</button>
+          <button type="button" class="reports-button" data-action="open-reports">任务记录</button>
         </div>
         <div class="phase-status">
           <span>飞行控制器</span>
@@ -212,6 +217,25 @@ function createInterface(root: HTMLElement): HTMLElement {
             <ul data-score-suggestion-list></ul>
           </div>
           <button type="button" class="score-close" data-action="close-score">知道了</button>
+        </div>
+      </div>
+
+      <div class="reports-overlay" data-reports-overlay hidden>
+        <div class="reports-block" data-reports-block>
+          <div class="reports-head">
+            <div>
+              <h2 data-reports-title>任务记录</h2>
+              <span class="report-role-badge" data-report-role>学员任务记录</span>
+            </div>
+            <button type="button" class="score-close" data-action="close-reports">关闭</button>
+          </div>
+          <div class="report-role-toggle" role="tablist" aria-label="查看视角">
+            <button type="button" class="role-tab" data-report-role-tab="student" aria-pressed="true">学员视角</button>
+            <button type="button" class="role-tab" data-report-role-tab="teacher" aria-pressed="false">教师查看</button>
+          </div>
+          <p class="report-teacher-note" data-report-teacher-note hidden>教师查看模式为只读，用于复核学员提交的任务报告；本机未实现多用户隔离。</p>
+          <div class="reports-list" data-reports-list></div>
+          <div class="report-detail report-print" data-report-detail hidden></div>
         </div>
       </div>
     </main>
@@ -280,6 +304,13 @@ export function createApp(root: HTMLElement): AppHandle {
     maxAngleErrorDeg: DEFAULT_PHOTO_VALIDATOR_CONFIG.maxAngleErrorDeg,
   });
   const captureStore = resolveInspectionCaptureStore();
+  const reportStore = resolveMissionReportStore();
+  /** P1-7: every capture of the current run, for the trainee report. */
+  const missionCaptures: InspectionCaptureRecord[] = [];
+  let missionStartedAt = 0;
+  let lastReport: MissionReport | null = null;
+  let currentDetailReport: MissionReport | null = null;
+  let reportRole: 'student' | 'teacher' = 'student';
   let missionId = `mission-${Date.now()}`;
   sessionRecorder.reset(missionId);
   sessionRecorder.setSceneReference({ x: 0, y: 0, z: 0 }, TARGET_POS);
@@ -470,6 +501,7 @@ export function createApp(root: HTMLElement): AppHandle {
     };
     void captureStore.save(record).catch(() => undefined);
     sessionRecorder.recordCapture(record);
+    missionCaptures.push(record);
     updateMissionUI();
   }
 
@@ -551,6 +583,314 @@ export function createApp(root: HTMLElement): AppHandle {
     scoreResult = scoringEngine.score(sessionRecorder.session());
     scoreDismissed = false;
     updateScoreUI();
+    // P1-7: assemble the trainee report from the SAME real recorded data and
+    // persist it. No value is invented - it is only reorganised for review.
+    const report = buildMissionReport({
+      missionId,
+      taskName: '输电塔右侧绝缘子串巡检',
+      targetId: layout.target.id,
+      targetName: layout.target.label ?? '绝缘子串巡检点',
+      startedAt: missionStartedAt || Date.now(),
+      finishedAt: Date.now(),
+      session: sessionRecorder.session(),
+      score: scoreResult,
+      captures: missionCaptures.map(toReportCaptureEntry),
+      controlSamples: sessionRecorder.controlSamples(),
+    });
+    lastReport = report;
+    void reportStore.save(report).catch(() => undefined);
+  }
+
+  function toReportCaptureEntry(record: InspectionCaptureRecord): ReportCaptureEntry {
+    return {
+      index: missionCaptures.indexOf(record) + 1,
+      timestamp: record.timestamp,
+      valid: record.photoValidation.valid,
+      photoValidation: record.photoValidation,
+      safetyState: record.safetyState,
+      aiResult: record.aiResult,
+      photoDataUrl: record.photoDataUrl,
+    };
+  }
+
+  // --- P1-7 trainee mission report: history list + teacher view --------------
+
+  const STATUS_LABEL: Record<ReportStatus, string> = {
+    completed: '完成',
+    failed: '失败',
+    incomplete: '未完成',
+  };
+
+  function esc(value: string | number): string {
+    return String(value).replace(/[&<>"']/g, (char) => {
+      switch (char) {
+        case '&':
+          return '&amp;';
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '"':
+          return '&quot;';
+        default:
+          return '&#39;';
+      }
+    });
+  }
+
+  function gradeLabel(grade: MissionScoreResult['grade']): string {
+    return DEFAULT_SCORE_CONFIG.labels[grade];
+  }
+
+  function buildReportDetailHtml(report: MissionReport, role: 'student' | 'teacher'): string {
+    const s = report.score;
+    const dimOrder: Array<keyof MissionScoreResult['dimensions']> = [
+      'missionCompletion',
+      'flightSafety',
+      'inspectionPosition',
+      'photoQuality',
+      'flightEfficiency',
+      'controlStability',
+    ];
+    const dims = dimOrder
+      .map((key) => {
+        const dim = s.dimensions[key];
+        const reasons = dim.reasons.length > 0 ? dim.reasons.map((r) => esc(r)).join('；') : '无扣分项';
+        return `
+          <li class="report-dim" data-score-status="${dim.status}">
+            <span class="report-dim-name">${esc(dim.label)}</span>
+            <b class="report-dim-value">${dim.score} / ${dim.maxScore}</b>
+            <p class="report-dim-reason">${reasons}</p>
+          </li>`;
+      })
+      .join('');
+
+    const controlRows =
+      report.controlSamples.length > 0
+        ? report.controlSamples
+            .slice(0, 12)
+            .map(
+              (c) =>
+                `<tr><td>${c.t}</td><td>${c.roll.toFixed(2)}</td><td>${c.pitch.toFixed(2)}</td><td>${c.yaw.toFixed(2)}</td><td>${c.throttle.toFixed(2)}</td></tr>`,
+            )
+            .join('')
+        : '';
+    const controlSection =
+      report.controlSamples.length > 0
+        ? `<section class="report-section">
+             <h3>飞行操纵记录（Roll / Pitch / Yaw / Throttle）</h3>
+             <p class="report-note">共 ${report.controlSamples.length} 条采样（每 200ms 一次）</p>
+             <table class="report-control-table">
+               <thead><tr><th>时间(ms)</th><th>Roll</th><th>Pitch</th><th>Yaw</th><th>Throttle</th></tr></thead>
+               <tbody>${controlRows}</tbody>
+             </table>
+             ${report.controlSamples.length > 12 ? `<p class="report-note">… 仅显示前 12 条</p>` : ''}
+           </section>`
+        : `<section class="report-section"><h3>飞行操纵记录（Roll / Pitch / Yaw / Throttle）</h3><p class="report-empty">无记录</p></section>`;
+
+    const captureRows = report.captures
+      .map((cap) => {
+        const reasons = cap.photoValidation.reasons.length > 0 ? cap.photoValidation.reasons.map((r) => esc(r)).join('；') : '—';
+        const ai =
+          cap.aiResult && cap.aiResult.defectDetected
+            ? `<p class="report-ai">模拟 AI 检测结果：检出缺陷（绝缘子片缺失），置信度 ${Math.round(cap.aiResult.confidence * 100)}%，来源：模拟 AI / 非真实 YOLO 模型</p>`
+            : '';
+        return `
+          <li class="report-capture ${cap.valid ? 'valid' : 'invalid'}">
+            <span class="report-capture-badge">${cap.valid ? '有效' : '无效'}</span>
+            <span>第 ${cap.index} 次 · 安全状态：${esc(cap.safetyState)}</span>
+            <p class="report-capture-reason">校验：${reasons}</p>
+            ${ai}
+            ${cap.photoDataUrl ? `<img class="report-photo" src="${esc(cap.photoDataUrl)}" alt="巡检照片 ${cap.index}" />` : ''}
+          </li>`;
+      })
+      .join('');
+    const captureSection =
+      report.captures.length > 0
+        ? `<section class="report-section">
+             <h3>拍摄记录（共 ${report.captures.length} 次）</h3>
+             <ul class="report-captures">${captureRows}</ul>
+           </section>`
+        : `<section class="report-section"><h3>拍摄记录</h3><p class="report-empty">无记录</p></section>`;
+
+    const photos = report.captures.filter((c) => c.valid && c.photoDataUrl);
+    const photoGallery =
+      photos.length > 0
+        ? `<section class="report-section">
+             <h3>有效巡检照片</h3>
+             <div class="report-photo-gallery">${photos
+               .map((c) => `<img class="report-photo" src="${esc(c.photoDataUrl ?? '')}" alt="有效巡检照片 ${c.index}" />`)
+               .join('')}</div>
+           </section>`
+        : '';
+
+    const hazardSection =
+      report.hazardSummary.length > 0
+        ? `<section class="report-section">
+             <h3>安全事件</h3>
+             <ul class="report-hazards">${report.hazardSummary
+               .map(
+                 (h) =>
+                   `<li class="hazard-${h.state.toLowerCase()}">${esc(h.state)}：${h.count} 次，累计 ${(h.totalDurationMs / 1000).toFixed(1)} 秒</li>`,
+               )
+               .join('')}</ul>
+           </section>`
+        : `<section class="report-section"><h3>安全事件</h3><p class="report-empty">全程安全，未触发 WARNING / DANGER / COLLISION</p></section>`;
+
+    const aiSection =
+      report.captures.some((c) => c.aiResult && c.aiResult.defectDetected)
+        ? `<section class="report-section">
+             <h3>Mock AI 检测结果</h3>
+             <p class="report-note report-ai-warn">以下结果来自模拟 AI（程序化教学缺陷），<b>非真实 YOLO 模型</b>，仅用于教学演示。</p>
+             <ul class="report-ai-list">${report.captures
+               .filter((c) => c.aiResult && c.aiResult.defectDetected)
+               .map(
+                 (c) =>
+                   `<li>第 ${c.index} 次照片：检出缺陷「绝缘子片缺失」，置信度 ${Math.round((c.aiResult?.confidence ?? 0) * 100)}%（模拟 AI）</li>`,
+               )
+               .join('')}</ul>
+           </section>`
+        : `<section class="report-section"><h3>Mock AI 检测结果</h3><p class="report-empty">未检测到缺陷</p></section>`;
+
+    const issues = s.majorIssues.length > 0 ? s.majorIssues.map((i) => esc(i)).join('；') : '无';
+    const suggestions =
+      s.suggestions.length > 0
+        ? `<ul class="report-suggestions">${s.suggestions.map((sug) => `<li>${esc(sug)}</li>`).join('')}</ul>`
+        : '<p class="report-empty">无记录</p>';
+
+    const roleNote =
+      role === 'teacher' ? `<p class="report-role-flag">教师查看模式（只读）：用于复核学员提交的任务报告。</p>` : '';
+
+    return `
+      <button type="button" class="report-back" data-action="back-to-list">← 返回列表</button>
+      ${roleNote}
+      <header class="report-header">
+        <h3>${esc(report.taskName)}</h3>
+        <p class="report-meta">任务 ID：${esc(report.missionId)} · 报告 ID：${esc(report.reportId)}</p>
+        <p class="report-meta">开始：${new Date(report.startedAt).toLocaleString('zh-CN')} · 结束：${new Date(report.finishedAt).toLocaleString('zh-CN')}</p>
+        <p class="report-meta">最终状态：<b class="report-status report-status-${report.status}">${STATUS_LABEL[report.status]}</b> · 巡检目标：${esc(report.targetName)}（${esc(report.targetId)}）· 是否进入巡检区：${report.enteredInspectionZone ? '是' : '否'}</p>
+      </header>
+      <section class="report-section report-summary-grid">
+        <div><span>飞行时长</span><b>${formatDuration(report.durationMs)}</b></div>
+        <div><span>航迹长度</span><b>${report.pathLengthM.toFixed(1)} m</b></div>
+        <div><span>最高高度</span><b>${report.maxAltitudeM.toFixed(1)} m</b></div>
+        <div><span>总分 / 等级</span><b>${s.totalScore} / 100 · ${esc(gradeLabel(s.grade))}${s.capped ? '（封顶）' : ''}</b></div>
+      </section>
+      ${controlSection}
+      ${captureSection}
+      ${photoGallery}
+      ${aiSection}
+      ${hazardSection}
+      <section class="report-section">
+        <h3>教学评分（六项）</h3>
+        <ul class="report-dimensions">${dims}</ul>
+        <p class="report-issues"><b>重大问题：</b>${esc(issues)}</p>
+        <div class="report-suggestions-block"><b>教学建议：</b>${suggestions}</div>
+      </section>
+      <div class="report-actions">
+        <button type="button" class="report-export" data-action="export-report">导出 JSON</button>
+        <button type="button" class="report-print-btn" data-action="print-report">打印 / 保存 PDF</button>
+      </div>
+    `;
+  }
+
+  async function renderReportsList(): Promise<void> {
+    const listEl = root.querySelector<HTMLElement>('[data-reports-list]');
+    if (!listEl) return;
+    const summaries = await reportStore.list();
+    listEl.innerHTML = '';
+    if (summaries.length === 0) {
+      listEl.innerHTML = '<p class="reports-empty">暂无任务记录。完成一次巡检后，报告会自动保存到这里。</p>';
+      return;
+    }
+    for (const summary of summaries) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'report-item';
+      item.dataset.reportId = summary.reportId;
+      item.innerHTML = `
+        <span class="report-item-date">${esc(summary.date)}</span>
+        <span class="report-item-task">${esc(summary.taskName)}</span>
+        <span class="report-status report-status-${summary.status}">${STATUS_LABEL[summary.status]}</span>
+        <span class="report-item-score">${summary.totalScore} 分 · ${esc(gradeLabel(summary.grade))}</span>
+        ${summary.hadCollision ? '<span class="report-collision">碰撞</span>' : ''}
+      `;
+      item.addEventListener('click', () => void openReportDetail(summary.reportId));
+      listEl.append(item);
+    }
+  }
+
+  async function openReportDetail(reportId: string): Promise<void> {
+    const report = await reportStore.get(reportId);
+    const listEl = root.querySelector<HTMLElement>('[data-reports-list]');
+    const detailEl = root.querySelector<HTMLElement>('[data-report-detail]');
+    if (!report || !detailEl) {
+      void renderReportsList();
+      return;
+    }
+    currentDetailReport = report;
+    if (listEl) listEl.hidden = true;
+    detailEl.hidden = false;
+    detailEl.innerHTML = buildReportDetailHtml(report, reportRole);
+  }
+
+  function backToList(): void {
+    const listEl = root.querySelector<HTMLElement>('[data-reports-list]');
+    const detailEl = root.querySelector<HTMLElement>('[data-report-detail]');
+    if (detailEl) detailEl.hidden = true;
+    if (listEl) listEl.hidden = false;
+    currentDetailReport = null;
+    void renderReportsList();
+  }
+
+  async function openReportsOverlay(): Promise<void> {
+    const overlay = root.querySelector<HTMLElement>('[data-reports-overlay]');
+    if (!overlay) return;
+    overlay.hidden = false;
+    currentDetailReport = null;
+    const detailEl = root.querySelector<HTMLElement>('[data-report-detail]');
+    const listEl = root.querySelector<HTMLElement>('[data-reports-list]');
+    if (detailEl) detailEl.hidden = true;
+    if (listEl) listEl.hidden = false;
+    await renderReportsList();
+  }
+
+  function closeReportsOverlay(): void {
+    const overlay = root.querySelector<HTMLElement>('[data-reports-overlay]');
+    if (overlay) overlay.hidden = true;
+  }
+
+  function exportCurrentReport(): void {
+    const report = currentDetailReport ?? lastReport;
+    if (!report) return;
+    const json = serializeReport(report);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `mission-report-${report.reportId}.json`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function printReport(): void {
+    window.print();
+  }
+
+  function setReportRole(role: 'student' | 'teacher'): void {
+    reportRole = role;
+    const badge = root.querySelector<HTMLElement>('[data-report-role]');
+    const teacherNote = root.querySelector<HTMLElement>('[data-report-teacher-note]');
+    const tabs = root.querySelectorAll<HTMLElement>('[data-report-role-tab]');
+    if (badge) badge.textContent = role === 'teacher' ? '教师查看（只读）' : '学员任务记录';
+    if (teacherNote) teacherNote.hidden = role !== 'teacher';
+    tabs.forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.reportRoleTab === role)));
+    if (currentDetailReport) {
+      const detailEl = root.querySelector<HTMLElement>('[data-report-detail]');
+      if (detailEl) detailEl.innerHTML = buildReportDetailHtml(currentDetailReport, role);
+    }
   }
 
   const MISSION_STATE_TEXT: Record<MissionState, string> = {
@@ -582,7 +922,16 @@ export function createApp(root: HTMLElement): AppHandle {
       scoreDismissed = false;
       missionId = `mission-${Date.now()}`;
       sessionRecorder.reset(missionId);
+      missionCaptures.length = 0;
+      missionStartedAt = 0;
+      lastReport = null;
+      currentDetailReport = null;
       updateScoreUI();
+      renderReportsList();
+    }
+    // Mark the wall-clock mission start once the run actually begins.
+    if (missionStartedAt === 0 && state !== 'IDLE' && state !== 'READY') {
+      missionStartedAt = Date.now();
     }
     prevMissionState = state;
 
@@ -740,6 +1089,38 @@ export function createApp(root: HTMLElement): AppHandle {
     capture: () => captureInspection(),
     photoResult: () => mission.photoResult,
     aiResult: () => mission.aiResult,
+  };
+
+  // --- P1-7 report event wiring + test seam ---------------------------------
+  root.querySelector<HTMLElement>('[data-action="open-reports"]')?.addEventListener('click', () => void openReportsOverlay());
+  root.querySelector<HTMLElement>('[data-reports-overlay]')?.addEventListener('click', (event) => {
+    const action = (event.target as HTMLElement).closest('[data-action]')?.getAttribute('data-action');
+    if (action === 'close-reports') closeReportsOverlay();
+    else if (action === 'back-to-list') backToList();
+    else if (action === 'export-report') exportCurrentReport();
+    else if (action === 'print-report') printReport();
+  });
+  root.querySelectorAll<HTMLElement>('[data-report-role-tab]').forEach((tab) =>
+    tab.addEventListener('click', () => setReportRole(tab.dataset.reportRoleTab === 'teacher' ? 'teacher' : 'student')),
+  );
+
+  const reportSeam = window as unknown as Record<string, unknown>;
+  reportSeam.__fdeReport = {
+    last: () => lastReport,
+    json: () => {
+      const report = currentDetailReport ?? lastReport;
+      return report ? serializeReport(report) : null;
+    },
+    detailJson: () => (currentDetailReport ? serializeReport(currentDetailReport) : null),
+    summaries: () => reportStore.list(),
+    get: (id: string) => reportStore.get(id),
+    exportName: () => {
+      const report = currentDetailReport ?? lastReport;
+      return report ? `mission-report-${report.reportId}.json` : null;
+    },
+    openReports: () => openReportsOverlay(),
+    openReport: (id: string) => openReportDetail(id),
+    setRole: (role: 'student' | 'teacher') => setReportRole(role),
   };
 
   let droneEntity: Awaited<ReturnType<typeof loadF450>>['entity'] | null = null;
