@@ -4,6 +4,11 @@ import { loadF450 } from '../drone/load-f450';
 import type { FlightSnapshot, FlightState } from '../flight/types';
 import { SimpleFlightController } from '../flight/adapters/SimpleFlightController';
 import { KeyboardInputAdapter } from '../input/adapters/KeyboardInputAdapter';
+import { GamepadInputAdapter } from '../input/adapters/GamepadInputAdapter';
+import { PilotInputPipeline, type PilotInputSource } from '../input/PilotInputPipeline';
+import { ControllerCalibrationPanel } from '../ui/controller-calibration';
+import { resolveProfileStore } from '../ui/profile-store';
+import type { DeviceProfile } from '../input/device-profile';
 import { createRenderConfig } from './render-config';
 
 export interface AppHandle {
@@ -100,6 +105,8 @@ function createInterface(root: HTMLElement): HTMLElement {
             <li><span class="check-state">—</span><span>巡检取证</span></li>
           </ol>
         </aside>
+
+        <aside class="panel calibration-anchor" data-calibration-anchor aria-label="遥控器标定"></aside>
       </section>
 
       <footer class="control-deck" aria-label="飞行操作区">
@@ -113,6 +120,10 @@ function createInterface(root: HTMLElement): HTMLElement {
         <div class="phase-status">
           <span>飞行控制器</span>
           <strong data-flight-mode>悬停</strong>
+        </div>
+        <div class="phase-status input-source-status">
+          <span>输入源</span>
+          <strong data-input-source>键盘</strong>
         </div>
       </footer>
     </main>
@@ -192,6 +203,47 @@ export function createApp(root: HTMLElement): AppHandle {
 
   const flightController = new SimpleFlightController();
   const keyboard = new KeyboardInputAdapter();
+  const gamepad = new GamepadInputAdapter(0);
+  const { store: profileStore } = resolveProfileStore();
+
+  // Device profiles keyed by adapter id. The calibration wizard keeps this in
+  // sync via onProfileApplied; the flight pipeline consults it (and the live
+  // wizard draft) so an un-saved controller still flies.
+  const deviceProfiles = new Map<string, DeviceProfile>();
+
+  const calibrationAnchor = root.querySelector<HTMLElement>('[data-calibration-anchor]');
+  const calibrationPanel = calibrationAnchor
+    ? new ControllerCalibrationPanel({
+        root: calibrationAnchor,
+        adapter: gamepad,
+        store: profileStore,
+        onProfileApplied: (profile) => deviceProfiles.set(profile.id, profile),
+      })
+    : null;
+
+  // Test seam: when the browser test pins the input clock, stale detection uses
+  // it instead of wall time (no other behaviour changes).
+  const inputNow = (): number => {
+    const override = (window as unknown as { __fdeInputClock?: number }).__fdeInputClock;
+    return typeof override === 'number' ? override : performance.now();
+  };
+
+  const pipeline = new PilotInputPipeline({
+    adapters: [gamepad],
+    keyboard: () => keyboard.poll(),
+    profileFor: (id) => {
+      const saved = deviceProfiles.get(id);
+      if (saved) return saved;
+      return calibrationPanel && calibrationPanel.isConnected() && calibrationPanel.getProfile() !== null
+        ? calibrationPanel.getProfile()
+        : null;
+    },
+    now: inputNow,
+  });
+
+  void gamepad.connect().catch(() => undefined);
+  calibrationPanel?.start();
+
   let droneEntity: Awaited<ReturnType<typeof loadF450>>['entity'] | null = null;
   void loadF450().then(({ entity, notice }) => {
     droneEntity = entity;
@@ -237,9 +289,16 @@ export function createApp(root: HTMLElement): AppHandle {
     altitude: root.querySelector<HTMLElement>('[data-altitude]'),
     state: root.querySelector<HTMLElement>('[data-flight-state]'),
     mode: root.querySelector<HTMLElement>('[data-flight-mode]'),
+    inputSource: root.querySelector<HTMLElement>('[data-input-source]'),
     x: root.querySelector<HTMLElement>('[data-position-x]'),
     y: root.querySelector<HTMLElement>('[data-position-y]'),
     z: root.querySelector<HTMLElement>('[data-position-z]'),
+  };
+
+  const updateInputSource = (source: PilotInputSource): void => {
+    if (readout.inputSource) {
+      readout.inputSource.textContent = source.kind === 'adapter' ? `遥控器 · ${source.label}` : '键盘';
+    }
   };
 
   const updateReadout = (snapshot: FlightSnapshot): void => {
@@ -270,7 +329,8 @@ export function createApp(root: HTMLElement): AppHandle {
   });
   root.querySelector<HTMLElement>('[data-action="hover"]')?.addEventListener('click', () => {
     keyboard.setHover(true);
-    updateReadout(flightController.update(keyboard.poll(), 0));
+    const input = pipeline.poll();
+    updateReadout(flightController.update(input.command, 0));
   });
   root.querySelector<HTMLElement>('[data-action="rtl"]')?.addEventListener('click', () => {
     flightController.rtl();
@@ -285,9 +345,11 @@ export function createApp(root: HTMLElement): AppHandle {
     if (disposed) return;
     const deltaSeconds = Math.min(Math.max((timestamp - lastUpdate) / 1000, 0), 0.1);
     lastUpdate = timestamp;
-    const snapshot = flightController.update(keyboard.poll(), deltaSeconds);
+    const input = pipeline.poll();
+    const snapshot = flightController.update(input.command, deltaSeconds);
     droneEntity?.update(snapshot, deltaSeconds);
     updateReadout(snapshot);
+    updateInputSource(input.source);
 
     if (droneEntity) {
       const target = droneEntity.group.position;
@@ -311,6 +373,8 @@ export function createApp(root: HTMLElement): AppHandle {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       keyboard.dispose();
+      gamepad.disconnect();
+      calibrationPanel?.stop();
       droneEntity?.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {

@@ -57,3 +57,39 @@ Notes:
 - One real defect was found while finishing this stage: `tests/browser/shell.spec.ts` wrote its screenshots to `screenshots/p1-1-<project>.png`, which **overwrote the P1-1 evidence files**. Fixed by renaming to `screenshots/p1-2-shell-<project>.png`; the two clobbered P1-1 screenshots were then restored bit-identical from `HEAD` (verified by SHA-256) and `p1-1-project-shell.png` was never touched.
 - `playwright.config.ts` no longer retains traces or failure screenshots in `test-results/`. In this environment the runner's file-write guard blocked those artifact paths and turned otherwise-passing tests into failures; artifact output now goes to the git-ignored `.playwright-output/`. Application behaviour is unaffected.
 - No controller brand, scene mission, scoring, persistence or AI behaviour is claimed in P1-2.
+
+## P1-3 Generic USB / Gamepad Input and Calibration
+
+Status: PASS
+
+Date: 2026-10-16
+
+Verification order for this stage was **sequential**, per the handoff instruction, and followed TDD (failing test first, then implementation) for every module.
+
+| Verification | Result | Evidence |
+|---|---|---|
+| Unit `npm test` | PASS | Vitest: **8 files, 78 tests passed** (`render-config` 2, `simple-flight-controller` 4, `input-normalizer` 19, `channel-mapper` 16, `gamepad-input-adapter` 8, `pilot-input-pipeline` 7, `profile-store` 12, `controller-calibration` 10) |
+| Browser `npm run test:browser` | PASS | Playwright: **8 passed / 2 skipped** across desktop-chrome + mobile-chrome. New `gamepad.spec.ts` (connect-and-fly + lost-link-hover) plus the existing `flight.spec.ts` and `shell.spec.ts` all green |
+| Production build `npm run build` | PASS | `tsc -b` clean; Vite: **20 modules** transformed, JS 516.86 kB (gzip 132.99 kB) |
+| Calibration wizard | PASS | `ControllerCalibrationPanel`: live CH1–CH8 monitor, per-axis Min/Center/Max capture state machine, reverse/deadzone/expo controls, IndexedDB persistence and JSON import/export |
+| IndexedDB store | PASS | `profile-store.ts` wraps IndexedDB behind a KV contract with an in-memory fallback; round-trips and rejects foreign payloads |
+| 250 ms lost-link safety | PASS | Unit: `pilot-input-pipeline.test.ts` forces hover and holds throttle past 250 ms. Browser: dropping the controller link reverts to keyboard and holds hover with altitude maintained (the real-world trigger for the same contract) |
+| Brand neutrality | PASS | Flight core only sees `DeviceProfile`/channels; no controller brand string reaches `SimpleFlightController` |
+
+Implemented files:
+
+- `src/input/PilotInputAdapter.ts` — brand-neutral `RawPilotInput` / `PilotInputAdapter` contract and `STALE_INPUT_MS = 250`.
+- `src/input/InputNormalizer.ts` — bipolar/unipolar axis normalization with asymmetric center spans, deadzone (with rescale for centered axes) and expo.
+- `src/input/ChannelMapper.ts` — maps normalized channels to `PilotCommand`; stale/disconnected input → hover with held throttle; never trusts a dead device's channels.
+- `src/input/device-profile.ts` — `DeviceProfile`, Mode 2 default (throttle reversed because a standard gamepad reports -1 forward), stored-schema round-trip.
+- `src/input/adapters/GamepadInputAdapter.ts` — generic Gamepad API polling; re-scans `getGamepads()` each call; injectable `GamepadSource` so it is unit-testable without a browser.
+- `src/input/PilotInputPipeline.ts` — unifies keyboard fallback and radio adapters; first connected/fresh source wins; priority order is data, not brand.
+- `src/ui/controller-calibration.ts` — calibration wizard and pure capture helpers.
+- `src/ui/profile-store.ts` — IndexedDB + in-memory KV store, JSON import/export.
+- `src/app/create-app.ts` — wired the pipeline, panel and a live input-source readout into the training shell; added a test seam (`window.__fdeInputClock`) for deterministic stale detection.
+- `tests/unit/*` and `tests/browser/gamepad.spec.ts` — TDD coverage above.
+
+Notes:
+
+- P1-3 delivers the input + calibration layer for Phase 1; it does **not** claim a complete teaching loop. The transmission-tower scene (P1-4), inspection loop and simulated AI (P1-5), scoring (P1-6) and the teacher-review persistence layer (P1-7) remain. P1-3's IndexedDB store is reused by P1-7.
+- Real hardware acceptance for RadioMaster EdgeTX / RadioLink AT9S / DJI FPV RC3 / CRSF-ELRS is recorded as `PENDING_DEVICE_TEST` (a skipped `test.fixme` in `gamepad.spec.ts`) and is **not** claimed as PASS. The simulated Gamepad API is a test double that proves wiring, wizard and lost-link fallback only.
