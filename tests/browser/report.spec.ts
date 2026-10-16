@@ -89,10 +89,16 @@ async function completeInspectionLoop(page: Page): Promise<void> {
   await waitForMissionState(page, 'COMPLETE');
 }
 
-async function openReportFromList(page: Page): Promise<void> {
+async function openReportFromList(page: Page, listScreenshotPath?: string): Promise<void> {
   await page.locator('[data-action="open-reports"]').click();
   await expect(page.locator('[data-reports-overlay]')).toBeVisible();
   await expect(page.locator('[data-reports-list] .report-item').first()).toBeVisible({ timeout: 10_000 });
+  // Capture the history LIST before opening the first item's detail (FIND-1 fix):
+  // the previously named "reports-list" screenshot was taken after the click and
+  // therefore showed the detail overlay, not the list.
+  if (listScreenshotPath) {
+    await page.screenshot({ path: listScreenshotPath, fullPage: true });
+  }
   await page.locator('[data-reports-list] .report-item').first().click();
   await expect(page.locator('[data-report-detail]')).toBeVisible();
 }
@@ -115,7 +121,10 @@ test.describe('P1-7 trainee mission report', () => {
     )) as unknown[];
     expect(summaries.length).toBeGreaterThanOrEqual(1);
 
-    await openReportFromList(page);
+    // List screenshot is captured inside openReportFromList, BEFORE the first item
+    // is clicked, so it genuinely shows the history list (FIND-1 fix). The reports
+    // overlay covers the calibration panel, so its fold timing does not affect it.
+    await openReportFromList(page, `screenshots/p1-7-reports-list-${testInfo.project.name}.png`);
     await expect(page.locator('[data-report-detail]')).toContainText('教学评分（六项）');
     await expect(page.locator('[data-report-detail] .report-dim')).toHaveCount(6);
     // A valid capture renders its photo in both the captures list and the
@@ -126,7 +135,6 @@ test.describe('P1-7 trainee mission report', () => {
 
     await foldCalibrationPanel(page);
     await page.waitForTimeout(1500);
-    await page.screenshot({ path: `screenshots/p1-7-reports-list-${testInfo.project.name}.png`, fullPage: true });
     await page.locator('[data-report-detail]').screenshot({
       path: `screenshots/p1-7-report-detail-${testInfo.project.name}.png`,
     });
