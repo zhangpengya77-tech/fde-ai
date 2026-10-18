@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07131f">
+  <title>學員下載中心｜FDE-AI-UAS</title>
+  <link rel="stylesheet" href="downloads.css">
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <a class="back-link" href="/live/">← 返回 FDE-AI-UAS</a>
+      <p class="eyebrow">FDE-AI-UAS</p>
+      <h1>學員下載中心</h1>
+      <p>課程所需軟體、驅動程式與工具集中下載。</p>
+    </header>
+    <section aria-label="下載分類" class="category-legend">
+      <span>地面站</span><span>無人機工具</span><span>3D / 測繪建模</span><span>驅動程式</span><span>AI / 教學工具</span><span>開發／安裝工具</span>
+    </section>
+    <p id="loading" class="notice" role="status">正在讀取下載清單…</p>
+    <p id="error" class="notice error" role="alert" hidden>下載清單暫時無法讀取，請稍後再試。</p>
+    <section id="downloadGrid" class="download-grid" aria-live="polite"></section>
+  </main>
+  <script src="downloads.js"></script>
+</body>
+</html>

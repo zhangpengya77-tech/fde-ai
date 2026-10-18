@@ -1,0 +1,183 @@
+{
+  "slot_stats": [
+    {
+      "reviewed": 0,
+      "slot_id": "R01",
+      "submitted": 1,
+      "title": "無人機基礎認知",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R02",
+      "submitted": 0,
+      "title": "模擬飛行訓練",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R03",
+      "submitted": 0,
+      "title": "真機飛行訓練",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R04",
+      "submitted": 0,
+      "title": "證照技能驗證",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R05",
+      "submitted": 0,
+      "title": "F450 工程組裝",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R06",
+      "submitted": 0,
+      "title": "鷹眼 AI 目標檢測",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R07",
+      "submitted": 0,
+      "title": "專業任務驗證",
+      "total": 1
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R08",
+      "submitted": 0,
+      "title": "綜合成果作品展示",
+      "total": 1
+    }
+  ],
+  "slot_titles": {
+    "R01": "無人機基礎認知",
+    "R02": "模擬飛行訓練",
+    "R03": "真機飛行訓練",
+    "R04": "證照技能驗證",
+    "R05": "F450 工程組裝",
+    "R06": "鷹眼 AI 目標檢測",
+    "R07": "專業任務驗證",
+    "R08": "綜合成果作品展示"
+  },
+  "stage_rows": [
+    {
+      "done": 0,
+      "key": "learn",
+      "total": 1
+    },
+    {
+      "done": 0,
+      "key": "practice",
+      "total": 1
+    },
+    {
+      "done": 0,
+      "key": "build",
+      "total": 1
+    },
+    {
+      "done": 0,
+      "key": "assess",
+      "total": 1
+    },
+    {
+      "done": 0,
+      "key": "certify",
+      "total": 1
+    }
+  ],
+  "student_count": 1,
+  "students": [
+    {
+      "completed_stages": 0,
+      "enrollment_pk": 1,
+      "evidence_count": 0,
+      "needs_revision_count": 0,
+      "outstanding_codes": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06",
+        "R07",
+        "R08"
+      ],
+      "outstanding_count": 8,
+      "pending_count": 1,
+      "reviewed_codes": [],
+      "reviewed_count": 0,
+      "reviewed_result_count": 0,
+      "slot_cells": [
+        {
+          "slot_id": "R01",
+          "status_key": "submitted"
+        },
+        {
+          "slot_id": "R02",
+          "status_key": "not_started"
+        },
+        {
+          "slot_id": "R03",
+          "status_key": "not_started"
+        },
+        {
+          "slot_id": "R04",
+          "status_key": "not_started"
+        },
+        {
+          "slot_id": "R05",
+          "status_key": "not_started"
+        },
+        {
+          "slot_id": "R06",
+          "status_key": "not_started"
+        },
+        {
+          "slot_id": "R07",
+          "status_key": "not_started"
+        },
+        {
+          "slot_id": "R08",
+          "status_key": "not_started"
+        }
+      ],
+      "stage_total": 5,
+      "submitted_count": 1,
+      "unsubmitted_codes": [
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06",
+        "R07",
+        "R08"
+      ],
+      "unsubmitted_count": 7
+    }
+  ],
+  "totals": {
+    "all_submitted_count": 0,
+    "feedback_rows": 0,
+    "needs_revision_total": 0,
+    "not_submitted_count": 0,
+    "outstanding_total": 8,
+    "pending_items_total": 1,
+    "pending_student_count": 1,
+    "pending_work_items": 1,
+    "review_result_rows": 0,
+    "reviewed_result_total": 0,
+    "total_reviewed": 0,
+    "total_submitted": 1,
+    "unsubmitted_items": 7,
+    "unsubmitted_items_total": 7
+  }
+}

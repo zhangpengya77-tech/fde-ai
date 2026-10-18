@@ -1,0 +1,66 @@
+{% extends 'learning/base.html' %}
+{% block title %}Golden Set 管理中心｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_vision_flywheel' %}">返回資料飛輪倉庫</a>
+<section class="page-heading">
+  <p class="eyebrow">教師後台 · Golden Test Center</p>
+  <h1>Golden Set 管理中心</h1>
+  <p class="muted">黃金測試集版本管理。本輪僅支援 <strong>{{ supported_task_id }}</strong>，四類標籤固定為 CW_F、CCW_F、CW_B、CCW_B。鎖定（FROZEN）後的版本不得再新增、修改或刪除樣本。</p>
+</section>
+
+<section class="section-block">
+  <h2>建立測試集版本</h2>
+  <p class="muted">建立後為草稿（DRAFT），四類標籤皆有已確認樣本後才可鎖定。</p>
+  <form method="post" action="{% url 'learning:teacher_golden_set_create' %}">
+    {% csrf_token %}
+    <label>測試集名稱<input name="name" required placeholder="例如 F450 槳葉方向黃金集"></label>
+    <label>版本<input name="version" value="v1" pattern="v?[0-9]+" placeholder="v1"></label>
+    <label>所屬班級（選填）
+      <select name="cohort_id">
+        <option value="">跨班共用</option>
+        {% for cohort in cohorts %}<option value="{{ cohort.pk }}">{{ cohort.cohort_id }} · {{ cohort.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>用途與取樣說明（選填）<textarea name="description" rows="3"></textarea></label>
+    <button class="button primary" type="submit">建立測試集</button>
+  </form>
+</section>
+
+<section class="section-block">
+  <h2>測試集清單（{{ rows|length }}）</h2>
+  {% if rows %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Golden Set ID</th><th>名稱</th><th>版本</th><th>狀態</th><th>照片數</th><th>已確認</th><th>四類分佈</th><th>缺類別</th><th>建立時間</th><th>操作</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.golden_set_id }}</td>
+          <td>{{ row.name }}</td>
+          <td>{{ row.version }}</td>
+          <td>{% if row.is_frozen %}<strong>FROZEN</strong>{% else %}DRAFT{% endif %}</td>
+          <td>{{ row.sample_count }}</td>
+          <td>{{ row.confirmed_sample_count }}</td>
+          <td>{% for label, count in row.label_distribution.items %}{{ label }}:{{ count }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+          <td>{% if row.missing_labels %}{{ row.missing_labels|join:'、' }}{% else %}—{% endif %}</td>
+          <td>{{ row.created_at|date:"Y-m-d H:i" }}</td>
+          <td><a class="button secondary" href="{% url 'learning:teacher_golden_set_detail' row.golden_set_id %}">管理樣本</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">目前尚無 Golden Set 版本。</p>
+  {% endif %}
+</section>
+
+<section class="section-block">
+  <h2>尚未啟用的功能</h2>
+  <ul class="muted">
+    <li>Golden Test 實際執行（推論）：未啟用，本輪僅建框架。</li>
+    <li>ACTIVE 發布：未啟用，需通過 Golden Test 驗證方可。</li>
+    <li>FOUR_SIDE_HOVER 測試集：未開放，本輪僅支援 PROP_DIRECTION。</li>
+  </ul>
+</section>
+{% endblock %}

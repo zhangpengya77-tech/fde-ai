@@ -1,0 +1,131 @@
+{% extends 'learning/base.html' %}
+{% block title %}進階模型管理｜FDE-AI{% endblock %}
+{% block page_styles %}
+<style>
+  .vision-page { max-width: 1180px; margin: 0 auto; }
+  .vision-intro { margin-bottom: 28px; }
+  .vision-flow { display: grid; gap: 0; }
+  .vision-step { position: relative; padding: 28px 0 34px 72px; border-top: 1px solid #d8dee8; }
+  .vision-step:last-child { border-bottom: 1px solid #d8dee8; }
+  .vision-step::before { content: attr(data-step); position: absolute; left: 0; top: 25px; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #123b65; color: #fff; font-weight: 800; }
+  .vision-step::after { content: ''; position: absolute; left: 23px; top: 73px; bottom: -1px; width: 2px; background: #cad5e2; }
+  .vision-step:last-child::after { display: none; }
+  .vision-step h2 { margin: 0 0 6px; font-size: 1.35rem; letter-spacing: 0; }
+  .vision-step-lead { margin: 0 0 20px; color: #52606d; }
+  .vision-status { padding: 12px 14px; border-left: 4px solid #c28b00; background: #fff8dc; margin: 14px 0; }
+  .vision-status.blocked { border-color: #b54747; background: #fff1f1; }
+  .vision-selection { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 24px; padding: 16px 0; border-top: 1px solid #e4e8ee; border-bottom: 1px solid #e4e8ee; }
+  .vision-selection dt { color: #667085; font-size: .82rem; }
+  .vision-selection dd { margin: 4px 0 0; font-weight: 700; overflow-wrap: anywhere; }
+  .vision-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+  .vision-actions form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0; }
+  .vision-actions .button, .vision-actions button { margin: 0; }
+  .vision-tag { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #eaf0f7; color: #294866; font-size: .78rem; font-weight: 700; }
+  .vision-tag.demo { background: #fff1cc; color: #7a5200; }
+  .vision-table td, .vision-table th { vertical-align: top; }
+  .vision-table small { display: block; margin-top: 4px; color: #667085; }
+  .vision-empty { padding: 18px 0; color: #667085; }
+  details.vision-details { margin-top: 14px; }
+  details.vision-details summary { cursor: pointer; color: #365d83; }
+  @media (max-width: 760px) {
+    .vision-step { padding: 24px 0 30px 0; }
+    .vision-step::before { position: static; width: 40px; height: 40px; margin-bottom: 12px; }
+    .vision-step::after { display: none; }
+    .vision-selection { grid-template-columns: 1fr; gap: 10px; }
+    .vision-table thead { display: none; }
+    .vision-table, .vision-table tbody, .vision-table tr, .vision-table td { display: block; width: 100%; }
+    .vision-table tr { padding: 12px 0; border-bottom: 1px solid #d8dee8; }
+    .vision-table td { border: 0; padding: 5px 0; }
+    .vision-table td::before { content: attr(data-label); display: block; color: #667085; font-size: .78rem; font-weight: 700; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="vision-page">
+  <section class="page-heading vision-intro">
+    <p class="eyebrow">教師後台 · 進階</p>
+    <h1>進階模型管理</h1>
+    <p class="muted">本頁為<strong>進階／工程檢視</strong>：列出模型倉庫的版本、來源與驗證脈絡。日常的模型複核、圖片驗證與正式啟用請使用「<strong>AI 視覺模型中心</strong>」。</p>
+  </section>
+
+  <div class="vision-status">
+    這是進階檢視頁。若您只要完成「看學員模型 → 用圖片驗證 → 設為正式模型 → 保存資源」，
+    請改用 <a href="{% url 'learning:teacher_vision_center' %}">AI 視覺模型中心</a>（單頁四區塊，含真實圖片驗證與正式啟用）。
+  </div>
+
+  <div class="vision-flow">
+    <section class="vision-step" id="step-1" data-step="01" aria-labelledby="step-1-title">
+      <h2 id="step-1-title">01｜學員模型提交</h2>
+      <p class="vision-step-lead">讀取現有 Growth Record R07 提交；選擇後會進入下方圖片驗證步驟。</p>
+      <div class="table-wrap"><table class="vision-table">
+        <thead><tr><th>班級／期別</th><th>組別</th><th>學員</th><th>模型任務</th><th>檔案／時間</th><th>審核狀態</th><th>操作</th></tr></thead>
+        <tbody>{% for model in models %}
+          <tr{% if selected_evidence.pk == model.pk %} aria-current="true"{% endif %}>
+            <td data-label="班級／期別">{{ model.growth_submission.enrollment.cohort.name }}<small>{{ model.growth_submission.enrollment.cohort_id }}</small></td>
+            <td data-label="組別">{{ model.group_label }}</td>
+            <td data-label="學員">{{ model.growth_submission.enrollment.student.nickname }}<small>{{ model.growth_submission.enrollment.student.public_user_id }}</small></td>
+            <td data-label="模型任務">{{ model.task_label }}</td>
+            <td data-label="檔案／時間"><strong>{{ model.filename }}</strong>{% if model.is_demo_test_only %} <span class="vision-tag demo">DEMO_TEST_ONLY</span>{% endif %}<small>{{ model.created_at|date:'Y-m-d H:i' }}</small></td>
+            <td data-label="審核狀態">{{ model.review_status }}<small>驗證：{{ model.validation_status }}</small></td>
+            <td data-label="操作"><a href="{% url 'learning:teacher_vision_model_detail' model.pk %}">查看模型</a><br><a href="?model={{ model.pk }}#step-2">選擇進行驗證</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="7">目前沒有可審核的 R07 學員模型。</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </section>
+
+    <section class="vision-step" id="step-2" data-step="02" aria-labelledby="step-2-title">
+      <h2 id="step-2-title">02｜教師圖片驗證</h2>
+      <p class="vision-step-lead">只有安全 Runner、真實模型與既有驗證門檻都就緒時，才會執行真實推論。</p>
+      {% if selected_evidence %}
+        <dl class="vision-selection">
+          <div><dt>目前選擇的學員</dt><dd>{{ selected_evidence.growth_submission.enrollment.student.nickname }} · {{ selected_evidence.growth_submission.enrollment.student.public_user_id }}</dd></div>
+          <div><dt>目前選擇的模型</dt><dd>{{ selected_evidence.filename }}</dd></div>
+          <div><dt>模型任務類型</dt><dd>{{ selected_evidence.task_label }}</dd></div>
+        </dl>
+        {% if selected_verify_reason %}<p class="vision-status blocked">目前無法執行真實圖片驗證：{{ selected_verify_reason }}</p>{% endif %}
+        {% if not api_online %}<p class="vision-status blocked">Vision API 目前無法連線。請確認 DEMO Live Backend 已啟動後再試。</p>{% endif %}
+        <form method="post" enctype="multipart/form-data" action="{% url 'learning:teacher_vision_model_verify_run' selected_evidence.pk %}">
+          {% csrf_token %}<label for="test-image">選擇測試照片</label>
+          <input id="test-image" name="test_image" type="file" accept="image/jpeg,image/png" {% if selected_verify_reason or not api_online %}disabled{% endif %}>
+          <div class="vision-actions"><button type="submit" {% if selected_verify_reason or not api_online %}disabled{% endif %}>開始辨識</button><a class="button quiet" href="{% url 'learning:teacher_vision_model_verify' selected_evidence.pk %}">查看驗證紀錄</a></div>
+        </form>
+        <details class="vision-details"><summary>詳細資訊</summary><p class="muted">審核：{{ selected_evidence.review_status }} · 驗證：{{ selected_evidence.validation_status }} · 部署：{{ selected_evidence.deployment_status }}</p><p class="muted">API 狀態：{% if api_online %}已連線{% else %}無法連線{% endif %}</p></details>
+      {% else %}<p class="vision-empty">請先在第一步選擇一筆學員模型。</p>{% endif %}
+    </section>
+
+    <section class="vision-step" id="step-3" data-step="03" aria-labelledby="step-3-title">
+      <h2 id="step-3-title">03｜確認並啟用網站模型</h2>
+      <p class="vision-step-lead">僅列出既有 Vision Registry 中通過驗證的模型。啟用後舊版本仍保留，可按任務回退。</p>
+      {% if not api_online %}<p class="vision-status blocked">Vision API 目前無法連線，無法讀取 ACTIVE 模型或執行啟用與回退。</p>{% else %}
+      <div class="table-wrap"><table class="vision-table">
+        <thead><tr><th>模型</th><th>任務</th><th>版本</th><th>驗證</th><th>目前狀態</th><th>操作</th></tr></thead>
+        <tbody>{% for model in activation_models %}
+          <tr>
+            <td data-label="模型">{{ model.model_name }}<small>{{ model.model_id }}</small></td>
+            <td data-label="任務">{% if model.model_type == 'PROP_DIRECTION' %}槳葉方向{% else %}四面懸停{% endif %}</td>
+            <td data-label="版本">{{ model.version|default:'未設定' }}</td><td data-label="驗證">{{ model.validation_label }}</td>
+            <td data-label="目前狀態"><span class="vision-tag">{{ model.status_label }}</span></td>
+            <td data-label="操作">{% if model.status == 'ACTIVE' %}目前 ACTIVE{% else %}<form method="post" action="{% url 'learning:teacher_vision_center_activate' %}" onsubmit="return confirm('確認啟用此模型？舊 ACTIVE 會保留為歷史版本。');">{% csrf_token %}<input type="hidden" name="model_id" value="{{ model.model_id }}"><input type="hidden" name="task_id" value="{{ model.model_type }}"><button type="submit">啟用此模型</button></form>{% endif %}</td>
+          </tr>
+        {% empty %}<tr><td colspan="6">目前沒有符合既有安全規則且可啟用的已驗證模型。</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% for model in active_models %}<div class="vision-actions"><strong>{{ model.model_type }} 目前 ACTIVE：{{ model.model_name }} {{ model.version }}</strong><form method="post" action="{% url 'learning:teacher_vision_center_rollback' %}" onsubmit="return confirm('確認回退到上一個已驗證版本？');">{% csrf_token %}<input type="hidden" name="task_id" value="{{ model.model_type }}"><button class="quiet" type="submit">Rollback 回退舊版</button></form></div>{% endfor %}
+      {% endif %}
+    </section>
+
+    <section class="vision-step" id="step-4" data-step="04" aria-labelledby="step-4-title">
+      <h2 id="step-4-title">04｜下一期教學模型資源庫</h2>
+      <p class="vision-step-lead">沿用現有模型倉庫。保存代表保留教學資源，不會自動啟用，也不會自動重新訓練。</p>
+      {% if selected_evidence and not selected_repository %}{% if selected_catalogue_reason %}<p class="vision-status">{{ selected_catalogue_reason }}</p>{% else %}<form method="post" action="{% url 'learning:teacher_vision_model_catalogue' selected_evidence.pk %}">{% csrf_token %}<input type="hidden" name="model_version" value="V1"><button type="submit">保存為教學資源</button></form>{% endif %}{% endif %}
+      <div class="table-wrap"><table class="vision-table">
+        <thead><tr><th>模型／版本</th><th>原始學員</th><th>任務</th><th>審核／驗證</th><th>模型狀態</th><th>保存日期</th></tr></thead>
+        <tbody>{% for record in repository_records %}
+          <tr><td data-label="模型／版本">{{ record.evidence.original_metadata.filename|default:'best.pt' }}<small>{{ record.model_version }}</small></td><td data-label="原始學員">{{ record.student.nickname }}<small>{{ record.cohort.name }}</small></td><td data-label="任務">{% if record.task_id == 'PROP_DIRECTION' %}槳葉方向{% else %}四面懸停{% endif %}</td><td data-label="審核／驗證">{{ record.get_review_status_display }}<small>{{ record.get_validation_status_display }}</small></td><td data-label="模型狀態">{{ record.get_deployment_status_display }}{% if record.is_demo_test_only %} <span class="vision-tag demo">DEMO_TEST_ONLY</span>{% endif %}</td><td data-label="保存日期">{{ record.created_at|date:'Y-m-d' }}</td></tr>
+        {% empty %}<tr><td colspan="6">資源庫目前沒有可顯示的模型。</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="vision-actions"><a class="button quiet" href="{% url 'learning:teacher_vision_flywheel' %}">查看歷史版本與資料飛輪</a></div>
+    </section>
+  </div>
+</div>
+{% if selected_evidence %}<script>if (new URLSearchParams(window.location.search).has('model')) { requestAnimationFrame(function () { document.getElementById('step-2').scrollIntoView({behavior: 'smooth', block: 'start'}); }); }</script>{% endif %}
+{% endblock %}

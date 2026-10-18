@@ -16,8 +16,10 @@ class PublicPlatformRouteTests(TestCase):
         self.assertContains(response, "開始學習 / 註冊")
         self.assertContains(response, "學員登入")
         self.assertContains(response, "教師登入")
-        self.assertContains(response, 'aria-label="平台学习分类"')
-        for label in ("學", "練", "作", "測", "證", "歷屆學員成果", "教師復核參照"):
+        # 教師 2026-10-15 整合裁決（A4）：平台頁首五階段分類列（aria-label="平台学习分类"）已移除，
+        # 唯一主導航改為原版左側 #moduleNav；原斷言隨之退役，改斷言左側導航存在。
+        self.assertContains(response, 'aria-label="Main navigation"')
+        for label in ("學", "練", "做", "測", "證", "歷屆學員成果", "教師復核參照"):
             self.assertContains(response, label)
         page = response.content.decode("utf-8")
         navigation_order = [
@@ -25,9 +27,11 @@ class PublicPlatformRouteTests(TestCase):
             'href="./tasks">12 任務',
             'href="./courses">學',
             'href="./simulator">練',
-            'href="./f450">作',
+            'href="./f450">做',
             'href="./eagle">測',
-            'href="./github">證',
+            # 教師 2026-10-15 裁決：原版左側導航為唯一主導航，「證」= R01–R08 真實成長日誌（Django）。
+            # 平台首頁「三分鐘看懂」示範面板隨之同步；./github 公開展示頁保留（直達網址仍可開）。
+            'href="/student/growth/">證',
             'href="./results">歷屆學員成果',
             'href="./teacher">教師復核參照',
         ]

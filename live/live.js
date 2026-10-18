@@ -141,43 +141,62 @@
     return Boolean(taskSelected && permissionGranted && !cameraActive);
   }
 
-  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true } = {}) {
+  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onInterim = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true, endGraceMs = 750, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout } = {}) {
     let enabled = false;
-    let recognition = null;
-    let transcriptDelivered = false;
-    function canListen() { return enabled && isPageActive() && !isBusy() && !recognition; }
+    let activeCycle = null;
+    let sequence = 0;
+    function canListen() { return enabled && isPageActive() && !isBusy() && !activeCycle; }
+    function submitCycle(cycle) {
+      if (!cycle || cycle.submitted || !cycle.transcript.trim()) return false;
+      cycle.submitted = true;
+      if (cycle.graceTimer) clearTimeoutImpl(cycle.graceTimer);
+      if (activeCycle === cycle) activeCycle = null;
+      onState('ASKING');
+      onTranscript(cycle.transcript.trim(), cycle.id);
+      return true;
+    }
+    function failCycle(cycle, code) {
+      if (!cycle || cycle.submitted || cycle.cancelled) return;
+      if (cycle.graceTimer) clearTimeoutImpl(cycle.graceTimer);
+      if (activeCycle === cycle) activeCycle = null;
+      enabled = false;
+      onError(code);
+      onState('IDLE');
+    }
     function listen() {
       if (!canListen() || !recognitionFactory) return false;
-      transcriptDelivered = false;
-      recognition = recognitionFactory();
+      const recognition = recognitionFactory();
+      const cycle = { id: `voice-${Date.now()}-${++sequence}`, recognition, transcript: '', submitted: false, cancelled: false, graceTimer: null };
+      activeCycle = cycle;
       recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.interimResults = true;
       recognition.lang = 'zh-TW';
       recognition.onstart = () => onState('LISTENING');
       recognition.onresult = (event) => {
         const transcript = Array.from(event.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
-        if (!transcript || transcriptDelivered) return;
-        transcriptDelivered = true;
-        onState('ASKING');
-        onTranscript(transcript);
+        const finalSeen = Array.from(event.results || []).some((result) => result.isFinal === true);
+        if (!transcript || cycle.submitted || cycle.cancelled) return;
+        cycle.transcript = transcript;
+        onInterim(transcript, finalSeen, cycle.id);
+        if (finalSeen) submitCycle(cycle);
       };
       recognition.onerror = (event) => {
         const code = event.error || 'voice_input_failed';
-        recognition = null;
-        onError(code);
-        onState('VOICE_STANDBY');
+        failCycle(cycle, code);
       };
       recognition.onend = () => {
-        recognition = null;
-        if (!enabled) return;
-        onState('VOICE_STANDBY');
-        if (!isBusy() && isPageActive()) listen();
+        if (cycle.cancelled || cycle.submitted || activeCycle !== cycle) return;
+        onState('TRANSCRIBING');
+        cycle.graceTimer = setTimeoutImpl(() => {
+          if (cycle.transcript.trim()) submitCycle(cycle);
+          else failCycle(cycle, 'speech-unstable');
+        }, endGraceMs);
       };
       try {
         recognition.start();
         return true;
       } catch (error) {
-        recognition = null;
+        activeCycle = null;
         enabled = false;
         onError(error);
         onState('IDLE');
@@ -185,9 +204,12 @@
       }
     }
     function stopCurrent() {
-      const active = recognition;
-      recognition = null;
-      if (active && typeof active.stop === 'function') active.stop();
+      const cycle = activeCycle;
+      activeCycle = null;
+      if (!cycle) return;
+      cycle.cancelled = true;
+      if (cycle.graceTimer) clearTimeoutImpl(cycle.graceTimer);
+      if (typeof cycle.recognition.stop === 'function') cycle.recognition.stop();
     }
     function enable() { enabled = true; onState('VOICE_STANDBY'); return listen(); }
     function pause() { enabled = false; stopCurrent(); onState('IDLE'); }
@@ -439,6 +461,82 @@
     return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/evidence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(evidence) }));
   }
 
+  // P1-1 (AI Model Center): student uploads a YOLO .pt as an inert EvidenceRecord.
+  async function submitP1ModelOutcome(fetchImpl, sessionId, file, note) {
+    if (!file) throw new Error('請選擇 .pt 模型檔');
+    if (!String(file.name).toLowerCase().endsWith('.pt')) throw new Error('僅接受 .pt 檔案');
+    return saveTrainingEvidence(fetchImpl, sessionId, {
+      evidence_type: 'YOLO_MODEL',
+      source: 'STUDENT_UPLOAD',
+      file_reference: `dev-upload://${file.name}`,
+      metadata: {
+        model_filename: file.name,
+        model_task_type: 'PROP_DETECTION',
+        size_bytes: file.size || 0,
+        student_note: String(note || '').slice(0, 500),
+      },
+    });
+  }
+
+  async function fetchP1ModelSubmissions(fetchImpl, sessionId) {
+    const response = await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/model-submissions`, {
+      headers: { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' },
+    });
+    return parseJsonResponse(response);
+  }
+
+  async function reviewP1ModelSubmission(fetchImpl, sessionId, evidenceId, decision, note = '') {
+    const response = await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/model-submissions/${encodeURIComponent(evidenceId)}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' },
+      body: JSON.stringify({ decision, note }),
+    });
+    return parseJsonResponse(response);
+  }
+
+  // P1-2：教師主動觸發 PROP Sandbox Benchmark；結果僅供審核，不會部署
+  async function startP1Benchmark(fetchImpl, sessionId, evidenceId) {
+    const response = await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/model-submissions/${encodeURIComponent(evidenceId)}/benchmark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' },
+      body: '{}',
+    });
+    return parseJsonResponse(response);
+  }
+
+  async function fetchP1Benchmarks(fetchImpl, sessionId, evidenceId) {
+    const response = await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/model-submissions/${encodeURIComponent(evidenceId)}/benchmarks`, {
+      headers: { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' },
+    });
+    return parseJsonResponse(response);
+  }
+
+  // 將 Benchmark 結果轉為教師可讀的摘要
+  function renderP1Benchmark(body) {
+    const benchmark = body?.benchmark || {};
+    const metrics = benchmark.metrics || {};
+    const vset = body?.validation_set || {};
+    const runtime = body?.runtime || {};
+    const rows = [
+      `狀態：${benchmark.status || '—'}`,
+      `模型類別：${(benchmark.model_classes || []).join(', ') || '—'}`,
+      `Validation Set：${vset.validation_set || '—'} · ${vset.available ? 'AVAILABLE' : 'NOT AVAILABLE'}`,
+      `Runtime：${runtime.ready ? 'READY' : 'MISSING'}（ultralytics=${runtime.ultralytics || '—'} / torch=${runtime.torch || '—'}）`,
+      `Real Model：${benchmark.model_file_hash && benchmark.model_file_hash !== 'NOT_AVAILABLE' ? 'READY' : 'MISSING'}`,
+      `Real Metrics：${Object.keys(metrics).length ? 'AVAILABLE' : 'PENDING'}`,
+    ];
+    if (Object.keys(metrics).length) {
+      rows.push(`Precision：${metrics.precision ?? '—'}`);
+      rows.push(`Recall：${metrics.recall ?? '—'}`);
+      rows.push(`mAP50：${metrics.map50 ?? '—'}`);
+      rows.push(`mAP50-95：${metrics.map50_95 ?? '—'}`);
+      rows.push(`Inference Time：${metrics.inference_time_ms ?? '—'} ms`);
+    } else {
+      rows.push('指標：尚無（等待 Golden Set 或驗證失敗）');
+    }
+    return rows.map((row) => `<p>${escapeHtml(row)}</p>`).join('');
+  }
+
   async function saveTrainingReflection(fetchImpl, sessionId, reflection) {
     if (!String(reflection?.original_text || '').trim()) throw new Error('student_original_summary_required');
     return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/reflection`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reflection) }));
@@ -446,6 +544,33 @@
 
   async function submitTeacherReview(fetchImpl, sessionId, decision, note = '', taskId = null, stepId = null) {
     return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/teacher-review`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' }, body: JSON.stringify({ task_id: taskId, step_id: stepId, decision, note }) }));
+  }
+
+  // ---- MP-12 Frontend Integration：只呼叫 Backend 既有 3 支 endpoint，不在前端複製任何狀態邏輯 ----
+  async function selectMpSubtask(fetchImpl, sessionId, subtaskId) {
+    return parseJsonResponse(await fetchImpl(
+      `/api/live/sessions/${encodeURIComponent(sessionId)}/training/mp12/${encodeURIComponent(subtaskId)}/select`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+    ));
+  }
+
+  async function completeMpSubtask(fetchImpl, sessionId, subtaskId) {
+    return parseJsonResponse(await fetchImpl(
+      `/api/live/sessions/${encodeURIComponent(sessionId)}/training/mp12/${encodeURIComponent(subtaskId)}/complete`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+    ));
+  }
+
+  async function submitMpTeacherReview(fetchImpl, sessionId, subtaskId, review) {
+    // 教師權限沿用 Main v2.0 既有機制：X-FDE-Role + X-FDE-Teacher-ID（不重新引入 MP-12 原 repo 的 PIN Gate）
+    return parseJsonResponse(await fetchImpl(
+      `/api/live/sessions/${encodeURIComponent(sessionId)}/training/mp12/${encodeURIComponent(subtaskId)}/teacher-review`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' },
+        body: JSON.stringify({ teacher_id: 'MOCK_TEACHER', decision: review.decision, reason: review.reason, note: review.note })
+      }
+    ));
   }
 
   async function fetchTrainingTaskView(fetchImpl, sessionId, taskId) {
@@ -458,6 +583,22 @@
 
   async function acknowledgeTrainingStepSafety(fetchImpl, sessionId, stepId) {
     return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/training/steps/${encodeURIComponent(stepId)}/safety-ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
+  }
+
+  async function setClassroomValidation(fetchImpl, sessionId, enabled) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/classroom-validation`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: Boolean(enabled) })
+    }));
+  }
+
+  async function recordClassroomEvent(fetchImpl, sessionId, event) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/classroom-validation/events`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(event)
+    }));
+  }
+
+  async function fetchClassroomValidationReport(fetchImpl, sessionId) {
+    return parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/classroom-validation/report`));
   }
 
   const STUDENT_LABELS = Object.freeze({
@@ -529,6 +670,57 @@
 
   function cameraPreviewPolicy() {
     return { localPreview: true, continuousVision: false, captureMode: 'explicit_single_frame' };
+  }
+
+  const TRADITIONAL_STUDENT_REPLACEMENTS = [
+    ['需要教师确认', '需要教師確認'],
+    ['目前画面', '目前畫面'],
+    ['实训', '實訓'], ['关键', '關鍵'], ['教师', '教師'], ['复核', '複核'], ['整体', '整體'],
+    ['当前', '當前'], ['任务', '任務'], ['建议', '建議'], ['摄像头', '攝像頭'], ['页面', '頁面'],
+    ['复制', '複製'], ['链接', '連結'], ['服务', '服務'], ['视觉', '視覺'], ['连接', '連線'],
+    ['开启', '開啟'], ['选择', '選擇'], ['学习', '學習'], ['组装', '組裝'], ['调参', '調參'],
+    ['真机', '真機'], ['协助', '協助'], ['环节', '環節'], ['状态', '狀態'], ['图例', '圖例'],
+    ['开始', '開始'], ['进行', '進行'], ['确认', '確認'], ['检查', '檢查'], ['载入', '載入'],
+    ['返回', '返回'], ['准备', '準備'], ['步骤', '步驟'], ['现在', '現在'], ['怎么', '怎麼'],
+    ['为什么', '為什麼'], ['暂无', '暫無'], ['语音', '語音'], ['正在听', '正在聽'], ['识别', '識別'],
+    ['处理', '處理'], ['回答', '回答'], ['画面', '畫面'], ['下一步', '下一步'], ['再试一次', '再試一次'],
+    ['阅读', '閱讀'], ['提醒', '提醒'], ['证据', '證據'], ['总结', '總結'], ['帮助', '幫助'],
+    ['发送', '傳送'], ['关闭', '關閉'], ['切换', '切換'], ['上传', '上傳'], ['设置', '設定'],
+    ['错误', '錯誤'], ['网络', '網路'], ['资料', '資料'], ['无法', '無法'], ['这个', '這個'],
+    ['已经', '已經'], ['内容', '內容'], ['说明', '說明'], ['进入', '進入'], ['完成', '完成']
+  ];
+
+  function toTraditionalStudentText(value) {
+    return TRADITIONAL_STUDENT_REPLACEMENTS.reduce((text, pair) => text.split(pair[0]).join(pair[1]), String(value ?? ''));
+  }
+
+  function applyTraditionalStudentLanguage(root, MutationObserverImpl = typeof MutationObserver === 'undefined' ? null : MutationObserver) {
+    if (!root) return null;
+    const translateNode = (node) => {
+      if (node?.nodeType === 3) {
+        const translated = toTraditionalStudentText(node.nodeValue);
+        if (translated !== node.nodeValue) node.nodeValue = translated;
+        return;
+      }
+      if (!node?.querySelectorAll) return;
+      const walker = node.ownerDocument?.createTreeWalker?.(node, 4);
+      if (walker) { let textNode; while ((textNode = walker.nextNode())) translateNode(textNode); }
+      for (const element of [node, ...node.querySelectorAll('[placeholder],[title],[aria-label]')]) {
+        for (const attr of ['placeholder', 'title', 'aria-label']) {
+          if (element?.hasAttribute?.(attr)) element.setAttribute(attr, toTraditionalStudentText(element.getAttribute(attr)));
+        }
+      }
+    };
+    translateNode(root);
+    if (!MutationObserverImpl) return null;
+    const observer = new MutationObserverImpl((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'characterData') translateNode(mutation.target);
+        for (const node of mutation.addedNodes || []) translateNode(node);
+      }
+    });
+    observer.observe(root, { subtree: true, childList: true, characterData: true });
+    return observer;
   }
 
   function assistantVisualActionState(cameraActive) {
@@ -718,12 +910,15 @@
     if (training.task_state === 'NEED_REWORK') return { kind: 'REWORK', label: '重新完成这一步' };
     if (training.task_state === 'NOT_STARTED' || training.task_state === 'BLOCKED') return { kind: 'START', label: '开始任务' };
     const step = training.current_step || {};
+    const taskId = training.task?.id || training.current_task_id;
+    if (taskId === 'TASK_08' && step.step_id === 'T08_TEACHER_FINAL_REVIEW') return { kind: 'TEACHER', label: '请教师最终复核' };
     if (step.teacher_gate) return { kind: 'TEACHER', label: '请教师确认' };
     if (step.evidence_required?.length) return { kind: 'EVIDENCE', label: '保存学习证据' };
     if (/REFLECTION$/.test(step.step_id || step.id || '') || /学习总结/.test(step.title || '')) return { kind: 'REFLECTION', label: '保存学习总结' };
     if (!training.current_training_step_id && !Object.keys(step).length) return training.task?.teacher_review_required
       ? { kind: 'TASK_REVIEW', label: '提交教师复核' }
       : { kind: 'TASK_COMPLETE', label: '完成任务' };
+    if (taskId === 'TASK_08') return { kind: 'STEP', label: '记录检查结果' };
     return { kind: 'STEP', label: '我完成了' };
   }
 
@@ -731,6 +926,69 @@
     if (taskState === 'COMPLETED') return { type: 'TASK', title: 'Task 已完成', canContinue: true };
     if (previousStepId && currentStepId && previousStepId !== currentStepId) return { type: 'STEP', title: '✅ 这一步完成', canContinue: true };
     return null;
+  }
+
+  // ---- MP-12 Frontend Integration（SELECTIVE PORT from MP-12 repo；Backend 為唯一權威） ----
+
+  function mpSubtaskAction(subtask = {}) {
+    if (subtask.status === 'COMPLETED') return { kind: 'DONE', label: '此子任务已完成', disabled: true };
+    if (subtask.status === 'PENDING_TEACHER_REVIEW') return { kind: 'WAIT', label: '等待教师现场确认', disabled: true };
+    if (subtask.teacher_required) return { kind: 'COMPLETE', label: '我已完成，请教师复核', disabled: false };
+    return { kind: 'COMPLETE', label: subtask.status === 'NEED_REWORK' ? '重新完成并提交' : '完成此子任务', disabled: false };
+  }
+
+  function setMp12View(elements, requestedView, { scroll = false } = {}) {
+    const view = requestedView === 'DETAIL' ? 'DETAIL' : 'MAP';
+    const detailVisible = view === 'DETAIL';
+    if (elements.mp12MapView) elements.mp12MapView.hidden = detailVisible;
+    if (elements.mp12DetailView) elements.mp12DetailView.hidden = !detailVisible;
+    if (elements.missionPlannerPanel) elements.missionPlannerPanel.dataset.view = view;
+    if (detailVisible && scroll && typeof elements.mp12DetailView?.scrollIntoView === 'function') {
+      elements.mp12DetailView.scrollIntoView({ block: 'start' });
+    }
+    return view;
+  }
+
+  function renderMissionPlannerState(elements, missionPlanner = null, { devMode = false } = {}) {
+    if (!missionPlanner || !Array.isArray(missionPlanner.items)) {
+      if (elements.missionPlannerPanel) elements.missionPlannerPanel.hidden = true;
+      return;
+    }
+    const current = missionPlanner.current_subtask
+      || missionPlanner.items.find((item) => item.subtask_id === missionPlanner.current_subtask_id)
+      || missionPlanner.items[0]
+      || {};
+    if (elements.missionPlannerPanel) elements.missionPlannerPanel.hidden = false;
+    if (elements.mp12Progress) elements.mp12Progress.textContent = missionPlanner.progress || '0 / 12';
+    if (elements.mp12TaskList) {
+      elements.mp12TaskList.innerHTML = missionPlanner.items.map((item) => {
+        const status = item.status || 'NOT_STARTED';
+        return `<li data-state="${escapeHtml(status)}"><button type="button" data-mp-subtask="${escapeHtml(item.subtask_id)}"><strong>${escapeHtml(item.subtask_id)}</strong><span>${escapeHtml(item.title)}</span><small>${escapeHtml(studentTaskStatus(status))}</small></button></li>`;
+      }).join('');
+    }
+    if (elements.mp12Title) elements.mp12Title.textContent = `${current.subtask_id || ''}｜${current.title || '等待选择'}`;
+    if (elements.mp12Objective) elements.mp12Objective.textContent = current.objective || '—';
+    if (elements.mp12Procedure) elements.mp12Procedure.innerHTML = (current.procedure || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    if (elements.mp12Checks) elements.mp12Checks.innerHTML = (current.completion_checks || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    // 安全提示僅為顯示；安全放行由 Backend Safety Gate 判定，前端不自行判定
+    if (elements.mp12Safety) elements.mp12Safety.innerHTML = (current.safety_rules || []).map((item) => `<p>⚠ ${escapeHtml(item)}</p>`).join('');
+    if (elements.mp12Evidence) elements.mp12Evidence.textContent = (current.evidence_types || []).join(' / ') || '不强制上传';
+    const action = mpSubtaskAction(current);
+    if (elements.mp12CompleteSubtask) {
+      elements.mp12CompleteSubtask.textContent = action.label;
+      elements.mp12CompleteSubtask.dataset.action = action.kind;
+      elements.mp12CompleteSubtask.disabled = action.disabled;
+    }
+    if (elements.mp12TeacherReview) {
+      elements.mp12TeacherReview.hidden = !(
+        devMode
+        && current.teacher_required
+        && current.status === 'PENDING_TEACHER_REVIEW'
+      );
+    }
+    if (elements.mp12CompletedBanner) {
+      elements.mp12CompletedBanner.hidden = missionPlanner.completed !== true;
+    }
   }
 
   function renderTrainingState(elements, training = {}) {
@@ -748,6 +1006,10 @@
     if (elements.trainingAction) elements.trainingAction.textContent = step.student_instruction || step.instruction || task.description || '—';
     if (elements.trainingWhy) elements.trainingWhy.textContent = step.why_it_matters || step.rationale || task.description || '—';
     const taskId = task.id || task.task_id || training.current_task_id || `TASK_${String(order).padStart(2, '0')}`;
+    const task08Check = taskId === 'TASK_08' && step.step_id !== 'T08_TEACHER_FINAL_REVIEW';
+    // MP-12 只屬於 TASK_07：沒有 mission_planner payload 就一律 hidden（TASK_01～06 / TASK_08～12 不顯示）
+    const isMissionPlanner = taskId === 'TASK_07' && Boolean(training.mission_planner);
+    renderMissionPlannerState(elements, isMissionPlanner ? training.mission_planner : null, { devMode: Boolean(elements.devMode) });
     const groups = studentStepGroups(taskId, steps, training.current_training_step_id, training.task_state);
     const activeGroup = groups.findIndex((group) => group.state === 'CURRENT');
     const stepView = studentCurrentStepView(step);
@@ -772,7 +1034,19 @@
     if (step.evidence_required?.length) conditions.push(`□ Evidence：${step.evidence_required.join(', ')}`);
     if (step.teacher_gate) conditions.push(step.progress?.teacher_decision === 'APPROVE' ? '☑ 教师已通过' : '□ 等待教师确认');
     if (!conditions.length) conditions.push('□ 学生确认完成实际操作');
+    if (task08Check && step.step_id === 'T08_PROP_VISION') conditions.push(`PROP Vision：${training.prop_vision_status || 'PENDING'}`);
     if (elements.trainingCompletionConditions) elements.trainingCompletionConditions.innerHTML = conditions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    if (elements.task08CheckStatusField) elements.task08CheckStatusField.hidden = !task08Check;
+    if (elements.task08CheckStatus && task08Check) {
+      const indoor = elements.task08CheckStatus.querySelector?.('option[value="NOT_AVAILABLE_INDOOR"]');
+      const visionPending = elements.task08CheckStatus.querySelector?.('option[value="VISION_MODEL_NOT_READY"]');
+      if (indoor) indoor.disabled = step.step_id !== 'T08_GPS_COMPASS_STATUS';
+      if (visionPending) visionPending.disabled = step.step_id !== 'T08_PROP_VISION';
+      if (step.step_id === 'T08_PROP_VISION' && training.prop_vision_status !== 'READY') elements.task08CheckStatus.value = 'VISION_MODEL_NOT_READY';
+      // 注意：VISION_MODEL_NOT_READY 绝不被自动改写为 PASS（需求 #7：不可用不得伪装成检测通过）。
+      // 仅当 NOT_AVAILABLE_INDOOR 出现在非 GPS 步骤时，才回退为 PASS 默认值。
+      else if (elements.task08CheckStatus.value === 'NOT_AVAILABLE_INDOOR' && step.step_id !== 'T08_GPS_COMPASS_STATUS') elements.task08CheckStatus.value = 'PASS';
+    }
     if (elements.safetyAcknowledgment) elements.safetyAcknowledgment.hidden = !step.safety_reminders?.length;
     if (elements.acknowledgeTrainingSafety) elements.acknowledgeTrainingSafety.checked = Boolean(step.progress?.safety_acknowledged);
     const primary = studentPrimaryAction({ ...training, current_step: step });
@@ -852,16 +1126,21 @@
       step: documentRef.querySelector('#currentStep'), instruction: documentRef.querySelector('#taskInstruction'), visionResult: documentRef.querySelector('#visionResult'),
       sopResult: documentRef.querySelector('#sopResult'), guidance: documentRef.querySelector('#coachGuidance'), confirm: documentRef.querySelector('#confirmStep'), devPanel: documentRef.querySelector('#devSimulator'),
       ragExplanation: documentRef.querySelector('#ragExplanation'), ragSource: documentRef.querySelector('#ragSource'), ragStatus: documentRef.querySelector('#ragStatus'), ragLatency: documentRef.querySelector('#ragLatency'),
-      enableVoiceCoach: documentRef.querySelector('#enableVoiceCoach'), pauseVoiceCoach: documentRef.querySelector('#pauseVoiceCoach'), liveCoachStatus: documentRef.querySelector('#liveCoachStatus'), latestAiAnswer: documentRef.querySelector('#latestAiAnswer'), fallbackMethods: documentRef.querySelector('#fallbackMethods'),
-      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), assistantVisualAction: documentRef.querySelector('#assistantVisualAction'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), cancelAiInteraction: documentRef.querySelector('#cancelAiInteraction'), askAiResponse: documentRef.querySelector('#askAiResponse'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
+      enableVoiceCoach: documentRef.querySelector('#enableVoiceCoach'), pauseVoiceCoach: documentRef.querySelector('#pauseVoiceCoach'), liveCoachStatus: documentRef.querySelector('#liveCoachStatus'), userTranscriptLabel: documentRef.querySelector('#userTranscriptLabel'), lastUserTranscript: documentRef.querySelector('#lastUserTranscript'), latestAiAnswer: documentRef.querySelector('#latestAiAnswer'), fallbackMethods: documentRef.querySelector('#fallbackMethods'),
+      pushToTalk: documentRef.querySelector('#pushToTalk'), textAskAi: documentRef.querySelector('#textAskAi'), assistantVisualAction: documentRef.querySelector('#assistantVisualAction'), askAiPanel: documentRef.querySelector('#askAiPanel'), askAiInput: documentRef.querySelector('#askAiInput'), submitAskAi: documentRef.querySelector('#submitAskAi'), cancelAiInteraction: documentRef.querySelector('#cancelAiInteraction'), askAiResponse: documentRef.querySelector('#askAiResponse'), answerSourceLabel: documentRef.querySelector('#answerSourceLabel'), voiceStatus: documentRef.querySelector('#voiceStatus'), voiceReplyControls: documentRef.querySelector('#voiceReplyControls'), playAiAnswer: documentRef.querySelector('#playAiAnswer'), stopAiAnswer: documentRef.querySelector('#stopAiAnswer'),
       trainingTaskList: documentRef.querySelector('#trainingTaskList'), trainingProgress: documentRef.querySelector('#trainingProgress'), mapProgress: documentRef.querySelector('#mapProgress'), trainingTaskNumber: documentRef.querySelector('#trainingTaskNumber'), trainingStepNumber: documentRef.querySelector('#trainingStepNumber'), trainingTitle: documentRef.querySelector('#trainingTitle'), trainingObjective: documentRef.querySelector('#trainingObjective'), trainingAction: documentRef.querySelector('#trainingAction'), trainingWhy: documentRef.querySelector('#trainingWhy'), trainingSafety: documentRef.querySelector('#trainingSafety'), trainingSteps: documentRef.querySelector('#trainingSteps'), trainingStepList: documentRef.querySelector('#trainingStepList'), trainingCompletionConditions: documentRef.querySelector('#trainingCompletionConditions'), acknowledgeTrainingSafety: documentRef.querySelector('#acknowledgeTrainingSafety'), confirmTrainingStep: documentRef.querySelector('#confirmTrainingStep'), trainingStatus: documentRef.querySelector('#trainingStatus'), trainingEvidence: documentRef.querySelector('#trainingEvidence'), trainingReflection: documentRef.querySelector('#trainingReflectionState'), trainingTeacher: documentRef.querySelector('#trainingTeacher'), trainingGrowth: documentRef.querySelector('#trainingGrowth'), trainingPrerequisite: documentRef.querySelector('#trainingPrerequisite'), cameraWaiting: documentRef.querySelector('#cameraWaiting'),
       taskMapScreen: documentRef.querySelector('#taskMapScreen'), taskDetailScreen: documentRef.querySelector('#taskDetailScreen'), backToTaskMap: documentRef.querySelector('#backToTaskMap'), studentGroupProgress: documentRef.querySelector('#studentGroupProgress'), studentGroupCount: documentRef.querySelector('#studentGroupCount'), currentStepTitle: documentRef.querySelector('#currentStepTitle'), currentStepHow: documentRef.querySelector('#currentStepHow'), currentStepDoneWhen: documentRef.querySelector('#currentStepDoneWhen'), safetyCard: documentRef.querySelector('#safetyCard'), cameraTool: documentRef.querySelector('#cameraTool'), evidenceCard: documentRef.querySelector('#evidenceCard'), reflectionCard: documentRef.querySelector('#reflectionCard'), teacherCard: documentRef.querySelector('#teacherCard'), completionCard: documentRef.querySelector('#completionCard'), stepCompleteFeedback: documentRef.querySelector('#stepCompleteFeedback'), taskCompleteFeedback: documentRef.querySelector('#taskCompleteFeedback'), continueTrainingStep: documentRef.querySelector('#continueTrainingStep'),
       browserCapabilityWarning: documentRef.querySelector('#browserCapabilityWarning'), browserCapabilityTitle: documentRef.querySelector('#browserCapabilityTitle'), browserCapabilityMessage: documentRef.querySelector('#browserCapabilityMessage'), copyCurrentLink: documentRef.querySelector('#copyCurrentLink'), capabilityCamera: documentRef.querySelector('#capabilityCamera'), capabilitySpeechInput: documentRef.querySelector('#capabilitySpeechInput'), capabilitySpeechOutput: documentRef.querySelector('#capabilitySpeechOutput'), capabilityBrowser: documentRef.querySelector('#capabilityBrowser'),
-      diagnosticCameraFrameTimestamp: documentRef.querySelector('#diagnosticCameraFrameTimestamp'), diagnosticVoiceState: documentRef.querySelector('#diagnosticVoiceState'), diagnosticTranscript: documentRef.querySelector('#diagnosticTranscript'), diagnosticAskRequest: documentRef.querySelector('#diagnosticAskRequest'), diagnosticAskLatency: documentRef.querySelector('#diagnosticAskLatency'), diagnosticFrame: documentRef.querySelector('#diagnosticFrame'), diagnosticVision: documentRef.querySelector('#diagnosticVision'), diagnosticRag: documentRef.querySelector('#diagnosticRag'), diagnosticTts: documentRef.querySelector('#diagnosticTts'), diagnosticLastError: documentRef.querySelector('#diagnosticLastError'),
-      safetyAcknowledgment: documentRef.querySelector('#safetyAcknowledgment'), primaryTrainingAction: documentRef.querySelector('#primaryTrainingAction'),
+      diagnosticCameraFrameTimestamp: documentRef.querySelector('#diagnosticCameraFrameTimestamp'), diagnosticVoiceState: documentRef.querySelector('#diagnosticVoiceState'), diagnosticVoiceTimeline: documentRef.querySelector('#diagnosticVoiceTimeline'), diagnosticTranscript: documentRef.querySelector('#diagnosticTranscript'), diagnosticSubmittedQuestion: documentRef.querySelector('#diagnosticSubmittedQuestion'), diagnosticAskRequest: documentRef.querySelector('#diagnosticAskRequest'), diagnosticAskHttpStatus: documentRef.querySelector('#diagnosticAskHttpStatus'), diagnosticAskLatency: documentRef.querySelector('#diagnosticAskLatency'), diagnosticLastAiAnswer: documentRef.querySelector('#diagnosticLastAiAnswer'), diagnosticFrame: documentRef.querySelector('#diagnosticFrame'), diagnosticVision: documentRef.querySelector('#diagnosticVision'), diagnosticRag: documentRef.querySelector('#diagnosticRag'), diagnosticTts: documentRef.querySelector('#diagnosticTts'), diagnosticLastError: documentRef.querySelector('#diagnosticLastError'),
+      safetyAcknowledgment: documentRef.querySelector('#safetyAcknowledgment'), primaryTrainingAction: documentRef.querySelector('#primaryTrainingAction'), task08CheckStatusField: documentRef.querySelector('#task08CheckStatusField'), task08CheckStatus: documentRef.querySelector('#task08CheckStatus'),
       evidenceFile: documentRef.querySelector('#trainingEvidenceFile'), saveEvidence: documentRef.querySelector('#saveTrainingEvidence'), reflectionOriginal: documentRef.querySelector('#reflectionOriginal'), reflectionAssisted: documentRef.querySelector('#reflectionAssisted'), saveReflection: documentRef.querySelector('#saveTrainingReflection'), startTrainingTask: documentRef.querySelector('#startTrainingTask'), completeTrainingTask: documentRef.querySelector('#completeTrainingTask'), devTeacherControls: documentRef.querySelector('#devTeacherControls'), teacherApprove: documentRef.querySelector('#mockTeacherApprove'), teacherReject: documentRef.querySelector('#mockTeacherReject'),
-      startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics')
+      teacherReviewNote: documentRef.querySelector('#teacherReviewNote'), classroomValidationToggle: documentRef.querySelector('#classroomValidationToggle'), refreshClassroomValidation: documentRef.querySelector('#refreshClassroomValidation'), classroomValidationReport: documentRef.querySelector('#classroomValidationReport'),
+      startCoach: documentRef.querySelector('#startCoach'), stopCoach: documentRef.querySelector('#stopCoach'), manualMode: documentRef.querySelector('#manualMode'), autoMode: documentRef.querySelector('#autoMode'), autoMetrics: documentRef.querySelector('#autoMetrics'),
+      visionAssessCenter: documentRef.querySelector('#visionAssessCenter'), teacherVisionCenter: documentRef.querySelector('#teacherVisionCenter'), devModePanel: documentRef.querySelector('#devModePanel'),
+      // MP-12 Frontend Integration：TASK_07 深度子模組 MP01～MP12
+      missionPlannerPanel: documentRef.querySelector('#missionPlannerPanel'), mp12MapView: documentRef.querySelector('#mp12MapView'), mp12DetailView: documentRef.querySelector('#mp12DetailView'), backToMp12Map: documentRef.querySelector('#backToMp12Map'), mp12Progress: documentRef.querySelector('#mp12Progress'), mp12TaskList: documentRef.querySelector('#mp12TaskList'), mp12Title: documentRef.querySelector('#mp12Title'), mp12Objective: documentRef.querySelector('#mp12Objective'), mp12Procedure: documentRef.querySelector('#mp12Procedure'), mp12Checks: documentRef.querySelector('#mp12Checks'), mp12Safety: documentRef.querySelector('#mp12Safety'), mp12Evidence: documentRef.querySelector('#mp12Evidence'), mp12EvidenceFile: documentRef.querySelector('#mp12EvidenceFile'), mp12SaveEvidence: documentRef.querySelector('#mp12SaveEvidence'), mp12CompleteSubtask: documentRef.querySelector('#mp12CompleteSubtask'), mp12TeacherReview: documentRef.querySelector('#mp12TeacherReview'), mp12TeacherDecision: documentRef.querySelector('#mp12TeacherDecision'), mp12TeacherReason: documentRef.querySelector('#mp12TeacherReason'), mp12TeacherNote: documentRef.querySelector('#mp12TeacherNote'), mp12SubmitTeacherReview: documentRef.querySelector('#mp12SubmitTeacherReview'), mp12CompletedBanner: documentRef.querySelector('#mp12CompletedBanner'), mp12BackToTask07: documentRef.querySelector('#mp12BackToTask07')
     };
+    elements.devMode = false;
     let stream = null;
     let sessionId = null;
     let cameras = [];
@@ -882,6 +1161,7 @@
     let currentDeviceId = '';
     let handsFreeVoice = null;
     let previewMonitor = null;
+    let currentStepEnteredAt = performance.now();
     const cameraPermissionKey = 'fde-live-camera-permission-granted';
     if (!storage) { try { storage = globalThis.localStorage || null; } catch { storage = null; } }
 
@@ -893,9 +1173,9 @@
       if (elements.submitAskAi) elements.submitAskAi.disabled = busy;
       if (elements.assistantVisualAction) elements.assistantVisualAction.disabled = busy;
       if (elements.pushToTalk) elements.pushToTalk.disabled = busy || state === 'SPEAKING';
-      const labels = { LISTENING: '🎙 正在听……', TRANSCRIBING: '正在识别语音…', ASKING: 'AI 正在思考…', CAPTURING_FRAME: '正在读取当前画面…', VISION_PROCESSING: 'AI 正在看画面…', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答…' };
+      const labels = { LISTENING: '🎙 正在聽……', TRANSCRIBING: '正在識別語音…', ASKING: 'AI 正在思考…', CAPTURING_FRAME: '正在讀取當前畫面…', VISION_PROCESSING: 'AI 正在看畫面…', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答…' };
       if (labels[state] && elements.voiceStatus) elements.voiceStatus.textContent = labels[state];
-      const studentLabels = { LISTENING: '正在听', TRANSCRIBING: '正在听', ASKING: 'AI 正在回答', CAPTURING_FRAME: 'AI 正在看', VISION_PROCESSING: 'AI 正在看', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答', ERROR: '请再试一次' };
+      const studentLabels = { LISTENING: '正在聽', TRANSCRIBING: '正在聽', ASKING: 'AI 正在回答', CAPTURING_FRAME: 'AI 正在看', VISION_PROCESSING: 'AI 正在看', ANSWER_READY: 'AI 已回答', SPEAKING: 'AI 正在回答', ERROR: '請再試一次' };
       if (elements.liveCoachStatus && studentLabels[state]) elements.liveCoachStatus.textContent = studentLabels[state];
       if (state === 'IDLE') {
         const entry = voiceEntryState(capabilities.speechInput);
@@ -1015,10 +1295,55 @@
 
     let sessionVisionSource = null;
 
+    const SESSION_STORAGE_KEY = 'fde-live-coach-session';
+    function loadPersistedSession() {
+      try {
+        const raw = storage?.getItem(SESSION_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.id === 'string' && typeof parsed.source === 'string') return parsed;
+      } catch {}
+      return null;
+    }
+    function persistSession(id, source) {
+      try { storage?.setItem(SESSION_STORAGE_KEY, JSON.stringify({ id, source })); } catch {}
+    }
+    function clearPersistedSession() {
+      try { storage?.removeItem(SESSION_STORAGE_KEY); } catch {}
+    }
+
     async function ensureSession(visionSource = 'REAL_VISION') {
       if (sessionId && sessionVisionSource === visionSource) return sessionId;
+      // 重载时复用同一 coach 会话，保留 TrainingProgress（含 VISION_MODEL_NOT_READY）——P1：重载保留。
+      if (!sessionId) {
+        const persisted = loadPersistedSession();
+        if (persisted && persisted.source === visionSource) {
+          try {
+            const check = await fetchImpl(`/api/live/sessions/${encodeURIComponent(persisted.id)}`);
+            if (check.ok) {
+              sessionId = persisted.id;
+              sessionVisionSource = visionSource;
+              const state = await parseJsonResponse(check);
+              renderTaskState(elements, state);
+              currentTrainingState = state.training || null;
+              currentTrainingTaskId = state.training?.current_task_id || currentTrainingTaskId;
+              currentTrainingStepId = state.training?.current_training_step_id || null;
+              initializeStudentTaskMap(elements, state.training);
+              elements.devMode = Boolean(state.dev_mode);
+              if (elements.devPanel) elements.devPanel.hidden = !state.dev_mode;
+              if (elements.devTeacherControls) elements.devTeacherControls.hidden = !state.dev_mode;
+              if (elements.visionAssessCenter) elements.visionAssessCenter.hidden = !state.dev_mode;
+              if (elements.teacherVisionCenter) elements.teacherVisionCenter.hidden = !state.dev_mode;
+              if (elements.devModePanel) elements.devModePanel.hidden = !state.dev_mode;
+              return sessionId;
+            }
+          } catch {}
+          // 服务端已无此会话（如未启用持久化而重启过）——回退到新建。
+        }
+      }
       if (sessionId) {
         try { await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }); } catch {}
+        clearPersistedSession();
         sessionId = null;
       }
       const response = await fetchImpl('/api/live/sessions', {
@@ -1030,7 +1355,9 @@
       const created = await response.json();
       sessionId = created.session_id;
       sessionVisionSource = visionSource;
+      persistSession(sessionId, visionSource);
       elements.devPanel.hidden = !created.dev_mode;
+      elements.devMode = Boolean(created.dev_mode);
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}`));
       renderTaskState(elements, state);
       currentTrainingState = state.training || null;
@@ -1038,6 +1365,10 @@
       currentTrainingStepId = state.training?.current_training_step_id || null;
       initializeStudentTaskMap(elements, state.training);
       if (elements.devTeacherControls) elements.devTeacherControls.hidden = !created.dev_mode;
+      // DEV-only sections hidden from student default flow (Section 7 clutter removal, Vision YOLO frozen).
+      if (elements.visionAssessCenter) elements.visionAssessCenter.hidden = !created.dev_mode;
+      if (elements.teacherVisionCenter) elements.teacherVisionCenter.hidden = !created.dev_mode;
+      if (elements.devModePanel) elements.devModePanel.hidden = !created.dev_mode;
       return sessionId;
     }
 
@@ -1268,6 +1599,7 @@
         const oldSession = sessionId;
         sessionId = null;
         sessionVisionSource = null;
+        clearPersistedSession();
         ragPollGeneration += 1;
         try {
           await fetchImpl(`/api/live/sessions/${encodeURIComponent(oldSession)}`, { method: 'DELETE' });
@@ -1334,21 +1666,32 @@
       isBusy: () => !['IDLE', 'ANSWER_READY'].includes(interaction.state()),
       isPageActive: () => !documentRef.hidden && !elements.taskDetailScreen?.hidden,
       onState: (state) => {
+        if (elements.diagnosticVoiceTimeline) elements.diagnosticVoiceTimeline.textContent = `${new Date().toISOString()} ${state}`;
         if (state === 'LISTENING') interaction.transition('LISTENING');
+        else if (state === 'TRANSCRIBING') interaction.transition('TRANSCRIBING');
+        else if (state === 'ASKING') interaction.transition('ASKING');
+        else if (state === 'IDLE') interaction.reset();
         else if (state === 'VOICE_STANDBY') {
           if (elements.liveCoachStatus) elements.liveCoachStatus.textContent = 'AI 已待命';
           if (elements.voiceStatus) elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
         }
       },
+      onInterim: (transcript, finalSeen) => {
+        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = finalSeen ? '你刚刚说' : '你正在说';
+        if (elements.lastUserTranscript) elements.lastUserTranscript.textContent = `「${transcript}」`;
+        if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
+      },
       onTranscript: (transcript) => {
+        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = '你刚刚说';
+        if (elements.lastUserTranscript) elements.lastUserTranscript.textContent = `「${transcript}」`;
         if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
         void submitStudentQuestion(transcript, { source: 'VOICE', autoSpeak: true });
       },
       onError: (code) => {
         if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`;
-        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture' || code === 'speech-unstable') {
           handsFreeVoice?.pause();
-          if (elements.voiceStatus) elements.voiceStatus.textContent = '当前浏览器暂不支持免按键语音，可使用按住说话。';
+          if (elements.voiceStatus) elements.voiceStatus.textContent = code === 'speech-unstable' ? '当前浏览器语音识别不稳定，已切换为按住说话。' : '当前浏览器暂不支持免按键语音，可使用按住说话。';
           if (elements.fallbackMethods) elements.fallbackMethods.open = true;
         } else if (elements.voiceStatus) elements.voiceStatus.textContent = '没有听清楚，请继续说一次。';
       }
@@ -1360,12 +1703,12 @@
         return;
       }
       elements.enableVoiceCoach.hidden = true;
-      elements.pauseVoiceCoach.hidden = false;
+      if (elements.pauseVoiceCoach) elements.pauseVoiceCoach.hidden = false;
       elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
     });
     elements.pauseVoiceCoach?.addEventListener('click', () => {
       handsFreeVoice.pause();
-      elements.pauseVoiceCoach.hidden = true;
+      if (elements.pauseVoiceCoach) elements.pauseVoiceCoach.hidden = true;
       elements.enableVoiceCoach.hidden = false;
       elements.voiceStatus.textContent = '语音助教已暂停。';
     });
@@ -1373,12 +1716,12 @@
     elements.textAskAi?.addEventListener('click', () => { elements.askAiPanel.hidden = false; elements.askAiInput.focus(); });
     function speechCallbacks() {
       return {
-        onStart: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); interaction.transition('SPEAKING'); if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'speaking'; elements.stopAiAnswer.hidden = false; },
-        onEnd: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = 'AI 回答完成'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'completed'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); },
-        onError: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = '语音播放失败，请阅读文字回答或点击播放。'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'error'; elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
+        onStart: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); interaction.transition('SPEAKING'); if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'speaking'; if (elements.stopAiAnswer) elements.stopAiAnswer.hidden = false; },
+        onEnd: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = 'AI 回答完成'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'completed'; if (elements.stopAiAnswer) elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); },
+        onError: () => { if (ttsStartWatchdog) clearTimeout(ttsStartWatchdog); elements.voiceStatus.textContent = '語音播放失敗，請閱讀文字回答。'; if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'error'; if (elements.stopAiAnswer) elements.stopAiAnswer.hidden = true; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
       };
     }
-    async function submitStudentQuestion(question, { autoSpeak = false, source = 'TEXT' } = {}) {
+    async function submitStudentQuestion(question, { autoSpeak = true, source = 'TEXT' } = {}) {
       if (!question.trim()) { elements.askAiResponse.textContent = source === 'VOICE' ? '没有听清楚，请再说一次。' : '请先输入问题。'; interaction.reset(); return; }
       currentAskController?.abort();
       const askController = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1392,6 +1735,11 @@
         interaction.transition('ERROR'); interaction.reset(); voiceControl?.releaseButton(); return;
       }
       interaction.transition(visual ? 'CAPTURING_FRAME' : 'ASKING', { requestId, interactionId });
+      if (source === 'VOICE') {
+        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = '你刚刚说';
+        if (elements.lastUserTranscript) elements.lastUserTranscript.textContent = `「${question.trim()}」`;
+      }
+      if (elements.diagnosticSubmittedQuestion) elements.diagnosticSubmittedQuestion.textContent = question.trim();
       if (elements.diagnosticAskRequest) elements.diagnosticAskRequest.textContent = requestId;
       elements.askAiResponse.textContent = 'AI 正在根据当前步骤查询教学知识…';
       const started = performance.now();
@@ -1405,27 +1753,39 @@
           return frame;
         } : null;
         const result = await askLiveCoach(fetchImpl, id, question, captureCurrent, { timeoutMs: visual ? 20000 : 15000, requestId, interactionId, controller: askController });
+        if (elements.diagnosticAskHttpStatus) elements.diagnosticAskHttpStatus.textContent = '200';
         interaction.transition('ANSWER_READY', { requestId, interactionId });
         const delivered = deliverAiAnswer(result.answer, { autoSpeak, speechReply, callbacks: speechCallbacks() });
         lastAiAnswer = delivered.text;
         elements.askAiResponse.textContent = delivered.text;
         if (elements.latestAiAnswer) elements.latestAiAnswer.textContent = delivered.text;
-        elements.voiceReplyControls.hidden = false;
+        if (elements.diagnosticLastAiAnswer) elements.diagnosticLastAiAnswer.textContent = delivered.text;
+        if (elements.answerSourceLabel) {
+          const answerSourceLabels = { AI_REFERENCE: 'AI 參考回答', AI_VISUAL_REFERENCE: 'AI 參考回答', VERIFIED_KNOWLEDGE: '已核對教學資料' };
+          elements.answerSourceLabel.textContent = answerSourceLabels[result.answer_source] || '';
+          elements.answerSourceLabel.hidden = !elements.answerSourceLabel.textContent;
+        }
+
         if (elements.diagnosticAskLatency) elements.diagnosticAskLatency.textContent = `${(performance.now() - started).toFixed(1)} ms`;
         if (elements.diagnosticVision) elements.diagnosticVision.textContent = result.vision_used ? 'one-frame completed' : 'not used';
+        void recordClassroomEvent(fetchImpl, id, {
+          event_type: 'AI_ASK', task_id: currentTrainingTaskId, step_id: currentTrainingStepId,
+          channel: visual ? 'VISION' : source, question: question.trim(), duration_ms: Math.round(performance.now() - started)
+        }).catch(() => {});
         if (elements.diagnosticRag) elements.diagnosticRag.textContent = result.rag_status || '—';
         if (autoSpeak && delivered.spoken) {
           ttsStartWatchdog = setTimeout(() => {
             if (interaction.state() !== 'SPEAKING') {
-              elements.voiceStatus.textContent = 'AI 已回答，请点击「播放回答」收听。';
+              elements.voiceStatus.textContent = 'AI 已回答。';
               if (elements.diagnosticTts) elements.diagnosticTts.textContent = 'autoplay blocked';
               interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer();
             }
           }, 1500);
         } else if (autoSpeak) { elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。'; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
-        else { elements.voiceStatus.textContent = 'AI 已回答，可点击播放回答。'; interaction.reset(); voiceControl?.releaseButton(); }
+        else { elements.voiceStatus.textContent = 'AI 已回答。'; interaction.reset(); voiceControl?.releaseButton(); }
         elements.voiceStatus.dataset.code = result.vision_used ? 'VISION_SINGLE_FRAME' : 'CONTEXT_ANSWER';
       } catch (error) {
+        if (elements.diagnosticAskHttpStatus) elements.diagnosticAskHttpStatus.textContent = String(error.status || 'ERROR');
         if (error.name === 'AbortError') elements.askAiResponse.textContent = '已取消这次询问。';
         else if (error.message === 'ask_timeout') elements.askAiResponse.textContent = visual ? '这次画面分析没有完成，请重新试一次。' : 'AI 服务暂时没有回应，请稍后再试。';
         else if (error.message === 'camera_not_ready' || error.message === 'camera_frame_required') elements.askAiResponse.textContent = '摄像头画面还没准备好，请稍等一秒再试。';
@@ -1447,7 +1807,7 @@
       if (!lastAiAnswer) return;
       if (!speechReply.speak(lastAiAnswer, speechCallbacks())) elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。';
     });
-    elements.stopAiAnswer?.addEventListener('click', () => { speechReply.stop(); elements.stopAiAnswer.hidden = true; elements.voiceStatus.textContent = '已停止播放'; });
+    elements.stopAiAnswer?.addEventListener('click', () => { speechReply.stop(); if (elements.stopAiAnswer) elements.stopAiAnswer.hidden = true; elements.voiceStatus.textContent = '已停止播放'; });
 
     elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
     elements.stopCoach.addEventListener('click', stopAutoObservation);
@@ -1464,13 +1824,18 @@
           renderCurrentTraining(state.training); return;
         }
         if (action === 'STEP' || action === 'TEACHER') {
-          const result = await submitTrainingStepFact(fetchImpl, id, currentTrainingStepId);
+          let fact = 'LEARNER_CONFIRMED';
+          if (currentTrainingTaskId === 'TASK_08') {
+            fact = currentTrainingStepId === 'T08_TEACHER_FINAL_REVIEW' ? 'NEEDS_CONFIRMATION' : (elements.task08CheckStatus?.value || 'PASS');
+          }
+          const result = await submitTrainingStepFact(fetchImpl, id, currentTrainingStepId, fact);
           acceptTrainingMutation(result.training); return;
         }
         if (action === 'EVIDENCE') {
           const file = elements.evidenceFile?.files?.[0];
           if (!file) { setMessage('请先拍照或选择学习证据。'); return; }
-          const result = await saveTrainingEvidence(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, evidence_type: file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO', source: 'STUDENT_UPLOAD', file_reference: `dev-upload://${file.name}`, metadata: { name: file.name, size: file.size, type: file.type } });
+          const expectedEvidence = currentTrainingState?.current_step?.evidence_required?.[0];
+          const result = await saveTrainingEvidence(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, evidence_type: currentTrainingTaskId === 'TASK_08' && expectedEvidence ? expectedEvidence : (file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO'), source: 'STUDENT_UPLOAD', file_reference: `dev-upload://${file.name}`, check_result: currentTrainingTaskId === 'TASK_08' ? (elements.task08CheckStatus?.value || 'PASS') : null, metadata: { name: file.name, size: file.size, type: file.type } });
           acceptTrainingMutation(result.training); setMessage('学习证据已保存。'); return;
         }
         if (action === 'REFLECTION') {
@@ -1487,16 +1852,102 @@
         setMessage(key ? messages[key] : `目前无法继续：${error.message}`);
       }
     });
-    elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', 'Development teacher review', currentTrainingTaskId, currentTrainingStepId); acceptTrainingMutation(result.training); });
-    elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', 'Development teacher requested rework', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); });
+    elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', elements.teacherReviewNote?.value || '', currentTrainingTaskId, currentTrainingStepId); acceptTrainingMutation(result.training); void recordClassroomEvent(fetchImpl, id, { event_type: 'TEACHER_REVIEW', task_id: currentTrainingTaskId, step_id: currentTrainingStepId }).catch(() => {}); });
+    elements.teacherReject?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'REJECT_REWORK', elements.teacherReviewNote?.value || '', currentTrainingTaskId, currentTrainingStepId); currentTrainingStepId = result.training.current_training_step_id; renderTrainingState(elements, result.training); void recordClassroomEvent(fetchImpl, id, { event_type: 'TEACHER_REVIEW', task_id: currentTrainingTaskId, step_id: currentTrainingStepId }).catch(() => {}); });
+    // ---- MP-12 Frontend Integration：事件綁定（只呼叫既有 Backend endpoint） ----
+    elements.mp12TaskList?.addEventListener('click', async (event) => {
+      const subtaskId = event.target.closest?.('[data-mp-subtask]')?.dataset?.mpSubtask;
+      if (!subtaskId) return;
+      setMp12View(elements, 'DETAIL', { scroll: true });
+      try {
+        const id = await ensureSession();
+        const result = await selectMpSubtask(fetchImpl, id, subtaskId);
+        renderCurrentTraining(result.training);
+        setMessage(`已打开 ${subtaskId}，可以按当前说明学习。`);
+      } catch (error) {
+        setMessage(`无法打开子任务：${error.message}`);
+      }
+    });
+    elements.backToMp12Map?.addEventListener('click', () => {
+      setMp12View(elements, 'MAP');
+      elements.mp12MapView?.scrollIntoView?.({ block: 'start' });
+    });
+    elements.mp12CompleteSubtask?.addEventListener('click', async () => {
+      if (elements.mp12CompleteSubtask.dataset.action !== 'COMPLETE') return;
+      const subtaskId = currentTrainingState?.mission_planner?.current_subtask_id;
+      if (!subtaskId) return;
+      try {
+        const id = await ensureSession();
+        const result = await completeMpSubtask(fetchImpl, id, subtaskId);
+        renderCurrentTraining(result.training);
+        const status = result.training.mission_planner?.subtasks?.[subtaskId]?.status;
+        setMessage(status === 'PENDING_TEACHER_REVIEW' ? '已提交，等待教师现场确认。' : '子任务已完成。');
+      } catch (error) {
+        setMessage(`目前无法完成此子任务：${error.message}`);
+      }
+    });
+    elements.mp12SaveEvidence?.addEventListener('click', async () => {
+      const file = elements.mp12EvidenceFile?.files?.[0];
+      const current = currentTrainingState?.mission_planner?.current_subtask;
+      if (!file || !current?.subtask_id) {
+        setMessage('请先选择当前子任务的证据文件。');
+        return;
+      }
+      const evidenceType = current.evidence_types?.[0];
+      if (!evidenceType) {
+        setMessage('当前子任务不要求保存证据。');
+        return;
+      }
+      try {
+        const id = await ensureSession();
+        // 繼續複用 Main v2.0 Shared Evidence 流程；MP 證據最終仍進入 Main-12 Growth Record
+        const result = await saveTrainingEvidence(fetchImpl, id, {
+          task_id: 'TASK_07',
+          step_id: current.subtask_id,
+          evidence_type: evidenceType,
+          source: 'STUDENT_UPLOAD',
+          file_reference: `dev-upload://${file.name}`,
+          metadata: { name: file.name, size: file.size, type: file.type }
+        });
+        renderCurrentTraining(result.training);
+        setMessage('当前子任务证据已保存。');
+      } catch (error) {
+        setMessage(`证据保存失败：${error.message}`);
+      }
+    });
+    elements.mp12SubmitTeacherReview?.addEventListener('click', async () => {
+      const subtaskId = currentTrainingState?.mission_planner?.current_subtask_id;
+      if (!subtaskId) return;
+      try {
+        const id = await ensureSession();
+        const result = await submitMpTeacherReview(fetchImpl, id, subtaskId, {
+          decision: elements.mp12TeacherDecision?.value || 'APPROVE',
+          reason: elements.mp12TeacherReason?.value || '',
+          note: elements.mp12TeacherNote?.value?.trim() || ''
+        });
+        renderCurrentTraining(result.training);
+        setMessage('教师现场复核已提交。');
+      } catch (error) {
+        setMessage(`教师复核失败：${error.message}`);
+      }
+    });
+    elements.mp12BackToTask07?.addEventListener('click', () => {
+      // 只回到 TASK_07 主流程畫面；不自動完成 TASK_07、不自動跳 TASK_08
+      setMp12View(elements, 'MAP');
+      elements.trainingTitle?.scrollIntoView?.({ block: 'start' });
+      setMessage('已返回 TASK_07；MP-12 完成記錄會保留，TASK_07 仍需完成既有流程。');
+    });
     elements.trainingTaskList?.addEventListener('click', async (event) => {
       const taskId = event.target.closest?.('[data-view-task]')?.dataset?.viewTask;
       if (!taskId) return;
       const id = await ensureSession();
       const result = await fetchTrainingTaskView(fetchImpl, id, taskId);
+      if (currentTrainingStepId) void recordClassroomEvent(fetchImpl, id, { event_type: 'STEP_EXIT', task_id: currentTrainingTaskId, step_id: currentTrainingStepId, duration_ms: Math.round(performance.now() - currentStepEnteredAt) }).catch(() => {});
       currentTrainingTaskId = taskId;
       renderCurrentTraining({ ...result.training_task_view, current_task_id: taskId, progress: elements.trainingProgress.textContent, evidence_count: elements.trainingEvidence.textContent, reflection_state: elements.trainingReflection.textContent, teacher_review_state: result.training_task_view.task.teacher_review_required ? 'REQUIRED' : 'NOT_REQUIRED' });
       showTaskDetail(elements);
+      currentStepEnteredAt = performance.now();
+      void recordClassroomEvent(fetchImpl, id, { event_type: 'TASK_ENTER', task_id: currentTrainingTaskId, step_id: currentTrainingStepId }).catch(() => {});
       setMessage(result.training_task_view.unsafe_action_allowed === false ? '可以先学习；到危险操作时需要完成安全检查并由教师确认。' : '此任务可以开始学习。');
       await maybeAutoStartCamera();
     });
@@ -1511,6 +1962,16 @@
     bindTaskMapRetry(elements.trainingTaskList, () => refreshMap().catch(() => renderTaskMapLoadError(elements)));
     elements.backToTaskMap?.addEventListener('click', () => refreshMap().catch((error) => setMessage(`任务地图刷新失败：${error.message}`)));
     elements.continueTrainingStep?.addEventListener('click', () => { if (!pendingTrainingState) return; const training = pendingTrainingState; pendingTrainingState = null; elements.stepCompleteFeedback.hidden = true; if (elements.completionCard) elements.completionCard.hidden = false; renderCurrentTraining(training); });
+    elements.classroomValidationToggle?.addEventListener('change', async () => {
+      const id = await ensureSession();
+      const state = await setClassroomValidation(fetchImpl, id, elements.classroomValidationToggle.checked);
+      if (elements.classroomValidationReport) elements.classroomValidationReport.textContent = state.enabled ? '课堂验证记录已开启' : '课堂验证记录已关闭';
+    });
+    elements.refreshClassroomValidation?.addEventListener('click', async () => {
+      const id = await ensureSession();
+      const report = await fetchClassroomValidationReport(fetchImpl, id);
+      if (elements.classroomValidationReport) elements.classroomValidationReport.textContent = JSON.stringify(report, null, 2);
+    });
 
     return { refreshHealth, refreshCameraDevices, initializeStudentMode: ensureSession, startCamera, maybeAutoStartCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation, pauseVoiceCoach: () => handsFreeVoice?.pause() };
   }
@@ -1524,9 +1985,183 @@
       .replaceAll("'", '&#039;');
   }
 
+  async function visionJson(fetchImpl, url, payload, headers = {}) {
+    const response = await fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(payload) });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body?.error?.message || body?.message || `HTTP ${response.status || 'error'}`);
+    return body;
+  }
+
+  function submitPropCheck(fetchImpl, payload) {
+    const safePayload = { ...payload };
+    delete safePayload.model_id;
+    delete safePayload.model_path;
+    return visionJson(fetchImpl, '/api/v1/vision/prop-check', safePayload);
+  }
+
+  function submitHoverAnalyze(fetchImpl, payload) {
+    const safePayload = { ...payload };
+    delete safePayload.model_id;
+    delete safePayload.model_path;
+    return visionJson(fetchImpl, '/api/v1/vision/hover-analyze', safePayload);
+  }
+
+  function activateVisionModel(fetchImpl, modelId, teacherId) {
+    return visionJson(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(modelId)}/activate`, {}, { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': teacherId });
+  }
+
+  function teacherVisionPost(fetchImpl, url, payload, teacherId = 'MOCK_TEACHER') {
+    return visionJson(fetchImpl, url, payload, { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': teacherId });
+  }
+
+  function fileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+      reader.onload = () => resolve(String(reader.result).split(',', 2)[1] || '');
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Student model submission: stored as an inert attachment, never executed client-side.
+  function submitStudentModel(fetchImpl, payload) {
+    return visionJson(fetchImpl, '/api/v1/vision/submissions', payload);
+  }
+
+  function importSubmission(fetchImpl, submissionId, payload, teacherId = 'MOCK_TEACHER') {
+    return visionJson(fetchImpl, `/api/v1/vision/submissions/${encodeURIComponent(submissionId)}/import`, payload, { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': teacherId });
+  }
+
+  function createGoldenSet(fetchImpl, payload, teacherId = 'MOCK_TEACHER') {
+    return visionJson(fetchImpl, '/api/v1/vision/golden-sets', payload, { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': teacherId });
+  }
+
+  function listGoldenSets(fetchImpl, modelType = null) {
+    const query = modelType ? `?model_type=${encodeURIComponent(modelType)}` : '';
+    return visionJson(fetchImpl, `/api/v1/vision/golden-sets${query}`);
+  }
+
+  function imageFilePayload(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('無法讀取照片')); };
+      image.onload = async () => {
+        try { resolve({ image_base64: await fileAsBase64(file), image_width: image.naturalWidth, image_height: image.naturalHeight }); }
+        finally { URL.revokeObjectURL(url); }
+      };
+      image.src = url;
+    });
+  }
+
+  function sampleVideoFile(file, intervalSeconds = 1) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      const cleanup = () => URL.revokeObjectURL(url);
+      video.muted = true; video.preload = 'metadata'; video.src = url;
+      video.onerror = () => { cleanup(); reject(new Error('無法讀取影片')); };
+      video.onloadedmetadata = async () => {
+        try {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          if (video.readyState < 2) await new Promise((done, fail) => { video.onloadeddata = done; video.onerror = fail; });
+          const frames = [];
+          const duration = Math.min(video.duration, 60);
+          for (let timestamp = 0; timestamp <= duration; timestamp += intervalSeconds) {
+            if (timestamp > 0) await new Promise((done, fail) => { video.onseeked = done; video.onerror = fail; video.currentTime = Math.min(timestamp, duration); });
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push({ timestamp, image_base64: canvas.toDataURL('image/jpeg', .82).split(',', 2)[1] });
+          }
+          resolve(frames);
+        } catch (error) { reject(error); }
+        finally { cleanup(); }
+      };
+    });
+  }
+
+  async function fetchVisionCollection(fetchImpl, url, teacherOnly = false) {
+    const headers = teacherOnly ? { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' } : {};
+    const response = await fetchImpl(url, { headers });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body?.error?.message || `HTTP ${response.status}`);
+    return body;
+  }
+
+  function initializeVisionCenter(documentRef = document, fetchImpl = fetch) {
+    const render = (selector, value) => { const element = documentRef.querySelector(selector); if (element) element.textContent = JSON.stringify(value, null, 2); };
+    documentRef.querySelector('#refreshVisionModels')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/models').then(value => { render('#visionModelList', value); render('#visionModelCompare', value.map(item => ({ model_name: item.model_name, dataset_version: item.dataset_version, metrics: item.metrics, status: item.status }))); }).catch(error => render('#visionModelList', { error: error.message })));
+    documentRef.querySelector('#refreshHardExamples')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/hard-examples?status=PENDING', true).then(value => render('#hardExampleList', value)).catch(error => render('#hardExampleList', { error: error.message })));
+    documentRef.querySelector('#refreshVisionDatasets')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/datasets').then(value => render('#visionDatasetList', value)).catch(error => render('#visionDatasetList', { error: error.message })));
+    documentRef.querySelector('#runPropAssessment')?.addEventListener('click', async () => {
+      try {
+        const file = documentRef.querySelector('#propAssessmentFile')?.files?.[0];
+        if (!file) throw new Error('請先選擇槳葉照片');
+        render('#propAssessmentResult', await submitPropCheck(fetchImpl, { ...await imageFilePayload(file), input_reference: file.name }));
+      } catch (error) { render('#propAssessmentResult', { error: error.message }); }
+    });
+    documentRef.querySelector('#runHoverAssessment')?.addEventListener('click', async () => {
+      try {
+        const file = documentRef.querySelector('#hoverAssessmentFile')?.files?.[0];
+        if (!file) throw new Error('請先選擇四面懸停影片');
+        render('#hoverAssessmentResult', await submitHoverAnalyze(fetchImpl, { frames: await sampleVideoFile(file), camera_profile_id: documentRef.querySelector('#hoverCameraProfileId')?.value || null, input_reference: file.name }));
+      } catch (error) { render('#hoverAssessmentResult', { error: error.message }); }
+    });
+    documentRef.querySelector('#uploadVisionModel')?.addEventListener('click', async () => {
+      try {
+        const file = documentRef.querySelector('#visionModelFile')?.files?.[0];
+        if (!file) throw new Error('請選擇 best.pt');
+        const payload = { model_type: documentRef.querySelector('#visionModelType').value, model_name: file.name.replace(/\.pt$/i, ''), version: documentRef.querySelector('#visionModelVersion').value, rule_version: documentRef.querySelector('#visionRuleVersion').value, dataset_id: documentRef.querySelector('#visionModelDatasetId').value, dataset_version: documentRef.querySelector('#visionModelDatasetVersion').value, file_name: file.name, file_base64: await fileAsBase64(file) };
+        render('#visionModelList', await teacherVisionPost(fetchImpl, '/api/v1/vision/models', payload));
+      } catch (error) { render('#visionModelList', { error: error.message }); }
+    });
+    documentRef.querySelector('#activateVisionModel')?.addEventListener('click', () => activateVisionModel(fetchImpl, documentRef.querySelector('#visionActionModelId').value, 'MOCK_TEACHER').then(value => render('#visionModelList', value)).catch(error => render('#visionModelList', { error: error.message })));
+    documentRef.querySelector('#archiveVisionModel')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(documentRef.querySelector('#visionActionModelId').value)}/archive`, {}).then(value => render('#visionModelList', value)).catch(error => render('#visionModelList', { error: error.message })));
+    documentRef.querySelector('#saveGoldenEvaluation')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(documentRef.querySelector('#visionEvaluationModelId').value)}/evaluate`, JSON.parse(documentRef.querySelector('#visionEvaluationMetrics').value)).then(value => render('#visionModelCompare', value)).catch(error => render('#visionModelCompare', { error: error.message })));
+    const review = decision => teacherVisionPost(fetchImpl, `/api/v1/vision/hard-examples/${encodeURIComponent(documentRef.querySelector('#hardExampleId').value)}/review`, { decision, teacher_label: documentRef.querySelector('#hardExampleLabel').value || null }).then(value => render('#hardExampleList', value)).catch(error => render('#hardExampleList', { error: error.message }));
+    documentRef.querySelector('#confirmHardExample')?.addEventListener('click', () => review('CONFIRMED'));
+    documentRef.querySelector('#correctHardExample')?.addEventListener('click', () => review('CORRECTED'));
+    documentRef.querySelector('#rejectHardExample')?.addEventListener('click', () => review('REJECTED'));
+    documentRef.querySelector('#buildNextDataset')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/datasets/${encodeURIComponent(documentRef.querySelector('#parentDatasetId').value)}/build-next`, { hard_example_ids: documentRef.querySelector('#nextDatasetSamples').value.split(',').map(value => value.trim()).filter(Boolean), new_samples: [] }).then(value => render('#visionDatasetList', value)).catch(error => render('#visionDatasetList', { error: error.message })));
+    documentRef.querySelector('#exportTrainingPackage')?.addEventListener('click', async () => {
+      try {
+        const datasetId = documentRef.querySelector('#exportDatasetId').value;
+        const response = await fetchImpl(`/api/v1/vision/datasets/${encodeURIComponent(datasetId)}/export`, { headers: { 'X-FDE-Role': 'teacher', 'X-FDE-Teacher-ID': 'MOCK_TEACHER' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const url = URL.createObjectURL(await response.blob());
+        const anchor = documentRef.createElement('a'); anchor.href = url; anchor.download = `${datasetId}.zip`; anchor.click(); URL.revokeObjectURL(url);
+      } catch (error) { render('#visionDatasetList', { error: error.message }); }
+    });
+    documentRef.querySelector('#saveCameraCalibration')?.addEventListener('click', () => teacherVisionPost(fetchImpl, '/api/v1/vision/camera-profiles', { four_corner_points: JSON.parse(documentRef.querySelector('#cameraCalibrationPoints').value) }).then(value => render('#cameraCalibrationResult', value)).catch(error => render('#cameraCalibrationResult', { error: error.message })));
+    documentRef.querySelector('#refreshStudentSubmissions')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/submissions?status=SUBMITTED', true).then(value => render('#studentSubmissionList', value)).catch(error => render('#studentSubmissionList', { error: error.message })));
+    documentRef.querySelector('#importSubmission')?.addEventListener('click', async () => {
+      try {
+        const submissionId = documentRef.querySelector('#importSubmissionId').value;
+        const payload = {
+          model_name: documentRef.querySelector('#importModelName').value || submissionId,
+          version: documentRef.querySelector('#importModelVersion').value || 'v1',
+          dataset_id: documentRef.querySelector('#importDatasetId').value,
+          dataset_version: documentRef.querySelector('#importDatasetVersion').value || 'v1',
+          rule_version: documentRef.querySelector('#importRuleVersion').value || 'r1',
+        };
+        render('#studentSubmissionList', await importSubmission(fetchImpl, submissionId, payload));
+      } catch (error) { render('#studentSubmissionList', { error: error.message }); }
+    });
+    documentRef.querySelector('#createGoldenSet')?.addEventListener('click', async () => {
+      try {
+        const payload = { model_type: documentRef.querySelector('#goldenSetType').value, name: documentRef.querySelector('#goldenSetName').value, total_cases: Number(documentRef.querySelector('#goldenSetCases').value || 0) };
+        render('#goldenSetList', await createGoldenSet(fetchImpl, payload));
+      } catch (error) { render('#goldenSetList', { error: error.message }); }
+    });
+    documentRef.querySelector('#refreshGoldenSets')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/golden-sets', true).then(value => render('#goldenSetList', value)).catch(error => render('#goldenSetList', { error: error.message })));
+  }
+
   if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
+      applyTraditionalStudentLanguage(document.body);
       const controller = createController();
+      initializeVisionCenter(document, fetch);
       controller.refreshHealth();
       controller.refreshCameraDevices();
       controller.initializeStudentMode().catch(() => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }));
@@ -1538,6 +2173,12 @@
     autoStartError,
     renderTaskState,
     renderTrainingState,
+    renderMissionPlannerState,
+    setMp12View,
+    mpSubtaskAction,
+    selectMpSubtask,
+    completeMpSubtask,
+    submitMpTeacherReview,
     studentFacingLabel,
     studentTaskStatus,
     taskCompletionPolicy,
@@ -1549,6 +2190,8 @@
     handleVoiceTranscript,
     questionRequiresVision,
     cameraPreviewPolicy,
+    toTraditionalStudentText,
+    applyTraditionalStudentLanguage,
     assistantVisualActionState,
     voiceEntryState,
     genericVisualObservationQuestion,
@@ -1576,6 +2219,9 @@
     fetchTrainingTaskView,
     submitTrainingStepFact,
     acknowledgeTrainingStepSafety,
+    setClassroomValidation,
+    recordClassroomEvent,
+    fetchClassroomValidationReport,
     performCaptureInteraction,
     triggerFilePicker,
     performUploadInteraction,
@@ -1599,5 +2245,13 @@
     scaleBoxForContain,
     stopStream,
     submitSnapshot
+    ,submitPropCheck
+    ,submitHoverAnalyze
+    ,activateVisionModel
+    ,submitStudentModel
+    ,importSubmission
+    ,createGoldenSet
+    ,listGoldenSets
+    ,initializeVisionCenter
   };
 });

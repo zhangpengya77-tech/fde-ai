@@ -40,6 +40,23 @@
   <h3>教師要求我提交什麼</h3>
   <ul class="requirements">{% if content_override and direction_content %}{% for item in direction_content.deliverables %}<li>{{ item }}</li>{% empty %}<li>請依教師要求提交學習證據。</li>{% endfor %}{% else %}{% for item in definition.evidence_requirement %}<li>{{ item }}</li>{% empty %}<li>請依教師要求提交學習證據。</li>{% endfor %}{% endif %}</ul>
 </section>
+{% if model_upload_allowed %}
+<section class="section-block growth-upload-section" aria-labelledby="r07-model-title">
+  <h2 id="r07-model-title">上傳 YOLO 模型 best.pt</h2>
+  <p class="muted">任務類型：<strong>PROP_DIRECTION</strong>。模型會作為既有 MODEL / YOLO_MODEL 證據送交教師審核，不會自動啟用。</p>
+  <p><a class="button secondary" href="{% url 'learning:student_prop_scan' enrollment.pk %}">槳葉方向辨識（手機拍照檢測）</a></p>
+  <div class="growth-document-list">
+    {% for model in model_evidence %}<article class="growth-document"><div><strong>{{ model.original_metadata.filename|default:'best.pt' }}</strong><small>狀態：{% if model.processed_metadata.vision_model_review.status == 'CANDIDATE' %}已列為候選{% elif model.processed_metadata.vision_model_review.status == 'RETURNED' %}退回補件{% elif model.processed_metadata.submission_status == 'SUBMITTED' %}等待教師審核{% else %}{{ model.processed_metadata.submission_status|default:'已保存' }}{% endif %} · {{ model.created_at|date:'Y-m-d H:i' }}</small>{% if model.processed_metadata.vision_model_review.current_note %}<small>教師意見：{{ model.processed_metadata.vision_model_review.current_note }}</small>{% endif %}</div><a class="button secondary" href="{% url 'learning:evidence_download' model.pk %}">下載</a></article>{% empty %}<p class="empty-state">尚未上傳訓練模型。</p>{% endfor %}
+  </div>
+  {% if editable %}
+  <form method="post" action="{% url 'learning:growth_model_upload' enrollment.pk %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label for="id_model_file">best.pt</label><input id="id_model_file" name="model_file" type="file" accept=".pt" required>
+    <button class="button primary" type="submit">上傳 YOLO 模型 best.pt</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
 <section class="section-block growth-upload-section">
   <div class="section-heading"><div><h2>{% if definition.slot_id == "R07" %}照片證據{% else %}學習證據{% endif %}</h2><p class="muted">{% if definition.slot_id == "R07" %}照片 {{ image_count }} / 5{% else %}已上傳 {{ image_count }} / 5 張圖片{% endif %}</p></div></div>
   <div class="growth-photo-grid" data-growth-saved-photo-list>

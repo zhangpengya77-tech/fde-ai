@@ -82,15 +82,20 @@ function renderNavigation() {
   const primaryNav = [
     { key: 'missions', label: '任', title: '12 任務地圖' },
     ...moduleSections,
+    { label: '健', title: '飛行健康 AI / Flight Health', href: '/flight-health/' },
     { key: 'cohorts', label: '展', title: '歷屆學員成果' },
     { key: 'teacher', label: '師', title: '教師復核中心' }
   ];
   $('#moduleNav').innerHTML = primaryNav
     .map(
       (section) =>
-        `<a href="${router.hrefFor(section.key)}" data-route="${section.key}"><span>${section.label}</span>${section.title}</a>`
+        `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''}><span>${section.label}</span>${section.title}</a>`
     )
     .join('');
+
+  // 手機左側抽屜直接沿用桌面左側欄的導航，避免兩份清單各自維護而走樣。
+  const mobileNavList = document.getElementById('mobileNavList');
+  if (mobileNavList) mobileNavList.innerHTML = $('#moduleNav').innerHTML;
 }
 
 function applyRoute(routeKey) {
@@ -201,7 +206,7 @@ function renderDataFlow() {
   const flow = [
     ['學', 'SOP / AI 助教'],
     ['練', '模擬器 / Mission Planner'],
-    ['作', 'F450 / AI / 3D'],
+    ['做', 'F450 / AI / 3D'],
     ['測', '鷹眼 AI 檢測'],
     ['證', '作品 / 能力紀錄']
   ];
@@ -613,8 +618,44 @@ function renderF450RagResult(result) {
       <div class="section-head"><span class="tag">F450 AI 助教</span><span class="tag">${escapeHtml(sourceLabel)}</span></div>
       <h3>回答</h3>
       <p>${escapeHtml(result.answer)}</p>
+      ${renderInspectionSpeechControls(result.answer)}
     </article>
   `;
+}
+
+/** 手機 AI 回答朗讀控制項：使用瀏覽器原生 SpeechSynthesis，不引入任何外部 TTS。 */
+function renderInspectionSpeechControls(answer) {
+  const text = String(answer || '').trim();
+  if (!text) return '';
+  if (!('speechSynthesis' in window)) {
+    return '<p class="speech-unsupported">此瀏覽器不支援語音朗讀，文字回答仍可正常閱讀。</p>';
+  }
+  return `
+    <div class="inspection-speech" data-inspection-speech>
+      <button type="button" class="secondary-action" data-speak-inspection>🔊 播放語音</button>
+      <button type="button" class="secondary-action" data-stop-inspection>■ 停止播放</button>
+    </div>
+  `;
+}
+
+/** 朗讀指定的 AI 回答：先取消上一段，避免疊音。 */
+function speakInspectionAnswer(button) {
+  if (!('speechSynthesis' in window)) return;
+  const panel = button.closest('[data-inspection-assistant]') || document;
+  const answer = panel.querySelector('.result-card p');
+  const text = answer ? answer.textContent.trim() : '';
+  if (!text) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = voiceAssistant.locale;
+  utterance.rate = 0.95;
+  // iOS Safari 需要由使用者手勢觸發，這裡同步呼叫 speak 以保留手勢授權。
+  window.speechSynthesis.speak(utterance);
+}
+
+/** 停止目前朗讀。 */
+function stopInspectionAnswer() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 
 function speakVoiceAnswer(text) {
@@ -761,7 +802,9 @@ function propellerFinalResult(result) {
     return {
       status: 'CHECK',
       title: '部分槳葉需要人工確認',
-      detail: uncertain.map((item) => `${item.motor}: ${item.errorCode}`).join('；')
+      // adaptPropResult 提供的是 reason（後端 reason_code 的可能原因），
+      // 舊欄位 errorCode 不存在會印出 undefined，這裡改為相容讀取。
+      detail: uncertain.map((item) => `${item.motor}: ${item.reason || item.errorCode || '待確認'}`).join('；')
     };
   }
   return {
@@ -813,7 +856,8 @@ function inspectionAssistantContext(result) {
     errors: checks.filter((item) => item.result !== 'PASS').map((item) => ({
       motor: item.motor,
       status: item.result,
-      error_code: item.errorCode,
+      // 後端 reason / reason_code 對應；errorCode 為舊欄位，保留相容。
+      error_code: item.reason || item.errorCode,
       detected: item.detectedDirection,
       expected: item.expectedDirection,
       blade_face: item.bladeFace
@@ -862,9 +906,14 @@ function renderPropellerInspectionResult(result, includeVisual = false) {
   const fileName = escapeHtml(result.fileName || '未命名檢測檔案');
   const detections = Array.isArray(result.detections) ? result.detections : [];
   const finalResult = propellerFinalResult(result);
+  // DEMO 模擬推論必須在學生視圖明確標示，不得冒充真實 YOLO 測評。
+  const demoBadge = result.simulationMode
+    ? `<div class="demo-simulation-badge"><strong>${escapeHtml(result.resultLabel || 'DEMO 模擬結果')}</strong><span>非真實 YOLO 推論，僅供展示操作流程</span></div>`
+    : '';
   return `
     <article class="result-card inspection-result yolo-result">
       <div class="inspection-summary-panel">
+        ${demoBadge}
         <div class="section-head">
           <span class="tag">${escapeHtml(result.engine)}</span>
           <span class="status ${statusClass(finalResult.status)}">${finalResult.status}</span>
@@ -942,6 +991,79 @@ function fileToDataUrl(file) {
   });
 }
 
+function imageSize(dataUrl) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth || image.width, height: image.naturalHeight || image.height });
+    image.onerror = () => resolve({ width: 0, height: 0 });
+    image.src = dataUrl;
+  });
+}
+
+// ---- Platform Integration：Assess 正式 Vision API ----
+function assessDevMode() {
+  const config = window.FdeRagConfig || {};
+  if (config.ASSESS_DEV_MODE === true) return true;
+  try {
+    return new URLSearchParams(window.location.search).get('dev') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function visionApiBase() {
+  const client = window.FdeVisionClient;
+  if (!client) return null;
+  return client.visionApiBase(window.FdeRagConfig || {}, window.location);
+}
+
+function noModelMessage() {
+  return (window.FdeVisionClient && window.FdeVisionClient.NO_MODEL_MESSAGE)
+    || '目前尚無可用模型，請稍後再試或聯絡教師。';
+}
+
+/** 正式流程不可用時的明確提示：絕不顯示模擬結果當成真實測評。 */
+function unavailableCard(message, detail) {
+  return `
+    <article class="result-card local-service-note">
+      <h3>目前尚無可用模型</h3>
+      <p>${escapeHtml(message || noModelMessage())}</p>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+    </article>
+  `;
+}
+
+/** 尚未選擇檔案時的提示：與「無可用模型」區分，避免誤導學生。 */
+function missingFileCard(message) {
+  return `
+    <article class="result-card local-service-note">
+      <h3>請先選擇照片</h3>
+      <p>${escapeHtml(message || '請先上傳 F450 俯視照片。')}</p>
+    </article>
+  `;
+}
+
+/** DEV MODE 專用：明確標示為模擬結果，不進入正式學生結果。 */
+function devOnlyNotice(detail) {
+  return `
+    <article class="result-card local-service-note">
+      <h3>DEV MODE 模擬結果</h3>
+      <p>此結果僅供開發測試，非真實 AI 測評結果。</p>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+    </article>
+  `;
+}
+
+/** Build 作：主要 CTA 指向 F450 Main-12（可由 PUBLIC_LIVE_COACH_URL 覆寫）。 */
+function renderBuildMain12Entry() {
+  const link = document.getElementById('buildMain12Entry');
+  if (!link) return;
+  const config = window.FdeRagConfig || {};
+  const publicUrl = String(config.PUBLIC_LIVE_COACH_URL || '').trim();
+  const localUrl = String(config.LIVE_COACH_URL || '/live/').trim();
+  link.href = publicUrl || localUrl;
+}
+
 async function runLocalYoloDetection(file) {
   const imageData = await fileToDataUrl(file);
   const response = await fetch(localYoloEndpoint, {
@@ -1005,6 +1127,15 @@ function renderCertificationChecklist() {
 function bindActions() {
   document.addEventListener('click', handleRouteClick);
   document.addEventListener('click', handleFdeColumnClick);
+  // AI 回答語音朗讀（事件委託：結果區會被 innerHTML 重新渲染）。
+  document.addEventListener('click', (event) => {
+    const speakButton = event.target.closest('[data-speak-inspection]');
+    if (speakButton) {
+      speakInspectionAnswer(speakButton);
+      return;
+    }
+    if (event.target.closest('[data-stop-inspection]')) stopInspectionAnswer();
+  });
   window.addEventListener('popstate', syncViewFromLocation);
 
   document.querySelectorAll('[data-task-id]').forEach((button) => {
@@ -1155,60 +1286,121 @@ function bindActions() {
     toggleVoicePlayback();
   });
 
+  // PROP_DIRECTION：正式走 /api/v1/vision/prop-check，不再使用 legacy 本機 YOLO。
   $('#propellerButton').addEventListener('click', async () => {
+    // 新一次檢測開始前，先停止上一段 AI 語音朗讀，避免疊音。
+    stopInspectionAnswer();
     const file = $('#propellerInput').files[0];
+    const client = window.FdeVisionClient;
     if (!file) {
-      const result = simulatePropellerAssessment('demo-f450-check.jpg');
-      $('#propellerResult').innerHTML = renderAssemblyResult(result);
-      appendInspectionKnowledgeAnswer(result);
+      if (assessDevMode()) {
+        const result = simulatePropellerAssessment('demo-f450-check.jpg');
+        $('#propellerResult').innerHTML = renderAssemblyResult(result) + devOnlyNotice();
+        appendInspectionKnowledgeAnswer(result);
+        return;
+      }
+      $('#propellerResult').innerHTML = missingFileCard('請先上傳 F450 俯視照片，再點擊「執行槳葉檢測」。');
       return;
     }
 
-    $('#propellerResult').innerHTML = '<article class="result-card"><p>正在連接本機 YOLOv8 模型並執行檢測...</p></article>';
+    $('#propellerResult').innerHTML = '<article class="result-card"><p>正在執行 AI 槳葉方向檢測...</p></article>';
     try {
-      const result = await runLocalYoloDetection(file);
+      const imageData = await fileToDataUrl(file);
+      const size = await imageSize(imageData);
+      const result = await client.propCheck({
+        base: visionApiBase(),
+        imageDataUrl: imageData,
+        imageWidth: size.width,
+        imageHeight: size.height,
+        fileName: file.name,
+      });
+      // 學生必須看到「自己上傳的那張照片」，否則預覽區只會顯示等待占位文字。
+      result.inputImage = imageData;
       $('#propellerResult').innerHTML = renderYoloAssemblyResult(result);
       appendInspectionKnowledgeAnswer(result);
     } catch (error) {
-      const result = simulatePropellerAssessment(file.name);
-      try {
-        result.inputImage = await fileToDataUrl(file);
-      } catch {
-        result.inputImage = '';
+      if (assessDevMode()) {
+        const result = simulatePropellerAssessment(file.name);
+        try {
+          result.inputImage = await fileToDataUrl(file);
+        } catch {
+          result.inputImage = '';
+        }
+        $('#propellerResult').innerHTML = renderAssemblyResult(result) + devOnlyNotice(error.message);
+        appendInspectionKnowledgeAnswer(result);
+        return;
       }
-      $('#propellerResult').innerHTML = `
-        ${renderAssemblyResult(result)}
-        <article class="result-card local-service-note">
-          <h3>本機模型尚未連線</h3>
-          <p>請先啟動 YOLO 偵測服務；目前畫面先顯示 MVP 模擬結果。</p>
-          <small>${error.message}</small>
-        </article>
-      `;
-      appendInspectionKnowledgeAnswer(result);
+      $('#propellerResult').innerHTML = unavailableCard(error.message, error.detail);
     }
   });
 
+  // FOUR_SIDE_HOVER：正式走 /api/v1/vision/hover-video（後端抽幀 + 分析）。
   $('#hoverButton').addEventListener('click', async () => {
     const file = $('#hoverInput').files[0];
+    const client = window.FdeVisionClient;
     if (!file) {
-      $('#hoverResult').innerHTML = renderHoverResult(simulateHoverAssessment('demo-hover-test.mp4'));
+      if (assessDevMode()) {
+        $('#hoverResult').innerHTML = renderHoverResult(simulateHoverAssessment('demo-hover-test.mp4')) + devOnlyNotice();
+        return;
+      }
+      $('#hoverResult').innerHTML = unavailableCard('請先上傳四面懸停影片；若已上傳仍無法分析，請稍後再試或聯絡教師。');
       return;
     }
 
-    $('#hoverResult').innerHTML = '<article class="result-card"><p>正在連接本機四面懸停模型並執行評分...</p></article>';
+    $('#hoverResult').innerHTML = '<article class="result-card"><p>正在執行 AI 四面懸停分析...</p></article>';
     try {
-      const result = await runLocalHoverScoring(file);
+      const fileData = await fileToDataUrl(file);
+      const result = await client.hoverAnalyze({
+        base: visionApiBase(),
+        fileDataUrl: fileData,
+        fileName: file.name,
+      });
       $('#hoverResult').innerHTML = renderHoverResult(result);
     } catch (error) {
-      $('#hoverResult').innerHTML = `
-        ${renderHoverResult(simulateHoverAssessment(file.name))}
-        <article class="result-card local-service-note">
-          <h3>本機四面懸停模型尚未連線</h3>
-          <p>請先啟動本機 AI 服務；目前畫面先顯示 MVP 模擬結果。</p>
-          <small>${error.message}</small>
-        </article>
-      `;
+      if (assessDevMode()) {
+        $('#hoverResult').innerHTML = renderHoverResult(simulateHoverAssessment(file.name)) + devOnlyNotice(error.message);
+        return;
+      }
+      $('#hoverResult').innerHTML = unavailableCard(error.message, error.detail);
     }
+  });
+}
+
+// 手機導航預設收合；選取任何入口後回到內容畫面。
+function bindMobileMenu() {
+  const toggle = document.getElementById('mobileMenuToggle');
+  const menu = document.getElementById('mobileMenu');
+  const backdrop = document.getElementById('mobileMenuBackdrop');
+  const closeButton = document.getElementById('mobileMenuClose');
+  if (!toggle || !menu) return;
+
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('mobile-menu-open', open);
+    if (backdrop) backdrop.hidden = !open;
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+    document.body.style.overflow = '';
+    // 換頁後把入口群組收回預設狀態，避免下次開選單還留著上一頁展開的痕跡。
+    const portalGroup = document.getElementById('mobilePortalGroup');
+    if (portalGroup) portalGroup.open = false;
+  };
+
+  toggle.addEventListener('click', () => setOpen(menu.hidden));
+  closeButton?.addEventListener('click', () => setOpen(false));
+  backdrop?.addEventListener('click', () => setOpen(false));
+  menu.addEventListener('click', (event) => {
+    if (event.target.closest('a')) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !menu.hidden) setOpen(false);
+  });
+  // 回到桌面寬度時抽屜一定不存在，避免殘留 body overflow:hidden 鎖住捲動。
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768 && !menu.hidden) setOpen(false);
   });
 }
 
@@ -1225,10 +1417,12 @@ renderLearningResources();
 renderFdeColumn();
 renderPracticeResources();
 renderBuildWorkflow();
+renderBuildMain12Entry();
 renderVoiceAssistantPanel();
 renderAssessmentWorkflows();
 renderTeacherDashboard();
 renderCertificationChecklist();
 bindActions();
+bindMobileMenu();
 syncViewFromLocation();
 })();

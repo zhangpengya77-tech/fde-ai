@@ -1,0 +1,129 @@
+{% extends 'learning/base.html' %}
+{% block title %}Golden Test 評估｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_vision_flywheel' %}">返回資料飛輪倉庫</a>
+<section class="page-heading">
+  <p class="eyebrow">教師後台 · Golden Test Center</p>
+  <h1>Golden Test 評估中心</h1>
+  <p class="muted">本頁為<strong>框架預留</strong>：呈現評估所需欄位與前置條件，本輪不執行推論、不載入 <code>.pt</code>、不變更任何模型狀態。</p>
+</section>
+
+<section class="section-block">
+  <h2>選定模型</h2>
+  <ul>
+    <li>Model ID：{{ record.model_id }}</li>
+    <li>學員：{{ record.student.nickname }} · 班級：{{ record.cohort.cohort_id }}</li>
+    <li>模型版本：{{ record.model_version }}</li>
+    <li>檔案參照：{{ record.artifact_reference }}</li>
+    <li>SHA256：{% if record.artifact_sha256 %}{{ record.artifact_sha256|slice:":16" }}…{% else %}—{% endif %}</li>
+    <li>審核狀態：{{ record.review_status }}</li>
+    <li>驗證狀態：{{ record.validation_status }}</li>
+    <li>部署狀態：{{ record.deployment_status }}</li>
+    <li>完整性：{{ record.integrity_status }}{% if record.integrity_checked_at %}（{{ record.integrity_checked_at|date:"Y-m-d H:i" }}）{% endif %}</li>
+  </ul>
+</section>
+
+<section class="section-block">
+  <h2>前置條件</h2>
+  <p class="muted">以下判斷由服務層<strong>自行查詢資料庫</strong>重新驗證（Golden Set 存在、task_id 相容、狀態為 FROZEN、有已確認樣本、四類完整、模型仍為合法候選）；本頁顯示的清單不作為安全判斷依據。</p>
+  {% if ready_blocked_reason %}
+  <p class="muted">{{ ready_blocked_reason }}</p>
+  <button class="button secondary" type="button" disabled aria-disabled="true">執行 Golden Test（尚不可用）</button>
+  {% else %}
+  <p class="muted">前置條件已滿足（模型為候選、且已有通過驗證的已鎖定 Golden Set 版本）。實際執行能力將於後續輪次實作。</p>
+  <button class="button secondary" type="button" disabled aria-disabled="true">執行 Golden Test（尚未實作）</button>
+  {% endif %}
+  <p class="muted">隔離執行環境：{{ runner.environment_label }}（{{ runner.environment }}）</p>
+</section>
+
+<section class="section-block">
+  <h2>測試集完整度</h2>
+  <p class="muted">
+    共 {{ completeness_rows|length }} 個版本；契約版本 {{ contract_version }}。
+    <strong>結構完整</strong>＝四類皆有已確認樣本；
+    <strong>可供正式評估</strong>＝在結構完整之上，另需已鎖定、且每類至少 {{ min_samples_per_class }} 張已確認樣本。
+    每類僅一張照片<strong>不得</strong>宣稱為可靠的正式模型評估集。
+  </p>
+  {% if completeness_rows %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Golden Set</th><th>版本</th><th>狀態</th><th>完整度</th><th>照片 / 已確認</th><th>四類分佈</th><th>Manifest</th><th>說明</th></tr></thead>
+      <tbody>
+      {% for row in completeness_rows %}
+        <tr>
+          <td>{{ row.golden_set_id }}</td>
+          <td>{{ row.version }}</td>
+          <td>{% if row.status == 'FROZEN' %}<strong>FROZEN</strong>{% else %}{{ row.status }}{% endif %}</td>
+          <td>
+            {% if row.level == evaluation_ready_level %}<strong>{{ row.level_label }}</strong>{% else %}{{ row.level_label }}{% endif %}
+          </td>
+          <td>{{ row.sample_count }} / {{ row.confirmed_sample_count }}</td>
+          <td>{% for label, count in row.label_distribution.items %}{{ label }}:{{ count }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+          <td>
+            {% if row.manifest_binding_status == 'BOUND' %}已綁定（{{ row.manifest_sha256|slice:":12" }}…）
+            {% elif row.manifest_binding_status == 'MISMATCH' %}<strong>不一致</strong>
+            {% else %}未綁定{% endif %}
+          </td>
+          <td class="muted">{{ row.reason }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">目前尚無 Golden Set 版本。</p>
+  {% endif %}
+</section>
+
+<section class="section-block">
+  <h2>評估設定</h2>
+  <form method="post" action="">
+    {% csrf_token %}
+    <label>模型版本<input value="{{ record.model_version }}" readonly></label>
+    <label>Golden Set 版本
+      <select name="golden_set_id">
+        {% for item in frozen_golden_sets %}
+        <option value="{{ item.golden_set_id }}">{{ item.golden_set_id }} · {{ item.version }}（{{ item.confirmed_sample_count }} 張已確認）</option>
+        {% empty %}
+        <option value="">尚無已鎖定版本</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>測試照片數
+      <input value="{% if frozen_golden_sets %}{{ frozen_golden_sets.0.confirmed_sample_count }}{% else %}0{% endif %}" readonly>
+    </label>
+    <label>Class Mapping
+      <select name="class_mapping" disabled aria-disabled="true">
+        {% for item in class_mapping %}<option>{{ item }}</option>{% empty %}<option>尚未提供類別對應表</option>{% endfor %}
+      </select>
+    </label>
+    <button class="button primary" type="submit" disabled aria-disabled="true">儲存評估設定（尚未實作）</button>
+  </form>
+</section>
+
+<section class="section-block">
+  <h2>評估指標（預留欄位）</h2>
+  <p class="muted">欄位定義沿用既有 Vision Center 的評估結構，避免出現兩套指標定義。</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>指標</th><th>名稱</th><th>說明</th><th>目前值</th></tr></thead>
+      <tbody>
+      {% for key, name, detail in metrics_placeholder %}
+        <tr><td>{{ key }}</td><td>{{ name }}</td><td>{{ detail }}</td><td class="muted">尚未評估</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section-block">
+  <h2>尚未啟用的功能</h2>
+  <ul class="muted">
+    <li>Golden Test 實際推論：未啟用（本輪只建框架）。</li>
+    <li>YOLO 訓練：未啟用（依指令禁止）。</li>
+    <li>ACTIVE 發布：未啟用（需通過 Golden Test 驗證）。</li>
+    <li>自動寫回 validation_status：未啟用（不得自動變更狀態）。</li>
+    <li>與 Live Backend Vision Center 的資料交換：未啟用（本輪只設計契約，未建立同步機制）。</li>
+  </ul>
+</section>
+{% endblock %}

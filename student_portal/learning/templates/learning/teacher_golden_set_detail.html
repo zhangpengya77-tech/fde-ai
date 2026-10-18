@@ -1,0 +1,112 @@
+{% extends 'learning/base.html' %}
+{% block title %}{{ golden_set.golden_set_id }}｜Golden Set 管理{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_golden_set_list' %}">返回 Golden Set 清單</a>
+<section class="page-heading">
+  <p class="eyebrow">教師後台 · Golden Test Center</p>
+  <h1>{{ golden_set.name }}</h1>
+  <p class="muted"><strong>{{ golden_set.golden_set_id }}</strong> · 版本 {{ golden_set.version }} · 任務 {{ golden_set.task_id }}
+    {% if golden_set.cohort %} · 班級 {{ golden_set.cohort.cohort_id }}{% else %} · 跨班共用{% endif %}
+  </p>
+  <p class="muted">
+    狀態：{% if summary.is_frozen %}<strong>FROZEN（已鎖定，樣本不可變更）</strong>{% else %}DRAFT（草稿，可調整）{% endif %}
+    {% if summary.frozen_at %} · 鎖定於 {{ summary.frozen_at|date:"Y-m-d H:i" }}{% endif %}
+  </p>
+</section>
+
+<section class="section-block">
+  <h2>測試集摘要</h2>
+  <ul class="muted">
+    <li>建立時間：{{ summary.created_at|date:"Y-m-d H:i" }}</li>
+    <li>照片總數：{{ summary.sample_count }}</li>
+    <li>教師已確認：{{ summary.confirmed_sample_count }}</li>
+    <li>四類分佈：{% for label, count in summary.label_distribution.items %}{{ label }} = {{ count }}{% if not forloop.last %}　{% endif %}{% endfor %}</li>
+    <li>尚缺類別：{% if summary.missing_labels %}{{ summary.missing_labels|join:'、' }}{% else %}無（四類齊備）{% endif %}</li>
+    <li>完整度：{{ completeness_label }}（{{ completeness_reason }}）</li>
+    <li>Manifest SHA256：{% if golden_set.manifest_sha256 %}<code>{{ golden_set.manifest_sha256|slice:":24" }}…</code>（{{ manifest_binding_label }}）{% else %}未綁定（鎖定時寫入）{% endif %}</li>
+    <li>Manifest 契約版本：{% if golden_set.manifest_contract_version %}{{ golden_set.manifest_contract_version }}{% else %}—{% endif %}</li>
+  </ul>
+  <p class="muted">鎖定後 Manifest SHA256 即固定；任何樣本或標籤變更都會造成不一致，必須建立新版本。</p>
+</section>
+
+{% if mutation_blocked_reason %}
+<section class="section-block">
+  <p class="muted">{{ mutation_blocked_reason }}</p>
+</section>
+{% else %}
+<section class="section-block">
+  <h2>新增測試照片</h2>
+  <p class="muted">只接受影像檔（jpg / jpeg / png / webp / bmp），單檔上限 10 MB。系統只保存照片與標籤，不載入、不執行任何模型檔案。</p>
+  <form method="post" action="{% url 'learning:teacher_golden_set_add_sample' golden_set.golden_set_id %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <label>測試照片<input type="file" name="image" accept=".jpg,.jpeg,.png,.webp,.bmp" required></label>
+    <label>標籤
+      <select name="label" required>
+        {% for value, text in label_choices %}<option value="{{ value }}">{{ value }} · {{ text }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>標註來源
+      <select name="annotation_source">
+        {% for value, text in annotation_sources %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>教師備註（選填）<input name="note" maxlength="255"></label>
+    <label class="inline-form"><input type="checkbox" name="confirm_now"> 同時標記為教師已確認</label>
+    <button class="button primary" type="submit">新增樣本</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="section-block">
+  <h2>樣本清單（{{ samples|length }}）</h2>
+  {% if samples %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>樣本 ID</th><th>標籤</th><th>標註來源</th><th>確認狀態</th><th>確認人</th><th>確認時間</th><th>備註</th><th>操作</th></tr></thead>
+      <tbody>
+      {% for sample in samples %}
+        <tr>
+          <td>{{ sample.sample_id|slice:":8" }}…</td>
+          <td>{{ sample.label }}</td>
+          <td>{{ sample.get_annotation_source_display }}</td>
+          <td>{% if sample.confirmation_status == 'CONFIRMED' %}<strong>已確認</strong>{% elif sample.confirmation_status == 'REJECTED' %}已退回{% else %}待確認{% endif %}</td>
+          <td>{% if sample.confirmed_by %}{{ sample.confirmed_by.username }}{% else %}—{% endif %}</td>
+          <td>{% if sample.confirmed_at %}{{ sample.confirmed_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td>
+          <td>{{ sample.note|default:'—' }}</td>
+          <td>
+            {% if mutation_blocked_reason %}
+              <span class="muted">已鎖定</span>
+            {% else %}
+              <form method="post" action="{% url 'learning:teacher_golden_sample_confirm' golden_set.golden_set_id sample.sample_id %}" class="inline-form">
+                {% csrf_token %}
+                <button class="button secondary" name="action" value="confirm" type="submit">確認</button>
+                <button class="button secondary" name="action" value="reject" type="submit">退回</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">目前尚無樣本。</p>
+  {% endif %}
+</section>
+
+{% if not summary.is_frozen %}
+<section class="section-block">
+  <h2>鎖定測試集版本</h2>
+  <p class="muted">鎖定後此版本的樣本不可再新增、修改或刪除，確保評估基準固定、結果可重現。四類標籤必須皆有已確認樣本才可鎖定。</p>
+  {% if summary.missing_labels %}
+  <p class="muted">尚缺類別：{{ summary.missing_labels|join:'、' }}，補齊並確認後才可鎖定。</p>
+  <button class="button secondary" type="button" disabled aria-disabled="true">鎖定測試集（尚不可用）</button>
+  {% else %}
+  <form method="post" action="{% url 'learning:teacher_golden_set_freeze' golden_set.golden_set_id %}">
+    {% csrf_token %}
+    <button class="button primary" type="submit">鎖定測試集（FROZEN）</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

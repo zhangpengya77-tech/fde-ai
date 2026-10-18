@@ -101,17 +101,18 @@ class StudentRegistrationForm(forms.Form):
 
     def clean_class_code(self):
         value = self.cleaned_data["class_code"].strip().upper()
+        self._class_code = None
         if not value:
-            self._class_code = None
             return value
         code = ClassCode.objects.filter(code=value, active=True).select_related("cohort").first()
-        if code is None or not code.cohort.active:
-            raise ValidationError("班級代碼無效，請向授課教師確認。")
-        if code.expires_at and code.expires_at <= timezone.now():
-            raise ValidationError("班級代碼已過期，請向授課教師確認。")
-        if code.max_uses is not None and code.use_count >= code.max_uses:
-            raise ValidationError("班級代碼已達使用上限，請向授課教師確認。")
-        self._class_code = code
+        # 教師指令（2026-10-18）：取消班級代碼驗證——代碼無效／過期／達使用上限時
+        # 不再阻擋註冊（舊行為 raise ValidationError「班級代碼無效…」）；
+        # 有有效代碼仍照常建立班級 enrollment（_class_code 保留原值）。
+        if code is not None and code.cohort.active:
+            expired = bool(code.expires_at and code.expires_at <= timezone.now())
+            exhausted = code.max_uses is not None and code.use_count >= code.max_uses
+            if not expired and not exhausted:
+                self._class_code = code
         return value
 
     @transaction.atomic
@@ -167,7 +168,25 @@ class TeacherIdentityForm(forms.Form):
 
 
 class StudentLoginForm(AuthenticationForm):
-    username = forms.EmailField(label="電子郵件")
+    # 2026-10-10 P0 修復（iPhone Safari 登入無反應）：
+    # 原本使用 forms.EmailField → 渲染為 <input type="email" required>。
+    # 行動版 Safari 的 HTML5 原生表單驗證在格式判定失敗時會「靜默阻擋送出」：
+    # 畫面完全不動、無跳轉、無任何錯誤訊息 —— 與實機回報症狀完全一致。
+    # 改為 type="text"（inputmode="email" 仍保留行動版郵件鍵盤），
+    # 並在伺服器端 clean() 做格式檢查，安全性不降低、體驗不再被原生驗證擋死。
+    username = forms.CharField(
+        label="電子郵件",
+        max_length=150,
+        widget=forms.TextInput(
+            attrs={
+                "autocomplete": "username",
+                "autocapitalize": "none",
+                "autocorrect": "off",
+                "spellcheck": "false",
+                "inputmode": "email",
+            }
+        ),
+    )
 
     def clean_username(self):
         return self.cleaned_data["username"].strip().lower()
@@ -177,6 +196,9 @@ class StudentLoginForm(AuthenticationForm):
         email = cleaned_data.get("username")
         password = cleaned_data.get("password")
         if not email or not password:
+            return cleaned_data
+        if "@" not in email or email.startswith("@") or email.endswith("@"):
+            self.add_error(None, "電子郵箱或密碼錯誤，請重新確認。")
             return cleaned_data
 
         user_model = get_user_model()
@@ -243,7 +265,26 @@ class StudentLoginForm(AuthenticationForm):
 
 
 class TeacherLoginForm(AuthenticationForm):
-    username = forms.CharField(label="教師帳號")
+    # 2026-10-18 P0 修復（iPhone 區網登入按了沒反應）：沿用 2026-10-10
+    # 學生登入的行動版硬化組合。教師帳號本質是 email，若日後有人改回
+    # EmailField（type="email" required）會重現「Safari 原生驗證靜默阻擋
+    # 送出：畫面不動、無跳轉、無錯誤」；此處固定 type="text" + inputmode="email"
+    # （保留行動版郵件鍵盤），並補 autocomplete/autocapitalize/autocorrect/
+    # spellcheck/enterkeyhint，讓鍵盤 Go 鍵可直接送出、輸入階段不被自動改寫。
+    username = forms.CharField(
+        label="教師帳號",
+        max_length=150,
+        widget=forms.TextInput(
+            attrs={
+                "autocomplete": "username",
+                "autocapitalize": "none",
+                "autocorrect": "off",
+                "spellcheck": "false",
+                "inputmode": "email",
+                "enterkeyhint": "next",
+            }
+        ),
+    )
 
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
@@ -370,6 +411,22 @@ class GrowthRecordForm(forms.Form):
             }
         ),
     )
+
+
+class GrowthModelForm(forms.Form):
+    # R07 AI Vision 僅接受既有 MODEL 證據所使用的 PyTorch 權重檔。
+    model_file = forms.FileField(
+        label="上傳訓練模型",
+        widget=forms.ClearableFileInput(attrs={"accept": ".pt"}),
+    )
+
+    def clean_model_file(self):
+        upload = self.cleaned_data["model_file"]
+        if Path(str(upload.name)).suffix.lower() != ".pt":
+            raise ValidationError("模型格式無效，請上傳 best.pt。")
+        if upload.size > 100 * 1024 * 1024:
+            raise ValidationError("模型檔案過大，單一檔案不得超過 100 MB。")
+        return upload
 
 
 SURVEY_LIKERT_CHOICES = [(value, str(value)) for value in range(1, 6)]

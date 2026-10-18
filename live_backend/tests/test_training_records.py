@@ -14,7 +14,7 @@ from app.training_records import (
 
 class TrainingRecordContractTests(unittest.TestCase):
     def test_evidence_contract_supports_all_required_types_and_fields(self):
-        required = {"PHOTO", "VIDEO", "SCREENSHOT", "CHECKLIST", "VISION_RESULT", "TEACHER_REVIEW", "MP_RESULT", "QGC_RESULT", "FLIGHT_LOG_REFERENCE", "FLIGHT_HEALTH_REFERENCE", "STUDENT_REFLECTION"}
+        required = {"PHOTO", "VIDEO", "SCREENSHOT", "CHECKLIST", "VISION_RESULT", "TEACHER_REVIEW", "MP_RESULT", "QGC_RESULT", "FLIGHT_LOG_REFERENCE", "FLIGHT_HEALTH_REFERENCE", "STUDENT_REFLECTION", "YOLO_MODEL"}
         self.assertEqual({item.value for item in EvidenceType}, required)
         evidence = EvidenceRecord.create(
             student_id="student-1", session_id="session-1", course_id="F450_AI_TRAINING",

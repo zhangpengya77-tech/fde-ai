@@ -1,0 +1,248 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}槳葉方向辨識｜FDE-AI{% endblock %}
+{% block page_styles %}
+<style>
+  .scan-shell { max-width: 720px; margin: 0 auto; }
+  .scan-state { border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+  .scan-state.blocked { background: #fdecec; border: 1px solid #e7a6a6; color: #7a1f1f; }
+  .scan-state.waiting { background: #fff6e5; border: 1px solid #e6c07a; color: #7a5a12; }
+  .scan-state.ready { background: #eaf7ec; border: 1px solid #9ac9a4; color: #1f5c2c; }
+  .scan-preview { position: relative; display: inline-block; max-width: 100%; }
+  .scan-preview img { max-width: 100%; height: auto; border-radius: 8px; display: block; }
+  .scan-box { position: absolute; border: 2px solid #d23b3b; border-radius: 4px; }
+  .scan-box span { position: absolute; top: -1.35em; left: -2px; background: #d23b3b; color: #fff;
+                   font-size: 11px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+  .motor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .motor-card { border: 1px solid #d7dbe0; border-radius: 8px; padding: 10px; background: #fff; }
+  .motor-card dt { font-size: 12px; color: #6b7280; }
+  .motor-card dd { margin: 0 0 6px 0; font-weight: 600; }
+  .verdict { font-size: 22px; font-weight: 700; padding: 12px; border-radius: 8px; text-align: center; }
+  .verdict.PASS { background: #eaf7ec; color: #1f5c2c; }
+  .verdict.NG { background: #fdecec; color: #a01f1f; }
+  .verdict.INSUFFICIENT_DATA { background: #f2f4f7; color: #4b5563; }
+  .explain-box { background: #f7f9fc; border-left: 4px solid #4b7bec; padding: 12px 14px; border-radius: 6px; }
+  .hidden { display: none !important; }
+  @media (max-width: 520px) { .motor-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:growth_record_detail' enrollment.pk 'R07' %}">返回 R07 成長紀錄</a>
+<section class="page-heading">
+  <p class="eyebrow">R07 · PROP_DIRECTION_V1</p>
+  <h1>槳葉方向與正反面辨識</h1>
+  <p class="muted">{{ enrollment.student.nickname }} · {{ enrollment.cohort_id }}</p>
+</section>
+
+<div class="scan-shell">
+
+  <section class="section-block">
+    <h2>目前狀態</h2>
+    {% if gate.can_infer %}
+      <div class="scan-state ready"><strong>{% if gate.model.simulation_mode %}DEMO 模擬推論{% else %}可推論{% endif %}</strong>：隔離推論環境已就緒。</div>
+    {% elif gate.state == 'WAITING_FOR_MODEL' %}
+      <div class="scan-state waiting">
+        <strong>WAITING_FOR_MODEL｜等待合格模型</strong>
+        <p class="muted">{{ gate.reason }}</p>
+        <p class="muted">{{ gate.detail }}</p>
+      </div>
+    {% else %}
+      <div class="scan-state blocked">
+        <strong>BLOCKED｜{{ gate.state_label }}</strong>
+        <p class="muted">{{ gate.reason }}</p>
+        <p class="muted">{{ gate.detail }}</p>
+      </div>
+    {% endif %}
+    {% if gate.model.simulation_mode %}
+      <p class="muted"><strong>目前為 DEMO 模擬模式：</strong>結果只驗證網站操作鏈路，不代表真實 YOLO 準確率。</p>
+    {% else %}
+      <p class="muted">本頁不會顯示模擬的檢測框、可信度或 PASS 結果。</p>
+    {% endif %}
+  </section>
+
+  {% if error %}<div class="scan-state blocked"><strong>{{ error }}</strong></div>{% endif %}
+
+  <section class="section-block">
+    <h2>上傳照片</h2>
+    <form method="post" enctype="multipart/form-data" id="scan-form">{% csrf_token %}
+      <label for="id_photo">選擇一張俯視照片</label>
+      <input id="id_photo" name="photo" type="file" accept="image/*" capture="environment" required>
+      <div id="preview-wrap" class="{% if not uploaded_data_url %}hidden{% endif %}" style="margin-top:10px;">
+        <div class="scan-preview" id="preview">{% if uploaded_data_url %}<img src="{{ uploaded_data_url }}" alt="已上傳的待辨識照片">{% endif %}</div>
+      </div>
+
+      <h3>這張照片中四個馬達的位置</h3>
+      <p class="muted">選填。請先勾選照片中可辨識的馬達，系統才能依 F450 規則判定 PASS／NG。</p>
+      <div class="motor-grid">
+        {% for motor in motor_ids %}
+        <fieldset class="motor-card" data-motor-field="{{ motor }}">
+          <legend><strong>{{ motor }}</strong></legend>
+          <label><input type="radio" name="motor_{{ motor }}" value="" checked> 未拍攝／不確定</label>
+        </fieldset>
+        {% endfor %}
+      </div>
+
+      <p style="margin-top:14px;">
+        <button class="button primary" type="submit" id="scan-submit"
+          {% if not gate.can_infer %}disabled aria-disabled="true"{% endif %}>開始辨識</button>
+        {% if not gate.can_infer %}<span class="muted">（目前無法執行推論，按鈕已停用）</span>{% endif %}
+      </p>
+    </form>
+  </section>
+
+  <section class="section-block">
+    <h2>已確認的安裝規則</h2>
+    <ul>
+      {% for motor, item in rule_table.expected.items %}
+      <li><strong>{{ motor }}</strong>（{{ item.position }}）：方向 <strong>{{ item.direction }}</strong>、槳面 <strong>{{ item.face }}</strong> 面朝上。</li>
+      {% endfor %}
+    </ul>
+    <p class="muted">模型類別契約：{{ rule_table.class_contract|join:'、' }}。規則版本：{{ rule_table.template_id }}。</p>
+  </section>
+
+  <section class="section-block">
+    <h2>辨識框（BBOX / Class / Confidence）</h2>
+    {% if result and result.state == 'READY' %}
+      {% if result.simulation_mode %}<div class="scan-state waiting"><strong>{{ result.result_label|default:'DEMO 模擬結果' }}</strong>：未載入學員的測試 best.pt。</div>{% endif %}
+      {% if result.detections %}
+      <ul>
+        {% for det in result.detections %}
+        <li>{{ det.class_name }} · 可信度 {{ det.confidence }} · 框 {{ det.box|join:',' }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">未偵測到任何目標。</p>{% endif %}
+    {% else %}
+      <p class="muted">尚未產生辨識結果。只有真實推論完成後，此區才會顯示檢測框、類別與可信度。</p>
+    {% endif %}
+  </section>
+
+  <section class="section-block">
+    <h2>判定結果（PASS / NG / 無法判定）</h2>
+    {% if result and result.state == 'READY' %}
+      <div class="verdict {{ result.evaluation.status }}">
+        {% if result.evaluation.status == 'PASS' %}PASS｜安裝正確
+        {% elif result.evaluation.status == 'NG' %}NG｜安裝有誤
+        {% else %}無法判定{% endif %}
+      </div>
+      <div class="motor-grid" style="margin-top:12px;">
+        {% for check in result.evaluation.checks %}
+        <dl class="motor-card">
+          <dt>{{ check.motor }}（{{ check.position }}）</dt>
+          <dd>{{ check.result }}</dd>
+          <dt>偵測</dt><dd>{{ check.detected_class|default:'—' }}{% if check.confidence %} · {{ check.confidence }}{% endif %}</dd>
+          <dt>應為</dt><dd>{{ check.expected_direction }} · {{ check.expected_face }} 面</dd>
+        </dl>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">尚未產生判定結果。未取得真實辨識結果時，一律不顯示 PASS 或 NG。</p>
+    {% endif %}
+  </section>
+
+  <section class="section-block">
+    <h2>AI 解釋（繁體中文）</h2>
+    {% if result and result.state == 'READY' %}
+    <div class="explain-box">
+      <p><strong>{{ result.explanation.headline }}</strong></p>
+      <ul>{% for line in result.explanation.details %}<li>{{ line }}</li>{% endfor %}</ul>
+      <p class="muted">{{ result.explanation.safety_note }}</p>
+    </div>
+    {% else %}
+    <p class="muted">尚未產生解釋。沒有真實辨識結果時，不會呼叫大模型編造結論。</p>
+    {% endif %}
+    <p style="margin-top:10px;">
+      <button class="button secondary" type="button" id="tts-play" {% if not result or result.state != 'READY' %}disabled aria-disabled="true"{% endif %}>語音朗讀結果</button>
+      <button class="button secondary" type="button" id="tts-stop" {% if not result or result.state != 'READY' %}disabled aria-disabled="true"{% endif %}>停止朗讀</button>
+    </p>
+    <p class="muted" id="tts-note">使用瀏覽器內建語音，未修改 Live Coach 語音系統。</p>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  var input = document.getElementById('id_photo');
+  var wrap = document.getElementById('preview-wrap');
+  var preview = document.getElementById('preview');
+  if (input) {
+    input.addEventListener('change', function () {
+      preview.innerHTML = '';
+      if (!input.files || !input.files[0]) { wrap.classList.add('hidden'); return; }
+      var url = URL.createObjectURL(input.files[0]);
+      var img = document.createElement('img');
+      img.src = url; img.alt = '待辨識照片預覽';
+      preview.appendChild(img);
+      wrap.classList.remove('hidden');
+    });
+  }
+
+  // 只有真實推論結果（state === 'READY'）才會畫出檢測框，絕不產生模擬框。
+  {% if result and result.state == 'READY' %}
+  {{ result.detections|json_script:"prop-detections" }}
+  {% endif %}
+  var detectionNode = document.getElementById('prop-detections');
+  var detectionData = detectionNode ? JSON.parse(detectionNode.textContent) : null;
+  if (detectionData && Array.isArray(detectionData) && preview) {
+    var baseImg = preview.querySelector('img');
+    if (baseImg) {
+      var draw = function () {
+        var nw = baseImg.naturalWidth || 1, nh = baseImg.naturalHeight || 1;
+        var sx = baseImg.clientWidth / nw, sy = baseImg.clientHeight / nh;
+        preview.querySelectorAll('.scan-box').forEach(function (n) { n.remove(); });
+        detectionData.forEach(function (det) {
+          if (!det || !det.box || det.box.length !== 4) { return; }
+          var b = document.createElement('div');
+          b.className = 'scan-box';
+          b.style.left = (det.box[0] * sx) + 'px';
+          b.style.top = (det.box[1] * sy) + 'px';
+          b.style.width = Math.max(1, (det.box[2] - det.box[0]) * sx) + 'px';
+          b.style.height = Math.max(1, (det.box[3] - det.box[1]) * sy) + 'px';
+          var tag = document.createElement('span');
+          tag.textContent = det.class_name + ' ' + det.confidence;
+          b.appendChild(tag);
+          preview.appendChild(b);
+        });
+      };
+      if (baseImg.complete) { draw(); } else { baseImg.addEventListener('load', draw); }
+      window.addEventListener('resize', draw);
+    }
+
+    // 以真實偵測結果填入馬達選項（僅在偵測到目標時）。
+    detectionData.forEach(function (det, index) {
+      var cards = document.querySelectorAll('[data-motor-field]');
+      cards.forEach(function (card) {
+        var motor = card.getAttribute('data-motor-field');
+        var label = document.createElement('label');
+        var radio = document.createElement('input');
+        radio.type = 'radio'; radio.name = 'motor_' + motor; radio.value = String(index);
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode(' 第 ' + (index + 1) + ' 框 · ' + det.class_name + ' ' + det.confidence));
+        card.appendChild(label);
+      });
+    });
+  }
+
+  // 語音朗讀：使用既有瀏覽器能力（SpeechSynthesis），不接觸 Live Coach 語音系統。
+  var ttsText = "{{ result.explanation.tts_text|default:''|escapejs }}";
+  var play = document.getElementById('tts-play');
+  var stop = document.getElementById('tts-stop');
+  if (play) {
+    play.addEventListener('click', function () {
+      if (!('speechSynthesis' in window)) {
+        document.getElementById('tts-note').textContent = '此瀏覽器不支援語音朗讀。';
+        return;
+      }
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(ttsText);
+      u.lang = 'zh-TW'; u.rate = 0.95;
+      window.speechSynthesis.speak(u);
+    });
+  }
+  if (stop) {
+    stop.addEventListener('click', function () {
+      if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -23,13 +23,9 @@
     {% endif %}
   </nav>
 </div>
-<nav class="fde-public-sections" aria-label="平台学习分类">
-  <a href="/platform/courses">學</a>
-  <a href="/platform/simulator">練</a>
-  <a href="/platform/f450">作</a>
-  <a href="/platform/eagle">測</a>
-  <a href="/platform/github">證</a>
-  <a href="/platform/results">歷屆學員成果</a>
-  <a href="/platform/teacher">教師復核參照</a>
-</nav>
+<!-- 五階段主導航（teacher 2026-10-15 最終裁決）：平台左側 #moduleNav（學→練→做→測→證）為全站唯一
+     五階段主導航，「證」→ Django 真實 R01–R08 成長日誌（/student/growth/）。
+     帳號列與 Django topbar 的重複「五階段學習工作台」連結已移除；
+     Django 工作台頁面 /student/courses/<pk>/learning-path/ 與路由保留，由學員首頁課程卡按鈕進入
+     （test_dashboard_offers_workbench_entry 保護該入口）。 -->
 {{ platform_context|json_script:"fde-public-context" }}

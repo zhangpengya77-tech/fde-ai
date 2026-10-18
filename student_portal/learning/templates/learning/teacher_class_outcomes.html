@@ -1,0 +1,132 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/teacher-outcomes.css' %}">{% endblock %}
+{% block title %}班級學習成果總覽｜教師後台{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+<section class="page-heading">
+  <p class="eyebrow">P3 · 班級學習成果</p>
+  <h1>班級學習成果總覽</h1>
+  <p class="muted">資料取自既有成長紀錄（R01–R08）、任務進度與五階段進度；狀態以教師複核結果為準，已提交不等於已透過。複核請進入學員詳情頁操作，本頁不提供新的複核功能。</p>
+</section>
+
+{# P4.1：所有條件（班級／排序／紀錄／類型／狀態／進度）可同時使用；各表單以隱藏欄位攜帶其他有效條件 #}
+<form method="get" class="filter-bar">
+  <label>班級<select name="cohort"><option value="">全部班級</option>{% for cohort in cohorts %}<option value="{{ cohort.cohort_id }}" {% if selected_cohort == cohort.cohort_id %}selected{% endif %}>{{ cohort.name }}（{{ cohort.cohort_id }}）</option>{% endfor %}</select></label>
+  <input type="hidden" name="sort" value="{{ pending_sort }}">
+  <input type="hidden" name="p_record" value="{{ record_filter }}">
+  <input type="hidden" name="p_type" value="{{ type_filter }}">
+  <input type="hidden" name="p_status" value="{{ status_filter }}">
+  <input type="hidden" name="s_state" value="{{ progress_filter }}">
+  <button class="button primary" type="submit">篩選</button><a class="button quiet" href="{% url 'learning:teacher_class_outcomes' %}">清除</a>
+</form>
+
+{% for class_row in class_rows %}
+<section class="section-block tco-class" id="cohort-{{ class_row.cohort.cohort_id }}" aria-label="{{ class_row.cohort.name }} 班級成果">
+  <div class="section-heading">
+    <h2>{{ class_row.cohort.name }}<span class="muted">（{{ class_row.cohort.cohort_id }}）</span></h2>
+    <span class="tco-badge">學員 {{ class_row.student_count }} 人</span>
+  </div>
+
+  <div class="tco-stats">
+    <div class="tco-stat"><span class="tco-stat-num">{{ class_row.student_count }}</span><span class="tco-stat-label">班級學員（人）</span></div>
+    <div class="tco-stat tco-stat-pending"><span class="tco-stat-num">{{ class_row.pending_count }}</span><span class="tco-stat-label">待複核成果（筆）</span></div>
+    <div class="tco-stat tco-stat-warn"><span class="tco-stat-num">{{ class_row.not_submitted_count }}</span><span class="tco-stat-label">尚未提交（人）</span></div>
+    <div class="tco-stat tco-stat-done"><span class="tco-stat-num">{{ class_row.all_submitted_count }}</span><span class="tco-stat-label">已完成八項（人）</span></div>
+  </div>
+
+  {# P5-A：統一待複核口徑。卡片為「成果筆數」，學員篩選為「人數」，兩者共用同一工作項目集合。 #}
+  <p class="tco-stat-note">
+    統計口徑：待複核成果＝尚未有有效教師複核的提交成果（單位：<strong>筆</strong>），
+    來源為{% for source in class_row.pending_source_counts %}{{ source.source_label }} {{ source.count }} 筆{% if not forloop.last %} · {% endif %}{% endfor %}；
+    另有需要補充 {{ class_row.needs_revision_count }} 筆（教師已複核並判定需補件）。
+    學員進度篩選「有待複核成果」為涉及<strong>人數</strong>（目前 {{ class_row.pending_student_count }} 人），
+    與本卡片共用同一工作項目集合，僅單位不同。
+  </p>
+
+  <h3 class="tco-subheading">待複核成果（{{ class_row.pending_count }} 筆）{% if class_row.pending_filtered %}<span class="muted">· 目前篩選顯示 {{ class_row.pending_rows|length }} 項</span>{% endif %}</h3>
+  <form method="get" class="sort-bar">
+    <label>紀錄<select name="p_record"><option value="">全部紀錄</option>{% for slot in record_slot_ids %}<option value="{{ slot }}" {% if record_filter == slot %}selected{% endif %}>{{ slot }}</option>{% endfor %}</select></label>
+    <label>類型<select name="p_type">{% for key, label in pending_type_options %}<option value="{{ key }}" {% if type_filter == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>狀態<select name="p_status">{% for key, label in pending_status_options %}<option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>排序<select name="sort">{% for key, label in pending_sort_options %}<option value="{{ key }}" {% if pending_sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <input type="hidden" name="cohort" value="{{ selected_cohort }}">
+    <input type="hidden" name="s_state" value="{{ progress_filter }}">
+    <button class="button quiet" type="submit">套用</button>
+  </form>
+  {% if class_row.pending_rows %}
+  <ul class="tco-pending">
+    {% for item in class_row.pending_rows %}
+    <li class="tco-pending-item">
+      <div class="tco-pending-copy">
+        <strong>{{ item.code }}｜{{ item.title }}</strong>
+        <span class="tco-pending-state tco-pending-state-{{ item.status_key }}">{{ item.status_label }}</span>
+        <span class="tco-pending-source">來源：{{ item.source_label }}</span>
+        <span class="muted">{{ item.student.nickname }}（{{ item.student.public_user_id }}）{% if item.submitted_at %} · 提交於 {{ item.submitted_at|date:'Y-m-d H:i' }}{% else %} · 無提交時間{% endif %}</span>
+      </div>
+      <a class="button secondary" href="{{ item.url }}">前往複核</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">{% if class_row.pending_count %}沒有符合目前篩選條件的待複核成果。{% else %}目前沒有待複核的成果。{% endif %}</p>
+  {% endif %}
+
+  <h3 class="tco-subheading">學員進度列表</h3>
+  <form method="get" class="sort-bar">
+    <label>學員<select name="s_state">{% for key, label in progress_filter_options %}<option value="{{ key }}" {% if progress_filter == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <input type="hidden" name="cohort" value="{{ selected_cohort }}">
+    <input type="hidden" name="sort" value="{{ pending_sort }}">
+    <input type="hidden" name="p_record" value="{{ record_filter }}">
+    <input type="hidden" name="p_type" value="{{ type_filter }}">
+    <input type="hidden" name="p_status" value="{{ status_filter }}">
+    <button class="button quiet" type="submit">套用</button>
+  </form>
+  <ul class="tco-progress">
+    {% for row in class_row.visible_student_rows %}
+    <li class="tco-progress-item tco-progress-{{ row.progress_state }}">
+      <div class="tco-progress-main">
+        <strong>{{ row.student.public_user_id }}</strong><span class="muted">{{ row.student.nickname }}</span>
+        <span class="tco-progress-state">{% if row.progress_state == 'none' %}尚未提交{% elif row.progress_state == 'complete' %}已全數提交{% else %}進行中{% endif %}</span>
+      </div>
+      <div class="tco-progress-nums"><span class="tco-progress-count">{{ row.submitted_count }} / 8</span><span class="muted">待複核 {{ row.pending_count }} 筆{% if row.needs_revision_count %} · 需補充 {{ row.needs_revision_count }} 筆{% endif %}</span></div>
+      <a class="button secondary" href="{{ row.detail_url }}">查看詳情</a>
+    </li>
+    {% empty %}
+    <li class="empty-state">{% if class_row.student_rows %}沒有符合篩選條件的學員。{% else %}此班級目前尚無在學學員。{% endif %}</li>
+    {% endfor %}
+  </ul>
+
+  <h3 class="tco-subheading">R01–R08 詳細矩陣</h3>
+  <div class="table-wrap">
+    <table class="tco-matrix">
+      <thead><tr><th>FDE ID</th><th>暱稱</th>{% for slot in "12345678" %}<th>R0{{ forloop.counter }}</th>{% endfor %}<th>已提交</th><th>已複核</th><th>待複核（筆）</th><th></th></tr></thead>
+      <tbody>
+        {% for row in class_row.student_rows %}
+        <tr>
+          <td data-label="FDE ID">{{ row.student.public_user_id }}</td>
+          <td data-label="暱稱">{{ row.student.nickname }}</td>
+          {% for cell in row.slot_cells %}<td data-label="{{ cell.slot_id }}"><span class="status status-{{ cell.status_key }}">{{ cell.status_label }}</span></td>{% endfor %}
+          <td data-label="已提交" class="tco-count-cell">{{ row.submitted_count }} / 8</td>
+          <td data-label="已複核" class="tco-count-cell">{{ row.reviewed_count }} / 8</td>
+          <td data-label="待複核" class="tco-count-cell">{{ row.pending_count }}</td>
+          <td data-label="詳情"><a href="{{ row.detail_url }}">查看</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="13">此班級目前尚無在學學員。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="tco-subheading">五階段學習概況</h3>
+  <div class="phase-summary">
+    {% for stage in class_row.stage_rows %}
+    <div><span>{{ stage.character }}｜{{ stage.title }}</span><strong>完成 {{ stage.done }} / {{ stage.total }} 人</strong></div>
+    {% endfor %}
+  </div>
+</section>
+{% empty %}
+<p class="empty-state">沒有可查看的班級；若剛被加入班級，請聯繫管理員開通教師權限。</p>
+{% endfor %}
+{% endblock %}

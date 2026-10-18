@@ -1,0 +1,208 @@
+/* 班級成果展示與簡報播放模式（P7-A／P7-B／P7-C，2026-10-13 教師指令）
+   沿用既有學員平台設計語彙（tech 青、深藍、淺灰邊框）。
+   僅供本頁使用，不改動既有樣式檔。
+   簡報模式為純前端切頁（無 PPTX／影片／AI 文案產生），支援 16:9 投影。 */
+
+.sc-root{display:block}
+.sc-screen-only{display:block}
+
+/* ── 工具列 ─────────────────────────────────────────────────────── */
+.sc-toolbar{margin:0 0 14px}
+.sc-toolbar-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0 14px}
+.sc-toolbar-row label{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#3d5464}
+.sc-toolbar-row select{max-width:320px}
+
+/* ── 隱私列（P7-C） ─────────────────────────────────────────────── */
+.sc-privacy-bar{display:grid;gap:10px;margin:0 0 16px;padding:12px 14px;background:#fbfdfe;border:1px solid #d9e1e6;border-left:4px solid #1c7c4a;border-radius:10px}
+.sc-privacy-note{margin:0;font-size:12.5px;line-height:1.7;color:#3d5464}
+.sc-privacy-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sc-mode-chip{display:inline-block;padding:3px 10px;border:1px solid #cfd9e0;background:#eef4f8;font-size:12.5px;font-weight:700;color:#12334a;white-space:nowrap}
+.sc-mode-chip.is-named{background:#fff4e0;border-color:#e2c78a;color:#8a6d1a}
+.sc-mode-chip.is-anon{background:#eaf5ee;border-color:#a9cfba;color:#1c7c4a}
+.sc-identify-notice{margin:0;font-size:12px;line-height:1.7;color:#8a6d1a;background:#fffaf0;border:1px dashed #e2c78a;padding:8px 10px}
+.sc-identify-scope{margin:0;font-size:12px;line-height:1.7;color:#536875}
+
+/* ── 舞台與投影片 ───────────────────────────────────────────────── */
+/* P8-C：grid 子項預設 min-width:auto，長內容（如超長教師評語）會以
+   min-content 把整個舞台撐開，造成整頁橫向溢出。
+   以 grid-template-columns:minmax(0,1fr) 讓投影片可收縮至容器寬度。 */
+.sc-stage{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.sc-slide{margin:0;padding:18px 20px;background:#fff;border:1px solid #d9e1e6;border-radius:10px;min-width:0}
+.sc-h2{margin:0 0 12px;font-size:18px;color:#12334a;border-left:4px solid #1c7c4a;padding-left:10px}
+.sc-sub{margin:-6px 0 12px;font-size:13px;color:#536875}
+.sc-note{margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#536875}
+.sc-empty{margin:6px 0;font-size:13px;color:#8a97a1}
+.sc-chip{display:inline-block;margin:2px 6px 2px 0;padding:2px 9px;background:#eef4f8;border:1px solid #cfd9e0;font-size:12.5px;font-weight:650;color:#12334a;white-space:nowrap}
+
+/* 封面 */
+.sc-slide-cover{text-align:center;padding:34px 20px;background:#f7fbfd;border-top:5px solid #12334a}
+.sc-brand-mark{display:inline-block;margin:0 0 10px;padding:8px 16px;background:#12334a;color:#fff;font-size:22px;font-weight:800;letter-spacing:2px}
+.sc-brand-name{margin:0 0 20px;font-size:13.5px;color:#3d5464}
+.sc-cover-title{margin:0 0 8px;font-size:30px;color:#12334a;letter-spacing:2px}
+.sc-cover-cohort{margin:0 0 12px;font-size:19px;font-weight:700;color:#1c7c4a}
+.sc-cover-meta{margin:0 0 16px;font-size:13px;color:#536875}
+.sc-cover-foot{margin:0;font-size:12px;color:#8a97a1}
+
+/* 統計卡 */
+.sc-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sc-stat{display:grid;gap:4px;padding:12px 14px;background:#fbfdfe;border:1px solid #d9e1e6;border-radius:10px}
+.sc-stat-num{font-size:26px;font-weight:800;line-height:1.1;color:#12334a}
+.sc-stat-label{font-size:12.5px;color:#536875}
+
+/* 表格 */
+/* P8-C：改為固定表格佈局。自動佈局下，長欄位（如教師評語）會以 max-content
+   撐寬整個表格，再把外層 grid 投影片一起撐開；固定佈局讓列寬只由本檔決定，
+   內容一律在儲存格內換行（配合下方的 overflow-wrap）。 */
+.sc-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.sc-table th,.sc-table td{border:1px solid #d9e1e6;padding:8px 10px;font-size:13px;text-align:left;vertical-align:top}
+.sc-table th{background:#f4f7f9;color:#12334a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* P8-C：長篇教師評語或長欄位不得溢出畫面，一律允許斷行。
+   1. 基礎樣式表有全域 `table{white-space:nowrap}`，會被儲存格繼承而使長評語
+      完全不換行（P8-C 實測：評語欄 scrollWidth 4534px / clientWidth 484px）。
+      本頁顯式覆寫為 normal，不改動該全域規則，以免影響其他頁面。
+   2. 僅用 overflow-wrap:anywhere（不疊加 legacy 的 word-break:break-word，
+      該值不影響 min-content 計算，反而讓長內容更難收斂）。 */
+.sc-table td{color:#3d5464;overflow-wrap:anywhere;white-space:normal}
+.sc-table-feedback td[data-label="教師評語"]{min-width:0}
+/* 教師回饋表列寬：讓評語取得最大寬度，其餘欄位維持可讀 */
+.sc-table-feedback th:nth-child(1){width:11%}
+.sc-table-feedback th:nth-child(2){width:10%}
+.sc-table-feedback th:nth-child(3){width:22%}
+.sc-table-feedback th:nth-child(4){width:12%}
+.sc-table-feedback th:nth-child(5){width:45%}
+
+/* 學員作品 */
+.sc-privacy-hint{margin:0 0 12px;padding:10px 12px;background:#fbfdfe;border:1px dashed #cfd9e0;font-size:12.5px;line-height:1.7;color:#3d5464}
+.sc-works{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sc-work{margin:0;padding:14px 16px;background:#fbfdfe;border:1px solid #d9e1e6;border-radius:10px}
+.sc-work-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.sc-work-head strong{color:#12334a;font-size:15px}
+.sc-work-name{font-size:14px;font-weight:700;color:#1c7c4a}
+.sc-work-code{font-size:12px;color:#8a97a1}
+.sc-work-nums{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:#3d5464;margin-bottom:8px}
+.sc-work-nums strong{color:#12334a}
+.sc-slot-strip{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.sc-slot{display:inline-block;padding:2px 8px;border:1px solid #d9e1e6;font-size:12px;font-weight:650;color:#3d5464;background:#fff}
+.sc-evidence{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0}
+.sc-evidence-item{margin:0;padding:8px;background:#fff;border:1px solid #d9e1e6}
+.sc-evidence-item figcaption{font-size:12px;color:#536875;margin-bottom:6px;word-break:break-word}
+.sc-evidence-item a{font-size:12.5px;color:#0f5c8c}
+.sc-evidence-thumb{display:block;width:100%;height:auto;max-height:200px;object-fit:contain;background:#f4f7f9}
+
+/* 結語 */
+.sc-slide-closing{text-align:center;padding:30px 20px;background:#f7fbfd;border-top:5px solid #1c7c4a}
+.sc-closing-title{margin:0 0 14px;font-size:24px;color:#12334a;letter-spacing:2px}
+.sc-closing-lead{margin:0 0 14px;font-size:15px;line-height:1.8;color:#3d5464}
+.sc-closing-note{margin:0 0 10px;font-size:12.5px;line-height:1.7;color:#536875}
+.sc-closing-brand{margin:16px 0 0;font-size:13px;font-weight:700;color:#12334a}
+
+/* ── 簡報控制列 ─────────────────────────────────────────────────── */
+.sc-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin:16px 0 8px}
+.sc-progress{font-size:14px;font-weight:700;color:#12334a;min-width:64px;text-align:center}
+.sc-hint{margin:0 0 20px;font-size:12px;color:#8a97a1;text-align:center}
+
+/* ══ 簡報播放模式（P7-B） ═════════════════════════════════════════
+   以 16:9 letterbox 舞台呈現；純 CSS 切頁，不重新載入頁面。 */
+body.sc-presenting{overflow:hidden;background:#0b1220}
+body.sc-presenting .topbar,
+body.sc-presenting .footer{display:none !important}
+
+body.sc-presenting .sc-stage{
+  position:fixed;inset:0;z-index:9000;display:grid;place-items:center;gap:0;
+  background:#0b1220;margin:0;
+}
+body.sc-presenting .sc-slide{display:none}
+body.sc-presenting .sc-slide.is-active{
+  display:flex;flex-direction:column;justify-content:center;
+  width:min(100vw,calc(100vh * 16 / 9));
+  height:min(100vh,calc(100vw * 9 / 16));
+  margin:0;border:0;border-radius:0;overflow:auto;
+  padding:clamp(16px,3.2vmin,44px);
+  font-size:clamp(11px,1.55vmin,19px);
+  box-shadow:0 0 0 1px #1d2b3a;
+}
+body.sc-presenting .sc-slide.is-active .sc-h2{font-size:clamp(15px,2.5vmin,30px)}
+body.sc-presenting .sc-slide.is-active .sc-stat-num{font-size:clamp(18px,4.2vmin,52px)}
+body.sc-presenting .sc-slide.is-active .sc-stat-label{font-size:clamp(10px,1.35vmin,16px)}
+body.sc-presenting .sc-slide.is-active .sc-cover-title{font-size:clamp(22px,5.2vmin,64px)}
+body.sc-presenting .sc-slide.is-active .sc-cover-cohort{font-size:clamp(14px,2.8vmin,34px)}
+body.sc-presenting .sc-slide.is-active .sc-brand-mark{font-size:clamp(15px,2.6vmin,34px)}
+body.sc-presenting .sc-slide.is-active .sc-closing-title{font-size:clamp(18px,4vmin,48px)}
+body.sc-presenting .sc-slide.is-active .sc-closing-lead{font-size:clamp(11px,1.9vmin,22px)}
+body.sc-presenting .sc-slide.is-active .sc-table th,
+body.sc-presenting .sc-slide.is-active .sc-table td{font-size:clamp(10px,1.45vmin,17px);padding:clamp(4px,0.9vmin,12px)}
+body.sc-presenting .sc-slide.is-active .sc-note,
+body.sc-presenting .sc-slide.is-active .sc-empty,
+body.sc-presenting .sc-slide.is-active .sc-privacy-hint{font-size:clamp(9px,1.25vmin,15px)}
+body.sc-presenting .sc-slide.is-active .sc-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(6px,1.2vmin,16px)}
+body.sc-presenting .sc-slide.is-active .sc-works{grid-template-columns:repeat(auto-fill,minmax(clamp(200px,26vmin,340px),1fr));gap:clamp(6px,1.2vmin,16px)}
+body.sc-presenting .sc-slide.is-active .sc-slide-cover{padding:clamp(18px,4vmin,60px)}
+body.sc-presenting .sc-controls{position:fixed;left:0;right:0;bottom:0;z-index:9100;margin:0;padding:8px 12px;background:rgba(11,18,32,.92);border-top:1px solid #1d2b3a}
+body.sc-presenting .sc-controls .button{background:#16283c;color:#e8f1f7;border-color:#2a4560}
+body.sc-presenting .sc-progress{color:#e8f1f7}
+body.sc-presenting .sc-hint{display:none}
+
+/* ── 手機（iPhone Safari 390px 起）：單欄、不橫向溢出 ───────────── */
+@media (max-width:680px){
+  /* 標籤改為上下堆疊，避免文字被壓成直排 */
+  .sc-toolbar-row label{width:100%;display:grid;gap:6px;align-items:stretch}
+  .sc-toolbar-row select,.sc-toolbar-row .button{max-width:100%;width:100%;min-height:44px}
+  .sc-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .sc-stat-num{font-size:22px}
+  .sc-works{grid-template-columns:1fr}
+  .sc-slide{padding:14px}
+  /* 表格轉卡片：避免 390px 橫向溢出 */
+  .sc-table thead{display:none}
+  .sc-table,.sc-table tbody,.sc-table tr,.sc-table td{display:block;width:100%}
+  .sc-table tr{margin:0 0 10px;padding:10px;background:#fbfdfe;border:1px solid #d9e1e6}
+  .sc-table td{display:grid;gap:2px;padding:4px 2px;border:0}
+  .sc-table td::before{content:attr(data-label);color:#536875;font-size:12px;font-weight:700}
+  .sc-table-feedback td[data-label="教師評語"]{min-width:0}
+  /* 本頁自身控件：手機提供足夠點按高度（僅本頁生效） */
+  .back-link,.sc-evidence-item a{display:inline-flex;align-items:center;min-height:44px}
+  /* 手機簡報：豎屏不放 16:9 letterbox（會過小），改為填滿螢幕 */
+  body.sc-presenting .sc-slide.is-active{
+    width:100vw;height:100vh;
+    padding:14px 14px 68px;
+    font-size:15px;
+    justify-content:flex-start;
+  }
+  body.sc-presenting .sc-slide.is-active .sc-h2{font-size:19px}
+  body.sc-presenting .sc-slide.is-active .sc-stat-num{font-size:26px}
+  body.sc-presenting .sc-slide.is-active .sc-stat-label{font-size:12.5px}
+  body.sc-presenting .sc-slide.is-active .sc-cover-title{font-size:28px}
+  body.sc-presenting .sc-slide.is-active .sc-cover-cohort{font-size:18px}
+  body.sc-presenting .sc-slide.is-active .sc-closing-title{font-size:22px}
+  body.sc-presenting .sc-slide.is-active .sc-closing-lead{font-size:14px}
+  body.sc-presenting .sc-slide.is-active .sc-table th,
+  body.sc-presenting .sc-slide.is-active .sc-table td{font-size:13px;padding:4px 2px}
+  body.sc-presenting .sc-slide.is-active .sc-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.sc-presenting .sc-slide.is-active .sc-works{grid-template-columns:1fr}
+  body.sc-presenting .sc-controls{gap:8px;padding:8px}
+  body.sc-presenting .sc-controls .button{flex:1 1 auto;min-height:44px}
+}
+
+/* ── 列印：只印一般檢視的內容（簡報模式不列印） ──────────────────── */
+@page{size:A4;margin:12mm}
+@media print{
+  .topbar,.footer,.sc-screen-only,.sc-toolbar,.sc-controls,.sc-hint,.button,.back-link,.page-heading{display:none !important}
+  html,body{background:#fff !important}
+  body.sc-presenting .sc-stage{position:static;background:#fff}
+  body.sc-presenting .sc-slide{display:block !important;width:auto;height:auto;box-shadow:none;padding:0}
+  .sc-stage{display:block;gap:0}
+  .sc-slide{border:1px solid #bbb;border-radius:0;margin:0 0 8mm;padding:0 0 4mm;break-inside:auto}
+  .sc-h2{border-left:3px solid #1c7c4a;font-size:13pt;margin-bottom:3mm}
+  .sc-table{width:100%;border-collapse:collapse;table-layout:fixed}
+  .sc-table thead{display:table-header-group}
+  .sc-table tr{break-inside:avoid;page-break-inside:avoid}
+  .sc-table th,.sc-table td{border:1px solid #999;padding:2mm 2.4mm;font-size:9pt;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+  .sc-table th{background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sc-work{break-inside:avoid;page-break-inside:avoid;border:1px solid #999;border-radius:0;background:#fff;margin-bottom:4mm}
+  .sc-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:2mm}
+  .sc-stat{border:1px solid #999;border-radius:0;background:#fff;padding:2mm 2.5mm}
+  .sc-stat-num{font-size:14pt}
+  .sc-stat-label{font-size:8pt}
+  .sc-evidence{grid-template-columns:repeat(3,minmax(0,1fr));gap:2mm}
+  .sc-evidence-thumb{max-height:36mm}
+  a{text-decoration:none;color:#000}
+}

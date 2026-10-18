@@ -5,9 +5,11 @@
 {% block content %}
 <section class="page-heading"><p class="eyebrow">FDE-AI 個人學習入口</p><h1>你好，{{ profile.nickname }}</h1><p class="muted">你的永久 FDE ID：<strong>{{ profile.public_user_id }}</strong></p></section>
 <section class="section-block">
-  <div class="section-heading"><h2>我的課程</h2><a class="button primary" href="{% url 'learning:join_cohort' %}">加入課程</a></div>
+  <div class="section-heading"><h2>我的課程</h2>{# 教師 2026-10-17 指示：先收掉「加入課程」入口；先以現有入班流程為主 #}<a class="button primary is-hidden" href="{% url 'learning:join_cohort' %}">加入課程</a></div>
   <div class="course-list">
-    {% for row in enrollment_rows %}<article class="course-row"><div><p class="eyebrow">{{ row.enrollment.cohort_id }}</p><h3>{{ row.enrollment.cohort.name }}</h3><p class="muted">成長記錄已提交 {{ row.submitted_count }} / {{ row.record_count }} · 教師已複核 {{ row.reviewed_count }} / {{ row.record_count }}</p></div><div class="course-actions"><a class="button primary" href="{% url 'learning:student_course_dashboard' row.enrollment.pk %}">我的學習成長日誌</a></div></article>
+    {# 教師 2026-10-17 指示：學生直接從「我的學習成長日誌」進入 R01–R08，跳過中間層。
+       「五階段學習工作台」按鈕先隱藏（不刪除），保留路由與頁面供日後取回。 #}
+    {% for row in enrollment_rows %}<article class="course-row"><div><p class="eyebrow">{{ row.enrollment.cohort_id }}</p><h3>{{ row.enrollment.cohort.name }}</h3><p class="muted">成長記錄已提交 {{ row.submitted_count }} / {{ row.record_count }} · 教師已複核 {{ row.reviewed_count }} / {{ row.record_count }}</p></div><div class="course-actions"><a class="button primary is-hidden" href="{% url 'learning:student_learning_path' row.enrollment.pk %}">五階段學習工作台</a><a class="button secondary" href="{% url 'learning:student_growth_dashboard' row.enrollment.pk %}">我的學習成長日誌</a></div></article>
     {% empty %}<p class="empty-state">尚未加入課程。選擇開放課程即可直接加入。</p>{% endfor %}
   </div>
 </section>

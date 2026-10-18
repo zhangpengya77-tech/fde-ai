@@ -220,6 +220,65 @@ PUBLIC_AI_TRUSTED_PROXY_IPS = frozenset(
     for ip in os.environ.get('DJANGO_PUBLIC_AI_TRUSTED_PROXY_IPS', '').split(',')
     if ip.strip()
 )
+VISION_SUBMISSION_API_BASE_URL = os.environ.get(
+    'DJANGO_VISION_SUBMISSION_API_BASE_URL', 'http://127.0.0.1:8030'
+).strip()
+VISION_SUBMISSION_API_TIMEOUT_SECONDS = max(
+    1, int(os.environ.get('DJANGO_VISION_SUBMISSION_API_TIMEOUT_SECONDS', '30'))
+)
+VISION_DEMO_SIMULATION_ENABLED = os.environ.get(
+    'DJANGO_VISION_DEMO_SIMULATION_ENABLED', ''
+).strip() == '1'
+
+# --- 外部模組接口層（I1，2026-10-13 教師總指令第四、五、六節）-------------------
+# 由教師在其他專案獨立開發的模組（MP 地面站／HQGC 考核／F450 3D 數位孿生）。
+# 未設定時一律 DISABLED → 工作台只顯示「待接入」，不產生連結、不建假資料。
+# 可用環境變數逐一模組覆寫（ENABLED=1 且提供 URL 才視為可用）：
+#   FDE_MODULE_F450_DIGITAL_TWIN_ENABLED / FDE_MODULE_F450_DIGITAL_TWIN_URL
+#   FDE_MODULE_MP_GROUND_STATION_ENABLED / FDE_MODULE_MP_GROUND_STATION_URL
+#   FDE_MODULE_HQGC_ASSESSMENT_ENABLED  / FDE_MODULE_HQGC_ASSESSMENT_URL
+# 注意：entry_url 只能是基礎網址，不得夾帶登入 Token、學生個資等敏感參數。
+FDE_EXTERNAL_MODULES = {
+    module_id: {
+        'enabled': os.environ.get('FDE_MODULE_{}_ENABLED'.format(module_id), '') == '1',
+        'entry_url': os.environ.get('FDE_MODULE_{}_URL'.format(module_id), '').strip(),
+    }
+    for module_id in ('F450_DIGITAL_TWIN', 'MP_GROUND_STATION', 'HQGC_ASSESSMENT')
+}
+
+# 外部模組健康探測（判定「服務暫時不可用」的真實依據）。
+# 僅在模組 enabled 且已設定 entry_url 時才會發出探測；預設配置下完全不探測。
+FDE_EXTERNAL_MODULE_PROBE_TIMEOUT_SECONDS = float(
+    os.environ.get('FDE_EXTERNAL_MODULE_PROBE_TIMEOUT_SECONDS', '1.5')
+)
+FDE_EXTERNAL_MODULE_PROBE_TTL_SECONDS = float(
+    os.environ.get('FDE_EXTERNAL_MODULE_PROBE_TTL_SECONDS', '30')
+)
+
+# I4-C（2026-10-13）：外部模組入口的**可信主機白名單**（明確允許者優先）。
+# 介面層預設拒絕指向內網／迴環／link-local／保留位址與雲端 metadata 的 URL；
+# 若教師的獨立模組確實部署於內網（例如 MP 地面站在 192.168.x.x），
+# 必須在此明確列出可信主機，介面層才會接受該入口。
+# 格式：以逗號分隔的精確主機名或後綴樣式（"*.school.edu.tw"）。
+# 例：FDE_EXTERNAL_MODULE_ALLOWED_HOSTS=mp.school.edu.tw,*.hqgc.internal
+# I5-B（2026-10-14）：此清單為**主機名信任清單**，非空時具有強制性；
+# 但它**不再授予放行內網位址的能力**（見下方 ALLOW_PRIVATE_HOSTS）。
+FDE_EXTERNAL_MODULE_ALLOWED_HOSTS = [
+    item.strip()
+    for item in os.environ.get('FDE_EXTERNAL_MODULE_ALLOWED_HOSTS', '').split(',')
+    if item.strip()
+]
+
+# I5-B（2026-10-14）：明確允許指向「內網／迴環／link-local／保留位址」的外部模組服務。
+# **僅接受精確主機名或精確 IP，不支援通配符**——避免 "*.school.edu.tw" 這類樣式
+# 自動放行所有解析到內網的位址（R2）。
+# metadata／localhost 主機永遠拒絕，列入本清單也無效。
+# 例：FDE_EXTERNAL_MODULE_ALLOW_PRIVATE_HOSTS=mp.school.edu.tw,192.168.1.50
+FDE_EXTERNAL_MODULE_ALLOW_PRIVATE_HOSTS = [
+    item.strip().lower().rstrip('.')
+    for item in os.environ.get('FDE_EXTERNAL_MODULE_ALLOW_PRIVATE_HOSTS', '').split(',')
+    if item.strip()
+]
 
 MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT') or BASE_DIR / 'private_media')
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2_500_000

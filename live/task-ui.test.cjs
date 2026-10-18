@@ -226,7 +226,7 @@ test('mobile student UI provides current step, safety acknowledgement, and one p
 
 test('student mode leads with plain-language coaching actions', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  for (const text of ['F450 AI 实训助教', 'AI 陪你一步一步完成 F450 实训', '现在要做什么', '为什么要这样做', 'AI 实训助教', '开启实训摄像头', '开启语音助教', '更多方式 / 备用方式', '当前操作', '留下学习证据', '我的学习总结', '教师复核状态']) {
+  for (const text of ['F450 AI 实训助教', 'AI 陪你一步一步完成 F450 实训', '现在要做什么', '为什么要这样做', 'AI 实训助教', '开启实训摄像头', '開始詢問 AI', '暫停語音', '无法使用语音？', '当前操作', '留下学习证据', '我的学习总结', '教师复核状态']) {
     assert.match(html, new RegExp(text));
   }
 });

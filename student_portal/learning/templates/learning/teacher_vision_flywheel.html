@@ -1,0 +1,51 @@
+{% extends 'learning/base.html' %}
+{% block title %}資料飛輪倉庫｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_vision_model_list' %}">返回進階模型管理</a>
+<section class="page-heading"><p class="eyebrow">教師後台</p><h1>資料飛輪倉庫</h1><p class="muted">彙整學員模型的版本、來源與驗證脈絡。本頁僅呈現框架與已入庫紀錄，不發布任何學生下載資源。</p><p class="muted">Golden Test 測試集管理：<a href="{% url 'learning:teacher_golden_set_list' %}">Golden Set 管理中心</a></p></section>
+
+<section class="section-block"><h2>已入庫模型（{{ record_count }}）</h2>
+<p class="muted">僅顯示您有權限的班級。入庫不等於已驗證或已啟用；本輪僅限原班級範圍，不開放跨班級發布。</p>
+{% if records %}
+<form method="post" action="{% url 'learning:teacher_vision_integrity_check_all' %}">{% csrf_token %}
+<button class="button secondary" type="submit">檢查全部檔案完整性</button>
+</form>
+<p class="muted">檢查只讀取快照檔位元組並重算雜湊，不載入模型，亦不會刪除、覆蓋或自動啟用任何檔案。</p>
+{% endif %}
+<div class="table-wrap"><table><thead><tr><th>Model ID</th><th>學員</th><th>班級</th><th>版本</th><th>父版本</th><th>任務</th><th>快照</th><th>完整性</th><th>審核</th><th>驗證</th><th>訓練用途</th><th>部署</th><th>操作</th></tr></thead><tbody>
+{% for record in records %}<tr><td>{{ record.model_id|slice:":8" }}…</td><td>{{ record.student.nickname }}</td><td>{{ record.cohort_id }}</td><td>{{ record.model_version }}</td><td>{% if record.parent_record %}{{ record.parent_record.model_id|slice:":8" }}…{% else %}—{% endif %}</td><td>{{ record.task_id }}</td><td>{% if record.has_snapshot %}{{ record.snapshot_sha256|slice:":12" }}…{% else %}未建立{% endif %}</td><td>{{ record.integrity_status }}{% if record.integrity_checked_at %}<br><span class="muted">{{ record.integrity_checked_at|date:"Y-m-d H:i" }}</span>{% endif %}</td><td>{{ record.review_status }}</td><td>{{ record.validation_status }}</td><td>{{ record.training_usage }}</td><td>{{ record.deployment_status }}</td><td><form method="post" action="{% url 'learning:teacher_vision_model_integrity_check' record.model_id %}">{% csrf_token %}<button class="button secondary" type="submit">檢查完整性</button></form><a class="button secondary" href="{% url 'learning:teacher_golden_test_page' record.model_id %}">Golden Test</a></td></tr>
+{% empty %}<tr><td colspan="13">目前尚無已入庫模型。</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="muted">DEMO_TEST_ONLY 樣本不會列為可發布訓練資源，也不會成為 ACTIVE。完整性為「檔案不存在」或「內容已變動」時，該模型不得作為訓練基底或發布。</p></section>
+
+<section class="section-block"><h2>快照保存</h2>
+<p class="muted">入庫時於倉庫建立獨立副本，原始學員檔案不搬移、不刪除。副本以內容雜湊命名，相同內容不會重複保存。</p>
+<ul class="muted">
+<li>倉庫快照檔案數：{{ snapshot_usage.file_count }}</li>
+<li>快照總位元組：{{ snapshot_usage.total_bytes }}</li>
+<li>未完成暫存檔：{{ snapshot_usage.temp_file_count }}</li>
+</ul></section>
+
+<section class="section-block"><h2>飛輪欄位規格</h2>
+<p class="muted">審核、驗證、訓練用途與部署為四個獨立維度，不合併為單一狀態欄位。</p>
+<div class="table-wrap"><table><thead><tr><th>模型</th><th>班級</th><th>版本</th><th>父版本</th><th>任務</th><th>審核</th><th>驗證</th><th>訓練用途</th><th>部署</th><th>發布範圍</th></tr></thead><tbody>
+{% for row in rows %}<tr><td>{{ row.artifact_reference }}</td><td>{{ row.cohort_id }}</td><td>{{ row.model_version }}</td><td>{{ row.parent_model_id|default:'—' }}</td><td>{{ row.task_id }}</td><td>{{ row.review_status }}</td><td>{{ row.validation_status }}</td><td>{{ row.training_usage }}</td><td>{{ row.deployment_status }}</td><td>{% if row.publication_scope %}{{ row.publication_scope|join:'、' }}{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10">目前沒有可入庫的模型。</td></tr>{% endfor %}
+</tbody></table></div></section>
+
+<section class="section-block"><h2>已預留欄位</h2><ul class="muted">
+<li>Model ID / Task ID / Student / Cohort</li>
+<li>Model Version / Parent Model ID / Dataset Version</li>
+<li>Class Mapping（學員類別索引 → 平台類別）</li>
+<li>best.pt 參照 / data.yaml 參照（可為空）</li>
+<li>Teacher Review / Validation History / Golden Test Result</li>
+<li>Publication Scope / Created / Updated Time</li>
+</ul></section>
+
+<section class="section-block"><h2>尚未啟用的功能</h2><ul class="muted">
+<li>下一屆學生取得訓練資源：未啟用，不發布學生下載資源。</li>
+<li>跨班級發布：未啟用，本輪僅限原班級範圍。</li>
+<li>Golden Test 執行與 ACTIVE 發布：未啟用（無隔離執行環境）。</li>
+<li>隔離環境：{{ runner.environment_label }}（{{ runner.environment }}）。</li>
+</ul></section>
+{% endblock %}

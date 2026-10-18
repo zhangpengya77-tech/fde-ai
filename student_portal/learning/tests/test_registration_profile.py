@@ -128,6 +128,26 @@ class RegistrationProfileTests(TestCase):
         self.assertContains(response, "不是一個可用的選項")
         self.assertFalse(StudentProfile.objects.filter(email="no-class@example.com").exists())
 
+    def test_registration_succeeds_without_valid_class_code(self):
+        """教師指令 2026-10-18：取消班級代碼驗證——DB 無有效代碼仍可完成註冊，僅不建立 enrollment。"""
+        self.assertFalse(ClassCode.objects.filter(code="2026-02").exists())
+        response = self.client.post(
+            reverse("learning:register"),
+            {
+                "nickname": "No Valid Code",
+                "email": "no-valid-code@example.com",
+                "class_code": "2026-02",
+                "training_source": "in_service",
+                "project_direction": "",
+                "password1": self.password,
+                "password2": self.password,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        profile = StudentProfile.objects.get(email="no-valid-code@example.com")
+        self.assertFalse(Enrollment.objects.filter(student=profile).exists())
+        self.assertFalse(profile.user.is_active)
+
     def test_registration_class_code_is_a_fixed_select_with_2026_default(self):
         form = StudentRegistrationForm()
 

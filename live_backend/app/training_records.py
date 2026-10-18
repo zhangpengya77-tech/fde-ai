@@ -26,6 +26,26 @@ class EvidenceType(str, Enum):
     FLIGHT_LOG_REFERENCE = "FLIGHT_LOG_REFERENCE"
     FLIGHT_HEALTH_REFERENCE = "FLIGHT_HEALTH_REFERENCE"
     STUDENT_REFLECTION = "STUDENT_REFLECTION"
+    YOLO_MODEL = "YOLO_MODEL"  # 學生上傳 best.pt 等 YOLO 模型檔案（P1-1）
+
+
+class ModelTaskType(str, Enum):
+    """AI 目標檢測任務類型；本輪只啟用 PROP_DETECTION，其餘預留。"""
+    PROP_DETECTION = "PROP_DETECTION"       # 槳葉方向與正反面辨識（CW_F / CCW_F / CW_B / CCW_B）
+    HOVER_DETECTION = "HOVER_DETECTION"     # 四面懸停（預留）
+    MOTOR_DETECTION = "MOTOR_DETECTION"     # 馬達檢測（預留）
+    GPS_DETECTION = "GPS_DETECTION"         # GPS 檢測（預留）
+    ESC_DETECTION = "ESC_DETECTION"         # ESC 檢測（預留）
+    FRAME_DETECTION = "FRAME_DETECTION"     # 機架檢測（預留）
+    BATTERY_DETECTION = "BATTERY_DETECTION" # 電池檢測（預留）
+
+
+class ModelSubmissionStatus(str, Enum):
+    """YOLO 模型提交在教師審核流程中的狀態。"""
+    UPLOADED = "UPLOADED"                           # 學生已上傳
+    PENDING_REVIEW = "PENDING_REVIEW"               # 等待教師審核
+    APPROVED_FOR_BENCHMARK = "APPROVED_FOR_BENCHMARK"  # 教師核准，可進入下一輪 Benchmark
+    REJECTED = "REJECTED"                           # 教師退回
 
 
 class ReflectionSource(str, Enum):
@@ -86,6 +106,22 @@ class ExternalCapabilityLink:
     @classmethod
     def existing_flight_health(cls, result_reference: str | None = None):
         return cls("EXISTING_FLIGHT_HEALTH", "/flight-health/", "EXTERNAL_ROUTE", "flight-health/", result_reference)
+
+    @classmethod
+    def existing_mp12(cls, result_reference: str | None = None):
+        """Platform Integration：MP-12 外部既有能力的 Integration Contract / Placeholder。
+
+        只宣告 MP-12 為外部既有能力，由 Integration Adapter 接入。
+        本輪不複製整個 repo、不合併分支、不重新開發 MP-12（不得觸碰 D:\\FDE-AI-UAS-MP12）。
+
+        MP-12 REAL INTEGRATION Phase 1（Backend）後：
+        MP-12 已確認為 Main-12 TASK_07 的深度子模組（parent_task_id = TASK_07），
+        其 Catalog / State / Teacher Gate 以 file-level adoption 複用（app/mp12_*.py），
+        經由 TrainingProgress.mp12_state() 與 /training/mp12/{subtask_id}/... 對外提供。
+        integration_entry 仍留空：MP-12 不是對外獨立路由，而是 TASK_07 的子模組，
+        入口即 TASK_07 本身；欄位值維持 EXTERNAL_ADAPTER_PENDING 以保有 Phase 1 凍結契約。
+        """
+        return cls("EXISTING_MP12", "", "EXTERNAL_ADAPTER_PENDING", "mp12/", result_reference)
 
 
 @dataclass(frozen=True)

@@ -9,11 +9,11 @@ Automated tests prove software workflow only. Motor, ESC, soldering, continuity,
 
 | Check | Desktop Chrome | iPhone Safari | Android Chrome |
 |---|---|---|---|
-| 12 Task list and current task | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| 12 Task list and current task | PASS | NOT_TESTED | NOT_TESTED |
 | Current-step navigation | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
 | Future task read-only / blocked message | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
-| Camera permission/start/stop/WAITING | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
-| Manual AI Check | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
+| Camera permission/start/stop/WAITING | FAIL | NOT_TESTED | NOT_TESTED |
+| Manual AI Check | BLOCKED_BY_CAMERA | NOT_TESTED | NOT_TESTED |
 | Evidence file selection/save | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
 | Student reflection | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
 | Teacher pending/approve/reject | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
@@ -22,6 +22,20 @@ Automated tests prove software workflow only. Motor, ESC, soldering, continuity,
 | Touch targets and narrow layout | PENDING_MANUAL_ACCEPTANCE | NOT_TESTED | NOT_TESTED |
 
 Desktop Chrome acceptance was deferred on 2026-10-01 because the user was away from the test computer. No automated result is counted as a real-browser PASS.
+
+## Desktop Chrome result — 2026-10-01
+
+- Device: Dell Windows laptop
+- Browser: Desktop Chrome
+- 12 Tasks / 0 / 12 / Task 01 / Backend ONLINE / Vision ONLINE: **PASS**
+- Camera start: **FAIL**
+- Camera ACTIVE / WAITING: **FAIL**
+- Manual AI Check: **BLOCKED_BY_CAMERA**
+- Stop / restart: **NOT_TESTED**
+- Browser error: NotFoundError: Requested device not found
+- Device selector: No camera found
+- Windows diagnostic: Logi C310 and Osmo Camera-class entries reported Unknown; OpenCV DirectShow, Media Foundation, and default probes returned no readable device/frame.
+- Classification: environment/device availability failure; no Camera or Live Session code change was made.
 
 ## Manual procedure
 

@@ -1,0 +1,192 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}五階段學習工作台｜{{ enrollment.cohort.name }}{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/growth-records.css' %}"><link rel="stylesheet" href="{% static 'learning/learning-path.css' %}">{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:student_course_dashboard' enrollment.pk %}">返回課程</a>
+<section class="page-heading">
+  <p class="eyebrow">{{ enrollment.cohort.name }} · {{ profile.public_user_id }}</p>
+  <h1>五階段學習工作台</h1>
+  <p class="muted">{{ profile.nickname }} · 專案方向：{{ direction_label }}</p>
+  <p class="muted">學習路徑：學 → 練 → 做 → 測 → 證。所有進度與狀態皆取自你的真實學習紀錄，未完成的功能會標示「規劃中」。</p>
+</section>
+
+<section class="growth-summary" aria-label="成長紀錄進度">
+  <div><span>成長紀錄已提交</span><strong>{{ growth_submitted_count }} / {{ growth_record_count }}</strong></div>
+  <div><span>教師已複核</span><strong>{{ growth_reviewed_count }} / {{ growth_record_count }}</strong></div>
+</section>
+
+<nav class="lp-path" aria-label="五階段學習路徑">
+  {% for stage in stage_rows %}
+    <a class="lp-path-step{% if current_stage and stage.key == current_stage.key %} is-current{% endif %}{% if stage.phase.status == 'completed' %} is-done{% endif %}" href="#stage-{{ stage.key }}" data-stage-link="{{ stage.key }}">
+      <span class="lp-path-character">{{ stage.character }}</span>
+      <span class="lp-path-title">{{ stage.title }}</span>
+      <span class="lp-path-state">{% if current_stage and stage.key == current_stage.key %}目前階段{% elif stage.phase.status == 'completed' %}已完成{% else %}{{ stage.phase_status_label|default:'未開始' }}{% endif %}</span>
+    </a>{% if not forloop.last %}<span class="lp-path-arrow" aria-hidden="true">→</span>{% endif %}
+  {% endfor %}
+</nav>
+<p class="lp-switch-note muted">點選上方「學、練、做、測、證」可切換階段；同一時間只顯示一個階段的完整內容。</p>
+
+{% if current_stage %}
+<section class="lp-current" aria-label="目前學習階段">
+  <p class="eyebrow">目前學習階段</p>
+  <h2>{{ current_stage.character }}｜{{ current_stage.title }}</h2>
+  <p class="muted">階段狀態：{{ current_stage.phase_status_label|default:'未開始' }}</p>
+  <a class="button primary" href="#stage-{{ current_stage.key }}" data-stage-link="{{ current_stage.key }}">前往「{{ current_stage.character }}」階段任務</a>
+</section>
+{% else %}
+<section class="lp-current" aria-label="目前學習階段">
+  <p class="eyebrow">目前學習階段</p>
+  <h2>本期五階段皆已完成</h2>
+  <p class="muted">可到成長日誌查看八項紀錄與教師複核結果。</p>
+  <a class="button primary" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">我的學習成長日誌</a>
+</section>
+{% endif %}
+
+{% for stage in stage_rows %}
+<section class="section-block lp-stage{% if not current_stage or stage.key != current_stage.key %} is-collapsed{% endif %}" id="stage-{{ stage.key }}" data-stage-section="{{ stage.key }}" aria-label="{{ stage.character }} 階段：{{ stage.title }}"{% if not current_stage or stage.key != current_stage.key %} hidden{% endif %}>
+  <div class="section-heading">
+    <h2><span class="lp-stage-character">{{ stage.character }}</span>{{ stage.title }}</h2>
+    {% if stage.phase %}<span class="status status-{{ stage.phase.status }}">{{ stage.phase_status_label }}</span>{% endif %}
+  </div>
+  <p class="muted lp-stage-summary">{{ stage.summary }}</p>
+
+  {% if stage.growth_rows %}
+  <h3 class="lp-subheading">成長紀錄任務</h3>
+  <div class="lp-card-grid">
+    {% for record in stage.growth_rows %}
+    <article class="lp-card">
+      <div class="lp-card-heading"><span class="growth-slot">{{ record.slot_id }}</span><span class="status status-{{ record.status_key }}">{{ record.status_label }}</span></div>
+      <h4>{{ record.title }}</h4>
+      {% if record.description %}<p class="lp-card-desc">{{ record.description }}</p>{% endif %}
+      {% if record.requirements %}
+      <div class="lp-card-detail">
+        <p class="lp-card-label">完成要求</p>
+        <ul class="lp-card-list">{% for item in record.requirements %}<li>{{ item }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% if record.evidence %}
+      <div class="lp-card-detail">
+        <p class="lp-card-label">需附證據</p>
+        <ul class="lp-card-list">{% for item in record.evidence %}<li>{{ item }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% if record.review_label %}<p class="lp-card-review">教師複核：{{ record.review_label }}{% if record.teacher_score != None %} · {{ record.teacher_score }} 分{% endif %}</p>{% endif %}
+      <a class="button secondary full" href="{{ record.url }}">進入紀錄</a>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if stage.task_rows %}
+  <h3 class="lp-subheading">任務進度</h3>
+  <div class="lp-card-grid">
+    {% for task in stage.task_rows %}
+    <article class="lp-card">
+      <div class="lp-card-heading"><span class="task-id">{{ task.display_id }}</span><span class="status status-{{ task.status_key }}">{{ task.status_label }}</span></div>
+      <h4>{{ task.title }}</h4>
+      {% if task.description %}<p class="lp-card-desc">{{ task.description }}</p>{% endif %}
+      {% if task.requirements %}
+      <div class="lp-card-detail">
+        <p class="lp-card-label">任務要求</p>
+        <ul class="lp-card-list">{% for item in task.requirements %}<li>{{ item }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% if task.evidence_required %}
+      <div class="lp-card-detail">
+        <p class="lp-card-label">需附證據</p>
+        <ul class="lp-card-list">{% for item in task.evidence_required %}<li>{{ item }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+      {% if task.record_slot %}
+      <p class="lp-card-linkline">對應成長紀錄：<a href="{{ task.record_url }}"><span class="growth-slot">{{ task.record_slot }}</span> {{ task.record_title }}</a><span class="muted">（{{ task.record_status_label }}）</span></p>
+      {% elif task.related_records %}
+      <p class="lp-card-linkline">相關成長紀錄：
+        {% for related in task.related_records %}<a href="{{ related.url }}"><span class="growth-slot">{{ related.slot_id }}</span> {{ related.title }}</a>{% if not forloop.last %}、{% endif %}{% endfor %}
+      </p>
+      {% endif %}
+      {% if task.map_note %}<p class="lp-card-note">{{ task.map_note }}</p>{% endif %}
+      {% if task.teacher_note %}<p class="lp-card-review">教師回饋：{{ task.teacher_note }}</p>{% endif %}
+      <a class="button secondary full" href="{{ task.url }}">查看任務</a>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if stage.entries %}
+  <h3 class="lp-subheading">現有功能入口</h3>
+  <ul class="lp-entry-list">
+    {% for entry in stage.entries %}
+    <li class="lp-entry">
+      <div class="lp-entry-copy"><strong>{{ entry.name }}</strong><span class="muted">{{ entry.note }}</span></div>
+      <a class="button secondary" href="{{ entry.url }}">進入</a>
+    </li>
+    {% endfor %}
+    {% if stage.key == 'assess' %}
+    {# 教師 2026-10-15 裁決 A1：FOUR_SIDE_HOVER 既有真實入口為平台 /platform/eagle 的「四面懸停檢測」。
+       此處僅以模板層新增連結指向既有頁面，不改 views.py、不新建功能、不偽造結果。
+       該頁在無 FOUR_SIDE_HOVER ACTIVE 模型時顯示「目前尚無可用模型」誠實提示。 #}
+    <li class="lp-entry">
+      <div class="lp-entry-copy"><strong>F450 四面懸停方向辨識（FOUR_SIDE_HOVER）</strong><span class="muted">既有鷹眼檢測頁的「四面懸停檢測」上傳區；無 ACTIVE 模型時顯示「目前尚無可用模型」，不偽造結果</span></div>
+      <a class="button secondary" href="/platform/eagle">進入</a>
+    </li>
+    {% endif %}
+  </ul>
+  {% endif %}
+
+  {% if stage.modules %}
+  <h3 class="lp-subheading">獨立實訓模組</h3>
+  {% for module in stage.modules %}
+  <article class="lp-module lp-module-{{ module.status_key }}{% if not module.url %} is-pending{% endif %}">
+    <div class="lp-module-head"><strong>{{ module.name }}</strong><span class="lp-badge lp-badge-{{ module.status_key }}{% if not module.url %} is-pending{% endif %}">{{ module.state }}</span></div>
+    <p class="muted">{{ module.note }}</p>
+    {% if module.url %}<a class="button secondary" href="{{ module.url }}">進入</a>{% endif %}
+  </article>
+  {% endfor %}
+  {% endif %}
+
+  {% if stage.planned %}
+  <h3 class="lp-subheading">規劃中專項</h3>
+  <ul class="lp-planned">
+    {% for item in stage.planned %}
+    <li><strong>{{ item.name }}</strong><span class="lp-badge">{{ item.state }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endfor %}
+
+<section class="section-block lp-feedback" id="stage-feedback" aria-label="教師回饋">
+  <div class="section-heading"><h2>教師回饋</h2></div>
+  {% if feedback_rows %}
+  <ul class="lp-feedback-list">
+    {% for item in feedback_rows %}
+    <li class="lp-feedback-item">
+      <div class="lp-feedback-head">
+        <div><p class="eyebrow">{{ item.source }}</p><strong>{{ item.title }}</strong></div>
+        <span class="status">{{ item.status_label }}{% if item.score != None %} · {{ item.score }} 分{% endif %}</span>
+      </div>
+      {% if item.note %}<p>{{ item.note|linebreaksbr }}</p>{% endif %}
+      <a class="button secondary" href="{{ item.url }}">查看詳情</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">目前尚無教師回饋。完成任務並提交後，教師的複核結果與評語會顯示在這裡。</p>
+  {% endif %}
+</section>
+
+<section class="section-block lp-quick-entries">
+  <div class="section-heading"><h2>常用入口</h2></div>
+  <div class="lp-quick-grid">
+    <a class="button primary" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">我的學習成長日誌（R01–R08）</a>
+    <a class="button secondary" href="{% url 'learning:student_course_dashboard' enrollment.pk %}">課程總覽</a>
+  </div>
+</section>
+
+{# 教師 2026-10-15 裁決 A2：五階段改為一次只顯示一個階段。
+   採純前端 hash 切換（零後端改動）：五個 stage section 全部輸出於 DOM（保住既有錨點、
+   R01–R08 八個成長槽位與各項入口皆存在），僅以 hidden 屬性控制顯示。
+   支援：重新整理（依 location.hash 還原）、上一頁／下一頁（hashchange）、手機瀏覽。 #}
+<script src="{% static 'learning/learning-path-switch.js' %}"></script>
+{% endblock %}

@@ -105,7 +105,7 @@ function withVideoDescription(video, description) {
 export const hero = {
   name: 'fde-ai',
   headline: 'FDE-AI 無人載具學習平台',
-  summary: 'AI 雙師教學｜學・練・作・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
+  summary: 'AI 雙師教學｜學・練・做・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
   systems: ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統'],
   systemStatus: [
     { label: 'YOLO v2', state: '本機模型', detail: '已預設接入 F450 零件與 CW/CCW 槳葉檢測流程。' },
@@ -133,7 +133,7 @@ export const designSystem = {
     warning: '#F5B84B',
     danger: '#FF5C73'
   },
-  motion: ['頁面淡入', '文字光暈與卡片浮起', '藍色邊框輕微發光', '學練作測證節點呼吸與進度流光', 'AI 檢測掃描線', '數字計分遞增'],
+  motion: ['頁面淡入', '文字光暈與卡片浮起', '藍色邊框輕微發光', '學練做測證節點呼吸與進度流光', 'AI 檢測掃描線', '數字計分遞增'],
   avoid: ['過度霓虹', '複雜 3D', '遊戲化卡通', '大量閃爍', '影片背景堆疊']
 };
 
@@ -154,7 +154,7 @@ export const moduleSections = [
   },
   {
     key: 'build',
-    label: '作',
+    label: '做',
     title: 'F450 組裝與 AI 助教',
     summary: 'Pixhawk 2.4.8 版本 F450 組裝、調參、照片 / 30 秒影片上傳與 RAG 助教。',
     goal: '依照 Pixhawk 2.4.8 流程完成 F450 組裝，遇到問題可上傳照片詢問 AI 助教。'
@@ -167,11 +167,11 @@ export const moduleSections = [
     goal: '上傳 F450 照片或四面懸停影片，產生可複核的 PASS / NG / CHECK 結果。'
   },
   {
-    key: 'certify',
     label: '證',
-    title: 'GitHub 成果存證',
-    summary: '把學習過程、組裝照片、AI 測評結果與作品整理到 GitHub。',
-    goal: '把學習紀錄、檢測截圖、影片與作品整理成 GitHub 倉庫，形成能力證據。'
+    title: '學習成長日誌（R01–R08）',
+    summary: '八項成長紀錄的真實進度與教師複核結果，資料取自學員端 Django 成長紀錄。',
+    goal: '逐項完成 R01–R08 成長紀錄並提交證據，教師複核後形成完整學習歷程。',
+    href: '/student/growth/'
   }
 ];
 
@@ -180,7 +180,7 @@ export const platformModes = [
     key: 'public',
     title: 'Public Mode',
     description: '面向校長、老師、論壇與合作機構，展示專案定位、五階段流程、任務包、AI 評分與成果案例。',
-    nav: ['項目介紹', '學練作測證', '任務包', '鷹眼評分', '作品成果', '合作入口']
+    nav: ['項目介紹', '學練做測證', '任務包', '鷹眼評分', '作品成果', '合作入口']
   },
   {
     key: 'student',
@@ -199,7 +199,7 @@ export const platformModes = [
 export const workflowSteps = [
   { key: 'learn', label: '學', title: '課程理解' },
   { key: 'practice', label: '練', title: '模擬練習' },
-  { key: 'build', label: '作', title: '專案實作' },
+  { key: 'build', label: '做', title: '專案實作' },
   { key: 'assess', label: '測', title: 'AI 測評' },
   { key: 'certify', label: '證', title: '成果存證' }
 ];
@@ -329,7 +329,7 @@ export const studentDashboard = {
     progress: [
       { label: '學', state: 'complete' },
       { label: '練', state: 'complete' },
-      { label: '作', state: 'complete' },
+      { label: '做', state: 'complete' },
       { label: '測', state: 'active' },
       { label: '證', state: 'pending' }
     ],

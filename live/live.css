@@ -104,14 +104,34 @@ aside strong { color: #ffcb64; }
 .ask-ai-drawer,.camera-tool{border:1px solid rgba(91,217,255,.28);border-radius:14px;background:rgba(5,20,33,.88);overflow:hidden}.ask-ai-drawer>summary,.camera-tool>summary{padding:16px 18px;color:#8feaff;font-weight:850;cursor:pointer;list-style:none}.ask-ai-drawer>summary::after,.camera-tool>summary::after{content:'＋';float:right}.ask-ai-drawer[open]>summary::after,.camera-tool[open]>summary::after{content:'－'}
 .student-tool[hidden]{display:none!important}.completion-feedback{border:1px solid rgba(110,255,180,.55);background:linear-gradient(145deg,rgba(10,62,55,.88),rgba(8,28,44,.9))!important;text-align:center}.completion-feedback h3{color:#6effb4}.task-complete{padding:26px!important}
 .student-camera{border:1px solid rgba(91,217,255,.28)}.section-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.section-heading span{color:#8aa9bc}
-.live-coach-card{display:grid;gap:14px;padding:18px;border:1px solid rgba(91,217,255,.36);border-radius:18px;background:linear-gradient(145deg,rgba(5,28,44,.96),rgba(4,17,29,.96))}.live-coach-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.live-coach-heading h3{margin:3px 0 0;color:#79f0b0}.live-coach-heading #pauseVoiceCoach{grid-column:2}.live-coach-card>.voice-status{color:#b7cad8}.live-coach-card .camera-tool{margin:0}.latest-answer-card{padding:14px;border-radius:14px;background:rgba(91,217,255,.08);border:1px solid rgba(91,217,255,.22)}.latest-answer-card p{margin:0}.latest-answer-card #latestAiAnswer{margin-top:7px;line-height:1.6;color:#eefaff}.fallback-methods{border-top:1px solid rgba(91,217,255,.2);padding-top:10px}.fallback-methods>summary{cursor:pointer;color:#8aa9bc;font-weight:750;padding:8px 0}.fallback-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.live-coach-card .student-camera>#startCamera{width:100%;margin-top:12px}.camera-frozen{color:#ffcf70;font-weight:800}
+.live-coach-card{display:grid;gap:14px;padding:18px;border:1px solid rgba(91,217,255,.36);border-radius:18px;background:linear-gradient(145deg,rgba(5,28,44,.96),rgba(4,17,29,.96))}.live-coach-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.live-coach-heading h3{margin:3px 0 0;color:#79f0b0}.live-coach-heading #pauseVoiceCoach{grid-column:2}.live-coach-card>.voice-status{color:#b7cad8}.live-coach-card .camera-tool{margin:0}.live-coach-conversation{padding:14px;border-radius:14px;background:rgba(91,217,255,.08);border:1px solid rgba(91,217,255,.22)}.live-coach-conversation p{margin:0}.live-coach-conversation .conversation-label{margin-top:10px;color:#8aa9bc;font-size:.78rem;font-weight:800}.live-coach-conversation .conversation-label:first-child{margin-top:0}.live-coach-conversation #lastUserTranscript,.live-coach-conversation #latestAiAnswer{margin-top:5px;line-height:1.55;color:#eefaff}.fallback-methods{border-top:1px solid rgba(91,217,255,.2);padding-top:10px}.fallback-methods>summary{cursor:pointer;color:#8aa9bc;font-weight:750;padding:8px 0}.fallback-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}.live-coach-card .student-camera>#startCamera{width:100%;margin-top:12px}.camera-frozen{color:#ffcf70;font-weight:800}
 .student-camera .preview{margin-top:14px}.student-camera-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+.classroom-more{border:1px solid rgba(91,217,255,.22);border-radius:14px;background:rgba(5,20,33,.72);overflow:hidden}.classroom-more>summary{padding:16px 18px;color:#8feaff;font-weight:800;cursor:pointer}.classroom-more-content{display:grid;gap:12px;padding:0 14px 14px}.live-coach-conversation{display:grid;gap:8px}.live-coach-conversation #lastUserTranscript,.live-coach-conversation #latestAiAnswer{padding:12px 14px;border-radius:14px}.live-coach-conversation #lastUserTranscript{background:rgba(91,217,255,.12)}.live-coach-conversation #latestAiAnswer{background:rgba(110,255,180,.1)}#answerSourceLabel{display:none!important}
 .completion-card,.evidence-card,.reflection-card,.teacher-card{border:1px solid rgba(91,217,255,.18)}
 .completion-card h3,.evidence-card h3,.reflection-card h3,.teacher-card h3{margin-top:0}
 .safety-acknowledgment{display:flex;align-items:center;gap:10px;margin:12px 0;padding:10px;border-radius:10px;background:rgba(255,203,100,.1);color:#ffdb8a}.safety-acknowledgment input{width:22px;height:22px;margin:0}.camera-tool{margin-top:14px}.camera-tool>.camera-panel{margin-bottom:0}
 .file-action{min-height:52px;display:flex!important;align-items:center;justify-content:center;padding:10px;border:1px dashed #51dfff;border-radius:10px;color:#eaf7ff!important;cursor:pointer}
 .file-action input{position:absolute!important;width:1px!important;height:1px!important;opacity:0}
 .assisted-summary{margin-top:12px}.teacher-card{border-color:rgba(255,203,100,.35)}.teacher-card h3{color:#ffcb64}
+.vision-center{margin:18px 0;padding:18px;border:1px solid #31566b;background:#0c1821}.vision-center-heading,.teacher-vision-center summary{display:flex;align-items:center;justify-content:space-between;gap:16px}.vision-center-heading h2{margin:0}.vision-student-grid,.vision-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.vision-workflow,.vision-admin-grid section{padding:14px;border:1px solid #344c5b;background:#111f29}.vision-workflow output,.vision-admin-grid output{display:block;margin-top:12px;white-space:pre-wrap}.vision-admin-grid pre{max-height:240px;overflow:auto;white-space:pre-wrap}.teacher-vision-center summary{cursor:pointer}.teacher-vision-center summary span{color:#ffcb64}@media(max-width:720px){.vision-student-grid,.vision-admin-grid{grid-template-columns:1fr}}
+.vision-admin-grid label{display:grid;gap:4px;margin:8px 0}.vision-admin-grid input,.vision-admin-grid select,.vision-admin-grid textarea{width:100%;box-sizing:border-box;background:#08131b;color:#eef8ff;border:1px solid #536b79;padding:8px}.vision-admin-grid button{margin:4px 4px 4px 0}
+/* MP-12 Frontend Integration：TASK_07 深度子模組樣式（SELECTIVE PORT，沿用 Main v2.0 色系） */
+.mp12-panel{display:grid;gap:16px;margin:14px 0;padding:18px;border:1px solid rgba(91,217,255,.32);border-radius:14px;background:#061827!important}.mp12-panel[hidden]{display:none!important}
+.mp12-map-view,.mp12-detail-view{display:grid;gap:16px}.mp12-map-view[hidden],.mp12-detail-view[hidden]{display:none!important}
+.mp12-heading,.mp12-current-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}.mp12-heading h3,.mp12-current-heading h3{margin:0}
+.mp12-heading>strong{padding:9px 12px;border-radius:8px;background:#102f42;color:#8feaff;white-space:nowrap}
+.mp12-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;list-style:none;margin:0;padding:0}.mp12-grid li{min-width:0}
+.mp12-grid button{width:100%;min-height:118px;display:grid;align-content:start;justify-items:start;gap:7px;margin:0;padding:12px;text-align:left;touch-action:manipulation;background:#111c25;border-color:#53606a}
+.mp12-grid button strong{font-size:1.05rem}.mp12-grid button span{color:#d9edf8;font-size:.82rem}.mp12-grid button small{color:#aab7bf}
+.mp12-grid li[data-state="NOT_STARTED"] button{background:#111c25;border-color:#53606a}.mp12-grid li[data-state="IN_PROGRESS"] button{background:#0c3f63;border-color:#41aee8}.mp12-grid li[data-state="PENDING_TEACHER_REVIEW"] button{background:#5a3c0d;border-color:#f5a623}.mp12-grid li[data-state="NEED_REWORK"] button{background:#5b2029;border-color:#ff6677}.mp12-grid li[data-state="COMPLETED"] button{background:#0c4836;border-color:#55dd9a}
+.mp12-current{display:grid;gap:12px;padding:16px;border-top:1px solid rgba(91,217,255,.22);border-bottom:1px solid rgba(91,217,255,.22)}
+.mp12-guide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.mp12-guide h4{margin:0 0 8px;color:#8feaff}.mp12-guide ol,.mp12-guide ul{margin:0;padding-left:22px;color:#d9edf8}
+.mp12-safety{color:#ffcb64}.mp12-safety p{margin:5px 0;color:#ffcb64}
+.mp12-evidence-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.mp12-teacher-review{display:grid;gap:10px;border:1px solid rgba(255,203,100,.52);background:#281d08!important}.mp12-teacher-review h3{margin:0;color:#ffcb64}
+.mp12-teacher-review select,.mp12-teacher-review textarea{width:100%;margin:7px 0 0;padding:10px;border:1px solid rgba(255,203,100,.42);border-radius:8px;background:#151106;color:#fff}
+.mp12-completed{padding:18px;border:1px solid rgba(85,221,154,.6);background:#0c4836}.mp12-completed strong{color:#7affb8;font-size:1.15rem}
+
 .task-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px;color:#8aa9bc;font-size:.86rem}
 .dev-mode-panel{margin-top:30px;border-color:rgba(245,166,35,.34)}.dev-mode-panel>summary{color:#f5a623}.dev-mode-content{padding:0 16px 16px}.dev-mode-content .task-panel,.dev-mode-content .results-panel{margin:12px 0}
 
@@ -125,7 +145,16 @@ aside strong { color: #ffcb64; }
   .live-coach-heading{grid-template-columns:1fr}.live-coach-heading #pauseVoiceCoach{grid-column:auto}.fallback-actions{grid-template-columns:1fr}
   .student-task button,.ask-actions button{width:100%;margin:5px 0}
   .section-heading{display:grid}.task-footer{display:grid}
+  .mp12-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mp12-guide,.mp12-evidence-actions{grid-template-columns:1fr}.mp12-current-heading{display:grid}.mp12-grid button{min-height:112px}
 }
+.p1-submission{margin:10px 0;padding:12px;border:1px solid rgba(255,203,100,.35);border-radius:12px;background:rgba(255,203,100,.06)}
+.p1-submission p{margin:4px 0;color:#eefaff}
+.p1-review-actions{display:flex;gap:10px;margin-top:10px}
+.p1-review-actions button{margin:0}
+.p1-benchmark{margin-top:12px;padding-top:10px;border-top:1px solid rgba(91,217,255,.22)}
+.p1-benchmark-title{margin:0 0 6px;color:#8feaff;font-weight:800}
+.p1-benchmark-result{margin-top:8px}
+.p1-benchmark-result p{margin:3px 0}
 
 @media (max-width:390px){
   .student-summary{grid-template-columns:1fr}.task-map-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -133,3 +162,29 @@ aside strong { color: #ffcb64; }
   .student-app{width:100%;padding:8px 8px 96px}.student-hero{padding:17px;border-radius:18px}.compact-status{display:none}.student-task{padding:10px;border-radius:18px}.student-group-progress li{min-width:92px;padding:8px}.student-group-progress li strong{font-size:.75rem}.current-step-card{min-height:260px;display:flex;flex-direction:column;justify-content:center}.current-step-card h3{font-size:1.55rem}.instruction-card:not(.current-step-card){padding:14px}.live-coach-card{padding:14px;box-shadow:0 12px 34px rgba(0,0,0,.32)}
   .browser-warning{grid-template-columns:1fr}.browser-warning button{grid-column:auto;grid-row:auto;width:100%}.voice-reply-controls{grid-template-columns:1fr}
 }
+
+/* 學生 Live Coach MVP：首屏只呈現任務、即時畫面與對話。 */
+.student-app:has(#taskDetailScreen:not([hidden])) .student-hero,
+.student-app:has(#taskDetailScreen:not([hidden])) .compact-status { display:none; }
+.student-task > .task-objective { display:none; }
+.student-task > .camera-tool { margin-top:8px; }
+.student-task > .camera-tool .student-camera { padding:10px; border:0; background:transparent; }
+.student-task > .camera-tool .section-heading h3,
+.student-task > .camera-tool .section-heading > span,
+.student-task > .camera-tool #liveMessage,
+.student-task > .camera-tool .preview-note { display:none; }
+.student-task > .camera-tool .preview { margin-top:0; aspect-ratio:3 / 4; border-radius:18px; }
+.student-task > #aiTools { margin-top:12px; padding:14px; }
+.student-task > #aiTools .live-coach-heading,
+.student-task > #aiTools #coachGuidance,
+.student-task > #aiTools #ragExplanation,
+.student-task > #aiTools .voice-status { display:none; }
+.student-task > #enableVoiceCoach { width:100%; margin:12px 0 0; }
+.student-task > #moreWays { margin-top:14px; }
+@media (min-width:761px) {
+  .student-task > .camera-tool .preview { max-height:70vh; aspect-ratio:16 / 10; }
+}
+
+/* 連往本機白名單下載中心的最小入口。 */
+.download-center-entry { display: inline-flex; float: right; color: #aee6ff; font-size: .85rem; font-weight: 700; text-decoration: none; }
+.download-center-entry:hover { text-decoration: underline; }

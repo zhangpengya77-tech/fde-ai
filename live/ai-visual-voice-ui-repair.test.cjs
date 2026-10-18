@@ -17,7 +17,8 @@ test('voice entry remains visible and reports unsupported capability', () => {
 test('Live Coach keeps the natural voice action visible and moves manual tools into fallback', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.match(html, /<section id="aiTools" class="live-coach-card">/);
-  assert.match(html, /id="enableVoiceCoach"[^>]*>开启语音助教</);
+  assert.match(html, /id="enableVoiceCoach"[^>]*>開始詢問 AI</);
+  assert.match(html, /id="pauseVoiceCoach"[^>]*hidden[^>]*>暫停語音</);
   assert.match(html, /<details id="fallbackMethods"[^>]*>/);
   assert.doesNotMatch(html, /<details id="fallbackMethods"[^>]*\sopen/);
   for (const id of ['pushToTalk', 'textAskAi', 'assistantVisualAction']) assert.match(html, new RegExp(`id="${id}"`));

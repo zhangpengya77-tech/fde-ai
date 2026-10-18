@@ -1,0 +1,101 @@
+/* 班級結訓成果報告（P5-B／P5-C，2026-10-13 教師指令）
+   沿用既有學員平台設計語彙（tech 青、深藍、淺灰邊框）。
+   僅供本頁使用，不改動既有樣式檔。列印使用瀏覽器原生列印＋print CSS。 */
+
+.trp-screen-only{display:block}
+.trp-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0 16px}
+.trp-toolbar label{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#3d5464}
+.trp-toolbar select{max-width:320px}
+.trp-section{margin:0 0 22px;padding:16px 18px;background:#fff;border:1px solid #d9e1e6;border-radius:10px}
+.trp-h2{margin:0 0 12px;font-size:18px;color:#12334a;border-left:4px solid #1c7c4a;padding-left:10px}
+.trp-h3{margin:14px 0 6px;font-size:14px;color:#12334a}
+.trp-dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 16px;margin:0}
+.trp-dl div{display:grid;gap:2px}
+.trp-dl dt{font-size:12.5px;color:#536875}
+.trp-dl dd{margin:0;font-size:15px;font-weight:700;color:#12334a}
+.trp-line{margin:8px 0;font-size:13.5px;color:#3d5464}
+.trp-chip{display:inline-block;margin:2px 6px 2px 0;padding:2px 9px;background:#eef4f8;border:1px solid #cfd9e0;font-size:12.5px;font-weight:650;color:#12334a;white-space:nowrap}
+.trp-note{margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#536875}
+.trp-empty{margin:6px 0;font-size:13px;color:#8a97a1}
+.trp-footer-note{margin:8px 0 24px;font-size:12px;color:#8a97a1;text-align:center}
+
+/* 成果摘要：8 張統計卡 */
+.trp-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.trp-stat{display:grid;gap:4px;padding:12px 14px;background:#fbfdfe;border:1px solid #d9e1e6;border-radius:10px}
+.trp-stat-num{font-size:26px;font-weight:800;line-height:1.1;color:#12334a}
+.trp-stat-label{font-size:12.5px;color:#536875}
+.trp-stat-pending{border-left:4px solid #c9a227}
+.trp-stat-pending .trp-stat-num{color:#8a6d1a}
+.trp-stat-warn .trp-stat-num{color:#a15c00}
+.trp-stat-done{border-left:4px solid #1c7c4a}
+.trp-stat-done .trp-stat-num{color:#1c7c4a}
+
+/* 表格 */
+.trp-table{width:100%;border-collapse:collapse}
+.trp-table th,.trp-table td{border:1px solid #d9e1e6;padding:8px 10px;font-size:13px;text-align:left;vertical-align:top}
+.trp-table th{background:#f4f7f9;color:#12334a;white-space:nowrap}
+.trp-table td{color:#3d5464}
+.trp-feedback-table td[data-label="教師評語"]{min-width:220px}
+
+/* 學員成果列表 */
+.trp-student{margin:0 0 14px;padding:14px 16px;background:#fbfdfe;border:1px solid #d9e1e6;border-radius:10px}
+.trp-student-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.trp-student-head strong{color:#12334a;font-size:15px}
+.trp-student-nums{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:#3d5464;margin-bottom:8px}
+.trp-student-nums strong{color:#12334a}
+.trp-slot-strip{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.trp-slot{display:inline-block;padding:2px 8px;border:1px solid #d9e1e6;font-size:12px;font-weight:650;color:#3d5464;background:#fff}
+.trp-evidence{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:0}
+.trp-evidence-item{margin:0;padding:8px;background:#fff;border:1px solid #d9e1e6}
+.trp-evidence-item figcaption{font-size:12px;color:#536875;margin-bottom:6px;word-break:break-word}
+.trp-evidence-item a{font-size:12.5px;color:#0f5c8c}
+.trp-evidence-thumb{display:block;width:100%;height:auto;max-height:200px;object-fit:contain;background:#f4f7f9}
+
+/* ── 手機（iPhone Safari 390px 起）單欄、不橫向溢出 ───────────────── */
+@media (max-width:680px){
+  .trp-dl{grid-template-columns:1fr}
+  .trp-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .trp-stat-num{font-size:22px}
+  .trp-toolbar label{width:100%}
+  .trp-toolbar select,.trp-toolbar .button{max-width:100%;width:100%;min-height:44px}
+  .trp-section{padding:14px}
+  /* 表格轉卡片：避免 390px 橫向溢出 */
+  .trp-table thead{display:none}
+  .trp-table,.trp-table tbody,.trp-table tr,.trp-table td{display:block;width:100%}
+  .trp-table tr{margin:0 0 10px;padding:10px;background:#fbfdfe;border:1px solid #d9e1e6}
+  .trp-table td{display:grid;gap:2px;padding:4px 2px;border:0}
+  .trp-table td::before{content:attr(data-label);color:#536875;font-size:12px;font-weight:700}
+  .trp-feedback-table td[data-label="教師評語"]{min-width:0}
+  /* 本報告頁自身的導覽連結：手機上提供足夠點按高度（僅本頁生效） */
+  .back-link,.trp-student .trp-screen-only a,.trp-evidence-item a{display:inline-flex;align-items:center;min-height:44px}
+}
+
+/* ── A4 列印（瀏覽器原生列印；不建伺服器 PDF） ───────────────────── */
+@page{size:A4;margin:12mm}
+@media print{
+  /* 隱藏導覽列、頁尾、篩選器、工具列與所有不必要按鈕 */
+  .topbar,.footer,.trp-screen-only,.trp-toolbar,.button,.back-link,.page-heading{display:none !important}
+  html,body{background:#fff !important}
+  body{font-size:10.5pt}
+  .trp-section{border:1px solid #bbb;border-radius:0;margin:0 0 8mm;padding:0 0 4mm;break-inside:auto}
+  .trp-h2{border-left:3px solid #1c7c4a;font-size:13pt;margin-bottom:3mm}
+  .trp-h3{font-size:11pt}
+  /* 重要表格：不裁切、表頭於換頁時重複、列不跨頁 */
+  .trp-table{width:100%;border-collapse:collapse}
+  .trp-table thead{display:table-header-group}
+  .trp-table tr{break-inside:avoid;page-break-inside:avoid}
+  .trp-table th,.trp-table td{border:1px solid #999;padding:2mm 2.4mm;font-size:9pt}
+  .trp-table th{background:#eee !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* 學員成果卡不跨頁裁切 */
+  .trp-student{break-inside:avoid;page-break-inside:avoid;border:1px solid #999;border-radius:0;background:#fff;margin-bottom:4mm}
+  .trp-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:2mm}
+  .trp-stat{border:1px solid #999;border-radius:0;background:#fff;padding:2mm 2.5mm}
+  .trp-stat-num{font-size:14pt}
+  .trp-stat-label{font-size:8pt}
+  .trp-dl{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .trp-evidence{grid-template-columns:repeat(3,minmax(0,1fr));gap:2mm}
+  .trp-evidence-thumb{max-height:36mm}
+  .trp-footer-note{color:#555;margin-top:4mm}
+  /* 連結列印時顯示網址不必要；保留文字即可 */
+  a{text-decoration:none;color:#000}
+}

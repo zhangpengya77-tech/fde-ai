@@ -194,11 +194,11 @@ test('connects F450 chat and Eagle correction to the same assistant service', ()
   assert.match(app, /finalResult\.status === 'PASS'/);
   assert.ok(html.indexOf('rag-config.js') < html.indexOf('rag-client.js'));
   assert.match(html, /document\.write\([\s\S]*rag-config\.js[\s\S]*Date\.now\(\)/);
-  assert.ok(html.indexOf('rag-client.js') < html.indexOf('app.js?v=1.2-eagle-rag'));
+  assert.ok(html.indexOf('rag-client.js') < html.indexOf('app.js?v='));
   assert.doesNotMatch(html, /f450-rag\.js/);
   assert.ok(fallbackHtml.indexOf('rag-config.js') < fallbackHtml.indexOf('rag-client.js'));
   assert.match(fallbackHtml, /document\.write\([\s\S]*rag-config\.js[\s\S]*Date\.now\(\)/);
-  assert.ok(fallbackHtml.indexOf('rag-client.js') < fallbackHtml.indexOf('app.js?v=1.2-eagle-rag'));
+  assert.ok(fallbackHtml.indexOf('rag-client.js') < fallbackHtml.indexOf('app.js?v='));
 });
 
 test('renders the RAG source label through the exported client helper', () => {

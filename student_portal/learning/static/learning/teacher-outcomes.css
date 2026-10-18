@@ -1,0 +1,83 @@
+/* 班級學習成果總覽（P3，2026-10-13 教師指令）
+   沿用既有學員平台設計語彙（tech 青、深藍、淺灰邊框）；桌面為狀態矩陣表，
+   手機（iPhone Safari 390px 起）單欄、不橫向溢出。僅供本頁使用，不改動既有樣式檔。 */
+.tco-badge{display:inline-block;padding:4px 12px;background:#eef1f3;border:1px solid #d9e1e6;color:#12334a;font-size:13px;font-weight:700;white-space:nowrap}
+.tco-subheading{margin:18px 0 8px;font-size:15px;color:#12334a}
+.tco-matrix{border-collapse:collapse;width:100%;min-width:880px}
+.tco-matrix th,.tco-matrix td{border:1px solid #d9e1e6;padding:8px 10px;font-size:13px;text-align:left;vertical-align:middle}
+.tco-matrix th{background:#f4f7f9;color:#12334a;white-space:nowrap}
+.tco-matrix td{color:#3d5464}
+.tco-matrix .status{display:inline-block;padding:2px 8px;border:1px solid #d9e1e6;font-size:12.5px;font-weight:650;white-space:nowrap}
+.tco-pending{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.tco-pending-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#fff;border:1px solid #d9e1e6;border-left:4px solid #c9a227}
+.tco-pending-copy{display:grid;gap:4px;min-width:0}
+.tco-pending-copy strong{color:#12334a}
+.tco-pending-copy span{font-size:13px}
+/* P4.2：待複核狀態必須可一眼區分「待教師複核」與「需要補充」 */
+.tco-pending-state{justify-self:start;display:inline-block;padding:2px 8px;border:1px solid #d9e1e6;font-size:12.5px;font-weight:700;white-space:nowrap;color:#3d5464;background:#f4f7f9}
+.tco-pending-state-submitted{border-color:#c9a227;color:#8a6d1a;background:#fdf7e6}
+.tco-pending-state-needs_revision{border-color:#a15c00;color:#a15c00;background:#fdf1e3}
+/* P5-A：資料來源標籤（成長紀錄／任務提交），不以名稱合併、一律明示來源 */
+.tco-pending-source{justify-self:start;display:inline-block;padding:2px 8px;border:1px solid #cfd9e0;font-size:12.5px;font-weight:650;white-space:nowrap;color:#12334a;background:#eef4f8}
+
+/* P4 統計卡片（2026-10-13 UI/UX 指令）：四張卡片讓教師 5 秒掌握班級全貌 */
+.tco-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0 6px}
+.tco-stat{display:grid;gap:4px;padding:14px 16px;background:#fff;border:1px solid #d9e1e6;border-radius:10px}
+.tco-stat-num{font-size:30px;font-weight:800;line-height:1.1;color:#12334a}
+.tco-stat-label{font-size:13px;color:#536875}
+.tco-stat-pending{border-left:4px solid #c9a227}
+.tco-stat-pending .tco-stat-num{color:#8a6d1a}
+.tco-stat-warn .tco-stat-num{color:#a15c00}
+.tco-stat-done{border-left:4px solid #1c7c4a}
+.tco-stat-done .tco-stat-num{color:#1c7c4a}
+/* P5-A（2026-10-13）：統一待複核口徑的說明列——明示單位（筆／人）與資料來源。 */
+.tco-stat-note{margin:6px 0 2px;font-size:13px;line-height:1.6;color:#536875}
+.tco-stat-note strong{color:#12334a}
+
+/* P4 待複核清單排序（GET 表單，與班級篩選同一模式）；
+   P4.1 同一列擴充為 紀錄／類型／狀態／排序 四個條件，全部可同時使用。 */
+.sort-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px}
+.sort-bar label{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#3d5464}
+.sort-bar select{max-width:180px}
+
+/* P4 學員進度列表：尚未提交／進行中／已全數提交一眼可分 */
+.tco-progress{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.tco-progress-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#fff;border:1px solid #d9e1e6;border-radius:10px}
+.tco-progress-main{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.tco-progress-main strong{color:#12334a}
+.tco-progress-state{font-size:12.5px;font-weight:700;color:#536875}
+.tco-progress-none .tco-progress-state{color:#a15c00}
+.tco-progress-complete .tco-progress-state{color:#1c7c4a}
+.tco-progress-nums{display:flex;align-items:baseline;gap:10px;font-size:13px;color:#3d5464;white-space:nowrap}
+.tco-progress-count{font-size:17px;font-weight:800;color:#12334a}
+
+/* 重要數字適度放大（只影響本頁，不動共用樣式檔） */
+.tco-count-cell{font-size:15px;font-weight:700}
+.tco-class .phase-summary strong{font-size:18px}
+
+/* 手機（iPhone Safari 390px 起）單欄、不橫向溢出：矩陣表轉為學員卡片 */
+@media (max-width:680px){
+  .tco-matrix{min-width:0}
+  .tco-matrix thead{display:none}
+  .tco-matrix tbody{display:grid;gap:12px}
+  .tco-matrix tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:14px;background:#fff;border:1px solid #d9e1e6}
+  .tco-matrix td{display:grid;gap:2px;padding:4px 6px;border:0;min-width:0}
+  .tco-matrix td::before{content:attr(data-label);color:#536875;font-size:12px;font-weight:700}
+  .tco-matrix td[data-label="FDE ID"],.tco-matrix td[data-label="暱稱"]{grid-column:span 2}
+  .tco-matrix td[data-label="詳情"] a{display:inline-block;min-height:44px;line-height:44px}
+  .tco-pending-item{flex-direction:column;align-items:stretch}
+  .tco-pending-item .button{width:100%;min-height:48px}
+  /* 2026-10-13 DEMO 驗收修正：班級篩選 select 於 390px 原生態寬度溢出 27px，限制不超過欄寬 */
+  select[name="cohort"]{max-width:100%;width:100%}
+  /* P4 手機版：統計卡片 2×2（四張都在首屏內可見，仍屬單欄頁面流）、排序與篩選控制項全寬易點 */
+  .tco-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tco-stat{padding:12px 14px}
+  .tco-stat-num{font-size:26px}
+  .sort-bar select,.sort-bar .button{max-width:100%;width:100%}
+  .sort-bar select{min-height:44px}
+  .sort-bar .button{min-height:44px}
+  .sort-bar label{width:100%}
+  .tco-progress-item{flex-direction:column;align-items:stretch}
+  .tco-progress-nums{white-space:normal}
+  .tco-progress-item .button{width:100%;min-height:44px}
+}

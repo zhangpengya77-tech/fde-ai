@@ -133,6 +133,48 @@ class F450LiveLoopTests(unittest.TestCase):
         self.assertEqual(self.state()["current_task_id"], "TASK_07")
         self.assertEqual(self.state()["task_state"], "IN_PROGRESS")
 
+    def test_classroom_validation_is_opt_in_and_builds_learning_report(self):
+        disabled = self.client.get(f"/api/live/sessions/{self.sid}/classroom-validation")
+        self.assertEqual(disabled.status_code, 200)
+        self.assertFalse(disabled.json()["enabled"])
+
+        enabled = self.client.post(
+            f"/api/live/sessions/{self.sid}/classroom-validation",
+            json={"enabled": True},
+        )
+        self.assertEqual(enabled.status_code, 200)
+        self.assertTrue(enabled.json()["enabled"])
+
+        for payload in (
+            {"event_type": "TASK_ENTER", "task_id": "TASK_01", "step_id": "T01_WORKSPACE"},
+            {"event_type": "AI_ASK", "task_id": "TASK_01", "step_id": "T01_WORKSPACE", "channel": "VOICE", "question": "下一步呢？", "duration_ms": 1200},
+            {"event_type": "AI_ASK", "task_id": "TASK_01", "step_id": "T01_WORKSPACE", "channel": "VISION", "question": "這是什麼？", "duration_ms": 2100},
+            {"event_type": "TEACHER_REVIEW", "task_id": "TASK_01", "step_id": "T01_WORKSPACE", "duration_ms": 500},
+            {"event_type": "STUCK", "task_id": "TASK_01", "step_id": "T01_WORKSPACE", "duration_ms": 3000},
+            {"event_type": "STEP_EXIT", "task_id": "TASK_01", "step_id": "T01_WORKSPACE", "duration_ms": 8000},
+            {"event_type": "TEACHER_CORRECTION", "task_id": "TASK_01", "step_id": "T01_WORKSPACE", "question": "這是什麼？", "ai_answer": "疑似馬達。", "teacher_answer": "這是 ESC。"},
+        ):
+            response = self.client.post(f"/api/live/sessions/{self.sid}/classroom-validation/events", json=payload)
+            self.assertEqual(response.status_code, 201)
+
+        report = self.client.get(f"/api/live/sessions/{self.sid}/classroom-validation/report")
+        self.assertEqual(report.status_code, 200)
+        body = report.json()
+        self.assertEqual(body["learning_report"]["ai_ask_count"], 2)
+        self.assertEqual(body["learning_report"]["voice_count"], 1)
+        self.assertEqual(body["learning_report"]["vision_count"], 1)
+        self.assertEqual(body["learning_report"]["teacher_review_count"], 1)
+        self.assertEqual(body["learning_report"]["stuck_time_ms"], 3000)
+        self.assertEqual(body["learning_report"]["completion_rate"], 0)
+        self.assertEqual(body["analytics"]["top_questions"][0]["question"], "下一步呢？")
+        self.assertEqual(body["analytics"]["longest_steps"][0]["duration_ms"], 8000)
+        self.assertEqual(body["analytics"]["teacher_help"][0]["step_id"], "T01_WORKSPACE")
+        self.assertEqual(body["learning_report"]["growth_record_id"], "05")
+        candidate = self.store.knowledge_candidates(self.sid)[0]
+        self.assertEqual(candidate["llm_answer"], "疑似馬達。")
+        self.assertEqual(candidate["teacher_correction"], "這是 ESC。")
+        self.assertEqual(candidate["review_status"], "APPROVED")
+
 
 if __name__ == "__main__":
     unittest.main()

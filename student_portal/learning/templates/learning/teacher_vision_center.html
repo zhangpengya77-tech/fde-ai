@@ -1,0 +1,770 @@
+{% extends 'learning/base.html' %}
+{% block title %}AI 視覺模型中心｜FDE-AI{% endblock %}
+{% block content %}
+<style>
+/* ---------- 四場景工作流（2026-10-16 教師裁決） ---------- */
+/* 關鍵：一次只顯示一個場景，絕不四個場景上下堆疊成長頁。 */
+.vc-head{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end;margin-bottom:6px}
+.vc-flowline{color:#5c6d78;font-size:14px;line-height:1.7}
+.vc-flowline b{color:#087f91}
+
+/* 頂部四個大場景導覽卡（始終可見，不是堆疊內容） */
+.vc-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 20px}
+.vc-nav-card{display:flex;flex-direction:column;gap:4px;padding:14px 14px;border:1px solid #cfdbe2;background:#fff;border-radius:10px;cursor:pointer;text-decoration:none;transition:border-color .15s,box-shadow .15s,background .15s}
+.vc-nav-card:hover{box-shadow:0 2px 12px rgba(8,127,145,.12);border-color:#9fd4dc}
+.vc-nav-card.active{background:#087f91;border-color:#087f91;box-shadow:0 3px 14px rgba(8,127,145,.28)}
+.vc-nav-card .vc-nav-num{font-size:13px;font-weight:700;color:#087f91;letter-spacing:.5px}
+.vc-nav-card .vc-nav-title{font-size:16px;font-weight:700;color:#10253a;line-height:1.25}
+.vc-nav-card.active .vc-nav-num,.vc-nav-card.active .vc-nav-title{color:#fff}
+.vc-nav-card .vc-nav-sub{font-size:12px;color:#5c6d78}
+.vc-nav-card.active .vc-nav-sub{color:rgba(255,255,255,.85)}
+
+/* 場景容器：預設隱藏，唯 active 顯示 */
+.vc-scene{display:none}
+.vc-scene.active{display:block;animation:vcFade .18s ease}
+@keyframes vcFade{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* 通用卡片 / 大按鈕 */
+.vc-card{background:#fff;border:1px solid #d9e1e6;border-radius:10px;padding:18px 20px;margin-bottom:16px}
+.vc-card h2{margin:0 0 4px;font-size:20px}
+.vc-card .vc-purpose{margin:0 0 14px;color:#5c6d78;font-size:14px;line-height:1.65}
+.vc-cta{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:12px 26px;font-size:16.5px;font-weight:700;border-radius:8px;text-decoration:none;border:1px solid transparent;cursor:pointer;line-height:1.2}
+.vc-cta.primary{background:#087f91;color:#fff;border-color:#087f91}
+.vc-cta.primary:hover{background:#066d7d}
+.vc-cta.primary[disabled]{background:#b7c6cc;border-color:#b7c6cc;cursor:not-allowed}
+.vc-cta.ghost{background:#fff;color:#087f91;border-color:#087f91}
+.vc-cta.ghost:hover{background:#eef7f9}
+.vc-cta.block{width:100%}
+.vc-badge{display:inline-block;padding:3px 10px;font-size:12px;font-weight:700;border:1px solid;border-radius:999px}
+.vc-badge.active{background:#e8f5f1;border-color:#1a987d;color:#12695a}
+.vc-badge.validated{background:#e9f1fb;border-color:#3f7cc4;color:#28578d}
+.vc-badge.candidate{background:#fdf6e3;border-color:#d3a12a;color:#8a6412}
+.vc-badge.rejected{background:#fdefeb;border-color:#b74834;color:#8f2d1d}
+.vc-badge.archived{background:#eef1f3;border-color:#a8b6c0;color:#52636f}
+.vc-badge.submitted{background:#fdf6e3;border-color:#d3a12a;color:#8a6412}
+.vc-badge.imported{background:#e9f1fb;border-color:#3f7cc4;color:#28578d}
+.vc-badge.ok{background:#e8f5f1;border-color:#1a987d;color:#12695a}
+.vc-badge.warn{background:#fdf6e3;border-color:#d3a12a;color:#8a6412}
+
+.vc-sublist{display:grid;gap:12px}
+.vc-sub{border:1px solid #dde6ec;background:#fdfefe;padding:14px 16px;border-radius:8px}
+.vc-sub-head{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
+.vc-sub-title{font-weight:700;color:#10253a;font-size:15px}
+.vc-meta{color:#5c6d78;font-size:13.5px;margin-top:6px;line-height:1.7}
+.vc-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:center}
+.vc-actions .vc-cta{min-height:46px;font-size:15px;padding:10px 20px}
+.vc-actions .button{min-height:46px;display:inline-flex;align-items:center;justify-content:center}
+
+/* 教師指令③：類別名對照表（2026-10-18） */
+.vc-map-table{width:100%;border-collapse:collapse;margin:12px 0 4px;font-size:14.5px}
+.vc-map-table th,.vc-map-table td{border:1px solid #d9e1e6;padding:10px 12px;text-align:left;vertical-align:middle}
+.vc-map-table th{background:#f2f7f9;color:#17415b;font-size:13px}
+.vc-map-table td select{width:100%;min-height:44px;border:1px solid #b8c6ce;padding:9px 11px;font:inherit;background:#fff;border-radius:6px}
+.vc-map-name{font-weight:700;color:#10253a;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.vc-importerr{margin-top:10px;border:1px solid #e3b7ac;background:#fdf1ef;border-radius:8px;padding:10px 12px;font-size:13.5px;color:#8f2d1d;line-height:1.65;word-break:break-word}
+.vc-importerr b{color:#8f2d1d}
+
+/* 場景② 上傳區與結果 */
+.vc-upload{border:2px dashed #9fd4dc;background:#f3fbfc;border-radius:12px;padding:28px 18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.vc-upload:hover{border-color:#087f91;background:#eaf7f9}
+.vc-upload.drag{border-color:#087f91;background:#e3f4f7}
+.vc-upload .vc-upload-icon{font-size:30px;line-height:1}
+.vc-upload .vc-upload-text{margin-top:8px;font-size:15px;color:#17415b;font-weight:650}
+.vc-upload .vc-upload-hint{margin-top:4px;font-size:12.5px;color:#5c6d78}
+.vc-upload input[type=file]{display:none}
+.vc-field-row{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0}
+.vc-f{flex:1 1 220px;min-width:180px}
+.vc-f label{display:block;font-weight:650;margin-bottom:6px;font-size:14px}
+.vc-f select,.vc-f input{width:100%;min-height:44px;border:1px solid #b8c6ce;padding:9px 11px;font:inherit;background:#fff;border-radius:6px}
+
+.vc-result{margin-top:18px;display:none}
+.vc-result.show{display:block}
+.vc-result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.vc-imgbox{background:#0d1b26;border-radius:10px;padding:10px;overflow:hidden}
+.vc-imgbox .vc-imgbox-label{color:#cfe3ea;font-size:12.5px;margin-bottom:6px;font-weight:650}
+.vc-imgbox img,.vc-imgbox canvas{display:block;width:100%;height:auto;border-radius:6px;background:#000}
+.vc-verdict-big{display:inline-block;padding:8px 20px;font-size:22px;font-weight:800;border:2px solid;border-radius:8px;margin-bottom:10px}
+.vc-verdict-big.pass{color:#12695a;border-color:#1a987d;background:#e8f5f1}
+.vc-verdict-big.fail{color:#8f2d1d;border-color:#b74834;background:#fdefeb}
+.vc-verdict-big.check{color:#8a6412;border-color:#d3a12a;background:#fdf6e3}
+.vc-v-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #eef3f6;font-size:14.5px}
+.vc-v-row:last-child{border-bottom:0}
+.vc-v-row span:first-child{color:#5c6d78}
+.vc-v-row span:last-child{font-weight:650;color:#10253a;text-align:right}
+.vc-note{background:#fdf6e3;border-left:3px solid #d3a12a;padding:11px 14px;font-size:13.5px;color:#6d5320;margin:12px 0}
+.vc-note.bad{background:#fdefeb;border-left-color:#b74834;color:#8f2d1d}
+.vc-note.ok{background:#e8f5f1;border-left-color:#1a987d;color:#12695a}
+.vc-empty{padding:16px;background:#f7fafb;border:1px dashed #c8d6de;color:#5c6d78;font-size:14px;border-radius:8px}
+
+/* 場景③ 正式模型 */
+.vc-hero{background:linear-gradient(135deg,#087f91,#0a9bab);color:#fff;border-radius:12px;padding:22px 24px;margin-bottom:18px}
+.vc-hero h2{color:#fff;margin:0 0 8px;font-size:22px}
+.vc-hero .vc-hero-row{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.vc-hero .vc-hero-name{font-size:19px;font-weight:800}
+.vc-hero .vc-hero-meta{font-size:14px;opacity:.92}
+
+/* 場景④ 三區 */
+.vc-zone{background:#fff;border:1px solid #d9e1e6;border-radius:10px;padding:18px 20px;margin-bottom:16px;border-top:4px solid #14a8b8}
+.vc-zone h3{margin:0 0 4px;font-size:17px}
+.vc-zone .vc-zone-sub{margin:0 0 12px;color:#5c6d78;font-size:13.5px;line-height:1.6}
+.vc-status-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.vc-status-item{border:1px solid #e0e8ed;border-radius:8px;padding:12px 14px}
+.vc-status-item .vc-s-label{font-size:13px;color:#5c6d78}
+.vc-status-item .vc-s-value{font-size:15px;font-weight:700;color:#10253a;margin-top:4px}
+.vc-status-item .vc-s-value.done{color:#12695a}
+.vc-status-item .vc-s-value.miss{color:#8a6412}
+.vc-status-item .vc-s-value.off{color:#8f2d1d}
+
+/* 進階管理（頁尾，預設關閉） */
+.vc-admin{margin-top:26px;border-top:1px solid #e3eaee;padding-top:12px}
+.vc-admin>summary{cursor:pointer;font-weight:650;color:#5c6d78;font-size:14px}
+.vc-admin-block{margin-top:16px;padding-top:12px;border-top:1px dashed #dde6ec}
+.vc-admin-block h3{margin:0 0 8px;font-size:16px}
+.vc-admin .vc-taskbar{display:flex;flex-wrap:wrap;gap:8px}
+.vc-admin .vc-tab{padding:8px 14px;border:1px solid #cfdbe2;background:#fff;color:#17415b;text-decoration:none;font-weight:650;font-size:14px;border-radius:6px}
+.vc-admin .vc-tab.active{background:#087f91;border-color:#087f91;color:#fff}
+.vc-admin .vc-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border:1px solid #cfdbe2;background:#fff;font-size:13px;color:#465e70;margin:0 8px 8px 0}
+.vc-admin .vc-pill b{color:#10253a}
+.vc-admin table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+.vc-admin th,.vc-admin td{border:1px solid #e0e8ed;padding:7px 9px;text-align:left;vertical-align:top}
+.vc-admin th{background:#f4f8fa;color:#3c5566;font-weight:650}
+
+/* 手機：導覽卡改為兩欄，按鈕全寬易點 */
+@media(max-width:640px){
+  .vc-nav{grid-template-columns:repeat(2,1fr);gap:8px}
+  .vc-nav-card{padding:11px 12px}
+  .vc-nav-card .vc-nav-title{font-size:14.5px}
+  .vc-cta{width:100%}
+  .vc-card{padding:15px 14px}
+  .vc-field-row .vc-f{flex:1 1 100%}
+  .vc-actions .vc-cta,.vc-actions .button{flex:1 1 100%}
+}
+</style>
+
+<section class="page-heading">
+  <div class="vc-head">
+    <div>
+      <p class="eyebrow">FDE-AI 2.0 · 教師</p>
+      <h1>AI 視覺模型中心</h1>
+      <p class="vc-flowline">四個步驟一次做一件事：<b>看學員模型</b> → <b>驗一張圖</b> → <b>設正式模型</b> → <b>留教學資料</b>。不需懂 YOLO 或部署。</p>
+    </div>
+    <a class="button quiet" href="{% url 'learning:teacher_dashboard' %}">回教師後台</a>
+  </div>
+</section>
+
+{% if not api_online %}
+<div class="vc-note bad">
+  <strong>推論服務目前無法連線，驗證與啟用按鈕暫不開放。</strong><br>
+  請確認 Live Backend 已啟動。這是正確的保護行為 —— 服務不在線時不會產生任何假的辨識結果。
+</div>
+{% endif %}
+
+{# ============================ 頂部四場景導覽（始終可見） ============================ #}
+<nav class="vc-nav" aria-label="視覺模型中心四個場景">
+  <a class="vc-nav-card{% if scene == 1 %} active{% endif %}" data-scene="1" href="?task={{ task_id }}&amp;scene=1">
+    <span class="vc-nav-num">①</span>
+    <span class="vc-nav-title">學員模型</span>
+    <span class="vc-nav-sub">挑一個待複核的模型</span>
+  </a>
+  <a class="vc-nav-card{% if scene == 2 %} active{% endif %}" data-scene="2" href="?task={{ task_id }}&amp;scene=2">
+    <span class="vc-nav-num">②</span>
+    <span class="vc-nav-title">圖片驗證</span>
+    <span class="vc-nav-sub">上傳一張圖看辨識</span>
+  </a>
+  <a class="vc-nav-card{% if scene == 3 %} active{% endif %}" data-scene="3" href="?task={{ task_id }}&amp;scene=3">
+    <span class="vc-nav-num">③</span>
+    <span class="vc-nav-title">正式模型</span>
+    <span class="vc-nav-sub">看現在用哪個</span>
+  </a>
+  <a class="vc-nav-card{% if scene == 4 %} active{% endif %}" data-scene="4" href="?task={{ task_id }}&amp;scene=4">
+    <span class="vc-nav-num">④</span>
+    <span class="vc-nav-title">下一輪資料飛輪</span>
+    <span class="vc-nav-sub">留給下屆的教學資料</span>
+  </a>
+</nav>
+
+{# ============================ 場景① 學員模型 ============================ #}
+<section class="vc-scene{% if scene == 1 %} active{% endif %}" data-scene="1">
+
+  {% if class_name_mapping %}
+  {# 教師指令③：類別名與任務預期不同但數量一致 → 對照表介面（不駁回、不改狀態） #}
+  <div class="vc-card" style="border-color:#d3a12a;background:#fffdf5">
+    <h2>類別名對照</h2>
+    <p class="vc-purpose">
+      這個模型的類別名與「{{ task_label }}」的任務預期<strong>不同但數量一致</strong>。
+      請把左側「模型類別」逐項對應到右側「任務預期類別」，確認後才會導入。
+      <strong>對照前不會建立任何資料，提交維持「待複核」。</strong>
+    </p>
+    <form method="post" action="{% url 'learning:teacher_vision_center_apply_mapping' %}">
+      {% csrf_token %}
+      <input type="hidden" name="task_id" value="{{ task_id }}">
+      <table class="vc-map-table">
+        <thead>
+          <tr><th style="width:34%">模型類別（實際）</th><th style="width:12%"></th><th>任務預期類別（請選擇）</th>
+        </thead>
+        <tbody>
+          {% for actual in class_name_mapping.class_names_actual %}
+          <tr>
+            <td><span class="vc-map-name">{{ actual }}</span></td>
+            <td style="text-align:center;color:#5c6d78">→</td>
+            <td>
+              <select name="map_{{ forloop.counter0 }}" required>
+                <option value="">請選擇…</option>
+                {% for expected in class_name_mapping.class_names_expected %}
+                <option value="{{ expected }}">{{ expected }}</option>
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="vc-actions">
+        <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>確認對照並導入</button>
+        <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=1">取消，先不導入</a>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="vc-card">
+    <h2>① 學員模型</h2>
+    <p class="vc-purpose">學員在成長紀錄上傳模型後，會自動出現在下面「待複核」。挑一個按「開始圖片驗證」即可。學員模型<strong>永遠不會自動成為正式模型</strong>。</p>
+
+    <h3 style="margin:6px 0 10px;font-size:16px">待複核（{{ pending_submissions|length }}）</h3>
+    {% if not pending_submissions %}
+      <div class="vc-empty">目前沒有「{{ task_label }}」的待複核模型。學員在 R07 成長紀錄上傳模型後，會自動出現在這裡。</div>
+    {% else %}
+      <div class="vc-sublist">
+        {% for item in pending_submissions %}
+        <div class="vc-sub">
+          <div class="vc-sub-head">
+            <span class="vc-sub-title">{{ item.original_filename }}</span>
+            <span class="vc-badge {{ item.status_css }}">{{ item.status_label }}</span>
+          </div>
+          <div class="vc-meta">
+            學員：{{ item.student_id }}｜小組：{{ item.group_id }}<br>
+            上傳日期：{{ item.uploaded_at_display }}
+          </div>
+          {% if item.import_last_error %}
+          {# 教師指令④⑤：匯入失敗後提交維持「待複核」；此處完整顯示失敗原因（不截斷） #}
+          <div class="vc-importerr">
+            <b>上次導入嘗試失敗</b>{% if item.import_attempted_at_display %}（{{ item.import_attempted_at_display }}）{% endif %}：{{ item.import_last_error }}
+            <br>提交維持「待複核」，請教師決定：修正後重試，或另行駁回。
+          </div>
+          {% endif %}
+          <div class="vc-actions">
+            <form method="post" action="{% url 'learning:teacher_vision_center_import' %}" class="inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="submission_id" value="{{ item.submission_id }}">
+              <input type="hidden" name="task_id" value="{{ task_id }}">
+              <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>開始圖片驗證</button>
+            </form>
+            {% if item.demo_active %}<span class="vc-badge imported">DEMO 已啟用（非真實驗證）</span>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <details class="vc-admin" style="margin-top:18px">
+      <summary>已處理紀錄（{{ processed_submissions|length }}）</summary>
+      {% if not processed_submissions %}
+        <div class="vc-empty" style="margin-top:12px">尚無已處理的模型。</div>
+      {% else %}
+        <div class="vc-sublist" style="margin-top:12px">
+          {% for item in processed_submissions %}
+          <div class="vc-sub">
+            <div class="vc-sub-head">
+              <span class="vc-sub-title">{{ item.original_filename }}</span>
+              <span class="vc-badge {{ item.status_css }}">{{ item.status_label }}</span>
+            </div>
+            <div class="vc-meta">
+              學員：{{ item.student_id }}｜小組：{{ item.group_id }}<br>
+              上傳日期：{{ item.uploaded_at_display }}
+            </div>
+            <div class="vc-actions">
+              {% if item.model_row %}
+                <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=2&amp;model={{ item.model_row.model_id }}">查看驗證 →</a>
+              {% else %}
+                <span class="muted" style="font-size:13px">此筆已處理，沒有可驗證的模型版本。</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </details>
+  </div>
+
+  <div class="vc-note">
+    按「開始圖片驗證」會把學員的模型送進與教師自傳模型<strong>完全相同</strong>的安全檢查。通過只代表格式正確，<strong>不代表已驗證、也不代表已啟用</strong>。
+    {% if demo_simulation_enabled %}
+      <br><strong>DEMO 模擬複核</strong>只標記 DEMO 狀態，<strong>不會</strong>修改正式 ACTIVE 模型，也<strong>不能</strong>當作真實品質驗證。
+    {% endif %}
+  </div>
+</section>
+
+{# ============================ 場景② 圖片驗證 ============================ #}
+<section class="vc-scene{% if scene == 2 %} active{% endif %}" data-scene="2">
+  <div class="vc-card">
+    <h2>② 圖片驗證</h2>
+    <p class="vc-purpose">上傳一張真實圖片，系統會<strong>實際載入您選的模型</strong>執行辨識，框出槳葉並顯示預測類別與信心值。未偵測到目標或信心不足時，系統會誠實回報「需要檢查」，<strong>不會只憑信心值就判通過</strong>。</p>
+
+    {% if not verifiable_models %}
+      <div class="vc-empty">
+        目前沒有可驗證的「{{ task_label }}」模型。<br>
+        請先到「① 學員模型」按「開始圖片驗證」，產生候選模型後再回來。
+      </div>
+    {% else %}
+      <div class="vc-field-row">
+        <div class="vc-f">
+          <label for="vc-model-select">要驗證的模型</label>
+          <select id="vc-model-select">
+            {% for m in verifiable_models %}
+              <option value="{{ m.model_id }}" {% if m.model_id == selected_model_id %}selected{% endif %}>{{ m.model_name|default:m.model_id }}（{{ m.version }}）· {{ m.status_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="vc-f">
+          <label for="vc-expected-select">這張圖的正確答案（可留空）</label>
+          <select id="vc-expected-select">
+            <option value="">不標註（只看模型辨識）</option>
+            {% for c in class_options %}
+              <option value="{{ c }}" {% if c == selected_expected %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'learning:teacher_vision_center_validate' %}" enctype="multipart/form-data" id="vc-validate-form">
+        {% csrf_token %}
+        <input type="hidden" name="task_id" value="{{ task_id }}">
+        <input type="hidden" name="model_id" id="vc-model-hidden" value="{{ selected_model_id }}">
+        <input type="hidden" name="expected_class" id="vc-expected-hidden" value="{{ selected_expected }}">
+
+        <label class="vc-upload" id="vc-upload" for="vc-image">
+          <div class="vc-upload-icon">📷</div>
+          <div class="vc-upload-text">點這裡或拖曳一張圖片到此處</div>
+          <div class="vc-upload-hint">支援 JPG / PNG；上傳後按「開始 AI 辨識」</div>
+          <input type="file" name="test_image" id="vc-image" accept="image/*">
+        </label>
+
+        <button class="vc-cta primary block" type="submit" id="vc-run-btn" style="margin-top:14px" {% if not api_online %}disabled{% endif %}>開始 AI 辨識</button>
+      </form>
+
+      <div class="vc-note" id="vc-loading" style="display:none">辨識中，請稍候…</div>
+      <div class="vc-note bad" id="vc-err" style="display:none"></div>
+
+      {# 結果區（AJAX 即時顯示，或來自伺服器回傳） #}
+      <div class="vc-result" id="vc-result">
+        <div class="vc-verdict-big" id="vc-verdict-big"></div>
+        <div class="vc-result-grid">
+          <div class="vc-imgbox">
+            <div class="vc-imgbox-label">原圖</div>
+            <img id="vc-original" alt="原圖">
+          </div>
+          <div class="vc-imgbox">
+            <div class="vc-imgbox-label">AI 結果（紅框為辨識到的槳葉）</div>
+            <canvas id="vc-canvas"></canvas>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <div class="vc-v-row"><span>使用模型</span><span id="vc-r-model"></span></div>
+          <div class="vc-v-row"><span>AI 預測類別</span><span id="vc-r-class"></span></div>
+          <div class="vc-v-row"><span>信心值</span><span id="vc-r-conf"></span></div>
+          <div class="vc-v-row"><span>教師標註</span><span id="vc-r-exp"></span></div>
+          <div class="vc-v-row"><span>說明</span><span id="vc-r-reason"></span></div>
+        </div>
+        <div class="vc-note ok" id="vc-r-source">本結果來自<strong>真實推論</strong>（Live Backend 實際載入該模型 .pt 執行），<strong>不是 DEMO 模擬</strong>。建議多張真實照片重複驗證後再啟用。</div>
+        <div class="vc-note bad" id="vc-r-nodetect" style="display:none"><strong>未辨識到槳葉，請更換照片。</strong>系統不會把這張當作通過。</div>
+      </div>
+
+      <div class="vc-actions" style="margin-top:16px">
+        <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=1">← 返回學員模型</a>
+        <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=3">查看正式模型 →</a>
+      </div>
+    {% endif %}
+  </div>
+
+  {# 伺服器回傳結果（非 AJAX 備援渲染） #}
+  {% if validation_result %}
+  <div class="vc-card" id="vc-server-result">
+    <h2>剛才的驗證結果</h2>
+    <div class="vc-verdict-big {{ validation_result.verdict_css }}">{{ validation_result.verdict_label }}</div>
+    <div class="vc-v-row"><span>使用模型</span><span>{{ validation_result.model_name }}（{{ validation_result.model_version }}）</span></div>
+    <div class="vc-v-row"><span>AI 預測類別</span><span>{{ validation_result.predicted_class|default:"無" }}</span></div>
+    <div class="vc-v-row"><span>信心值</span><span>{% if validation_result.predicted_confidence != None %}{{ validation_result.predicted_confidence }}{% else %}—{% endif %}</span></div>
+    <div class="vc-v-row"><span>說明</span><span>{{ validation_result.reason }}</span></div>
+    {% if validation_result.reason_code == 'NO_DETECTION' %}
+      <div class="vc-note bad"><strong>未辨識到槳葉，請更換照片。</strong></div>
+    {% endif %}
+    <p class="muted" style="font-size:13px;margin:10px 0 0">本判定來自<strong>真實推論</strong>，<strong>不是 DEMO 模擬結果</strong>。單張圖片不足以代表整體品質，建議重複驗證後再啟用。</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ============================ 場景③ 正式模型 ============================ #}
+<section class="vc-scene{% if scene == 3 %} active{% endif %}" data-scene="3">
+  <div class="vc-card">
+    <h2>③ 正式模型</h2>
+    <p class="vc-purpose">每個任務只會有一個 <strong>正式使用（ACTIVE）</strong> 模型。驗證通過後按「設為正式模型」即完成切換；舊版本會自動保留，隨時可回復。</p>
+
+    {% if active_model %}
+      <div class="vc-hero">
+        <h2>目前正式使用</h2>
+        <div class="vc-hero-row">
+          <span class="vc-hero-name">{{ active_model.model_name|default:active_model.model_id }}</span>
+          <span class="vc-hero-meta">版本 {{ active_model.version }}</span>
+          <span class="vc-badge active">正式使用</span>
+          <span class="vc-hero-meta">啟用時間：{{ active_model.activated_at_display|default:"—" }}</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="vc-empty">「{{ task_label }}」目前尚未啟用任何正式模型。學員端辨識在啟用前不會使用任何模型。</div>
+    {% endif %}
+
+    <h3 style="margin:18px 0 4px;font-size:16px">可設為正式模型的版本</h3>
+    <div class="vc-note">
+      <strong>「已通過結構驗證」只代表模型可載入、類別正確，不代表真實圖片辨識品質已通過。</strong>請以「② 圖片驗證」的<strong>真實推論結果</strong>作為辨識品質依據。
+    </div>
+
+    {% if candidate_models %}
+      <div class="vc-sublist">
+        {% for m in candidate_models %}
+        <div class="vc-sub">
+          <div class="vc-sub-head">
+            <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
+            <span class="vc-badge {{ m.status_css }}">{{ m.status_label }}</span>
+          </div>
+          <div class="vc-meta">
+            來源：{{ m.source_label|default:"—" }}｜上傳：{{ m.uploaded_at_display|default:"—" }}<br>
+            圖片驗證依據：<span class="vc-badge {{ m.image_evidence_css }}">{{ m.image_evidence_label }}</span>
+          </div>
+          {% if m.recognition_quality_proven %}
+            <div class="vc-note ok" style="margin-top:10px">已有真實圖片驗證依據（最近一次：{{ m.last_image_validation.predicted_class|default:"無" }}／信心值 {% if m.last_image_validation.predicted_confidence != None %}{{ m.last_image_validation.predicted_confidence }}{% else %}—{% endif %}）。</div>
+          {% else %}
+            <div class="vc-note" style="margin-top:10px"><strong>尚未完成品質驗證。</strong>請先在「② 圖片驗證」用真實圖片驗證過，再考慮設為正式模型。</div>
+          {% endif %}
+          <div class="vc-actions">
+            {% if m.can_activate %}
+              <form method="post" action="{% url 'learning:teacher_vision_center_activate' %}" class="inline-form"
+                    onsubmit="return confirm('確定要把這個模型設為正式使用嗎？目前的正式模型會保留為歷史版本。');">
+                {% csrf_token %}
+                <input type="hidden" name="task_id" value="{{ task_id }}">
+                <input type="hidden" name="model_id" value="{{ m.model_id }}">
+                <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>設為正式模型</button>
+              </form>
+            {% else %}
+              <span class="muted" style="font-size:13px">此版本尚未通過驗證，無法啟用。請先到「② 圖片驗證」用圖片驗證。</span>
+            {% endif %}
+            <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=2&amp;model={{ m.model_id }}">先驗證圖片 →</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="vc-empty" style="margin-top:10px">目前沒有可設為正式的候選版本。</div>
+    {% endif %}
+
+    <details class="vc-admin" style="margin-top:18px">
+      <summary>版本管理（歷史版本與回復）</summary>
+      {% if history %}
+        <div class="vc-sublist" style="margin-top:12px">
+          {% for h in history %}
+          <div class="vc-sub">
+            <div class="vc-sub-head">
+              <span class="vc-sub-title">{{ h.model_name|default:h.model_id }}（{{ h.version }}）</span>
+              <span class="vc-badge {{ h.status_css }}">{{ h.status_label }}</span>
+            </div>
+            <div class="vc-meta">上傳：{{ h.uploaded_at_display|default:"—" }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="vc-empty" style="margin-top:12px">目前沒有模型版本。</div>
+      {% endif %}
+      {% if can_rollback %}
+      <div class="vc-actions">
+        <form method="post" action="{% url 'learning:teacher_vision_center_rollback' %}" class="inline-form"
+              onsubmit="return confirm('確定要回復到上一個已驗證的版本嗎？目前的正式模型會保留為歷史版本。');">
+          {% csrf_token %}
+          <input type="hidden" name="task_id" value="{{ task_id }}">
+          <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>回復舊版本</button>
+        </form>
+      </div>
+      {% endif %}
+    </details>
+
+    <div class="vc-actions" style="margin-top:16px">
+      <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=2">← 返回圖片驗證</a>
+      <a class="vc-cta ghost" href="{% url 'learning:teacher_vision_model_list' %}">進入完整模型管理頁 →</a>
+    </div>
+  </div>
+</section>
+
+{# ============================ 場景④ 下一輪資料 ============================ #}
+<section class="vc-scene{% if scene == 4 %} active{% endif %}" data-scene="4">
+  <div class="vc-card">
+    <h2>④ 下一輪資料飛輪</h2>
+    <p class="vc-purpose">這一區只回答三件事：<strong>哪些模型已經過教師認可、哪些圖片值得再訓練、下一輪教學資料準備得怎麼樣</strong>。模型檔案屬於模型庫，與這裡是兩件事。</p>
+
+    {# A 教師認可的模型 #}
+    <div class="vc-zone">
+      <h3>A. 教師認可的模型</h3>
+      <p class="vc-zone-sub">已通過真實圖片驗證（有真實推論依據）的模型，可以留給下一屆繼續用。</p>
+      {% if approved_models %}
+        <div class="vc-sublist">
+          {% for m in approved_models %}
+          <div class="vc-sub">
+            <div class="vc-sub-head">
+              <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
+              <span class="vc-badge ok">已通過真實圖片驗證</span>
+            </div>
+            <div class="vc-meta">最近驗證：{{ m.last_image_validation.predicted_class|default:"無" }}／信心值 {% if m.last_image_validation.predicted_confidence != None %}{{ m.last_image_validation.predicted_confidence }}{% else %}—{% endif %}</div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="vc-empty">目前還沒有「已通過真實圖片驗證」的模型。請先在「② 圖片驗證」用真實圖片驗證過，模型才會出現在這裡。</div>
+      {% endif %}
+    </div>
+
+    {# B 值得再訓練的圖片 #}
+    <div class="vc-zone">
+      <h3>B. 值得再訓練的圖片</h3>
+      <p class="vc-zone-sub">來自本輪真實圖片驗證中「預測與標註不符」或「信心不足」的張數統計。這些<strong>目前只記在這次登入期間，尚未保存完整圖片</strong>，無法直接匯出再訓練。</p>
+      <div class="vc-status-grid">
+        <div class="vc-status-item"><div class="vc-s-label">預測與標註不符</div><div class="vc-s-value miss">{{ resources.mismatch_samples }}</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">信心不足</div><div class="vc-s-value miss">{{ resources.low_confidence_samples }}</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">已保存完整圖片</div><div class="vc-s-value off">尚未保存</div></div>
+      </div>
+    </div>
+
+    {# C 下一輪資料準備狀態 #}
+    <div class="vc-zone">
+      <h3>C. 下一輪資料準備狀態</h3>
+      <p class="vc-zone-sub">如實說明各項資源的準備情況。缺少的標示為「尚缺」，需要授權或人工確認的標示為「待確認」。匯出功能<strong>尚未接通</strong>，不會出現假的匯出按鈕。</p>
+      <div class="vc-status-grid">
+        <div class="vc-status-item"><div class="vc-s-label">可用模型檔案（best.pt）</div><div class="vc-s-value done">{{ resources.model_count }} 個（已備）</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">類別對應（4 類契約）</div><div class="vc-s-value done">已定義</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">授權訓練圖片</div><div class="vc-s-value miss">{{ resources.images }}</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">YOLO 標註檔</div><div class="vc-s-value miss">{{ resources.labels }}</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">本輪驗證報告</div><div class="vc-s-value warn">{{ resources.validation_reports }}（本次登入期間，尚未持久化）</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">匯出下一輪資料包</div><div class="vc-s-value off">尚未接通匯出</div></div>
+      </div>
+      <div class="vc-actions" style="margin-top:14px">
+        <a class="vc-cta ghost" href="{% url 'learning:teacher_vision_flywheel' %}">進入完整資料飛輪頁 →</a>
+      </div>
+    </div>
+
+    <div class="vc-note">
+      <strong>發布下一屆資源前需要教師確認。</strong>學員上傳的圖片與模型可能含有個人資料，資源庫不會自動對外發布，需由教師逐一確認後才可輸出。
+    </div>
+    <div class="vc-actions" style="margin-top:14px">
+      <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=3">← 返回正式模型</a>
+    </div>
+  </div>
+</section>
+
+{# ============================ 進階管理（頁尾，預設關閉） ============================ #}
+<details class="vc-admin">
+  <summary>進階管理（一般教師不需使用）</summary>
+
+  <div class="vc-admin-block">
+    <h3>任務類型切換</h3>
+    <p class="muted" style="font-size:13.5px;margin:0 0 8px">兩個任務使用同一套複核流程，各自有獨立的模型、版本與正式版本。</p>
+    <div class="vc-taskbar">
+      {% for option in task_options %}
+        <a class="vc-tab {% if option.id == task_id %}active{% endif %}" href="?task={{ option.id }}">{{ option.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="vc-admin-block">
+    <h3>推論服務與版本狀態</h3>
+    <div>
+      <span class="vc-pill"><b>推論服務</b>
+        {% if api_online %}<span style="color:#12695a;font-weight:650">正常</span>{% else %}<span style="color:#8f2d1d;font-weight:650">無法連線</span>{% endif %}
+      </span>
+      {% for row in task_summary %}
+      <span class="vc-pill">
+        <b>{{ row.label }}</b>
+        {% if row.active %}<span style="color:#12695a;font-weight:650">正式：{{ row.active.model_name|default:row.active.model_id }}（{{ row.active.version }}）</span>
+        {% else %}<span style="color:#8a6412">尚未啟用</span>{% endif %}
+        <span class="muted">｜版本數 {{ row.history_count }}</span>
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="vc-admin-block">
+    <h3>上傳您自己的模型</h3>
+    <p class="muted" style="font-size:13.5px;margin:0 0 8px">教師自行訓練的模型可從這裡上傳；上傳後仍須完成「② 圖片驗證」才可設為正式模型。</p>
+    <form method="post" action="{% url 'learning:teacher_vision_center_upload' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="task_id" value="{{ task_id }}">
+      <div class="vc-field-row">
+        <div class="vc-f">
+          <label for="vc-up-name">模型名稱</label>
+          <input type="text" name="model_name" id="vc-up-name" placeholder="例如：四槳方向 v2" required>
+        </div>
+        <div class="vc-f">
+          <label for="vc-up-version">版本</label>
+          <input type="text" name="version" id="vc-up-version" value="v1" required>
+        </div>
+      </div>
+      <div class="vc-field-row">
+        <div class="vc-f">
+          <label for="vc-up-file">模型檔案（best.pt）</label>
+          <input type="file" name="model_file" id="vc-up-file" accept=".pt" required>
+        </div>
+      </div>
+      <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>上傳並檢查</button>
+    </form>
+  </div>
+
+  <div class="vc-admin-block">
+    <h3>系統運作方式（供技術人員參考）</h3>
+    <table>
+      <tr><th>推論執行位置</th><td>Live Backend 獨立推論服務（Django 不載入 .pt）</td></tr>
+      <tr><th>Django 是否載入 .pt</th><td>否。學生模型為 PyTorch pickle，載入即執行任意程式碼，一律交由獨立進程處理。</td></tr>
+      <tr><th>兩個任務是否共用模型</th><td>否。各自獨立的模型、規則、測試集與啟用版本。</td></tr>
+      <tr><th>舊模型是否被刪除</th><td>否。切換時只改狀態，原版本永久保留為歷史。</td></tr>
+    </table>
+  </div>
+</details>
+
+<script>
+(function () {
+  // ---- 場景切換 ----
+  var scene = {{ scene|default:1 }};
+  function switchScene(n, push) {
+    document.querySelectorAll('.vc-scene').forEach(function (s) {
+      s.classList.toggle('active', s.getAttribute('data-scene') === String(n));
+    });
+    document.querySelectorAll('.vc-nav-card').forEach(function (c) {
+      var on = c.getAttribute('data-scene') === String(n);
+      c.classList.toggle('active', on);
+      c.setAttribute('aria-current', on ? 'true' : 'false');
+    });
+    if (push !== false) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('scene', n);
+      history.replaceState(null, '', url.toString());
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  document.querySelectorAll('.vc-nav-card').forEach(function (card) {
+    card.addEventListener('click', function (e) {
+      // 即時切換場景（不整頁重載），並同步 URL 的 scene 參數。
+      e.preventDefault();
+      var n = card.getAttribute('data-scene');
+      switchScene(n, true);
+    });
+  });
+  switchScene(scene, false);
+
+  // ---- 場景② AJAX 即時辨識 ----
+  var form = document.getElementById('vc-validate-form');
+  if (form) {
+    var sel = document.getElementById('vc-model-select');
+    var exp = document.getElementById('vc-expected-select');
+    var hidModel = document.getElementById('vc-model-hidden');
+    var hidExp = document.getElementById('vc-expected-hidden');
+    var fileInput = document.getElementById('vc-image');
+    var upload = document.getElementById('vc-upload');
+    var resultBox = document.getElementById('vc-result');
+    var errBox = document.getElementById('vc-err');
+    var loading = document.getElementById('vc-loading');
+    var canvas = document.getElementById('vc-canvas');
+
+    function sync() { if (sel && hidModel) hidModel.value = sel.value; if (exp && hidExp) hidExp.value = exp.value; }
+    if (sel) sel.addEventListener('change', sync);
+    if (exp) exp.addEventListener('change', sync);
+    sync();
+
+    // 拖曳上傳
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      upload.addEventListener(ev, function (e) { e.preventDefault(); upload.classList.add('drag'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      upload.addEventListener(ev, function (e) { e.preventDefault(); upload.classList.remove('drag'); });
+    });
+    upload.addEventListener('drop', function (e) {
+      if (e.dataTransfer && e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+      }
+    });
+
+    function simpleVerdict(r) {
+      if (r.verdict === 'MATCH') return { text: '通過', cls: 'pass' };
+      if (r.verdict === 'MISMATCH') return { text: '不通過', cls: 'fail' };
+      return { text: '需要檢查', cls: 'check' };
+    }
+
+    function drawBoxes(imgUrl, boxes) {
+      var img = new Image();
+      img.onload = function () {
+        var maxW = canvas.parentElement.clientWidth - 20;
+        var scale = maxW / img.naturalWidth;
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = Math.max(2, canvas.width * 0.006);
+        ctx.strokeStyle = '#ff3b30';
+        ctx.font = Math.round(canvas.width * 0.032) + 'px sans-serif';
+        ctx.fillStyle = '#ff3b30';
+        ctx.textBaseline = 'top';
+        (boxes || []).forEach(function (b) {
+          var x1 = b.bbox[0] * scale, y1 = b.bbox[1] * scale, x2 = b.bbox[2] * scale, y2 = b.bbox[3] * scale;
+          ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+          var label = b.class + ' ' + (b.confidence != null ? Math.round(b.confidence * 100) + '%' : '');
+          ctx.fillText(label, x1, y1 + 2);
+        });
+      };
+      img.src = imgUrl;
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errBox.style.display = 'none';
+      if (!fileInput.files.length) { errBox.textContent = '請先選擇一張測試圖片。'; errBox.style.display = 'block'; return; }
+      sync();
+      var file = fileInput.files[0];
+      var localUrl = URL.createObjectURL(file);
+      document.getElementById('vc-original').src = localUrl;
+
+      loading.style.display = 'block';
+      resultBox.classList.remove('show');
+
+      var fd = new FormData(form);
+      fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          loading.style.display = 'none';
+          if (!data.ok) { errBox.textContent = data.error || '驗證失敗，請重試。'; errBox.style.display = 'block'; return; }
+          var r = data.result;
+          var v = simpleVerdict(r);
+          var big = document.getElementById('vc-verdict-big');
+          big.textContent = v.text;
+          big.className = 'vc-verdict-big ' + v.cls;
+          document.getElementById('vc-r-model').textContent = r.model_name + '（' + r.model_version + '）';
+          document.getElementById('vc-r-class').textContent = r.predicted_class || '無';
+          document.getElementById('vc-r-conf').textContent = (r.predicted_confidence != null) ? r.predicted_confidence : '—';
+          document.getElementById('vc-r-exp').textContent = r.expected_class || '（未標註）';
+          document.getElementById('vc-r-reason').textContent = r.reason || '';
+          document.getElementById('vc-r-nodetect').style.display = (r.reason_code === 'NO_DETECTION') ? 'block' : 'none';
+          drawBoxes(localUrl, r.boxes);
+          resultBox.classList.add('show');
+        })
+        .catch(function () {
+          loading.style.display = 'none';
+          errBox.textContent = '網路錯誤，請重試。'; errBox.style.display = 'block';
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}

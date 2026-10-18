@@ -1,0 +1,20 @@
+{
+  "validation_set_id": "PROP_GOLDEN",
+  "version": "PROP_GOLDEN_V1",
+  "created_at": "2026-10-07",
+  "class_contract": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+  "class_contract_version": "PROP_V1",
+  "image_count": 0,
+  "per_class_count": {
+    "CW_F": 0,
+    "CCW_F": 0,
+    "CW_B": 0,
+    "CCW_B": 0
+  },
+  "source": "NONE",
+  "review_status": "BLOCKED_NO_REAL_SAMPLES",
+  "frozen": false,
+  "images_dir": "images",
+  "labels_dir": "labels",
+  "note": "P1-2.5 真實性檢查結果：磁碟上不存在對應 CW_F / CCW_F / CW_B / CCW_B 四類的真實人工確認標註樣本，因此本集合尚未成為 Golden Set。既有 qualification/live_propellers 為空且使用舊類別（cw_propeller / ccw_propeller），不得冒充新 Contract。本集合在未凍結且未經教師確認前，available() 恆為 false，Benchmark 狀態為 WAITING_FOR_GOLDEN_SET，不偽造 PASS。"
+}

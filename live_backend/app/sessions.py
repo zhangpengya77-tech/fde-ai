@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+import json
+import os
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
+from collections import Counter, defaultdict
+from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 
@@ -9,7 +13,7 @@ from .sop import DetectionFact, SopCourse, SopDecision, SopStep, load_demo_cours
 from .safety import SAFETY_REMINDERS
 from .task_catalog import TaskStatus, load_f450_course
 from .task_state import TaskTransitionError, TrainingProgress
-from .training_records import EvidenceRecord, PendingSyncGrowthRecordAdapter, StudentReflection
+from .training_records import EvidenceRecord, EvidenceType, ModelSubmissionStatus, ModelTaskType, PendingSyncGrowthRecordAdapter, StudentReflection
 
 
 def utc_now_iso() -> str:
@@ -90,16 +94,86 @@ class LiveSession:
                 value.pop(key, None)
         return value
 
+    def to_persist_dict(self) -> dict:
+        """Full serialization for session persistence (P1: 重载保留)."""
+        return asdict(self)
+
+    @classmethod
+    def from_persist_dict(cls, data: dict) -> "LiveSession":
+        return cls(**data)
+
 
 class InMemorySessionStore:
-    def __init__(self, course: SopCourse | None = None):
+    def __init__(self, course: SopCourse | None = None, persistence_path: Path | None = None):
         self.course = course or load_demo_course()
         self.task = self.course.tasks[0]
         self._sessions: dict[str, LiveSession] = {}
         self._training: dict[str, TrainingProgress] = {}
         self._evidence: dict[str, list[EvidenceRecord]] = {}
         self._reflections: dict[str, list[StudentReflection]] = {}
+        self._knowledge_candidates: dict[str, list[dict]] = {}
+        self._classroom_validation: dict[str, dict] = {}
+        self._coach_history: dict[str, list[dict]] = {}
+        self._prop_vision_probe = lambda: False
         self._lock = RLock()
+        self._persistence_path = persistence_path
+        if self._persistence_path is not None:
+            self._load_all()
+
+    def _persist(self) -> None:
+        """Atomically write the full session + training snapshot to disk (P1: 重载保留)."""
+        if self._persistence_path is None:
+            return
+        snapshot = {
+            "sessions": {sid: session.to_persist_dict() for sid, session in self._sessions.items()},
+            "training": {
+                sid: progress.to_dict()
+                for sid, progress in self._training.items()
+                if sid in self._sessions
+            },
+        }
+        try:
+            self._persistence_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._persistence_path.with_name(self._persistence_path.name + ".tmp")
+            tmp.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, self._persistence_path)
+        except OSError:
+            # Persistence is best-effort; never break the live session path.
+            pass
+
+    def _load_all(self) -> None:
+        if self._persistence_path is None or not self._persistence_path.exists():
+            return
+        try:
+            data = json.loads(self._persistence_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+        for sid, sdata in data.get("sessions", {}).items():
+            try:
+                self._sessions[sid] = LiveSession.from_persist_dict(sdata)
+            except Exception:
+                continue
+        for sid, tdata in data.get("training", {}).items():
+            if sid not in self._sessions:
+                continue
+            try:
+                self._training[sid] = TrainingProgress.from_dict(tdata)
+            except Exception:
+                self._training.pop(sid, None)
+        # Ensure every restored F450 session has a training entry even if training wasn't saved.
+        for sid, session in self._sessions.items():
+            if session.training_track == "F450_TWELVE_TASK" and sid not in self._training:
+                self._training[sid] = TrainingProgress(session.session_id, f"dev-student:{sid}", load_f450_course())
+
+    def set_prop_vision_probe(self, probe) -> None:
+        """注入既有 PROP ACTIVE 模型狀態，不建立第二套 Vision 系統。"""
+        self._prop_vision_probe = probe
+
+    def _prop_vision_status(self) -> str:
+        try:
+            return "READY" if self._prop_vision_probe() else "PENDING"
+        except (KeyError, OSError, ValueError):
+            return "PENDING"
 
     def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo", training_track: str | None = None) -> LiveSession:
         now = utc_now_iso()
@@ -129,9 +203,15 @@ class InMemorySessionStore:
             if training_track == "F450_TWELVE_TASK":
                 self._training[session.session_id] = TrainingProgress(session.session_id, f"dev-student:{session.session_id}", load_f450_course())
                 self._evidence[session.session_id] = []
-                self._reflections[session.session_id] = []
+            self._reflections[session.session_id] = []
+            self._knowledge_candidates[session.session_id] = []
+            self._classroom_validation[session.session_id] = {
+                "enabled": False, "entered_at": None, "exited_at": None, "events": [],
+            }
+            self._coach_history[session.session_id] = []
             self._append(session, "SESSION_STARTED")
             self._append(session, "STEP_STARTED")
+        self._persist()
         return session
 
     def training_progress(self, session_id: str) -> TrainingProgress:
@@ -153,6 +233,16 @@ class InMemorySessionStore:
         session.prerequisite_state = "BLOCKED" if missing else "READY"
         session.safety_state = "TEACHER_GATE" if definition.safety_gate else "ADVISORY"
         session.teacher_review_state = "PENDING" if current.status is TaskStatus.PENDING_TEACHER_REVIEW else ("REQUIRED" if definition.teacher_review_required else "NOT_REQUIRED")
+        # MP-12 Integration：TASK_07 以目前 MP 子任務的教師需求「強化」Gate。
+        # 注意：只做強化，不做放寬；Main-12 既有的 unsafe_step_missing 安全鏈維持不變。
+        if current_id == "TASK_07":
+            mp_current = progress.mp12_state().get("current_subtask") or {}
+            if mp_current.get("teacher_required"):
+                session.safety_state = "TEACHER_GATE"
+                if mp_current.get("status") == "PENDING_TEACHER_REVIEW":
+                    session.teacher_review_state = "PENDING"
+                elif session.teacher_review_state == "NOT_REQUIRED":
+                    session.teacher_review_state = "REQUIRED"
         session.evidence_count = len(self._evidence[session_id])
         session.reflection_state = "available" if self._reflections[session_id] else "missing"
         return session
@@ -170,8 +260,10 @@ class InMemorySessionStore:
             "title": item.title, "status": progress.task(item.id).status.value,
             "viewable": True,
             "actionable": True,
+            "readiness": "READY" if not progress.missing_prerequisites(item.id) else "BLOCKED",
+            "missing_prerequisites": list(progress.missing_prerequisites(item.id)),
         } for item in progress.course.tasks]
-        return {
+        payload = {
             "training_track": session.training_track,
             "hardware_profile": session.hardware_profile,
             "current_task_id": current.id,
@@ -224,11 +316,17 @@ class InMemorySessionStore:
                 "evidence_state": len(self._evidence[session_id]),
             },
         }
+        if current.id == "TASK_08":
+            payload["prop_vision_status"] = self._prop_vision_status()
+        if current.id == "TASK_07":
+            # MP-12 Integration：TASK_07 暴露既有 MP-12 子模組狀態（parent_task_id 由 MP-12 自帶）
+            payload["mission_planner"] = progress.mp12_state()
+        return payload
 
     @staticmethod
     def _training_step_payload(step, progress) -> dict:
         state = progress.training_step_progress.get(step.step_id, {})
-        return {
+        payload = {
             "step_id": step.step_id, "id": step.step_id, "order": step.order,
             "title": step.title, "student_instruction": step.student_instruction,
             "instruction": step.student_instruction, "why_it_matters": step.why_it_matters,
@@ -238,6 +336,7 @@ class InMemorySessionStore:
             "safety_reminders": [{"id": item, "message": SAFETY_REMINDERS[item].message} for item in step.safety_reminders],
             "progress": state,
         }
+        return payload
 
     def training_task_view(self, session_id: str, task_id: str) -> dict:
         progress = self.training_progress(session_id)
@@ -253,7 +352,7 @@ class InMemorySessionStore:
             current_id = task.id
         current_step = next((step for step in task.steps if step.step_id == task_progress.current_training_step_id), None)
         missing = list(progress.unsafe_step_missing(task.id, task_progress.current_training_step_id))
-        return {
+        payload = {
             "viewable": True,
             "actionable": True,
             "completable": not missing,
@@ -273,25 +372,65 @@ class InMemorySessionStore:
                 "teacher_review_required": task.teacher_review_required,
             },
         }
+        if task.id == "TASK_08":
+            payload["prop_vision_status"] = self._prop_vision_status()
+        if task.id == "TASK_07":
+            payload["mission_planner"] = progress.mp12_state()
+        return payload
 
-    def record_training_step_fact(self, session_id: str, step_id: str, fact: str) -> dict:
+    def record_training_step_fact(self, session_id: str, step_id: str, fact: str, student_note: str = "") -> dict:
         task_id = self._sessions[session_id].current_task_id
-        self.training_progress(session_id).record_step_fact(task_id, step_id, fact)
+        self.training_progress(session_id).record_step_fact(task_id, step_id, fact, student_note)
+        self._persist()
         return self.training_state(session_id)
 
     def acknowledge_training_step_safety(self, session_id: str, step_id: str) -> dict:
         task_id = self._sessions[session_id].current_task_id
         self.training_progress(session_id).acknowledge_step_safety(task_id, step_id)
+        self._persist()
+        return self.training_state(session_id)
+
+    # ---- MP-12 Integration Adapter（Backend）：TASK_07 深度子模組 MP01～MP12 ----
+
+    def select_mp_subtask(self, session_id: str, subtask_id: str) -> dict:
+        self.training_progress(session_id).select_mp_subtask(subtask_id)
+        self._sync_training_session(session_id, "TASK_07")
+        self._persist()
+        return self.training_state(session_id)
+
+    def complete_mp_subtask(self, session_id: str, subtask_id: str, *, actor: str) -> dict:
+        self.training_progress(session_id).complete_mp_subtask(subtask_id, actor=actor)
+        self._sync_training_session(session_id, "TASK_07")
+        self._persist()
+        return self.training_state(session_id)
+
+    def review_mp_subtask(
+        self,
+        session_id: str,
+        subtask_id: str,
+        decision: str,
+        teacher_id: str,
+        *,
+        reason: str = "",
+        note: str = "",
+    ) -> dict:
+        self.training_progress(session_id).review_mp_subtask(
+            subtask_id, decision, teacher_id, reason=reason, note=note
+        )
+        self._sync_training_session(session_id, "TASK_07")
+        self._persist()
         return self.training_state(session_id)
 
     def review_training_step(self, session_id: str, task_id: str, step_id: str, decision: str, teacher_id: str, note: str) -> dict:
         self.training_progress(session_id).review_step(task_id, step_id, decision, teacher_id, note=note)
         self._sync_training_session(session_id, task_id)
+        self._persist()
         return self.training_state(session_id)
 
     def start_training_task(self, session_id: str, task_id: str) -> dict:
         self.training_progress(session_id).start_task(task_id)
         self._sync_training_session(session_id, task_id)
+        self._persist()
         return self.training_state(session_id)
 
     def complete_training_task(self, session_id: str, task_id: str) -> dict:
@@ -304,14 +443,27 @@ class InMemorySessionStore:
             raise TaskTransitionError("reflection_required")
         self.training_progress(session_id).request_completion(task_id, actor="student")
         self._sync_training_session(session_id, task_id)
+        self._persist()
         return self.training_state(session_id)
 
     def add_training_evidence(self, session_id: str, evidence: EvidenceRecord) -> None:
+        # MP-12 Integration：MP 證據同樣進入 Shared Evidence（Growth Record 口徑不變），
+        # 並額外寫入 MP-12 子任務自身的 evidence 清單。
         self._evidence[session_id].append(evidence)
-        self.training_progress(session_id).record_evidence(evidence.task_id, evidence.evidence_type.value, evidence.file_reference or evidence.evidence_id)
+        progress = self.training_progress(session_id)
+        reference = evidence.file_reference or evidence.evidence_id
+        progress.record_evidence(evidence.task_id, evidence.evidence_type.value, reference)
         if evidence.step_id:
-            self.training_progress(session_id).record_step_evidence(evidence.task_id, evidence.step_id, evidence.evidence_type.value)
+            if evidence.task_id == "TASK_07" and evidence.step_id.startswith("MP"):
+                progress.record_mp_evidence(evidence.step_id, evidence.evidence_type.value, reference)
+                self._sync_training_session(session_id, evidence.task_id)
+                return
+            progress.record_step_evidence(
+                evidence.task_id, evidence.step_id, evidence.evidence_type.value,
+                evidence.file_reference, evidence.check_result, str(evidence.metadata.get("student_note") or ""),
+            )
         self._sync_training_session(session_id, evidence.task_id)
+        self._persist()
 
     def add_training_reflection(self, session_id: str, reflection: StudentReflection) -> None:
         self._reflections[session_id].append(reflection)
@@ -319,14 +471,233 @@ class InMemorySessionStore:
         if current:
             self.training_progress(session_id).record_step_reflection(reflection.task_id, current)
         self._sync_training_session(session_id, reflection.task_id)
+        self._persist()
 
     def review_training_task(self, session_id: str, task_id: str, decision: str, teacher_id: str, note: str):
         review = self.training_progress(session_id).record_teacher_review(task_id, decision, teacher_id, note)
         self._sync_training_session(session_id, task_id)
+        self._persist()
         return review
 
     def growth_record(self, session_id: str):
         return PendingSyncGrowthRecordAdapter().build(self.training_progress(session_id), tuple(self._evidence[session_id]), tuple(self._reflections[session_id]))
+
+    # ---- P1-1：學生 YOLO 模型提交與教師審核（復用 EvidenceRecord） ----
+    def list_model_submissions(self, session_id: str) -> list[dict]:
+        """列出該 session 下所有 YOLO 模型提交（教師收件匣）。"""
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        return [asdict(ev) for ev in self._evidence[session_id] if ev.evidence_type == EvidenceType.YOLO_MODEL]
+
+    def get_model_submission(self, session_id: str, evidence_id: str) -> dict:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        for ev in self._evidence[session_id]:
+            if ev.evidence_id == evidence_id and ev.evidence_type == EvidenceType.YOLO_MODEL:
+                return asdict(ev)
+        raise KeyError("model_submission_not_found")
+
+    def review_model_submission(self, session_id: str, evidence_id: str, decision: str, teacher_id: str, note: str) -> dict:
+        # 教師審核結果；decision 僅允許 APPROVED_FOR_BENCHMARK / REJECTED，不觸發執行或部署。
+        if decision not in (ModelSubmissionStatus.APPROVED_FOR_BENCHMARK.value, ModelSubmissionStatus.REJECTED.value):
+            raise ValueError("invalid_model_review_decision")
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        evidences = self._evidence[session_id]
+        for index, ev in enumerate(evidences):
+            if ev.evidence_id == evidence_id and ev.evidence_type == EvidenceType.YOLO_MODEL:
+                meta = dict(ev.metadata)
+                meta["model_status"] = decision
+                meta["teacher_note"] = str(note or "")
+                meta["reviewed_by"] = teacher_id
+                meta["reviewed_at"] = utc_now_iso()
+                # 僅更新審核狀態與備註，不載入、不執行、不部署模型。
+                updated = replace(ev, teacher_review={"decision": decision, "teacher_id": teacher_id, "note": note, "reviewed_at": meta["reviewed_at"]}, metadata=meta)
+                evidences[index] = updated
+                return asdict(updated)
+        raise KeyError("model_submission_not_found")
+
+    def record_model_benchmark(self, session_id: str, evidence_id: str, benchmark: dict) -> dict:
+        # P1-2：將 Benchmark 結果寫回既有 submission；不改變 model_status，不部署、不啟用。
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        evidences = self._evidence[session_id]
+        for index, ev in enumerate(evidences):
+            if ev.evidence_id == evidence_id and ev.evidence_type == EvidenceType.YOLO_MODEL:
+                meta = dict(ev.metadata)
+                meta["benchmark_status"] = str(benchmark.get("status") or "")
+                meta["latest_benchmark_id"] = str(benchmark.get("benchmark_id") or "")
+                meta["benchmarked_at"] = str(benchmark.get("created_at") or "")
+                # 只記錄結果供教師審核，不複製 best.pt，不建立 Model Version Manager。
+                updated = replace(ev, metadata=meta)
+                evidences[index] = updated
+                return asdict(updated)
+        raise KeyError("model_submission_not_found")
+
+    def record_knowledge_candidate(self, session_id: str, *, question: str, task_id: str | None, step_id: str | None, llm_answer: str, provider: str | None = None, model: str | None = None, language: str = "zh-TW", answer_source: str = "AI_REFERENCE", tokens: dict | None = None, latency_ms: float | None = None, vision_used: bool = False, image_reference: str | None = None) -> dict:
+        candidate = {
+            "session_id": session_id,
+            "question": question,
+            "answer": llm_answer,
+            "task": task_id,
+            "step": step_id,
+            "task_id": task_id,
+            "step_id": step_id,
+            "llm_answer": llm_answer,
+            "answer_source": answer_source,
+            "provider": provider,
+            "model": model,
+            "language": language,
+            "tokens": dict(tokens or {}),
+            "latency_ms": latency_ms,
+            "vision_used": bool(vision_used),
+            "image_reference": image_reference,
+            "follow_up_count": 0,
+            "resolved": False,
+            "teacher_override": None,
+            "teacher_review": None,
+            "teacher_correction": None,
+            "review_status": "PENDING_REVIEW",
+            "candidate_type": "KNOWLEDGE_CANDIDATE",
+            "final_answer": None,
+        }
+        self._knowledge_candidates[session_id].append(candidate)
+        return dict(candidate)
+
+    def knowledge_candidates(self, session_id: str) -> list[dict]:
+        return [dict(item) for item in self._knowledge_candidates[session_id]]
+
+    def record_coach_turn(self, session_id: str, question: str, answer: str, answer_source: str) -> dict:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        training = self.training_state(session_id)
+        turn = {
+            "timestamp": utc_now_iso(), "question": str(question).strip(), "answer": str(answer).strip(),
+            "answer_source": answer_source, "task_id": training.get("current_task_id"),
+            "step_id": training.get("current_training_step_id"), "evidence_count": training.get("evidence_count", 0),
+            "teacher_review_state": training.get("teacher_review_state"),
+        }
+        history = self._coach_history[session_id]
+        history.append(turn)
+        del history[:-20]
+        return dict(turn)
+
+    def coach_history(self, session_id: str) -> list[dict]:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        return [dict(item) for item in self._coach_history[session_id]]
+
+    def approved_teacher_answer(self, session_id: str, question: str, task_id: str | None, step_id: str | None) -> str | None:
+        normalized = str(question).strip().casefold()
+        for candidate in reversed(self._knowledge_candidates[session_id]):
+            if candidate.get("review_status") != "APPROVED":
+                continue
+            if str(candidate.get("question") or "").strip().casefold() != normalized:
+                continue
+            if candidate.get("task_id") not in (None, task_id) or candidate.get("step_id") not in (None, step_id):
+                continue
+            answer = candidate.get("final_answer") or candidate.get("teacher_correction") or candidate.get("teacher_override")
+            if answer:
+                return str(answer)
+        return None
+
+    def set_classroom_validation(self, session_id: str, enabled: bool) -> dict:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        state = self._classroom_validation[session_id]
+        state["enabled"] = bool(enabled)
+        stamp = utc_now_iso()
+        state["entered_at" if enabled else "exited_at"] = stamp
+        return self.classroom_validation_state(session_id)
+
+    def classroom_validation_state(self, session_id: str) -> dict:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        state = self._classroom_validation[session_id]
+        return {
+            "enabled": state["enabled"],
+            "entered_at": state["entered_at"],
+            "exited_at": state["exited_at"],
+            "event_count": len(state["events"]),
+        }
+
+    def record_classroom_event(self, session_id: str, payload: dict) -> dict:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        state = self._classroom_validation[session_id]
+        event = {
+            "timestamp": utc_now_iso(),
+            "event_type": str(payload.get("event_type") or "UNKNOWN"),
+            "task_id": payload.get("task_id"),
+            "step_id": payload.get("step_id"),
+            "channel": payload.get("channel"),
+            "question": str(payload.get("question") or "").strip(),
+            "duration_ms": max(0, int(payload.get("duration_ms") or 0)),
+        }
+        if state["enabled"]:
+            state["events"].append(event)
+            if event["event_type"] == "TEACHER_CORRECTION":
+                self.record_knowledge_candidate(
+                    session_id,
+                    question=event["question"],
+                    task_id=event["task_id"],
+                    step_id=event["step_id"],
+                    llm_answer=str(payload.get("ai_answer") or ""),
+                    answer_source="AI_REFERENCE",
+                )
+                candidate = self._knowledge_candidates[session_id][-1]
+                candidate["teacher_correction"] = str(payload.get("teacher_answer") or "")
+                candidate["teacher_review"] = "APPROVED"
+                candidate["teacher_override"] = candidate["teacher_correction"]
+                candidate["resolved"] = True
+                candidate["review_status"] = "APPROVED"
+                candidate["candidate_type"] = "TEACHER_STYLE_CANDIDATE"
+                candidate["final_answer"] = candidate["teacher_correction"]
+        return dict(event)
+
+    def classroom_validation_report(self, session_id: str) -> dict:
+        if session_id not in self._sessions:
+            raise KeyError(session_id)
+        events = self._classroom_validation[session_id]["events"]
+        questions = Counter(item["question"] for item in events if item["event_type"] == "AI_ASK" and item["question"])
+        step_times = defaultdict(int)
+        teacher_help = Counter()
+        for item in events:
+            key = (item["task_id"], item["step_id"])
+            if item["event_type"] == "STEP_EXIT":
+                step_times[key] += item["duration_ms"]
+            elif item["event_type"] == "TEACHER_REVIEW":
+                teacher_help[key] += 1
+        asks = [item for item in events if item["event_type"] == "AI_ASK"]
+        growth = self.growth_record(session_id)
+        completed, total = (int(value.strip()) for value in growth.progress_label.split("/", 1))
+        return {
+            **self.classroom_validation_state(session_id),
+            "analytics": {
+                "top_questions": [{"question": question, "count": count} for question, count in questions.most_common(20)],
+                "longest_steps": [
+                    {"task_id": key[0], "step_id": key[1], "duration_ms": duration}
+                    for key, duration in sorted(step_times.items(), key=lambda item: item[1], reverse=True)[:20]
+                ],
+                "teacher_help": [
+                    {"task_id": key[0], "step_id": key[1], "count": count}
+                    for key, count in teacher_help.most_common(20)
+                ],
+            },
+            "learning_report": {
+                "progress": growth.progress_label,
+                "growth_record_id": growth.growth_record_id,
+                "evidence_count": growth.evidence_count,
+                "ai_ask_count": len(asks),
+                "voice_count": sum(item["channel"] == "VOICE" for item in asks),
+                "text_count": sum(item["channel"] == "TEXT" for item in asks),
+                "vision_count": sum(item["channel"] == "VISION" for item in asks),
+                "teacher_review_count": sum(item["event_type"] == "TEACHER_REVIEW" for item in events),
+                "stuck_time_ms": sum(item["duration_ms"] for item in events if item["event_type"] == "STUCK"),
+                "completion_rate": round(completed / total, 4) if total else 0,
+                "total_recorded_duration_ms": sum(item["duration_ms"] for item in events),
+            },
+        }
 
     def get(self, session_id: str) -> LiveSession | None:
         with self._lock:
@@ -532,4 +903,5 @@ class InMemorySessionStore:
             self._training.pop(session_id, None)
             self._evidence.pop(session_id, None)
             self._reflections.pop(session_id, None)
+            self._persist()
             return True

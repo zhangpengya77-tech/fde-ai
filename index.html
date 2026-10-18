@@ -22,22 +22,48 @@
       </div>
     </aside>
 
-    <nav class="mobile-demo-nav" aria-label="Mobile demo navigation">
-      <strong>FDE-AI 手機展示</strong>
-      <div>
-        <a href="./">首頁</a>
-        <a href="./tasks">12 任務</a>
-        <a href="./courses">學</a>
-        <a href="./simulator">練</a>
-        <a href="./f450">作</a>
-        <a href="./eagle">測</a>
-        <a href="./github">證</a>
-        <a href="./results">歷屆學員成果</a>
-        <a href="./teacher">教師復核參照</a>
+    <header class="mobile-header">
+      <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習平台</small></a>
+      <a class="mobile-login-link" href="/student/">學員前端</a>
+      <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileMenu">選單</button>
+    </header>
+
+    <nav id="mobileMenu" class="mobile-demo-nav" aria-label="Mobile demo navigation" hidden>
+      <div class="mobile-menu-head">
+        <a class="mobile-menu-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習控制中心</small></a>
+        <button class="mobile-menu-close" id="mobileMenuClose" type="button" aria-label="關閉選單">✕</button>
+      </div>
+
+      <!-- 桌面右上角的 Portal / 工具入口：手機改為可收合群組，預設收起。 -->
+      <details class="mobile-portal-group" id="mobilePortalGroup">
+        <summary>入口選單 · Portal<span class="mobile-portal-hint">註冊 / 登入 / 教師 / 下載</span></summary>
+        <div class="mobile-portal-links">
+          <a href="/student/">學員前端</a>
+          <a href="/register/">學員註冊</a>
+          <a href="/teacher/login/">教師後台</a>
+          <a href="/downloads/">下載中心</a>
+          <a href="/flight-health/">飛行健康 AI</a>
+          <a href="/student/growth/">我的成長日誌</a>
+        </div>
+      </details>
+
+      <!-- 與桌面左側欄同一份導航，由 renderNavigation() 同步寫入，不另外維護。 -->
+      <div class="mobile-nav-list" id="mobileNavList"></div>
+
+      <div class="mobile-menu-foot">
+        <span>v1.1 MVP</span>
+        <small>AI 雙師教學系統</small>
       </div>
     </nav>
+    <div class="mobile-menu-backdrop" id="mobileMenuBackdrop" hidden></div>
 
     <main>
+      <nav class="portal-entry-links" aria-label="Portal and tools">
+        <a href="/student/">學員前端</a>
+        <a href="/register/">學員註冊</a>
+        <a href="/teacher/login/">教師後台</a>
+        <a href="/downloads/">下載中心 <small>Download Center</small></a>
+      </nav>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
           <p class="eyebrow">System Boot · AI Vehicle Lab</p>
@@ -70,16 +96,16 @@
         <div class="section-intro">
           <p class="eyebrow">Mobile Demo Mode</p>
           <h2>三分鐘看懂 FDE-AI</h2>
-          <p>手機展示依照首頁、12 任務、學練作測證、歷屆學員成果與教師復核參照的电脑版結構排列。</p>
+          <p>手機展示依照首頁、12 任務、學練做測證、歷屆學員成果與教師復核參照的电脑版結構排列。</p>
         </div>
         <div class="mobile-demo-grid">
           <a href="./"><span>01</span><strong>首頁</strong><small>FDE-AI 無人載具學習平台</small></a>
           <a href="./tasks"><span>02</span><strong>12 任務</strong><small>四階段成長地圖</small></a>
           <a href="./courses"><span>03</span><strong>學</strong><small>課程影片與學習資源</small></a>
           <a href="./simulator"><span>04</span><strong>練</strong><small>模擬器與考照練習</small></a>
-          <a href="./f450"><span>05</span><strong>作</strong><small>F450、AI 助教與專案實作</small></a>
+          <a href="./f450"><span>05</span><strong>做</strong><small>F450、AI 助教與專案實作</small></a>
           <a href="./eagle"><span>06</span><strong>測</strong><small>鷹眼 AI 檢測中心</small></a>
-          <a href="./github"><span>07</span><strong>證</strong><small>GitHub 成果存證</small></a>
+          <a href="/student/growth/"><span>07</span><strong>證</strong><small>學習成長日誌（R01–R08）</small></a>
           <a href="./results"><span>08</span><strong>歷屆學員成果</strong><small>展示歷屆學員影片與作品</small></a>
           <a href="./teacher"><span>09</span><strong>教師復核參照</strong><small>查看教師複核流程與示例</small></a>
         </div>
@@ -88,7 +114,7 @@
       <section class="section-block flow-section">
         <div class="section-intro">
           <p class="eyebrow">Learning Data Stream</p>
-          <h2>學・練・作・測・證</h2>
+          <h2>學・練・做・測・證</h2>
           <p>整個平台的核心視覺語言固定在五個節點：從課程理解，到模擬訓練、專案實作、AI 測評與能力存證。</p>
         </div>
         <div class="learning-flow" id="learningFlow"></div>
@@ -133,6 +159,19 @@
         </div>
       </section>
 
+      <!-- 飛行健康 AI 分析獨立專欄入口 -->
+      <section class="section-block flight-health-section" id="flight-health-entry">
+        <div class="flight-health-banner">
+          <div class="flight-health-content">
+            <span class="tag">AI 飛行健康</span>
+            <h2>飛行健康 AI 分析</h2>
+            <p>上傳飛控日誌，快速了解飛機目前的健康狀況，並取得下一步檢查建議。</p>
+            <p class="flight-health-aux">適用於飛後檢查、故障復盤與學習記錄。</p>
+          </div>
+          <a class="primary-action flight-health-btn" href="./flight-health/">開始健康分析 →</a>
+        </div>
+      </section>
+
       <section class="section-block module-page compact-section" id="learn">
         <div class="section-intro">
           <p class="eyebrow">Learn · 學</p>
@@ -173,10 +212,13 @@
 
       <section class="section-block module-page compact-section" id="build">
         <div class="section-intro">
-          <p class="eyebrow">Build · 作</p>
+          <p class="eyebrow">Build · 做</p>
           <h2>F450 Pixhawk 實作與 AI 助教</h2>
           <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教透過 F450 RAG 知識庫協助排錯。</p>
         </div>
+        <!-- Platform Integration：首頁「作 Build」主要 CTA 進入 F450 Main-12 / Student Live Coach -->
+        <a class="primary-action build-main12-entry" id="buildMain12Entry" href="/live/">進入 F450 Main-12 實作（AI 即時助教）→</a>
+        <p class="build-legacy-note">以下為 1.0 舊版 F450 組裝流程與 RAG 助教，保留供參照。</p>
         <div class="build-layout">
           <div class="panel">
             <div class="section-head">
@@ -284,6 +326,10 @@
           <p class="eyebrow">Certify · 證</p>
           <h2>GitHub 成果存證</h2>
           <p>作品頁是能力檔案館，把學習、組裝、AI 測評、教師評語與反思整理成可追蹤成果。</p>
+          <!-- 教師 2026-10-15 裁決：左側 #moduleNav 的「證」已改指 Django 真實 R01–R08 成長日誌（/student/growth/）。
+               本頁（./github）不再是五階段主導航的目標，保留為公開展示頁（直接輸入網址仍可開啟）；
+               原先由 renderStageGuides 注入的 stage-guide 改為靜態輸出，頁面外觀與內容不變。 -->
+          <div class="stage-guide"><span>證</span><strong>GitHub 成果存證</strong><p>把學習紀錄、檢測截圖、影片與作品整理成 GitHub 倉庫，形成能力證據。</p></div>
         </div>
         <div class="cert-grid" id="certificationChecklist"></div>
       </section>
@@ -291,13 +337,14 @@
 
     <script src="./src/router.js?v=1.2-fde-column"></script>
     <script src="./src/course-definitions.js?v=1.5b-course-sync"></script>
-    <script src="./src/platform-browser.js?v=1.5b-course-sync"></script>
+    <script src="./src/platform-browser.js?v=1.5d-stage-rename"></script>
     <script src="./src/data/fdeVideos.js?v=1.2-fde-column-suffix"></script>
     <script src="./src/fde-column.js?v=1.2-fde-column-tags"></script>
     <script>
       document.write('<script src="./src/rag-config.js?v=' + Date.now() + '"><\/script>');
     </script>
-    <script src="./src/rag-client.js?v=1.2-eagle-rag"></script>
-    <script src="./src/app.js?v=1.2-eagle-rag&fde=1.2-fde-column"></script>
+    <script src="./src/rag-client.js?v=1.2.3-mobile-speech"></script>
+    <script src="./src/vision-client.js?v=1.0.3-mobile-speech"></script>
+    <script src="./src/app.js?v=1.2.3-mobile-speech&fde=1.2-fde-column"></script>
   </body>
 </html>

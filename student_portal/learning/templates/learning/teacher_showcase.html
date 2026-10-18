@@ -1,0 +1,241 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/teacher-showcase.css' %}">{% endblock %}
+{% block title %}班級成果展示｜教師後台{% endblock %}
+{% block content %}
+<div id="showcase-root" class="sc-root" data-slide-count="{{ slide_ids|length }}" data-identify="{% if identify %}1{% else %}0{% endif %}">
+
+  {# ── 工具列（僅螢幕顯示，列印／投影時隱藏） ───────────────────────── #}
+  <div class="sc-toolbar sc-screen-only">
+    <a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+    <section class="page-heading">
+      <p class="eyebrow">P7 · 班級成果發表與教學展示</p>
+      <h1>班級成果展示中心</h1>
+      <p class="muted">本頁只呈現既有真實資料（成長紀錄、任務進度、五階段進度、教師複核與回饋、既有成果證據），不產生任何假成績、假照片、假證照或自動生成的教師評語。{{ showcase_caveat }}</p>
+    </section>
+
+    {% if cohorts %}
+    <form method="get" class="sc-toolbar-row" id="showcase-toolbar">
+      <label>班級
+        <select name="cohort" onchange="this.form.submit()">
+          {% for item in cohorts %}<option value="{{ item.cohort_id }}" {% if selected_cohort == item.cohort_id %}selected{% endif %}>{{ item.name }}（{{ item.cohort_id }}）</option>{% endfor %}
+        </select>
+      </label>
+      <button class="button primary" type="button" id="showcase-start">開始展示</button>
+      <a class="button quiet" href="{% url 'learning:teacher_class_report' %}{% if selected_cohort %}?cohort={{ selected_cohort }}{% endif %}">前往班級成果報告</a>
+    </form>
+    {% endif %}
+
+    {% if report %}
+    <div class="sc-privacy-bar">
+      <p class="sc-privacy-note"><strong>隱私預設：</strong>{{ privacy_note }}</p>
+      <div class="sc-privacy-actions">
+        <span class="sc-mode-chip {% if identify %}is-named{% else %}is-anon{% endif %}">
+          {% if identify %}具名展示（教師確認已取得必要授權）{% else %}匿名化展示（預設）{% endif %}
+        </span>
+        <form method="post" class="inline-form">
+          {% csrf_token %}
+          {% if identify %}
+          <input type="hidden" name="action" value="disable_identify">
+          <button class="button secondary" type="submit">改回匿名化展示</button>
+          {% else %}
+          <input type="hidden" name="action" value="enable_identify">
+          <button class="button secondary" type="submit">教師確認已取得必要授權，開啟具名展示</button>
+          {% endif %}
+        </form>
+      </div>
+      <p class="sc-identify-notice">{{ identify_notice }}</p>
+      {% if identified_cohorts %}
+      <p class="sc-identify-scope">目前開啟具名展示的班級：{% for cid in identified_cohorts %}<span class="sc-chip">{{ cid }}</span>{% endfor %}｜切換到其他班級仍為匿名化展示。</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if not report %}
+  <p class="empty-state">尚無紀錄：目前沒有可展示的班級成果；若剛被加入班級，請聯繫管理員開通教師權限。</p>
+  {% else %}
+
+  {# ── 簡報舞台（16:9） ────────────────────────────────────────────── #}
+  <div class="sc-stage" id="sc-stage" role="region" aria-label="班級成果簡報" aria-live="polite">
+
+    {# 1. 封面 #}
+    <section class="sc-slide sc-slide-cover" data-slide="cover" id="slide-cover" aria-label="封面">
+      <p class="sc-brand-mark">FDE</p>
+      <p class="sc-brand-name">FDE-AI-UAS · 無人機組裝與 AI 雙師教學系統</p>
+      <h2 class="sc-cover-title">班級成果發表</h2>
+      <p class="sc-cover-cohort">{{ report.cohort.name }}</p>
+      <p class="sc-cover-meta">班級編號 {{ report.cohort.cohort_id }} · 學員 {{ report.student_count }} 人 · 產生時間 {{ report.generated_at|date:'Y-m-d H:i' }}</p>
+      <p class="sc-cover-foot">本簡報只呈現既有真實資料，不代表考核合格、結訓通過或任何證照取得。</p>
+    </section>
+
+    {# 2. 班級成果 #}
+    <section class="sc-slide" data-slide="outcomes" id="slide-outcomes" aria-label="班級成果">
+      <h2 class="sc-h2">班級成果</h2>
+      <div class="sc-stats">
+        <div class="sc-stat"><span class="sc-stat-num">{{ report.student_count }}</span><span class="sc-stat-label">學員總人數（人）</span></div>
+        <div class="sc-stat"><span class="sc-stat-num">{{ report.total_submitted }}</span><span class="sc-stat-label">R01–R08 已提交（筆）</span></div>
+        <div class="sc-stat"><span class="sc-stat-num">{{ report.total_reviewed }}</span><span class="sc-stat-label">R01–R08 已複核（筆）</span></div>
+        <div class="sc-stat"><span class="sc-stat-num">{{ report.all_submitted_count }}</span><span class="sc-stat-label">八項已提交（人）</span></div>
+        <div class="sc-stat"><span class="sc-stat-num">{{ report.pending_items_total }}</span><span class="sc-stat-label">待教師複核（筆）</span></div>
+        <div class="sc-stat"><span class="sc-stat-num">{{ report.reviewed_result_total }}</span><span class="sc-stat-label">已有教師複核結果（筆）</span></div>
+      </div>
+      <p class="sc-note">口徑與班級成果報告、結訓審核清單、CSV 匯出完全一致（同一統計來源）。「八項已提交」僅代表提交數達 8 項，不代表已通過。</p>
+    </section>
+
+    {# 3. 五階段概況 #}
+    <section class="sc-slide" data-slide="stages" id="slide-stages" aria-label="五階段概況">
+      <h2 class="sc-h2">學 → 練 → 做 → 測 → 證 五階段概況</h2>
+      <table class="sc-table">
+        <thead><tr><th>階段</th><th>完成人數</th><th>班級人數</th><th>完成比例</th></tr></thead>
+        <tbody>
+          {% for stage in report.stage_rows %}
+          <tr>
+            <td data-label="階段">{{ stage.character }}｜{{ stage.title }}</td>
+            <td data-label="完成人數">{{ stage.done }} 人</td>
+            <td data-label="班級人數">{{ stage.total }} 人</td>
+            <td data-label="完成比例">{{ stage.done }} / {{ stage.total }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4">尚無紀錄</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="sc-note">完成定義：僅計入五階段進度為「已完成」者；分母為班級在學學員數。「證」階段為課程學習成果紀錄，非民航局專業操作證。</p>
+    </section>
+
+    {# 4. R01–R08 真實提交成果 #}
+    <section class="sc-slide" data-slide="slots" id="slide-slots" aria-label="R01-R08 成長成果">
+      <h2 class="sc-h2">R01–R08 真實提交成果</h2>
+      <table class="sc-table">
+        <thead><tr><th>紀錄</th><th>名稱</th><th>已提交（人）</th><th>已複核（人）</th></tr></thead>
+        <tbody>
+          {% for slot in report.slot_stats %}
+          <tr>
+            <td data-label="紀錄">{{ slot.slot_id }}</td>
+            <td data-label="名稱">{% if slot.title %}{{ slot.title }}{% else %}<span class="muted">尚無紀錄</span>{% endif %}</td>
+            <td data-label="已提交（人）">{{ slot.submitted }} / {{ slot.total }}</td>
+            <td data-label="已複核（人）">{{ slot.reviewed }} / {{ slot.total }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4">尚無紀錄</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="sc-note">已提交＝狀態屬已提交／需補充／合格／不合格；已複核＝狀態屬需補充／合格／不合格。已提交不等於已通過。</p>
+    </section>
+
+    {# 5. 學員作品與成果證據 #}
+    <section class="sc-slide" data-slide="works" id="slide-works" aria-label="學員作品與成果證據">
+      <h2 class="sc-h2">學員作品與成果證據（{{ report.student_count }} 人 · 證據 {{ showcase_evidence_total }} 件）</h2>
+      {% if not identify %}
+      <p class="sc-privacy-hint">目前為<strong>匿名化展示</strong>：學員以序號呈現，作品影像與可識別檔案一律不載入。如需具名展示，請由教師確認已取得學員展示授權後再開啟。</p>
+      {% else %}
+      <p class="sc-privacy-hint">目前為<strong>具名展示</strong>：僅載入教師有權查看的既有證據；證據存取沿用原有權限檢查，不產生任何公開網址。</p>
+      {% endif %}
+      <div class="sc-works">
+        {% for row in showcase_rows %}
+        <article class="sc-work">
+          <header class="sc-work-head">
+            <strong>{{ row.label }}</strong>
+            {% if row.display_name %}<span class="sc-work-name">{{ row.display_name }}</span>{% endif %}
+            {% if row.public_user_id %}<span class="sc-work-code">{{ row.public_user_id }}</span>{% endif %}
+            <span class="sc-chip">{{ row.direction_label }}</span>
+          </header>
+          <div class="sc-work-nums">
+            <span>已提交 <strong>{{ row.submitted_count }} / 8</strong></span>
+            <span>已複核 <strong>{{ row.reviewed_count }} / 8</strong></span>
+            <span>五階段 <strong>{{ row.completed_stages }} / {{ row.stage_total }}</strong></span>
+            <span>成果證據 <strong>{{ row.evidence_count }}</strong></span>
+          </div>
+          <div class="sc-slot-strip">
+            {% for cell in row.slot_cells %}<span class="sc-slot status status-{{ cell.status_key }}">{{ cell.slot_id }}：{{ cell.status_label }}</span>{% endfor %}
+          </div>
+          {% if identify %}
+            {% if row.evidence_rows %}
+            <div class="sc-evidence">
+              {% for evidence in row.evidence_rows %}
+              <figure class="sc-evidence-item">
+                <figcaption>{{ evidence.slot_id }} · {{ evidence.type_label }}{% if evidence.description %} · {{ evidence.description }}{% endif %}</figcaption>
+                {% if evidence.external_url %}
+                <a href="{{ evidence.external_url }}" target="_blank" rel="noopener noreferrer">開啟外部連結</a>
+                {% elif evidence.is_image %}
+                <img class="sc-evidence-thumb" src="{% url 'learning:evidence_download' evidence.evidence_id %}?inline=1" alt="{{ evidence.slot_id }} 成果證據縮圖" loading="lazy">
+                {% elif evidence.has_upload %}
+                <a href="{% url 'learning:evidence_download' evidence.evidence_id %}">開啟私有檔案</a>
+                {% else %}
+                <span class="muted">證據檔案尚未處理</span>
+                {% endif %}
+              </figure>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="sc-empty">尚無紀錄（此學員尚無成果證據）</p>
+            {% endif %}
+          {% elif row.evidence_count %}
+          <p class="sc-empty">成果證據 {{ row.evidence_count }} 件（匿名化展示中，未載入影像）</p>
+          {% else %}
+          <p class="sc-empty">尚無紀錄（尚無成果證據）</p>
+          {% endif %}
+        </article>
+        {% empty %}
+        <p class="sc-empty">尚無紀錄（此班級目前尚無在學學員）</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# 6. 教師已複核的學習成果與回饋 #}
+    <section class="sc-slide" data-slide="feedback" id="slide-feedback" aria-label="教師回饋">
+      <h2 class="sc-h2">教師已複核的學習成果與回饋</h2>
+      <p class="sc-sub">已有教師複核結果 {{ report.reviewed_result_total }} 筆 · 其中填有教師評語 {{ feedback_note_total }} 筆</p>
+      {% if not identify %}
+        {% if feedback_note_total %}
+      <p class="sc-privacy-hint">目前為<strong>匿名化展示</strong>：教師評語可能含學員姓名或其他可識別資訊，因此僅顯示統計筆數（本班目前共 {{ feedback_note_total }} 筆評語），不顯示評語內容。如需顯示個別評語，請由教師確認已取得展示授權後再開啟具名展示。</p>
+        {% else %}
+      <p class="sc-empty">尚無紀錄（目前尚無任何教師評語或回饋）</p>
+        {% endif %}
+      {% elif report.feedback_rows %}
+      <table class="sc-table sc-table-feedback">
+        <thead><tr><th>學員</th><th>來源</th><th>項目</th><th>複核結果</th><th>教師評語</th></tr></thead>
+        <tbody>
+          {% for item in report.feedback_rows|slice:":12" %}
+          <tr>
+            <td data-label="學員">{{ item.student.public_user_id }}</td>
+            <td data-label="來源">{{ item.source_label }}</td>
+            <td data-label="項目">{{ item.code }}｜{{ item.title }}</td>
+            <td data-label="複核結果">{{ item.review_status_label }}</td>
+            <td data-label="教師評語">{{ item.note }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="sc-empty">尚無紀錄（目前尚無任何教師評語或回饋）</p>
+      {% endif %}
+      <p class="sc-note">本區只顯示教師實際填寫的評語與複核結果；系統不會自動生成任何教師評語。</p>
+    </section>
+
+    {# 7. 結語 #}
+    <section class="sc-slide sc-slide-closing" data-slide="closing" id="slide-closing" aria-label="結語">
+      <h2 class="sc-closing-title">結語</h2>
+      <p class="sc-closing-lead">{{ report.cohort.name }} 共 {{ report.student_count }} 位學員，累計 R01–R08 已提交 {{ report.total_submitted }} 筆、已複核 {{ report.total_reviewed }} 筆，教師已複核結果 {{ report.reviewed_result_total }} 筆。</p>
+      <p class="sc-closing-note">{{ showcase_caveat }}</p>
+      <p class="sc-closing-note">本頁資料來源：既有成長紀錄、任務進度、五階段進度、教師複核與回饋、既有成果證據。僅供授權教師於教學展示使用；不產生公開分享連結，也不開放匿名觀看。</p>
+      <p class="sc-closing-brand">FDE-AI-UAS · 學員任務學習系統</p>
+    </section>
+
+  </div>
+
+  {# ── 控制列（簡報模式） ─────────────────────────────────────────── #}
+  <div class="sc-controls sc-screen-only" id="sc-controls" hidden>
+    <button class="button secondary" type="button" id="sc-prev">← 上一頁</button>
+    <span class="sc-progress"><span id="sc-current">1</span> / {{ slide_ids|length }}</span>
+    <button class="button secondary" type="button" id="sc-next">下一頁 →</button>
+    <button class="button quiet" type="button" id="sc-exit">退出展示（Esc）</button>
+  </div>
+  <p class="sc-hint sc-screen-only" id="sc-hint" hidden>鍵盤操作：←／→ 切換頁面 · Esc 退出展示 · Home／End 跳到首／末頁</p>
+
+  {% endif %}
+</div>
+<script src="{% static 'learning/teacher-showcase.js' %}"></script>
+{% endblock %}

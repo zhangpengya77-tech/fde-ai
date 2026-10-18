@@ -34,6 +34,9 @@
   function apiCandidates(config, pageLocation) {
     const local = normalizeBase(config.RAG_API_BASE_URL, 'local', pageLocation);
     const publicApi = normalizeBase(config.PUBLIC_RAG_API_URL, 'public', pageLocation);
+    // 手機（非 loopback）直開時 PUBLIC_RAG_API_URL 為空會導致完全沒有候選端點，
+    // 因此與 vision-client 一致，加入「同源」後備（由 8111 代理至 RAG）。
+    const sameOrigin = normalizeBase(pageLocation?.origin, 'local', pageLocation);
     const mode = config.RAG_API_MODE || 'auto';
     const localPage = pageLocation && isLoopback(pageLocation.hostname);
     const endpoints = mode === 'local'
@@ -42,7 +45,7 @@
         ? [publicApi]
         : localPage
           ? [local, publicApi]
-          : [publicApi];
+          : [publicApi, sameOrigin];
     const seen = new Set();
 
     return endpoints.filter(Boolean).filter(({ base }) => {

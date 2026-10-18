@@ -1,0 +1,195 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/teacher-checklist.css' %}">{% endblock %}
+{% block title %}結訓審核清單｜教師後台{% endblock %}
+{% block content %}
+<div class="trc-screen-only">
+  <a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+  <section class="page-heading">
+    <p class="eyebrow">P6 · 結訓審核清單</p>
+    <h1>結訓審核清單</h1>
+    <p class="muted">本清單只彙整既有真實資料（成長紀錄提交、任務提交、教師複核紀錄），協助教師掌握「誰還沒交、誰還在等我複核」。<strong>本頁不自動判定學員合格或結訓通過，也不核發任何證照</strong>；複核一律前往既有教師審核頁進行，未建立第二套複核流程。</p>
+  </section>
+
+  {% if cohorts %}
+  <form method="get" class="trc-toolbar" id="checklist-toolbar">
+    <label>班級
+      <select name="cohort" onchange="this.form.submit()">
+        {% for item in cohorts %}<option value="{{ item.cohort_id }}" {% if selected_cohort == item.cohort_id %}selected{% endif %}>{{ item.name }}（{{ item.cohort_id }}）</option>{% endfor %}
+      </select>
+    </label>
+    <button class="button primary" type="submit">切換班級</button>
+    <a class="button secondary" href="{% url 'learning:teacher_class_report' %}?cohort={{ selected_cohort }}">班級成果報告</a>
+    {% if checklist %}
+    <a class="button quiet" href="{% url 'learning:teacher_cohort_export_summary_cohort' selected_cohort %}">匯出班級統計摘要 CSV</a>
+    <a class="button quiet" href="{% url 'learning:teacher_cohort_export_records_cohort' selected_cohort %}">匯出學員成果明細 CSV</a>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+
+{% if not checklist %}
+<p class="empty-state">尚無紀錄：目前沒有可查看的班級；若剛被加入班級，請聯繫管理員開通教師權限。</p>
+{% else %}
+
+{# ── 1. 班級總人數與待處理總覽 ───────────────────────────────────── #}
+<section class="trc-section trc-basic" id="checklist-basic" aria-label="班級總人數與待處理總覽">
+  <h2 class="trc-h2">班級總人數與待處理總覽</h2>
+  <dl class="trc-dl">
+    <div><dt>班級名稱</dt><dd>{{ checklist.cohort.name }}</dd></div>
+    <div><dt>班級編號</dt><dd>{{ checklist.cohort.cohort_id }}</dd></div>
+    <div><dt>班級總人數</dt><dd>{{ checklist.student_count }} 人</dd></div>
+    <div><dt>清單產生時間</dt><dd>{{ checklist.generated_at|date:'Y-m-d H:i' }}</dd></div>
+  </dl>
+  <div class="trc-stats">
+    <div class="trc-stat"><span class="trc-stat-num">{{ checklist.unsubmitted_total }}</span><span class="trc-stat-label">R01–R08 尚未提交（筆）</span></div>
+    <div class="trc-stat trc-stat-pending"><span class="trc-stat-num">{{ checklist.pending_review_total }}</span><span class="trc-stat-label">待教師複核（筆）</span></div>
+    <div class="trc-stat trc-stat-warn"><span class="trc-stat-num">{{ checklist.needs_revision_total }}</span><span class="trc-stat-label">需要補充（筆）</span></div>
+    <div class="trc-stat trc-stat-done"><span class="trc-stat-num">{{ checklist.reviewed_result_total }}</span><span class="trc-stat-label">已有教師複核結果（筆）</span></div>
+  </div>
+  <p class="trc-note">口徑與 P5 班級成果報告完全一致（同一份彙整）：成長紀錄提交 ＋ 任務提交為同一工作項目集合；待教師複核＝尚未有有效教師複核者，需要補充＝已判定需補充者。「八項已提交」不代表八項通過。</p>
+</section>
+
+{# ── 2. R01–R08 尚未提交項目 ─────────────────────────────────────── #}
+<section class="trc-section" id="checklist-unsubmitted" aria-label="R01-R08 尚未提交項目">
+  <h2 class="trc-h2">R01–R08 尚未提交項目（{{ checklist.unsubmitted_total }} 筆）</h2>
+  {% if checklist.unsubmitted_by_slot %}
+  <table class="trc-table">
+    <thead><tr><th>紀錄</th><th>名稱</th><th>尚未提交（人）</th><th>班級人數</th><th>待處理學員</th></tr></thead>
+    <tbody>
+      {% for slot_id, items in checklist.unsubmitted_by_slot %}
+      <tr>
+        <td data-label="紀錄">{{ slot_id }}</td>
+        <td data-label="名稱">{{ items.0.title }}</td>
+        <td data-label="尚未提交（人）">{{ items|length }}</td>
+        <td data-label="班級人數">{{ checklist.student_count }}</td>
+        <td data-label="待處理學員">
+          {% for item in items %}<a class="trc-chip" href="{{ item.url }}">{{ item.student.public_user_id }}（{{ item.status_label }}）</a>{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="trc-note">狀態含「○ 未開始」與「🟡 進行中」；點擊學員即前往既有教師審核頁，不在此頁直接複核。</p>
+  {% else %}
+  <p class="trc-empty">尚無紀錄（此班級目前沒有尚未提交的 R01–R08 項目）</p>
+  {% endif %}
+</section>
+
+{# ── 3. 待教師複核項目 ───────────────────────────────────────────── #}
+<section class="trc-section" id="checklist-pending" aria-label="待教師複核項目">
+  <h2 class="trc-h2">待教師複核項目（{{ checklist.pending_review_total }} 筆）</h2>
+  {% if checklist.pending_review_items %}
+  <table class="trc-table">
+    <thead><tr><th>學員</th><th>來源</th><th>項目</th><th>狀態</th><th>提交時間</th><th>審核入口</th></tr></thead>
+    <tbody>
+      {% for item in checklist.pending_review_items %}
+      <tr>
+        <td data-label="學員">{{ item.student.public_user_id }}<span class="muted">（{{ item.student.nickname }}）</span></td>
+        <td data-label="來源">{{ item.source_label }}</td>
+        <td data-label="項目">{{ item.code }}｜{{ item.title }}</td>
+        <td data-label="狀態"><span class="status status-{{ item.status_key }}">{{ item.status_label }}</span></td>
+        <td data-label="提交時間">{% if item.submitted_at %}{{ item.submitted_at|date:'Y-m-d H:i' }}{% else %}<span class="muted">無提交時間</span>{% endif %}</td>
+        <td data-label="審核入口"><a class="button secondary trc-action" href="{{ item.url }}">前往複核</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="trc-empty">尚無紀錄（目前沒有等待教師複核的成果）</p>
+  {% endif %}
+</section>
+
+{# ── 4. 需要補充項目 ─────────────────────────────────────────────── #}
+<section class="trc-section" id="checklist-needs-revision" aria-label="需要補充項目">
+  <h2 class="trc-h2">需要補充項目（{{ checklist.needs_revision_total }} 筆）</h2>
+  {% if checklist.needs_revision_items %}
+  <table class="trc-table">
+    <thead><tr><th>學員</th><th>來源</th><th>項目</th><th>狀態</th><th>提交時間</th><th>審核入口</th></tr></thead>
+    <tbody>
+      {% for item in checklist.needs_revision_items %}
+      <tr>
+        <td data-label="學員">{{ item.student.public_user_id }}<span class="muted">（{{ item.student.nickname }}）</span></td>
+        <td data-label="來源">{{ item.source_label }}</td>
+        <td data-label="項目">{{ item.code }}｜{{ item.title }}</td>
+        <td data-label="狀態"><span class="status status-{{ item.status_key }}">{{ item.status_label }}</span></td>
+        <td data-label="提交時間">{% if item.submitted_at %}{{ item.submitted_at|date:'Y-m-d H:i' }}{% else %}<span class="muted">無提交時間</span>{% endif %}</td>
+        <td data-label="審核入口"><a class="button secondary trc-action" href="{{ item.url }}">前往複核</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="trc-empty">尚無紀錄（目前沒有需要學員補充的成果）</p>
+  {% endif %}
+</section>
+
+{# ── 5. 已有教師複核結果 ─────────────────────────────────────────── #}
+<section class="trc-section" id="checklist-reviewed" aria-label="已有教師複核結果">
+  <h2 class="trc-h2">已有教師複核結果（{{ checklist.reviewed_result_total }} 筆）</h2>
+  {% if checklist.review_result_rows %}
+  <table class="trc-table">
+    <thead><tr><th>學員</th><th>來源</th><th>項目</th><th>複核結果</th><th>評分</th><th>教師評語</th><th>時間</th></tr></thead>
+    <tbody>
+      {% for item in checklist.review_result_rows %}
+      <tr>
+        <td data-label="學員">{{ item.student.public_user_id }}<span class="muted">（{{ item.student.nickname }}）</span></td>
+        <td data-label="來源">{{ item.source_label }}</td>
+        <td data-label="項目">{{ item.code }}｜{{ item.title }}</td>
+        <td data-label="複核結果">{{ item.review_status_label }}</td>
+        <td data-label="評分">{% if item.score is not None %}{{ item.score }}{% else %}—{% endif %}</td>
+        <td data-label="教師評語">{% if item.note %}{{ item.note }}{% else %}<span class="muted">未填寫評語</span>{% endif %}</td>
+        <td data-label="時間">{% if item.reviewed_at %}{{ item.reviewed_at|date:'Y-m-d H:i' }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="trc-note">只顯示教師實際留下的複核紀錄；「未填寫評語」表示該筆複核未填評語，系統不會自動生成任何教師評語。</p>
+  {% else %}
+  <p class="trc-empty">尚無紀錄（目前尚無任何教師複核結果）</p>
+  {% endif %}
+</section>
+
+{# ── 6. 每位學員尚待處理的項目 ───────────────────────────────────── #}
+<section class="trc-section" id="checklist-students" aria-label="每位學員尚待處理的項目">
+  <h2 class="trc-h2">每位學員尚待處理的項目（{{ checklist.student_rows|length }} 人）</h2>
+  {% for row in checklist.student_rows %}
+  <article class="trc-student">
+    <header class="trc-student-head">
+      <strong>{{ row.student.public_user_id }}</strong>
+      <span class="muted">{{ row.student.nickname }}</span>
+      {% if row.group %}<span class="trc-chip">小組：{{ row.group.name }}</span>{% endif %}
+      <span class="trc-chip trc-chip-outstanding">尚待處理 {{ row.outstanding_count }} 筆</span>
+    </header>
+    <div class="trc-student-nums">
+      <span>尚未提交 <strong>{{ row.unsubmitted_count }}</strong></span>
+      <span>待教師複核 <strong>{{ row.pending_count }}</strong></span>
+      <span>需要補充 <strong>{{ row.needs_revision_count }}</strong></span>
+      <span>已有複核結果 <strong>{{ row.reviewed_result_count }}</strong></span>
+      <span>五階段完成 <strong>{{ row.completed_stages }} / {{ row.stage_total }}</strong></span>
+    </div>
+    {% if row.outstanding_items %}
+    <ul class="trc-items">
+      {% for item in row.outstanding_items %}
+      <li>
+        <span class="trc-item-code">{{ item.code }}</span>
+        <span class="trc-item-title">{{ item.title }}</span>
+        <span class="trc-item-source">（{{ item.source_label }}）</span>
+        <span class="status status-{{ item.status_key }}">{{ item.status_label }}</span>
+        <a class="trc-item-link" href="{{ item.url }}">前往複核 →</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="trc-empty">尚無紀錄（該學員目前沒有尚待處理的項目）</p>
+    {% endif %}
+    <p class="trc-screen-only"><a href="{{ row.detail_url }}">前往既有學員詳情頁（複核作業）</a></p>
+  </article>
+  {% empty %}
+  <p class="trc-empty">尚無紀錄（此班級目前尚無在學學員）</p>
+  {% endfor %}
+</section>
+
+<div class="trc-footer-note">本清單由 FDE-AI-UAS 教師後台產生 · 僅供授權教師判斷使用 · 不自動判定合格、不核發證照 · 複核請至既有教師審核頁</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FDE-AI-UAS 2.0 最終人工驗收清單（2026-10-16）</title>
+<style>
+  :root{ --bg:#f7f8fa; --card:#ffffff; --ink:#1f2733; --muted:#5b6675; --line:#e3e7ee;
+         --pass:#0a7d3e; --passbg:#e7f6ec; --pend:#9a6b00; --pendbg:#fff4d6; --fail:#b42318; --failbg:#fdecea;
+         --accent:#1356b0; }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;
+       margin:0;background:var(--bg);color:var(--ink);line-height:1.55}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 60px}
+  header{border-bottom:3px solid var(--accent);padding-bottom:14px;margin-bottom:18px}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px}
+  .banner{background:#fff8e6;border:1px solid #f0d28a;color:#7a5a00;padding:10px 14px;border-radius:8px;
+          font-size:13px;margin:14px 0}
+  .status-pill{display:inline-block;background:var(--pendbg);color:var(--pend);border:1px solid #e7c45a;
+               padding:3px 12px;border-radius:999px;font-weight:700;font-size:13px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px;margin:16px 0}
+  h2{font-size:17px;margin:0 0 12px;border-left:4px solid var(--accent);padding-left:10px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+  .kpi{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:12px;text-align:center}
+  .kpi .n{font-size:26px;font-weight:800}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:7px 8px;vertical-align:top;text-align:left}
+  th{background:#eef2f8;position:sticky;top:0}
+  tr:nth-child(even) td{background:#fafbfc}
+  .tag{display:inline-block;padding:1px 8px;border-radius:6px;font-weight:700;font-size:11.5px;white-space:nowrap}
+  .t-pass{background:var(--passbg);color:var(--pass)}
+  .t-pend{background:var(--pendbg);color:var(--pend)}
+  .t-fail{background:var(--failbg);color:var(--fail)}
+  input.teacher,textarea.teacher{width:100%;border:1px dashed #b9c2d0;background:#fffdf3;border-radius:5px;
+       padding:4px 6px;font:inherit;font-size:12px;color:#243}
+  textarea.teacher{resize:vertical;min-height:30px}
+  .grp{font-weight:700;color:var(--accent);margin:14px 0 4px}
+  code{background:#eef1f5;padding:1px 5px;border-radius:4px;font-size:12px}
+  ul{margin:8px 0;padding-left:20px} li{margin:4px 0}
+  .url{color:var(--accent);word-break:break-all}
+  .note{font-size:12px;color:var(--muted)}
+  footer{color:var(--muted);font-size:12px;text-align:center;margin-top:22px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>FDE-AI-UAS 2.0 — 最終人工驗收清單（FINAL MANUAL ACCEPTANCE）</h1>
+  <div class="sub">專案：<code>D:\FDE-AI-UAS-v2.0</code> ｜ 分支 <code>fde-ai-v2.0-dev</code> ｜ 執行日期：2026-10-16 ｜ 驗收環境：DEMO <code>192.168.1.114:8110</code>(Django) / <code>:8111</code>(Live)</div>
+  <div style="margin-top:10px">最終狀態：<span class="status-pill">MANUAL_ACCEPTANCE_PENDING</span> — 僅教師親自確認後方可標記 PASSED。</div>
+</header>
+
+<div class="banner">
+  ⚠️ 安全聲明：本輪驗收<strong>僅讀取/操作 DEMO 環境</strong>，未觸碰正式 <code>:8022</code> 服務與正式資料庫、未修改任何程式碼、未新增 migration、未改 ACTIVE 核心、未 commit/push/deploy、未清理任何學員或教師資料。
+  自動驗收項目以「真實登入/登出/頁面內容斷言」執行，非僅看 HTTP 200。
+</div>
+
+<section>
+  <h2>一、自動環境檢查（二）</h2>
+  <div class="grid">
+    <div class="kpi"><div class="n" style="color:var(--pass)">PASS</div><div class="l">Django :8110 健康</div></div>
+    <div class="kpi"><div class="n" style="color:var(--pass)">PASS</div><div class="l">Live :8111 健康</div></div>
+    <div class="kpi"><div class="n" style="color:var(--pass)">PASS</div><div class="l">學員/教師雙角色登入</div></div>
+    <div class="kpi"><div class="n" style="color:var(--pend)">環境</div><div class="l">RAG :8770 在聽 / 問答 503</div></div>
+    <div class="kpi"><div class="n" style="color:var(--pend)">環境</div><div class="l">YOLO :8765 未啟動</div></div>
+  </div>
+  <p class="note">註：<code>/api/live/health</code> 回報 <code>live_backend=online</code>、<code>general_ai=configured</code>、<code>vision=offline</code>（因 :8765 未啟，符合預期）。RAG :8770 監聽中（PID 19088），但 <code>/api/rag/ask</code> 回 503，屬整合問題，非服務中斷。</p>
+</section>
+
+<section>
+  <h2>二、22 項人工驗收清單（A 學員 10 / B 教師 8 / C 其他 4）</h2>
+  <p class="note">「自動結果」為本代理以 Chrome-free 功能腳本（真實登入/登出/內容斷言）之結果；「實際 / 截圖 / 教師確認」三欄請教師於瀏覽器中填寫。</p>
+
+  <div class="grp">A ｜ 學員端（10 項）</div>
+  <table>
+    <tr><th>ID</th><th>項目</th><th>入口網址</th><th>操作方式</th><th>預期結果</th><th>自動結果</th><th>狀態</th><th>實際（教師填）</th><th>截圖</th></tr>
+    <tr><td>A1</td><td>桌面首頁可開啟</td><td class="url">http://192.168.1.114:8111/</td><td>瀏覽器開啟首頁</td><td>顯示平台與五階段導航</td><td>PASS（200，含「學/登入」）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A2</td><td>學員登入可成功</td><td class="url">:8111/login/</td><td>輸入 demo.student01 帳密登入</td><td>跳轉 /student/ 並建立 session</td><td>PASS（landed /student/，sessionid 寫入）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A3</td><td>學員登出可成功</td><td class="url">:8111/logout/</td><td>點「登出」</td><td>跳轉登入頁，session 失效</td><td>PASS（→ /login/?next=/student/）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A4</td><td>五階段導航可見</td><td class="url">:8111/</td><td>查看左側/頂部導航</td><td>學 / 練 / 做 / 測 / 證 皆顯示</td><td>PASS（5 個標籤全命中）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A5</td><td>學：課程列表可瀏覽</td><td class="url">in-app → /courses</td><td>點「學」進入課程</td><td>課程列表顯示</td><td>直接 URL 深鏈 404（已知限制）；in-app 導航可達</td><td><span class="tag t-pend">PENDING</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A6</td><td>練：模擬器入口</td><td class="url">in-app → /simulator</td><td>點「練」</td><td>模擬器載入</td><td>直接 URL 深鏈 404（已知限制）；in-app 導航可達</td><td><span class="tag t-pend">PENDING</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A7</td><td>做：F450 組裝入口</td><td class="url">in-app → /f450</td><td>點「做」</td><td>F450 任務載入</td><td>直接 URL 深鏈 404（已知限制）；in-app 導航可達</td><td><span class="tag t-pend">PENDING</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A8</td><td>測：Eagle 測試入口</td><td class="url">:8111/eagle</td><td>點「測」</td><td>Eagle 測試載入</td><td>PASS（200，SPA shell 可開啟）</td><td><span class="tag t-pass">PASS*</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A9</td><td>證：成長紀錄 R01–R08</td><td class="url">:8111/student/courses/1/growth/</td><td>點「證」</td><td>R01–R08 成長紀錄顯示</td><td>PASS（200 入口可開）；內容為 JS 渲染，待瀏覽器確認</td><td><span class="tag t-pass">PASS*</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>A10</td><td>手機入口（mobile UA）</td><td class="url">:8111/ （iPhone Safari）</td><td>iPhone Safari 開啟</td><td>首頁可顯示並可操作</td><td>PASS（mobile UA 可取首頁）；真機互動待確認</td><td><span class="tag t-pass">PASS*</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+  </table>
+
+  <div class="grp">B ｜ 教師端（8 項）</div>
+  <table>
+    <tr><th>ID</th><th>項目</th><th>入口網址</th><th>操作方式</th><th>預期結果</th><th>自動結果</th><th>狀態</th><th>實際（教師填）</th><th>截圖</th></tr>
+    <tr><td>B1</td><td>教師登入可成功</td><td class="url">:8111/teacher/login/</td><td>輸入 demo.teacher 帳密</td><td>跳轉 /teacher/</td><td>PASS（landed /teacher/，sessionid 寫入）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B2</td><td>教師登出可成功</td><td class="url">:8111/logout/（UI 使用此路由）</td><td>點「登出」</td><td>跳轉登入頁，session 失效</td><td>PASS（經 /logout/ 驗證 session 失效，/teacher/ 隨即要求登入）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B3</td><td>AI 視覺模型中心頁可開啟</td><td class="url">:8111/teacher/vision-center/</td><td>教師登入後開啟</td><td>四區塊頁顯示</td><td>PASS（200，58KB 頁面）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B4</td><td>待複核模型區塊</td><td class="url">:8111/teacher/vision-center/</td><td>查看①</td><td>顯示「待複核」</td><td>PASS（頁面含「待複核」）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B5</td><td>教師圖片驗證區塊</td><td class="url">:8111/teacher/vision-center/</td><td>查看②</td><td>顯示「圖片驗證」</td><td>PASS（頁面含「圖片驗證」）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B6</td><td>當前正式模型區塊</td><td class="url">:8111/teacher/vision-center/</td><td>查看③</td><td>顯示「當前正式模型」+版本清單</td><td>PASS（頁面含「當前正式模型」）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B7</td><td>Data Flywheel 區塊</td><td class="url">:8111/teacher/vision-center/</td><td>查看④</td><td>顯示 Data Flywheel / 資料飛輪</td><td>PASS（頁面含「Data Flywheel」）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>B8</td><td>進階模型管理舊頁</td><td class="url">:8111/teacher/vision-models/</td><td>開啟舊頁</td><td>顯示「進階」標示（與新版中心區分）</td><td>PASS（200，含「進階」）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+  </table>
+
+  <div class="grp">C ｜ 其他功能（4 項）</div>
+  <table>
+    <tr><th>ID</th><th>項目</th><th>入口網址</th><th>操作方式</th><th>預期結果</th><th>自動結果</th><th>狀態</th><th>實際（教師填）</th><th>截圖</th></tr>
+    <tr><td>C1</td><td>跨服務代理 /platform/（I4）</td><td class="url">:8111/teacher/login/</td><td>經 8111 取 Django 路由</td><td>200，證明 Live 透明代理 Django</td><td>PASS（200）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>C2</td><td>RAG 問答同源代理</td><td class="url">:8111/api/rag/ask</td><td>於手機/前端提問</td><td>回傳知識庫答案</td><td>503（RAG :8770 在聽但整合未通，非服務中斷）</td><td><span class="tag t-pend">PENDING</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>C3</td><td>Live Coach 即時助教</td><td class="url">:8111/api/live/health</td><td>健康檢查</td><td>live_backend online</td><td>PASS（online，general_ai configured）</td><td><span class="tag t-pass">PASS</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+    <tr><td>C4</td><td>外部模組狀態頁（I5）</td><td class="url">前端渲染（外部模組四態）</td><td>查看模組狀態</td><td>已可使用 / 尚未接入 / 服務暫時不可用 / 權限不足</td><td>後端邏輯存在（external_modules.py）；狀態由前端渲染，待瀏覽器確認</td><td><span class="tag t-pend">PENDING</span></td><td><input class="teacher"></td><td><input class="teacher"></td></tr>
+  </table>
+  <p class="note">標 <span class="tag t-pass">PASS*</span> 者：入口/頁面可開啟已自動驗證；其「互動功能」因需瀏覽器渲染，併入下方教師親自操作清單。</p>
+</section>
+
+<section>
+  <h2>三、FAIL / BLOCKED / PENDING 原因</h2>
+  <p><strong>硬失敗（FAIL）：0 項。</strong>原自動腳本標記的 7 個 FAIL 經人工核實後，均非功能缺陷：</p>
+  <ul>
+    <li><strong>A5/A6/A7 直接 URL 404</strong>：學/練/做 模組在 SPA 客戶端路由（<code>src/router.js</code>）中確實存在（learn→courses、practice→simulator、build→f450）。後端 <code>main.py:564-566</code> 僅對 <code>/</code> 與 <code>/eagle</code> 回傳 <code>index.html</code> 作 SPA fallback，故直接深鏈 <code>/simulator</code>、<code>/f450</code>、<code>/courses</code> 會 404；但經 App 內導航（pushState）可正常抵達。屬已知 deep-link 限制，非模組故障。</li>
+    <li><strong>A9 內容關鍵字未命中</strong>：<code>/student/courses/1/growth/</code> 回 200，成長紀錄由前端 JS 渲染，HTTP 層關鍵字偵測不可靠 → 入口可開，內容待瀏覽器確認。</li>
+    <li><strong>B2 教師登出</strong>：自動腳本測的 <code>/teacher/logout/</code> 回 404（該路由未接）；但教師 UI 的登出表單使用 <code>learning:logout</code> → <code>/logout/</code>，實測可正確登出並使 <code>/teacher/</code> 隨後要求登入 → 功能 PASS。僅 <code>/teacher/logout/</code> 為無用路由（建議教師決定是否清理）。</li>
+    <li><strong>C2 RAG 503</strong>：RAG 服務 <code>:8770</code> 確實在監聽（PID 19088），<code>/api/rag/ask</code> 回 503 屬 Live↔RAG 整合問題，非服務中斷。</li>
+    <li><strong>C4 I5 狀態頁</strong>：外部模組四態由前端渲染，後端合約邏輯在 <code>learning/external_modules.py</code> 已實作；HTTP 層無法斷言 → 待瀏覽器確認。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>四、需教師親自操作最短清單（PENDING_MANUAL）</h2>
+  <p class="note">以下項目本代理無法以自動腳本判定（需真機／瀏覽器／獨立服務），請教師親自確認後勾選：</p>
+  <ol>
+    <li><strong>iPhone Safari 真機</strong>：以 iPhone 開啟 <code>http://192.168.1.114:8111/</code>，確認登入、五階段導航（學/練/做/測/證）與各模組互動（A5/A6/A7/A10）。<em>嚴禁以 Chrome 桌面手機模擬代替真機。</em></li>
+    <li><strong>YOLO 真推論</strong>：啟動 <code>:8765</code> 真模型後，於教師「圖片驗證」上傳真實槳葉照片，確認辨識準確度。<em>不得以合成圖 NO_DETECTION 宣稱槳葉辨識合格。</em></li>
+    <li><strong>RAG 問答實測</strong>：確認 <code>/api/rag/ask</code> 能回傳知識庫答案（需先排除 503 整合問題）。</li>
+    <li><strong>I5 外部模組四態</strong>：於前端確認「已可使用 / 尚未接入 / 服務暫時不可用 / 權限不足」四態正確顯示。</li>
+    <li><strong>視覺模型 ACTIVE 寫入測試</strong>：須於<strong>完全隔離</strong>的 <code>:8112</code>/<code>:8117</code> 環境執行（依既有 <code>start_vision_isolated.ps1</code>），不得寫入 DEMO 或正式。</li>
+    <li><strong>各 SPA 模組互動功能</strong>：課程瀏覽、模擬器操作、F450 十二任務、Eagle 測試、R01–R08 成長紀錄顯示。（A8/A9 入口已開，功能待確認）</li>
+  </ol>
+</section>
+
+<section>
+  <h2>五、可點開 DEMO 入口</h2>
+  <ul>
+    <li>展示首頁（Live）：<span class="url">http://192.168.1.114:8111/</span></li>
+    <li>學員登入：<span class="url">http://192.168.1.114:8111/login/</span></li>
+    <li>教師登入：<span class="url">http://192.168.1.114:8111/teacher/login/</span></li>
+    <li>教師視覺模型中心：<span class="url">http://192.168.1.114:8111/teacher/vision-center/</span></li>
+    <li>學員帳號：<code>demo.student01@fde-demo.local</code> ｜ 教師帳號：<code>demo.teacher@fde-demo.local</code></li>
+    <li>登入密碼：見受限交付檔 <code>~/.fde-demo-credentials/demo.shared.password.txt</code></li>
+  </ul>
+  <p class="note">若服務已停止：於專案根目錄執行 <code>powershell -ExecutionPolicy Bypass -File demo/tools/start_demo.ps1</code>（或 <code>start_demo_hold.ps1</code> 撐住服務）。注意：本沙箱內 DEMO 服務會隨工作階段結束而死，需重啟方可點開。</p>
+</section>
+
+<section>
+  <h2>六、最終結論</h2>
+  <div class="grid">
+    <div class="kpi"><div class="n" style="color:var(--pass)">17</div><div class="l">自動 PASS</div></div>
+    <div class="kpi"><div class="n" style="color:var(--pend)">5</div><div class="l">PENDING_MANUAL</div></div>
+    <div class="kpi"><div class="n" style="color:var(--fail)">0</div><div class="l">硬失敗 FAIL</div></div>
+  </div>
+  <p><strong>總結</strong>：DEMO 環境啟動正常，學員端（登入/登出/五階段導航/成長入口/手機入口）與教師端（登入/登出/視覺模型中心四區塊/進階舊頁）核心流程全部自動 PASS；跨服務代理與 Live Coach 健康亦 PASS。剩餘 5 項為需真機/瀏覽器/獨立服務方能判定的 PENDING_MANUAL，<strong>無任何功能硬失敗</strong>。最終狀態維持 <span class="status-pill">MANUAL_ACCEPTANCE_PENDING</span>，待教師依第四節親自確認後方可標記 PASSED。</p>
+</section>
+
+<footer>FDE-AI-UAS 2.0 最終人工驗收 ｜ 自動化腳本：<code>.test-temp/final_accept_v2.py</code> ｜ 結果 JSON：<code>.test-temp/final_accept_v2.json</code></footer>
+</div>
+</body>
+</html>

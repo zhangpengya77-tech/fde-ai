@@ -73,7 +73,11 @@ class F450TaskCatalogTests(unittest.TestCase):
     def test_task08_is_verification_and_prop_vision_is_only_a_subtask(self):
         task = self.by_id["TASK_08"]
         step_ids = {step.id for step in task.steps}
-        self.assertTrue({"RADIO_INPUT_VERIFY", "FLIGHT_MODE_VERIFY", "MOTOR_MAPPING_VERIFY", "MOTOR_DIRECTION_VERIFY", "PROP_ORIENTATION_VERIFY", "ATTITUDE_RESPONSE_VERIFY", "GPS_DETECTION_VERIFY", "RECEIVER_STATE_VERIFY", "FAILSAFE_VERIFY", "RTL_CONFIG_VERIFY"} <= step_ids)
+        self.assertEqual(step_ids, {
+            "T08_FLIGHT_MODE_CHECK", "T08_RC_INPUT_CHECK", "T08_GPS_COMPASS_STATUS",
+            "T08_FAILSAFE_CONFIG", "T08_RTL_CONFIG", "T08_PAYLOAD_MAPPING",
+            "T08_PROP_VISION", "T08_TEACHER_FINAL_REVIEW",
+        })
         self.assertEqual(task.vision_tasks, ("propeller_orientation_assist",))
 
     def test_task09_is_qgc_simulation_not_real_arm_authority(self):

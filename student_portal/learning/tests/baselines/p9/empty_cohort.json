@@ -1,0 +1,106 @@
+{
+  "slot_stats": [
+    {
+      "reviewed": 0,
+      "slot_id": "R01",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R02",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R03",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R04",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R05",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R06",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R07",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    },
+    {
+      "reviewed": 0,
+      "slot_id": "R08",
+      "submitted": 0,
+      "title": "",
+      "total": 0
+    }
+  ],
+  "slot_titles": {},
+  "stage_rows": [
+    {
+      "done": 0,
+      "key": "learn",
+      "total": 0
+    },
+    {
+      "done": 0,
+      "key": "practice",
+      "total": 0
+    },
+    {
+      "done": 0,
+      "key": "build",
+      "total": 0
+    },
+    {
+      "done": 0,
+      "key": "assess",
+      "total": 0
+    },
+    {
+      "done": 0,
+      "key": "certify",
+      "total": 0
+    }
+  ],
+  "student_count": 0,
+  "students": [],
+  "totals": {
+    "all_submitted_count": 0,
+    "feedback_rows": 0,
+    "needs_revision_total": 0,
+    "not_submitted_count": 0,
+    "outstanding_total": 0,
+    "pending_items_total": 0,
+    "pending_student_count": 0,
+    "pending_work_items": 0,
+    "review_result_rows": 0,
+    "reviewed_result_total": 0,
+    "total_reviewed": 0,
+    "total_submitted": 0,
+    "unsubmitted_items": 0,
+    "unsubmitted_items_total": 0
+  }
+}

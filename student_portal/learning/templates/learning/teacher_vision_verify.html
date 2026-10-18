@@ -1,0 +1,84 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block title %}圖片測試｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_vision_model_detail' evidence.pk %}">返回模型詳情</a>
+<section class="page-heading">
+  <p class="eyebrow">圖片測試 · {{ task_type }}</p>
+  <h1>{{ evidence.original_metadata.filename|default:'best.pt' }}</h1>
+  <p class="muted">學員：{{ evidence.growth_submission.enrollment.student.nickname }} · 班級：{{ evidence.growth_submission.enrollment.cohort_id }} · 審核狀態：{{ review_status }}</p>
+</section>
+
+<section class="section-block">
+  <h2>流程位置</h2>
+  <p class="muted">教師後台 → 學員 R07 → best.pt → 模型詳情 → <strong>圖片測試</strong>（本頁）。</p>
+</section>
+
+<section class="section-block">
+  <h2>執行環境狀態</h2>
+  {% if gate_state == 'READY' %}
+    <p><strong>可執行測試。</strong>隔離推論環境已就緒。</p>
+  {% elif gate_state == 'WAITING_FOR_MODEL' %}
+    <p><strong>WAITING_FOR_MODEL｜等待合格模型。</strong></p>
+    <p class="muted">{{ gate_reason }}</p>
+    <p class="muted">{{ gate_detail }}</p>
+  {% else %}
+    <p><strong>BLOCKED｜目前無法執行推論。</strong></p>
+    <p class="muted">原因：{{ gate_reason }}</p>
+    <p class="muted">隔離環境：{{ runner.environment_label }}（{{ runner.environment }}）</p>
+    <p class="muted">啟用條件：{{ gate_detail }}</p>
+  {% endif %}
+  <p class="muted">本頁不會載入學員 .pt，也不會產生任何模擬辨識結果。</p>
+</section>
+
+<section class="section-block">
+  <h2>模型資訊</h2>
+  <ul>
+    <li>模型檔案：{{ evidence.original_metadata.filename|default:'best.pt' }}</li>
+    <li>任務類型：{{ task_type }}</li>
+    <li>檔案大小：{{ evidence.original_metadata.size_bytes|default:'—' }} bytes</li>
+    <li>提交時間：{{ evidence.created_at|date:'Y-m-d H:i' }}</li>
+    <li>四類契約：CW_F、CCW_F、CW_B、CCW_B</li>
+  </ul>
+</section>
+
+<section class="section-block">
+  <h2>圖片上傳區</h2>
+  <form method="post" action="{% url 'learning:teacher_vision_model_verify_run' evidence.pk %}" enctype="multipart/form-data">{% csrf_token %}
+    <label>測試照片<input type="file" name="test_image" accept="image/*" {% if gate_state != 'READY' %}disabled aria-disabled="true"{% endif %}></label>
+    <button class="button primary" type="submit" {% if gate_state != 'READY' %}disabled aria-disabled="true"{% endif %}>執行測試</button>
+    {% if gate_state != 'READY' %}<p class="muted">測試按鈕已停用，無法送出。</p>{% endif %}
+  </form>
+</section>
+
+<section class="section-block">
+  <h2>辨識結果（BBOX / Class / Confidence）</h2>
+  {% if test_records %}
+    <table><thead><tr><th>Class Name</th><th>Confidence</th><th>BBOX</th></tr></thead><tbody>
+      {% for record in test_records %}<tr><td>{{ record.class_name|default:'—' }}</td><td>{{ record.confidence|default:'—' }}</td><td>{{ record.box|default:'—' }}</td></tr>{% endfor %}
+    </tbody></table>
+  {% else %}
+    <p class="muted">尚未產生結果。只有真實推論完成後，此區才會顯示 BBOX、Class Name 與 Confidence。</p>
+    <table><thead><tr><th>Class ID</th><th>Class Name</th><th>Confidence</th><th>BBOX</th></tr></thead><tbody><tr><td colspan="4">尚無資料。</td></tr></tbody></table>
+  {% endif %}
+</section>
+
+<section class="section-block">
+  <h2>判定（PASS / NG / REVIEW）</h2>
+  <p class="muted">尚無判定結果。類別或馬達規則未確認時，一律輸出 REVIEW。</p>
+</section>
+
+<section class="section-block">
+  <h2>測試歷史紀錄</h2>
+  <ul>{% for record in test_records %}<li>{{ record.at }} · {{ record.verdict|default:'REVIEW' }}{% if record.note %}：{{ record.note }}{% endif %}</li>{% empty %}<li>尚無測試紀錄。</li>{% endfor %}</ul>
+</section>
+
+<section class="section-block">
+  <h2>尚未啟用的功能</h2>
+  <ul class="muted">
+    <li>實際推論執行：未啟用（需安全隔離沙箱）。</li>
+    <li>Golden Test 比對：未啟用。</li>
+    <li>ACTIVE 發布：未啟用（本頁不提供發布入口）。</li>
+  </ul>
+</section>
+{% endblock %}

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>飛行健康 AI 分析 | FDE-AI-UAS</title>
+  <link rel="stylesheet" href="./css/style.css?v=20261017">
+</head>
+<body>
+
+  <!-- DEMO 專屬警示橫幅（僅在使用者主動進入 DEMO 時呈現，嚴禁混淆） -->
+  <div id="demo-top-banner" class="demo-top-banner hidden">
+    <span>⚠️ <strong>DEMO 演示數據，不是真實飛控分析結果</strong></span>
+    <button type="button" class="demo-exit-btn" onclick="exitDemoMode()">退出 DEMO</button>
+  </div>
+
+  <!-- 頂部導航列 -->
+  <header class="top-header">
+    <div class="brand">
+      <span class="brand-icon">🚁</span>
+      <div>
+        <h1 class="brand-title">飛行健康 AI 分析</h1>
+        <span class="brand-subtitle">日誌健康體檢 · 非調參工具 · 穩定優先</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="open-drawer-top-btn" class="btn-secondary" title="展開原始數據與規則日誌">教師模式</button>
+      <a class="back-link" href="../">← 返回首頁</a>
+    </div>
+  </header>
+
+  <!-- 服務連線狀態指示條（即時反映在線/離線/未配置狀態） -->
+  <div id="service-status-banner" class="status-banner checking">
+    <span>正在偵測飛行健康診斷服務...</span>
+  </div>
+
+  <main class="container">
+
+    <!-- 視覺 5 階段步驟條 (為 390px/430px 手機排版大幅減負) -->
+    <nav class="stepper-container" aria-label="分析進度">
+      <div id="stepper-five" class="stepper-five">
+        <!-- 由 JS 動態生成 5 個階段節點 -->
+      </div>
+    </nav>
+
+    <!-- ==========================================
+         階段 1: ① 上傳日誌
+         ========================================== -->
+    <section id="stage-1" class="stage-panel active">
+      <div id="upload-box-area" class="card">
+        <h2 style="font-size:16px; font-weight:800; margin-bottom:4px;">① 上傳飛控日誌</h2>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">
+          請選擇或拖入飛行器記錄的 DataFlash 日誌（.BIN 或 .LOG）。
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="aircraft-input">飛行器識別碼 / 機型</label>
+          <input type="text" id="aircraft-input" class="form-control" value="F450-01 一號機 (Quad-X)">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="task-select">訓練科目</label>
+          <select id="task-select" class="form-control">
+            <option value="四面懸停訓練 (Hovering)" selected>四面懸停訓練 (Hovering)</option>
+            <option value="八字航線練習 (Figure-8)">八字航線練習 (Figure-8)</option>
+            <option value="GPS 定點飛行 (Loiter)">GPS 定點飛行 (Loiter)</option>
+            <option value="自主返航測試 (RTL)">自主返航測試 (RTL)</option>
+          </select>
+        </div>
+
+        <input type="file" id="file-input" accept=".BIN,.bin,.LOG,.log" style="display:none;">
+
+        <div id="upload-dropzone" class="upload-dropzone">
+          <div class="upload-icon">📂</div>
+          <div class="upload-title">點擊或拖入飛控日誌 (.BIN / .LOG)</div>
+          <div class="upload-desc">支援 ArduPilot DataFlash 格式（單檔上限 64MB）</div>
+          <button type="button" class="btn-secondary">選擇本機檔案</button>
+          <div id="selected-file-label" style="font-size:12px; font-weight:700; color:#00c2ff; margin-top:8px;"></div>
+        </div>
+
+        <div id="upload-hint-msg" style="display:none; font-size:12px; color:#f5b84b; margin-top:10px;"></div>
+
+        <div style="margin-top:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span id="flight-health-engine-status" class="engine-status engine-builtin">診斷引擎：系統標準規則</span>
+        </div>
+
+        <div style="margin-top:16px;">
+          <button type="button" id="start-analyze-btn" class="btn-primary" disabled onclick="startAnalysis()">
+            <span>🚀 開始自動健康檢查</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 分析中過渡 -->
+      <div id="analyzing-box-area" class="card analyzing-box" style="display:none;">
+        <div class="spinner"></div>
+        <h3 style="font-size:16px; font-weight:800; margin-bottom:4px;">正在進行飛行健康診斷...</h3>
+        <p style="font-size:12px; color:var(--text-muted);">
+          解析 DataFlash 封包 ➔ 萃取動力/電池/定位/震動特徵 ➔ 比對確定性安全規則
+        </p>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         階段 2: ② 飛行健康報告（第一屏 30 秒看懂）
+         ========================================== -->
+    <section id="stage-2" class="stage-panel">
+      <!-- 第一屏看板：專注只回答三大核心問題 -->
+      <div class="card first-screen-card">
+        <div class="screen-header-row">
+          <h2 class="screen-main-title">飛行健康報告看板</h2>
+          <div id="hero-overall-badge" class="status-badge status-unassessed">
+            ⚪ 無法判斷
+          </div>
+        </div>
+
+        <!-- 日誌基本資訊（由後端 student_view 填入：來源檔案 / 解析訊息數 / 分析引擎） -->
+        <div id="hero-log-info" class="hero-log-info"></div>
+
+        <div class="three-answers-grid">
+          <!-- 問題 1（數據驅動） -->
+          <div class="answer-row-box">
+            <div class="answer-row-label">❓ 1. 飛機整體健不健康？</div>
+            <div class="answer-row-val" id="hero-q1-answer">
+              等待日誌分析結果…
+            </div>
+          </div>
+
+          <!-- 問題 2（數據驅動） -->
+          <div class="answer-row-box">
+            <div class="answer-row-label">❓ 2. 最主要問題是什麼？</div>
+            <div class="answer-row-val" id="hero-q2-answer">
+              等待日誌分析結果…
+            </div>
+          </div>
+
+          <!-- 問題 3（數據驅動） -->
+          <div class="answer-row-box">
+            <div class="answer-row-label">❓ 3. 下一步先做什麼？（依序排查）</div>
+            <div class="answer-row-val" id="hero-q3-answer">
+              等待日誌分析結果…
+            </div>
+          </div>
+        </div>
+
+        <div class="disclaimer-strip">
+          <span>⚠️</span>
+          <span>AI 輔助分析，最終訓練、安全與復飛判斷由帶班教官復核。</span>
+        </div>
+      </div>
+
+      <!-- 本次飛行安全提醒（V1.2 新增；僅顯示已核驗的真實安全事件） -->
+      <div id="safety-alerts-panel" class="safety-alerts-panel" hidden>
+        <div class="safety-alerts-title">🛡️ 本次飛行安全提醒</div>
+        <div id="safety-alerts-list" class="safety-alerts-list"></div>
+      </div>
+
+      <!-- 八項健康卡（學員層固定 8 張、雙列四行）：絕不出現 PWM / PID / EKF / HDOP / 原始規則編號 -->
+      <div class="health-cards-grid">
+        <div id="propulsion-card" class="health-card"></div>
+        <div id="battery-card" class="health-card"></div>
+        <div id="gps-card" class="health-card"></div>
+        <div id="stability-card" class="health-card"></div>
+        <div id="rc-signal-card" class="health-card"></div>
+        <div id="flight-mode-card" class="health-card"></div>
+        <div id="altitude-card" class="health-card"></div>
+        <div id="sensors-card" class="health-card"></div>
+      </div>
+
+      <div class="nav-bottom-bar">
+        <button type="button" class="btn-nav btn-nav-prev" onclick="goToStage(1)">重新上傳</button>
+        <button type="button" class="btn-nav btn-nav-next" onclick="goToStage(3)">下一步：記錄手感回饋 →</button>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         階段 3: ③ 飛手實際飛行感受
+         ========================================== -->
+    <section id="stage-3" class="stage-panel">
+      <div class="card">
+        <h2 style="font-size:16px; font-weight:800; margin-bottom:4px;">③ 飛手實際飛行感受</h2>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">
+          請告訴我們你的飛行體感。系統會將主觀感受與客觀日誌進行融合對照。
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">1. 飛起來感覺怎麼樣？</label>
+          <div class="feedback-rating-row">
+            <button type="button" class="rating-btn" data-val="normal">
+              <span class="emoji">😊</span>
+              <span class="label">正常</span>
+            </button>
+            <button type="button" class="rating-btn" data-val="fair">
+              <span class="emoji">😐</span>
+              <span class="label">差不多</span>
+            </button>
+            <button type="button" class="rating-btn selected" data-val="poor">
+              <span class="emoji">😟</span>
+              <span class="label">比較差</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">2. 你覺得哪裡不對？（可多選）</label>
+          <div id="symptom-chips" class="chips-cloud">
+            <span class="chip selected">左右漂</span>
+            <span class="chip">前後漂</span>
+            <span class="chip">高度忽高忽低</span>
+            <span class="chip">油門很大但飛不起來</span>
+            <span class="chip selected">起飛容易翻</span>
+            <span class="chip">GPS 定點不穩</span>
+            <span class="chip">飛機明顯抖動</span>
+            <span class="chip">遙控反應異常</span>
+            <span class="chip">切換模式異常</span>
+            <span class="chip">RTL 沒有回來</span>
+            <span class="chip">無法解鎖</span>
+            <span class="chip">其他</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">3. 什麼時候最明顯？（可多選）</label>
+          <div id="phase-chips" class="chips-cloud">
+            <span class="chip">解鎖前</span>
+            <span class="chip selected">起飛</span>
+            <span class="chip selected">懸停</span>
+            <span class="chip">前進飛行</span>
+            <span class="chip">飛行中</span>
+            <span class="chip">大油門</span>
+            <span class="chip">切換模式</span>
+            <span class="chip">RTL</span>
+            <span class="chip">下降</span>
+            <span class="chip">降落</span>
+            <span class="chip">全程</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pilot-notes-input">4. 補充說明（自由填寫，可留空）</label>
+          <textarea id="pilot-notes-input" class="form-control" rows="2" placeholder="起飛時右邊下沉明顯，需手動大幅打桿補償...">起飛時右邊下沉明顯，需手動大幅打桿補償</textarea>
+        </div>
+
+        <button type="button" id="submit-feedback-btn" class="btn-primary" style="margin-top:10px;">
+          提交手感，開始融合分析 →
+        </button>
+        <div id="feedback-save-hint" class="feedback-save-hint" hidden>✅ 手感問卷已保存</div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         階段 4: ④ 綜合飛行結論與助教
+         ========================================== -->
+    <section id="stage-4" class="stage-panel">
+      <!-- 飛行體驗關聯層（主客觀四大清楚分塊） -->
+      <div class="card">
+        <h2 style="font-size:16px; font-weight:800; margin-bottom:4px;">④ 日誌客觀數據 + 飛手感受融合</h2>
+        <div id="correlator-four-blocks" class="correlator-four-blocks">
+          <!-- 由 JS 渲染四大分塊 -->
+        </div>
+      </div>
+
+      <!-- 本次最終飛行結論（固定 8 項落地模組） -->
+      <div class="card conclusion-eight-card">
+        <h2 style="font-size:16px; font-weight:800; margin-bottom:10px;">本次最終飛行結論</h2>
+        <div id="conclusion-eight-fields">
+          <!-- 由 JS 渲染 8 大項 -->
+        </div>
+      </div>
+
+      <!-- AI 飛行健康助教（折疊友好，按需提問） -->
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <span style="font-size:20px;">🤖</span>
+          <h3 style="font-size:15px; font-weight:800;">AI 飛行健康助教</h3>
+        </div>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+          依據客觀日誌與你的手感解答疑問。穩定第一，預設第一。
+        </p>
+
+        <div class="quick-q-scroll">
+          <button type="button" class="quick-q-btn" onclick="askAI('為什麼起飛一直往右漂？')">為什麼起飛往右漂？</button>
+          <button type="button" class="quick-q-btn" onclick="askAI('我的感受與日誌一致嗎？')">感受與日誌一致嗎？</button>
+          <button type="button" class="quick-q-btn" onclick="askAI('能不能直接改 PID 解決？')">能不能直接改 PID？</button>
+          <button type="button" class="quick-q-btn" onclick="askAI('下一步先摸哪顆螺絲？')">下一步先摸哪顆螺絲？</button>
+        </div>
+
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <input type="text" id="ai-input-text" class="form-control" placeholder="輸入你想問的飛行疑問...">
+          <button type="button" class="btn-primary" style="width:auto; white-space:nowrap; padding:9px 14px;" onclick="askAI()">提問</button>
+        </div>
+
+        <div id="ai-answer-panel" class="ai-answer-panel">
+          <div style="color:var(--text-muted); font-size:12px; text-align:center;">
+            點擊上方常見問題或自行輸入，AI 助教將以標準 8 步曲為你客觀解答。
+          </div>
+        </div>
+      </div>
+
+      <div class="nav-bottom-bar">
+        <button type="button" class="btn-nav btn-nav-prev" onclick="goToStage(3)">返回回饋</button>
+        <button type="button" class="btn-nav btn-nav-next" onclick="goToStage(5)">前往教師復核與成長卡 →</button>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         階段 5: ⑤ 教師復核與成長記錄
+         ========================================== -->
+    <section id="stage-5" class="stage-panel">
+      <!-- 教師復核 -->
+      <div class="card">
+        <h2 style="font-size:16px; font-weight:800; margin-bottom:4px;">⑤ 帶班教師復核</h2>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+          AI 分析為技術輔助，最終安全放飛由現場帶班教官簽署。
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">教官評定狀態</label>
+          <div class="review-tabs-row">
+            <button type="button" class="review-tab-btn selected" data-status="pending">待教師復核</button>
+            <button type="button" class="review-tab-btn" data-status="confirmed">確認放飛</button>
+            <button type="button" class="review-tab-btn" data-status="caution">提示注意</button>
+            <button type="button" class="review-tab-btn" data-status="retest_required">需重新測試</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="teacher-name-input">復核教官姓名</label>
+          <input type="text" id="teacher-name-input" class="form-control" value="王教官">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="teacher-notes-input">教官復核指導意見</label>
+          <textarea id="teacher-notes-input" class="form-control" rows="2">已在現場觀察到右側 2 號馬達啟動延遲，更換電調與槳葉後進行低空懸停驗證。</textarea>
+        </div>
+      </div>
+
+      <!-- 成長記錄卡預覽 -->
+      <div class="growth-card-preview">
+        <div id="growth-card-preview-area">
+          <!-- 由 JS 渲染成長卡 -->
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn-primary" onclick="window.print()">
+          <span>🖨️ 列印 / 儲存成長記錄卡</span>
+        </button>
+        <button type="button" class="btn-secondary" onclick="goToStage(1)">
+          <span>🔄 開始新架次體檢</span>
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================
+       第二層：教師/工程師專業資料抽屜 (Layer 2 Drawer)
+       預設絕對折疊，僅當點擊「查看專業資料」或「教師模式」時滑出
+       ========================================== -->
+  <div id="drawer-backdrop" class="drawer-backdrop">
+    <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div class="drawer-header">
+        <div id="drawer-title" class="drawer-title">教師專業資料層 (Layer 2)</div>
+        <button type="button" id="drawer-close-btn" class="drawer-close" aria-label="關閉抽屜">&times;</button>
+      </div>
+      <div id="drawer-content-body" class="drawer-body">
+        <!-- 由 JS 注入原始數據、時序與規則依據 -->
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/config.js?v=20261017"></script>
+  <script src="./js/app.js?v=20261017"></script>
+</body>
+</html>

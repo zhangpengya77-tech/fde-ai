@@ -1,0 +1,77 @@
+/* 五階段學習工作台（P1，2026-10-12 教師指令）
+   沿用既有學員平台設計語彙（tech 青、深藍、淺灰邊框），手機單欄、不橫向溢出。
+   僅供學習工作台頁面使用，不改動既有樣式檔。 */
+.lp-path{display:flex;align-items:stretch;flex-wrap:wrap;gap:8px;margin:16px 0}
+.lp-path-step{display:flex;flex:1 1 150px;flex-direction:column;gap:6px;min-width:0;min-height:44px;padding:12px;background:#fff;border:1px solid #d9e1e6;border-top:4px solid #9fb3bd;color:#12334a;text-decoration:none}
+.lp-path-step.is-done{border-top-color:#0c8794}
+.lp-path-step.is-current{border-top-color:#36d0d8;box-shadow:0 0 0 2px rgba(54,208,216,.35)}
+.lp-path-character{display:grid;place-items:center;width:38px;height:38px;background:#10253a;color:#36d0d8;font-weight:750;font-size:18px}
+.lp-path-title{font-weight:700}
+.lp-path-state{color:#536875;font-size:13px}
+.lp-path-arrow{display:grid;place-items:center;color:#9fb3bd;font-size:20px}
+.lp-current{margin:16px 0;padding:18px;background:#fff;border:1px solid #d9e1e6;border-left:4px solid #0c8794}
+.lp-current h2{margin:6px 0 4px;font-size:20px}
+.lp-current .button{margin-top:10px}
+.lp-stage{scroll-margin-top:16px}
+.lp-stage-heading{display:flex;align-items:center;gap:12px}
+.lp-stage-character{display:grid;place-items:center;flex:0 0 auto;width:44px;height:44px;background:#10253a;color:#36d0d8;font-weight:750;font-size:20px}
+.lp-stage-summary{margin:8px 0 4px}
+.lp-subheading{margin:16px 0 8px;font-size:15px;color:#12334a}
+.lp-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.lp-card{display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;background:#fff;border:1px solid #d9e1e6}
+.lp-card-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.lp-card h4{margin:0;font-size:16px}
+/* P2 任務與成長證據鏈整合：任務詳情、要求、證據清單、對應成長紀錄提示 */
+.lp-card-desc{margin:0;color:#3d5464;font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+.lp-card-detail{display:grid;gap:4px;min-width:0}
+.lp-card-label{margin:0;color:#536875;font-size:12.5px;font-weight:700}
+.lp-card-list{display:grid;gap:2px;margin:0;padding-left:18px;color:#3d5464;font-size:13.5px;line-height:1.55}
+.lp-card-list li{overflow-wrap:anywhere}
+.lp-card-linkline{margin:0;font-size:13.5px;color:#12334a;line-height:1.6;overflow-wrap:anywhere}
+.lp-card-linkline .growth-slot{margin-right:2px}
+.lp-card-linkline a{color:#0c8794}
+.lp-card-note{margin:0;padding:8px 10px;background:#eef1f3;border:1px dashed #d9e1e6;color:#536875;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.lp-card-review{margin:0;padding-top:8px;border-top:1px solid #eef1f3;color:#12334a;font-size:13.5px;line-height:1.6;overflow-wrap:anywhere}
+.lp-entry-list,.lp-planned,.lp-feedback-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.lp-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#fff;border:1px solid #d9e1e6}
+.lp-entry-copy{display:grid;gap:4px;min-width:0}
+.lp-module{display:grid;gap:8px;padding:14px;background:#fff;border:1px solid #d9e1e6;border-left:4px solid #c9a227}
+.lp-module-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lp-module p{margin:0}
+.lp-badge{display:inline-block;padding:3px 10px;background:#eef1f3;color:#536875;border:1px solid #d9e1e6;font-size:13px;font-weight:650;white-space:nowrap}
+.lp-badge.is-pending{background:#fff8e6;color:#735711;border-color:#e6d29a}
+/* I2-B 四狀態：已可使用／尚未接入／服務暫時不可用／權限不足（後者三種一律不可點） */
+.lp-module-available{border-left-color:#1a987d}
+.lp-badge-available{background:#e8f5f1;color:#12695a;border-color:#9fd3c6}
+.lp-module-not-integrated{border-left-color:#c9a227}
+.lp-module-service-unavailable{border-left-color:#b74834}
+.lp-badge-service-unavailable{background:#fdefeb;color:#8f2d1d;border-color:#e0b0a5}
+.lp-module-role-restricted{border-left-color:#7a8699}
+.lp-badge-role-restricted{background:#eef1f3;color:#4a5766;border-color:#c8d0d9}
+.lp-planned li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:#fff;border:1px dashed #d9e1e6}
+.lp-feedback-item{display:grid;gap:8px;padding:14px;background:#fff;border:1px solid #d9e1e6}
+.lp-feedback-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lp-feedback-item p{margin:0;color:#3d5464;line-height:1.65;overflow-wrap:anywhere}
+.lp-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lp-quick-grid .button{min-height:48px}
+.status-not_started{background:#eef1f3;color:#536875}
+
+/* 教師 2026-10-15 裁決 A2：一次只顯示一個階段。
+   五個 stage section 仍全部存在於 DOM（保住錨點與所有入口），未顯示者加 hidden 屬性。
+   is-collapsed 僅為語意標記；實際隱藏由 [hidden] 負責，無 JS 時全部可見（漸進增強）。 */
+.lp-stage[hidden]{display:none}
+.lp-switch-note{margin:-6px 0 14px;font-size:13.5px}
+.lp-path-step[aria-current="true"]{border-top-color:#36d0d8;box-shadow:0 0 0 2px rgba(54,208,216,.35)}
+
+/* 手機（iPhone Safari 390px 起）單欄、不橫向溢出 */
+@media (max-width:680px){
+  .lp-path{gap:6px}
+  .lp-path-step{flex:1 1 44%;padding:10px}
+  .lp-path-arrow{flex:0 0 auto;font-size:16px}
+  .lp-current{padding:14px}
+  .lp-card-grid,.lp-quick-grid{grid-template-columns:1fr}
+  .lp-entry{flex-direction:column;align-items:stretch}
+  .lp-entry .button{width:100%;min-height:48px}
+  .lp-stage-heading{align-items:flex-start}
+  .lp-path-step,.lp-card,.lp-entry,.lp-module,.lp-feedback-item{min-width:0}
+}

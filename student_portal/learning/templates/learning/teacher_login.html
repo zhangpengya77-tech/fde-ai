@@ -4,10 +4,13 @@
 <section class="form-panel">
   <a class="back-link" href="{% url 'learning:home' %}">返回</a>
   <h1>教師登入</h1>
-  <form method="post">{% csrf_token %}
+  {# 2026-10-18 P0（iPhone 區網登入按了沒反應）：translate="no" 避免 Safari
+     翻譯列／翻譯模式干擾表單；錯誤訊息置於欄位之前，確保手機畫面無需捲動
+     即可看到（沿用 2026-10-10 學生登入修復模式），消除「按了沒反應」的錯覺。 #}
+  <form method="post" action="{% url 'learning:teacher_login' %}" novalidate translate="no">{% csrf_token %}
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    {% if form.non_field_errors %}<div class="login-errors" role="alert">{% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}</div>{% endif %}
     {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>{% endfor %}
-    {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
     <button class="button primary full" type="submit">登入教師後台</button>
   </form>
 </section>

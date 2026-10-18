@@ -1,5 +1,10 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from learning.project_directions import (
@@ -11,7 +16,7 @@ from learning.project_directions import (
     task_display_id,
     student_status_label,
 )
-from learning.models import Cohort, Enrollment, TaskDefinition, TeacherCohortAccess
+from learning.models import Cohort, Enrollment, Evidence, TaskDefinition, TeacherCohortAccess
 from learning.tests.helpers import create_student_account, enroll_student
 
 
@@ -225,6 +230,88 @@ class ProjectDirectionEnrollmentTests(TestCase):
         self.assertContains(response, 'id="id_video"')
         self.assertContains(response, "保存草稿")
         self.assertContains(response, "提交教師複核")
+
+    def test_r07_ai_direction_shows_prop_model_upload_only(self):
+        self.enrollment.project_direction = "ai_flight_assessment"
+        self.enrollment.save(update_fields=["project_direction"])
+
+        response = self.client.get(
+            reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R07"])
+        )
+
+        self.assertContains(response, "上傳 YOLO 模型 best.pt")
+        self.assertContains(response, 'accept=".pt"')
+        self.assertContains(response, "PROP_DIRECTION")
+        self.assertNotContains(response, "FOUR_SIDE_HOVER")
+
+    def test_r07_non_ai_direction_does_not_show_model_upload(self):
+        self.enrollment.project_direction = "flight_f450"
+        self.enrollment.save(update_fields=["project_direction"])
+
+        response = self.client.get(
+            reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R07"])
+        )
+
+        self.assertNotContains(response, "上傳 YOLO 模型 best.pt")
+        self.assertNotContains(response, 'accept=".pt"')
+
+    def test_r07_model_upload_reuses_model_evidence_and_links_vision_submission(self):
+        self.enrollment.project_direction = "ai_flight_assessment"
+        self.enrollment.save(update_fields=["project_direction"])
+        detail_url = reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R07"])
+        url = reverse("learning:growth_model_upload", args=[self.enrollment.pk])
+
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=Path(media_root)):
+            with patch("learning.views.submit_model_evidence_to_vision") as submit:
+                submit.return_value = {"submission_id": "sub-r07", "status": "SUBMITTED"}
+                response = self.client.post(
+                    url,
+                    {
+                        "action": "upload_model",
+                        "model_file": SimpleUploadedFile(
+                            "best.pt", b"student-model", content_type="application/octet-stream"
+                        ),
+                    },
+                )
+
+                self.assertRedirects(response, detail_url)
+                evidence = Evidence.objects.get(evidence_type=Evidence.Type.MODEL)
+                self.assertEqual(evidence.growth_submission.definition.slot_id, "R07")
+                self.assertEqual(evidence.original_metadata["task_type"], "PROP_DIRECTION")
+                self.assertEqual(evidence.processed_metadata["vision_submission_id"], "sub-r07")
+                self.assertEqual(evidence.processed_metadata["submission_status"], "SUBMITTED")
+                submit.assert_called_once()
+                payload = submit.call_args.kwargs
+                self.assertEqual(payload["task_type"], "PROP_DIRECTION")
+                self.assertEqual(payload["growth_record_slot"], "R07")
+                self.assertEqual(payload["evidence_type"], "YOLO_MODEL")
+                self.assertEqual(payload["evidence_reference"], str(evidence.evidence_id))
+
+    def test_r07_model_upload_failure_does_not_leave_model_evidence(self):
+        self.enrollment.project_direction = "ai_flight_assessment"
+        self.enrollment.save(update_fields=["project_direction"])
+        detail_url = reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R07"])
+        url = reverse("learning:growth_model_upload", args=[self.enrollment.pk])
+
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=Path(media_root)):
+            with patch(
+                "learning.views.submit_model_evidence_to_vision",
+                side_effect=RuntimeError("vision unavailable"),
+            ):
+                response = self.client.post(
+                    url,
+                    {
+                        "action": "upload_model",
+                        "model_file": SimpleUploadedFile(
+                            "best.pt", b"student-model", content_type="application/octet-stream"
+                        ),
+                    },
+                    follow=True,
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "模型提交失敗")
+                self.assertFalse(Evidence.objects.filter(evidence_type=Evidence.Type.MODEL).exists())
 
     def test_teacher_dashboard_shows_enrollment_project_direction(self):
         teacher = get_user_model().objects.create_user(

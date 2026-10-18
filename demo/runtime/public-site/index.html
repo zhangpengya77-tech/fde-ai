@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="FDE-AI 無人機 AI 雙師實訓平台公開入口：學員登入、教師登入、註冊帳號與 .pt 訓練模型上傳。">
+<title>FDE-AI 無人機 AI 雙師實訓平台</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="hero">
+  <p class="kicker">FDE-AI-UAS v2.0 · DEMO 公開入口</p>
+  <h1>無人機 AI 雙師實訓平台</h1>
+  <p class="sub">F450 四旋翼組裝培訓 &times; AI 目標檢測實訓</p>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="entries-title">
+    <h2 id="entries-title">進入平台</h2>
+    <div class="entries">
+      <a class="entry primary" href="/login/">
+        <strong>學員登入</strong>
+        <span>使用 demo student 既有帳號</span>
+      </a>
+      <a class="entry" href="/teacher/login/">
+        <strong>教師登入</strong>
+        <span>模型倉庫 / 圖片驗證 / 模型審核</span>
+      </a>
+      <a class="entry" href="/register/">
+        <strong>註冊新帳號</strong>
+        <span>首次使用的老師／學員</span>
+      </a>
+      <a class="entry" href="/eagle/">
+        <strong>AI 實訓工作台</strong>
+        <span>五階段學習（進入後可用導航切換）</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="status-title">
+    <div class="card-head">
+      <h2 id="status-title">服務狀態</h2>
+      <button type="button" id="status-refresh" class="refresh">重新檢查</button>
+    </div>
+    <ul class="status-list" id="status-list">
+      <li data-service="django"><i class="dot" aria-hidden="true"></i><span class="name">學員／教師入口（Django）</span><b class="state">檢查中…</b></li>
+      <li data-service="live"><i class="dot" aria-hidden="true"></i><span class="name">即時助教後端（Live）</span><b class="state">檢查中…</b></li>
+      <li data-service="flight_health"><i class="dot" aria-hidden="true"></i><span class="name">飛行健檢（Flight Health）</span><b class="state">檢查中…</b></li>
+    </ul>
+    <p class="muted" id="status-time">正在連線到教師電腦…</p>
+  </section>
+
+  <section class="card" aria-labelledby="howto-title">
+    <h2 id="howto-title">學員如何上傳訓練模型（.pt）</h2>
+    <ol class="howto">
+      <li>以<strong>學員帳號</strong>登入（上方「學員登入」）。</li>
+      <li>進入「我的成長記錄」→ 選擇 <strong>R07 AI 目標檢測</strong>。</li>
+      <li>在「上傳 YOLO 模型 best.pt」區塊選擇檔案並送出。</li>
+      <li>模型送達教師模型倉庫，狀態為<strong>「等待教師審核」</strong>，不會自動啟用。</li>
+    </ol>
+    <p class="muted">格式限制：僅接受 <code>.pt</code>；單一檔案上限 100 MB。</p>
+  </section>
+
+  <section class="card notice" aria-labelledby="notice-title">
+    <h2 id="notice-title">使用須知</h2>
+    <ul>
+      <li>本平台依賴<strong>教師電腦開機並保持連線</strong>；教師電腦或網路中斷時，頁面會顯示「服務暫時不可用」，恢復後即可繼續使用。</li>
+      <li>此為臨時公開隧道網址，可能因服務重啟而變更；變更後請向教師索取最新網址。</li>
+      <li>模型檔案只送達教師電腦上的模型倉庫，經教師審核後才會進入啟用流程。</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <p>FDE-AI DEMO · 靜態入口頁由教師電腦本地託管（:8112 反向代理至 Live :8111）</p>
+</footer>
+
+<script src="/assets/status.js" defer></script>
+</body>
+</html>

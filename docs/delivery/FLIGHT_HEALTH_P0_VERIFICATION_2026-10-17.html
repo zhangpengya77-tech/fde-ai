@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flight Health AI｜P0 八张健康卡真实日志判读 — 定向复验与逐卡验证报告（2026-10-17）</title>
+<style>
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7;max-width:1080px;margin:0 auto;padding:28px;color:#1f2937;background:#f8fafc}
+  h1{font-size:24px;border-bottom:3px solid #0ea5e9;padding-bottom:8px}
+  h2{font-size:19px;margin-top:34px;color:#0f172a;border-left:5px solid #0ea5e9;padding-left:10px}
+  h3{font-size:16px;color:#334155;margin-top:22px}
+  .meta{color:#64748b;font-size:13px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13px}
+  th,td{border:1px solid #cbd5e1;padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#e2e8f0;font-weight:700}
+  tr:nth-child(even){background:#f1f5f9}
+  .ok{color:#16a34a;font-weight:700}
+  .warn{color:#d97706;font-weight:700}
+  .bad{color:#dc2626;font-weight:700}
+  .box{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  code{background:#eef2ff;padding:1px 5px;border-radius:4px;font-size:12px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .p-real{background:#dbeafe;color:#1d4ed8}
+  .p-sim{background:#fef3c7;color:#92400e}
+  .p-sample{background:#dcfce7;color:#166534}
+  ul{margin:8px 0 8px 4px} li{margin:4px 0}
+  .foot{color:#94a3b8;font-size:12px;margin-top:30px;border-top:1px solid #e2e8f0;padding-top:10px}
+</style>
+</head>
+<body>
+
+<h1>Flight Health AI｜P0 八张健康卡真实日志判读 — 定向复验与逐卡验证报告</h1>
+<p class="meta">日期：2026-10-17 ｜ 模块：<code>D:\FDE-AI-UAS-v2.0\flight-health\</code>（DEMO 参考实现）｜ 状态：<b>MANUAL_ACCEPTANCE_PENDING（待教师用真实日志复测确认）</b></p>
+
+<div class="box">
+<b>一句话结论：</b>教师真实 9/29 日志 <b>确实存在</b>（在只读仓库 <code>D:\FDE-Flight-Health-AI\sample_logs\ardupilot\log_452_2026-9-29-20-38-08.bin</code>，不在 v2.0 内，前序代理只搜了 v2.0 才误报"缺失"）。当前 sandbox 解析器对该真实日志<b>已能真实解析 42,110 条消息并产出八卡真实判定</b>（8/8 无 <code>undefined</code>、无空白）。教师之前看到的"空白卡 / undefined / 无法判断"是<b>两件事</b>：① 跨后端 <code>card_id</code> 契约不一致导致 4 张卡空白（已用历史 JSON 证据坐实、本次已修复）；② 旧版/缓存代码（解析器只认样本格式 → 全 ⚪、缺 <code>next_action</code> → <code>undefined</code>）。之前的 8/8 渲染测试<b>只覆盖了 sandbox 前端 × sandbox 引擎这一条自洽路径</b>，从未覆盖教师实际连接的正式后端路径，因此是高风险的"假绿"。
+</div>
+
+<h2>一、教师真实 9/29 日志状态（按规格"优先用真实日志"）</h2>
+<table>
+<tr><th>项目</th><th>结果</th></tr>
+<tr><td>是否在 v2.0 仓库内</td><td><span class="bad">否</span> —— 前序 P0 报告称"缺失"，是因只搜了 <code>D:\FDE-AI-UAS-v2.0</code></td></tr>
+<tr><td>真实位置（只读仓库）</td><td><code>D:\FDE-Flight-Health-AI\sample_logs\ardupilot\log_452_2026-9-29-20-38-08.bin</code></td></tr>
+<tr><td>大小 / SHA-256</td><td>1,631,197 B ｜ <code>e5ef768b6033a72b2acc523e7ea3e490f4b647f8cc7df2c849f79acc5a2a9d7a</code>（与历史记录一致）</td></tr>
+<tr><td>本次使用方式</td><td><span class="ok">只读分析</span> —— 仅读取该 .bin 喂给 sandbox 引擎，<b>未修改</b>只读仓库任何文件</td></tr>
+<tr><td>解析结果（sandbox 引擎）</td><td><span class="ok">42,110 条飞控消息</span>，八卡全部有真实数据（非 0 条）</td></tr>
+</table>
+
+<h2>二、为什么之前的测试"8/8 渲染成功"，教师却看到 undefined / 无法判断 / 空白？</h2>
+<p>这是本次复验最核心的问题。结论：<b>8/8 渲染测试验证的是"单一自洽配置"，而教师实际落在另一条未测配置上。</b></p>
+
+<h3>2.1 测试只覆盖了 sandbox 前端 × sandbox 内建引擎</h3>
+<p>契约测试 <code>accept_flight_health_p0.py</code>（44/44）与本轮实测都证明：当<b>沙箱前端连沙箱引擎</b>时，两侧都用同一套 <code>card_id</code>（<code>gps / rc-signal / flight-mode / altitude</code>），八卡完美渲染——这是<b>针对该配置的真实通过</b>。但教师环境并非如此。</p>
+
+<h3>2.2 教师实际触发的两个真实缺陷（测试从未覆盖）</h3>
+<table>
+<tr><th>教师看到的现象</th><th>真实根因</th><th>证据 / 状态</th></tr>
+<tr>
+<td><b>4 张卡空白</b>（定位 / 遥控 / 模式 / 高度）</td>
+<td>跨后端 <code>card_id</code> 契约不一致。教师 <code>config.js</code> 的 LAN/localhost 指向 <code>:8040</code>，即<b>教师正式诊断主机</b>（<code>D:\FDE-Flight-Health-AI</code>），它用 <code>positioning / rc_signal / flight_mode / altitude_control</code> 命名；而 2026-10-17 前端<b>刻意删除了别名</b>，只认 <code>gps / rc-signal / flight-mode / altitude</code> → 4 个 <code>cardIdMap[card_id]</code> 为 <code>undefined</code> → 静默跳过 → 空白。</td>
+<td><span class="bad">已坐实</span>：<code>demo/runtime/logs/fh_929_verify_PROD_ENGINE.json</code> 显示 <code>gps-card / rc-signal-card / flight-mode-card / altitude-card</code> 全部 <code>rendered=false, empty=true</code>。<b>本次已修复（见第四节）。</b></td>
+</tr>
+<tr>
+<td><b>"👉 undefined"</b></td>
+<td>旧版 <code>_card()</code> 未输出 <code>next_action</code> 字段，前端直接插入 <code>card.next_action</code> → 字面值 <code>undefined</code>。</td>
+<td><span class="ok">已修复</span>：2026-10-16 起 <code>CARD_CONTRACT</code> 每卡都有 <code>next_action</code>，本轮实测 <code>undefined=0</code>。仅当教师<b>未强制刷新、命中旧缓存</b>时才会出现（见 R8）。</td>
+</tr>
+<tr>
+<td><b>"数据缺失，无法判断" ⚪</b></td>
+<td>旧版解析器只认 <code>gen_sample_bin.py</code> 私有格式，对真实 ArduPilot .bin <b>解析出 0 条消息</b> → 八卡全 UNKNOWN、文案"数据缺失，无法判断"。</td>
+<td><span class="ok">已修复</span>：解析器已对齐真实 DataFlash 帧结构；本轮真实 9/29 日志解析出 42,110 条。仅旧版/缓存会重现。</td>
+</tr>
+</table>
+<p class="meta">⇒ 结论：之前的 8/8 是<b>假绿</b>——它验证了"页面打开 / HTTP 200 / 八卡 DOM 渲染"这一层，但从未验证<b>真实后端契约一致性</b>与<b>旧代码/缓存路径</b>。规格要求"不得把页面打开/HTTP 200/8 卡 DOM 渲染当成判读通过证据"，正是此意。</p>
+
+<h2>三、八张卡逐卡验证表（真实 9/29 日志，sandbox 引擎实测）</h2>
+<p class="meta">字段含义：<span class="pill p-real">真实 9/29</span> 来自教师真实日志（只读分析）｜<span class="pill p-sample">样本</span> 来自 v2.0 自带测试样本｜<span class="pill p-sim">DEMO</span> 为隔离演示数据（不混入真实判定）。</p>
+<table>
+<tr><th>#</th><th>card_id</th><th>名称</th><th>原始字段 → 计算</th><th>规则依据（阈值）</th><th>页面显示</th><th>验证结果</th></tr>
+<tr>
+<td>01</td><td>propulsion</td><td>动力健康</td>
+<td>RCOU 四通道均值 → 极差 <b>358.1</b></td>
+<td>MOT-01｜spread&gt;200 → inspect</td>
+<td><span class="warn">🟠 需要检查</span></td>
+<td><span class="pill p-real">真实</span> 与教师正式引擎一致（均判异常）</td>
+</tr>
+<tr>
+<td>02</td><td>battery</td><td>电池健康</td>
+<td>BAT.Volt 最低 <b>11.05V</b>（满电99%）</td>
+<td>BAT-01｜&lt;13.5V → inspect（阈值按 4S 设）</td>
+<td><span class="warn">🟠 需要检查</span></td>
+<td><span class="pill p-real">真实</span> <span class="bad">与正式引擎不一致</span>：3S 电池 11.05V 属正常放电，阈值误判。属<b>规则缺口 R1</b>（待教师批准）</td>
+</tr>
+<tr>
+<td>03</td><td>gps</td><td>定位健康</td>
+<td>GPS.NSats 最低 <b>12</b>、HDOP 最大 <b>1.43</b></td>
+<td>GPS-01｜sats&lt;7/&lt;4、HDOP&gt;2</td>
+<td><span class="ok">🟢 通过</span></td>
+<td><span class="pill p-real">真实</span> <span class="bad">与正式引擎不一致</span>：沙箱无事件型规则，漏掉真实 GPS Glitch 9.45s。属<b>规则缺口 R3</b></td>
+</tr>
+<tr>
+<td>04</td><td>stability</td><td>姿态稳定</td>
+<td>ATT 跟踪误差最大 <b>45.7°</b>（含 Yaw）</td>
+<td>ATT-01｜&gt;25° → danger</td>
+<td><span class="bad">🔴 危险</span></td>
+<td><span class="pill p-real">真实</span> <span class="bad">与正式引擎不一致</span>：45.7° 疑似 Yaw ±180° 环绕误差（误报）。属<b>规则缺口 R2</b></td>
+</tr>
+<tr>
+<td>05</td><td>rc-signal</td><td>遥控信号</td>
+<td>RCIN C1 1440–1501 / C2 1503 / C3 1000–2000 / C4 1005–1995</td>
+<td>RC-01｜越出 900~2100 → inspect</td>
+<td><span class="ok">🟢 通过</span></td>
+<td><span class="pill p-real">真实</span> 沙箱无事件规则，漏掉真实 Radio Failsafe 3.1s（仅在正式引擎 safety_alerts）</td>
+</tr>
+<tr>
+<td>06</td><td>flight-mode</td><td>飞行模式</td>
+<td>MODE 32 次记录，模式 [0,2,5,6]</td>
+<td>MODE-01｜编号越出 0~30 → inspect</td>
+<td><span class="ok">🟢 通过</span></td>
+<td><span class="pill p-real">真实</span> <span class="bad">与正式引擎不一致</span>：沙箱漏掉模式切换被拒 20.57s。属<b>规则缺口 R3</b></td>
+</tr>
+<tr>
+<td>07</td><td>altitude</td><td>高度控制</td>
+<td>BARO 中位 −0.15m vs CTUN −0.02m，偏差 <b>0.13m</b></td>
+<td>ALT-01｜偏差&gt;3m → inspect</td>
+<td><span class="ok">🟢 通过</span></td>
+<td><span class="pill p-real">真实</span> <span class="bad">与正式引擎不一致</span>：正式引擎认为"无可靠定高规则"→ 恒未评估。属<b>规则缺口 R4</b></td>
+</tr>
+<tr>
+<td>08</td><td>sensors</td><td>传感器</td>
+<td>VIBE 峰值 <b>1.84</b>、clip 0</td>
+<td>VIB-01｜&gt;2.0/&gt;3.0</td>
+<td><span class="ok">🟢 通过</span></td>
+<td><span class="pill p-real">真实</span> <span class="bad">与正式引擎不一致</span>：正式引擎第 08 卡对应 ekf 域（无规则）→ 未评估。属<b>规则缺口 R5</b></td>
+</tr>
+</table>
+<p class="meta">样本与 DEMO 数据（仅供参考，不混入真实判定）：healthy 样本 8/8 🟢；bad 样本含 🟠/🔴；DEMO_PAYLOAD 为隔离演示包（已规范化为 sandbox 命名，不进真实分析）。</p>
+
+<h2>四、本轮最小范围修复（均在修改边界内）</h2>
+<p>修改边界（规格）：<b>未改</b> DataFlash 解析器核心算法 / 八卡阈值 / R07 / 正式部署 / Git commit；<b>未改</b>只读仓库 <code>D:\FDE-Flight-Health-AI</code>。</p>
+<table>
+<tr><th>修复项</th><th>文件 / 位置</th><th>说明</th></tr>
+<tr>
+<td><b>① 跨后端 card_id 契约归一化</b>（修复 4 张空白卡）</td>
+<td><code>js/app.js</code> 新增 <code>CARD_ID_CANONICAL</code> + <code>canonicalCardId()</code>，并在 <code>renderReportPage</code> 的卡片映射处调用</td>
+<td>显式桥接两套<b>已知且刻意</b>的契约（沙箱 <code>gps/rc-signal/flight-mode/altitude</code> ↔ 教师正式 <code>positioning/rc_signal/flight_mode/altitude_control</a>）。<b>非双 key 掩蓋漂移</b>：<code>cardIdMap</code> 仍保持单一权威（CT2 通过），未知 id 仍 <code>console.warn</code> 并跳过。CT4（无历史别名残留）仍 PASS。</td>
+</tr>
+<tr>
+<td><b>② 成长卡硬编码故障文案 → 数据驱动</b>（修复谎报）</td>
+<td><code>js/app.js</code> <code>renderGrowthCard()</code></td>
+<td>原第 1265 行硬编码"主要問題：動力輸出不均衡（某一側持續偏高）"，对全绿日志也显示该故障故事，违反本档第 1170 行"嚴禁硬編碼故障故事"纪律。改为取自当次真实分析：有异常显异常、全绿显"未發現異常"。</td>
+</tr>
+</table>
+<p class="meta">验证：<code>node --check js/app.js</code> 通过；引擎单测 8/8 OK；CT2/CT4 静态校验 PASS；真实 9/29 日志经 sandbox 后端 5 步链路实测 8/8 渲染、无空白、<code>undefined=0</code>；归一化映射确认 4 个正式后端 id 全部命中 DOM。</p>
+
+<h2>五、之前报告声稱的修复是否仍存在（核對结果）</h2>
+<table>
+<tr><th>声稱修复</th><th>当前代码核对</th><th>结论</th></tr>
+<tr><td>R1 删除 cardIdMap 别名</td><td><code>js/app.js:693</code> cardIdMap 仅 8 个 sandbox id，无别名</td><td><span class="ok">存在</span></td></tr>
+<tr><td>R2 DEMO_PAYLOAD 规范化为 sandbox id</td><td><code>js/app.js:55-119</code> 全部为 <code>gps/rc-signal/flight-mode/altitude</code></td><td><span class="ok">存在</span></td></tr>
+<tr><td>R3/R5 状态枚举统一（normal/inspect/danger/unknown）</td><td><code>getStatusMetaFromEngine</code> / <code>normalizeSeverity</code> 已覆盖小写下划线枚举</td><td><span class="ok">存在</span></td></tr>
+<tr><td>R6/R7 参考后端守卫（值存在）+ 空文件走全灰</td><td><code>reference_server.py:197</code> 判 <code>sess.get("analysis")</code> 值；<code>:255</code> 用 <code>is None</code></td><td><span class="ok">存在</span></td></tr>
+<tr><td>R8 静态资源加版本号</td><td><code>index.html:7,373,374</code> <code>?v=20261017</code></td><td><span class="ok">存在</span></td></tr>
+<tr>
+<td>解析器真实 DataFlash 帧解析（核心 P0）</td><td><code>builtin_rule_engine.parse_bin_log</code> 真实帧扫描；真实 9/29 日志 42,110 条</td><td><span class="ok">存在且有效</span></td></tr>
+<tr>
+<td>附帶缺陷 C：renderGrowthCard 硬编码故障故事</td><td>本轮前 <code>js/app.js:1265</code> 仍硬编码 → <b>本轮已修</b></td><td><span class="warn">本轮补修</span></td></tr>
+<tr>
+<td>附帶缺陷 B：sandbox student_view 缺 safety_alerts</td><td><code>reference_server.py:_student_view_from_analysis</code> 仍不输出 safety_alerts（事件规则本身也缺失）</td><td><span class="warn">仍待处理</span>（属 R3 规则缺口，待教师批准）</td></tr>
+</table>
+
+<h2>六、仍未解决 / 待教师决策（未擅自修改）</h2>
+<ul>
+<li><b>R1–R5 规则缺口（6/8 与正式引擎不一致）</b>：电池 3S 阈值、姿态 Yaw 环绕、GPS/Failsafe/Mode 事件型规则、高度/传感器语义归属。均<b>未改阈值、未改算法</b>，列规则原文+证据+建议+风险待教师批准（详见 <code>P0_FLIGHT_HEALTH_929_CONTRACT_DIAGNOSIS_2026-10-17.md</code> 第八节）。</li>
+<li><b>跨后端归一化（本轮已修）仍需教师用正式后端复测</b>：请教师连正式诊断主机（<code>:8040</code>）重传 9/29 日志，确认 03/05/06/07 四卡不再空白。</li>
+<li><b>sandbox 模式 safety_alerts 缺失</b>：真实 GPS Glitch / Failsafe / 模式切换事件在 sandbox 模式下不显示，需补事件规则后才会有数据。</li>
+<li><b>卡片文案语言一致性</b>：后端结论为简体、UI 为繁体（如"四路电机输出命令差值达 358"），不影响判读正确性，属显示偏好。</li>
+<li><b>并行编辑协调</b>：<code>flight-health/</code> 此前有另一代理改动，已就本次最小修改完成核对，无冲突残留。</li>
+</ul>
+
+<h2>七、验收测试小结</h2>
+<table>
+<tr><th>测试</th><th>结果</th></tr>
+<tr><td>引擎单元测试 <code>test_engine_resolver.py</code></td><td><span class="ok">8/8 OK</span></td></tr>
+<tr><td>契约静态校验 CT2（cardIdMap==后端 ID）/ CT4（无历史别名）</td><td><span class="ok">PASS</span></td></tr>
+<tr><td>js/app.js 语法检查</td><td><span class="ok">OK</span></td></tr>
+<tr><td>真实 9/29 日志 × sandbox 后端 5 步链路</td><td><span class="ok">42,110 条 / 8/8 渲染 / 无空白 / undefined=0</span></td></tr>
+<tr><td>跨后端映射（4 个正式 id → DOM）</td><td><span class="ok">全部命中，无空白</span></td></tr>
+</table>
+
+<div class="foot">
+修改边界遵守：未改 DataFlash 解析器核心算法、未改八卡阈值、未改 R07、未做正式部署、未执行 Git commit、未改只读仓库。<br>
+交付物：本报告 ＋ <code>js/app.js</code> 两处修复 ＋ <code>.test-temp/fh_verify_sandbox_e2e.py</code>（复验脚本）。<br>
+停止条件：根因定位、最小修复、回归测试完成；待教师用真实日志经正式后端复测确认后，方可标记 PASSED。
+</div>
+
+</body>
+</html>

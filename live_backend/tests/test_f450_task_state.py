@@ -99,6 +99,35 @@ class F450TaskStateTests(unittest.TestCase):
         self.assertEqual(task.status, TaskStatus.NOT_STARTED)
         self.assertEqual(self.progress.task("TASK_09").status, TaskStatus.NOT_STARTED)
 
+    def test_task08_vision_model_not_ready_only_allowed_on_prop_vision(self):
+        self.progress.start_task("TASK_08")
+        self.progress.task("TASK_08").current_training_step_id = "T08_PROP_VISION"
+        # VISION_MODEL_NOT_READY 仅允许出现在 PROP_VISION 步骤，且应被记录为 check_status。
+        self.progress.record_step_fact("TASK_08", "T08_PROP_VISION", "VISION_MODEL_NOT_READY", student_note="active model not ready")
+        step_state = self.progress.task("TASK_08").training_step_progress["T08_PROP_VISION"]
+        self.assertEqual(step_state["check_status"], "VISION_MODEL_NOT_READY")
+        # 在非 PROP_VISION 步骤记录 VISION_MODEL_NOT_READY 必须被拒绝。
+        self.progress.task("TASK_08").current_training_step_id = "T08_GPS_COMPASS_STATUS"
+        with self.assertRaisesRegex(TaskTransitionError, "vision_pending_only_allowed_for_prop"):
+            self.progress.record_step_fact("TASK_08", "T08_GPS_COMPASS_STATUS", "VISION_MODEL_NOT_READY")
+
+    def test_task08_evidence_rejects_vision_model_not_ready_status(self):
+        self.progress.start_task("TASK_08")
+        # 选一个有 evidence_required 的 TASK_08 步骤（FLIGHT_MODE_CHECK 要求 SCREENSHOT），
+        # 才能走到 check_status 校验分支（PROP_VISION 本身无 evidence_required，会先被 wrong_evidence_type 挡住）。
+        self.progress.task("TASK_08").current_training_step_id = "T08_FLIGHT_MODE_CHECK"
+        # VISION_MODEL_NOT_READY 不得作为 evidence check_status（需求 #7：不可用不得伪装成检测通过）。
+        with self.assertRaisesRegex(TaskTransitionError, "invalid_task08_evidence_status"):
+            self.progress.record_step_evidence(
+                "TASK_08", "T08_FLIGHT_MODE_CHECK", "SCREENSHOT", check_status="VISION_MODEL_NOT_READY"
+            )
+        # 正向对照：合法的 check_status（如 PASS）应当被接受，证明上面的拒绝来自 check_status 校验而非证据类型。
+        self.progress.record_step_evidence(
+            "TASK_08", "T08_FLIGHT_MODE_CHECK", "SCREENSHOT", check_status="PASS"
+        )
+        step_state = self.progress.task("TASK_08").training_step_progress["T08_FLIGHT_MODE_CHECK"]
+        self.assertEqual(step_state["check_status"], "PASS")
+
 
 if __name__ == "__main__":
     unittest.main()

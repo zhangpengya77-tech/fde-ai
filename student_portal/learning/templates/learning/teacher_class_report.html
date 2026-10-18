@@ -1,0 +1,205 @@
+{% extends 'learning/base.html' %}
+{% load static %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'learning/teacher-report.css' %}">{% endblock %}
+{% block title %}班級結訓成果報告｜教師後台{% endblock %}
+{% block content %}
+<div class="trp-screen-only">
+  <a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+  <section class="page-heading">
+    <p class="eyebrow">P5 · 班級結訓成果報告</p>
+    <h1>班級結訓成果報告</h1>
+    <p class="muted">本報告只彙整既有真實資料（成長紀錄、任務進度、五階段進度、教師複核紀錄），不產生任何假成績、假照片、假證照或自動生成的教師評語。「八項已提交」不等於「八項通過」；「證」階段成果不等於取得民航局專業操作證。報告預設僅供授權教師查看。</p>
+  </section>
+
+  {% if cohorts %}
+  <form method="get" class="trp-toolbar" id="report-toolbar">
+    <label>班級
+      <select name="cohort" onchange="this.form.submit()">
+        {% for item in cohorts %}<option value="{{ item.cohort_id }}" {% if selected_cohort == item.cohort_id %}selected{% endif %}>{{ item.name }}（{{ item.cohort_id }}）</option>{% endfor %}
+      </select>
+    </label>
+    <button class="button primary" type="submit">切換班級</button>
+    <button class="button secondary" type="button" id="print-report">列印報告</button>
+    <a class="button quiet" href="{% url 'learning:teacher_class_outcomes' %}?cohort={{ selected_cohort }}">前往成果總覽（複核作業）</a>
+  </form>
+  {% endif %}
+</div>
+
+{% if not report %}
+<p class="empty-state">尚無紀錄：目前沒有可查看的班級報告；若剛被加入班級，請聯繫管理員開通教師權限。</p>
+{% else %}
+
+{# ── 1. 班級基本資料 ─────────────────────────────────────────────── #}
+<section class="trp-section trp-basic" id="report-basic" aria-label="班級基本資料">
+  <h2 class="trp-h2">班級基本資料</h2>
+  <dl class="trp-dl">
+    <div><dt>班級名稱</dt><dd>{{ report.cohort.name }}</dd></div>
+    <div><dt>班級編號</dt><dd>{{ report.cohort.cohort_id }}</dd></div>
+    <div><dt>班級狀態</dt><dd>{% if report.cohort.active %}在訓{% else %}已結訓／停用{% endif %}</dd></div>
+    <div><dt>課程期別建立時間</dt><dd>{{ report.cohort.created_at|date:'Y-m-d' }}</dd></div>
+    <div><dt>學員總人數</dt><dd>{{ report.student_count }} 人</dd></div>
+    <div><dt>報告產生時間</dt><dd>{{ report.generated_at|date:'Y-m-d H:i' }}</dd></div>
+  </dl>
+  <h3 class="trp-h3">課程資訊</h3>
+  {% if report.direction_counts %}
+  <p class="trp-line">專案方向：
+    {% for label, count in report.direction_counts %}<span class="trp-chip">{{ label }} {{ count }} 人</span>{% endfor %}
+  </p>
+  {% else %}
+  <p class="trp-empty">尚無紀錄</p>
+  {% endif %}
+  {% if report.training_counts %}
+  <p class="trp-line">培訓來源：
+    {% for label, count in report.training_counts %}<span class="trp-chip">{{ label }} {{ count }} 人</span>{% endfor %}
+  </p>
+  {% else %}
+  <p class="trp-empty">尚無紀錄</p>
+  {% endif %}
+</section>
+
+{# ── 2. 班級成果摘要 ─────────────────────────────────────────────── #}
+<section class="trp-section" id="report-summary" aria-label="班級成果摘要">
+  <h2 class="trp-h2">班級成果摘要</h2>
+  <div class="trp-stats">
+    <div class="trp-stat"><span class="trp-stat-num">{{ report.student_count }}</span><span class="trp-stat-label">學員總人數（人）</span></div>
+    <div class="trp-stat"><span class="trp-stat-num">{{ report.total_submitted }}</span><span class="trp-stat-label">R01–R08 已提交（筆）</span></div>
+    <div class="trp-stat"><span class="trp-stat-num">{{ report.total_reviewed }}</span><span class="trp-stat-label">R01–R08 已複核（筆）</span></div>
+    <div class="trp-stat trp-stat-pending"><span class="trp-stat-num">{{ report.pending_items_total }}</span><span class="trp-stat-label">待教師複核（筆）</span></div>
+    <div class="trp-stat trp-stat-warn"><span class="trp-stat-num">{{ report.needs_revision_total }}</span><span class="trp-stat-label">需要補充（筆）</span></div>
+    <div class="trp-stat"><span class="trp-stat-num">{{ report.not_submitted_count }}</span><span class="trp-stat-label">尚未提交（人）</span></div>
+    <div class="trp-stat trp-stat-done"><span class="trp-stat-num">{{ report.all_submitted_count }}</span><span class="trp-stat-label">八項已提交（人）</span></div>
+    <div class="trp-stat"><span class="trp-stat-num">{{ report.pending_student_count }}</span><span class="trp-stat-label">有待複核成果（人）</span></div>
+  </div>
+  <p class="trp-note">口徑說明：卡片為「成果筆數」，涉及學員為「人數」，兩者使用同一工作項目集合（成長紀錄＋任務提交），僅單位不同。「八項已提交」僅代表提交數達 8 項，不代表已通過。</p>
+</section>
+
+{# ── 3. 五階段學習概況 ───────────────────────────────────────────── #}
+<section class="trp-section" id="report-stage" aria-label="五階段學習概況">
+  <h2 class="trp-h2">五階段學習概況</h2>
+  <table class="trp-table trp-stage-table">
+    <thead><tr><th>階段</th><th>完成人數</th><th>班級人數</th><th>完成比例</th></tr></thead>
+    <tbody>
+      {% for stage in report.stage_rows %}
+      <tr>
+        <td data-label="階段">{{ stage.character }}｜{{ stage.title }}</td>
+        <td data-label="完成人數">{{ stage.done }} 人</td>
+        <td data-label="班級人數">{{ stage.total }} 人</td>
+        <td data-label="完成比例">{{ stage.done }} / {{ stage.total }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4">尚無紀錄</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="trp-note">完成定義：僅計入五階段進度為「已完成」者；分母為班級在學學員數。</p>
+</section>
+
+{# ── 4. R01–R08 成長成果 ─────────────────────────────────────────── #}
+<section class="trp-section" id="report-slots" aria-label="R01-R08 成長成果">
+  <h2 class="trp-h2">R01–R08 成長成果</h2>
+  <table class="trp-table">
+    <thead><tr><th>紀錄</th><th>名稱</th><th>已提交（人）</th><th>已複核（人）</th><th>班級人數</th></tr></thead>
+    <tbody>
+      {% for slot in report.slot_stats %}
+      <tr>
+        <td data-label="紀錄">{{ slot.slot_id }}</td>
+        <td data-label="名稱">{% if slot.title %}{{ slot.title }}{% else %}<span class="muted">尚無紀錄</span>{% endif %}</td>
+        <td data-label="已提交（人）">{{ slot.submitted }} / {{ slot.total }}</td>
+        <td data-label="已複核（人）">{{ slot.reviewed }} / {{ slot.total }}</td>
+        <td data-label="班級人數">{{ slot.total }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">尚無紀錄</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="trp-note">已提交＝狀態屬已提交／需補充／合格／不合格；已複核＝狀態屬需補充／合格／不合格。已提交不等於已通過。</p>
+</section>
+
+{# ── 5. 學員成果列表 ─────────────────────────────────────────────── #}
+<section class="trp-section" id="report-students" aria-label="學員成果列表">
+  <h2 class="trp-h2">學員成果列表（{{ report.student_rows|length }} 人）</h2>
+  {% for row in report.student_rows %}
+  <article class="trp-student">
+    <header class="trp-student-head">
+      <strong>{{ row.student.public_user_id }}</strong>
+      <span class="muted">{{ row.student.nickname }}</span>
+      <span class="trp-chip">{{ row.direction_label }}</span>
+      {% if row.group %}<span class="trp-chip">小組：{{ row.group.name }}</span>{% endif %}
+    </header>
+    <div class="trp-student-nums">
+      <span>R01–R08 已提交 <strong>{{ row.submitted_count }} / 8</strong></span>
+      <span>已複核 <strong>{{ row.reviewed_count }} / 8</strong></span>
+      <span>待教師複核 <strong>{{ row.pending_count }} 筆</strong></span>
+      <span>需要補充 <strong>{{ row.needs_revision_count }} 筆</strong></span>
+      <span>五階段完成 <strong>{{ row.completed_stages }} / {{ row.stage_total }}</strong></span>
+      <span>成果證據 <strong>{{ row.evidence_count }}</strong></span>
+    </div>
+    <div class="trp-slot-strip">
+      {% for cell in row.slot_cells %}<span class="trp-slot status status-{{ cell.status_key }}">{{ cell.slot_id }}：{{ cell.status_label }}</span>{% endfor %}
+    </div>
+    {% if row.evidence_rows %}
+    <div class="trp-evidence">
+      {% for evidence in row.evidence_rows %}
+      <figure class="trp-evidence-item">
+        <figcaption>{{ evidence.slot_id }} · {{ evidence.type_label }}{% if evidence.description %} · {{ evidence.description }}{% endif %}</figcaption>
+        {% if evidence.external_url %}
+        <a href="{{ evidence.external_url }}" target="_blank" rel="noopener noreferrer">開啟外部連結</a>
+        {% elif evidence.is_image %}
+        <a href="{% url 'learning:evidence_download' evidence.evidence_id %}?inline=1" target="_blank" rel="noopener noreferrer"><img class="trp-evidence-thumb" src="{% url 'learning:evidence_download' evidence.evidence_id %}?inline=1" alt="{{ evidence.slot_id }} 成果證據縮圖" loading="lazy"></a>
+        {% elif evidence.has_upload %}
+        <a href="{% url 'learning:evidence_download' evidence.evidence_id %}">開啟私有檔案</a>
+        {% else %}
+        <span class="muted">證據檔案尚未處理</span>
+        {% endif %}
+      </figure>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="trp-empty">尚無紀錄（尚無成果證據）</p>
+    {% endif %}
+    <p class="trp-screen-only"><a href="{{ row.detail_url }}">前往既有學員詳情頁（複核作業）</a></p>
+  </article>
+  {% empty %}
+  <p class="trp-empty">尚無紀錄（此班級目前尚無在學學員）</p>
+  {% endfor %}
+</section>
+
+{# ── 6. 教師回饋 ─────────────────────────────────────────────────── #}
+<section class="trp-section" id="report-feedback" aria-label="教師回饋">
+  <h2 class="trp-h2">教師回饋（{{ report.feedback_rows|length }} 筆）</h2>
+  {% if report.feedback_rows %}
+  <table class="trp-table trp-feedback-table">
+    <thead><tr><th>學員</th><th>來源</th><th>項目</th><th>複核結果</th><th>評分</th><th>教師評語</th><th>時間</th></tr></thead>
+    <tbody>
+      {% for item in report.feedback_rows %}
+      <tr>
+        <td data-label="學員">{{ item.student.public_user_id }}<span class="muted">（{{ item.student.nickname }}）</span></td>
+        <td data-label="來源">{{ item.source_label }}</td>
+        <td data-label="項目">{{ item.code }}｜{{ item.title }}</td>
+        <td data-label="複核結果">{{ item.review_status_label }}</td>
+        <td data-label="評分">{% if item.score is not None %}{{ item.score }}{% else %}—{% endif %}</td>
+        <td data-label="教師評語">{{ item.note }}</td>
+        <td data-label="時間">{% if item.reviewed_at %}{{ item.reviewed_at|date:'Y-m-d H:i' }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="trp-empty">尚無紀錄（目前尚無任何教師評語或回饋）</p>
+  {% endif %}
+  <p class="trp-note">本區只顯示教師實際填寫的評語與評分；系統不會自動生成任何教師評語。</p>
+</section>
+
+<div class="trp-footer-note">本報告由 FDE-AI-UAS 教師後台產生 · 資料來源：既有成長紀錄、任務進度與教師複核紀錄 · 僅供授權教師查看</div>
+{% endif %}
+
+<script>
+  (function () {
+    var btn = document.getElementById('print-report');
+    if (btn) {
+      btn.addEventListener('click', function () { window.print(); });
+    }
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends 'learning/base.html' %}
+{% block title %}模型詳情｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_vision_model_list' %}">返回進階模型管理</a>
+<section class="page-heading"><p class="eyebrow">{{ task_type }}</p><h1>{{ evidence.original_metadata.filename|default:'best.pt' }}</h1><p class="muted">學員：{{ evidence.growth_submission.enrollment.student.nickname }} · 班級：{{ evidence.growth_submission.enrollment.cohort_id }} · 上傳時間：{{ evidence.created_at|date:'Y-m-d H:i' }}</p><a class="button secondary" href="{% url 'learning:evidence_download' evidence.pk %}">私有下載</a> <a class="button secondary" href="{% url 'learning:teacher_vision_model_verify' evidence.pk %}">圖片測試</a></section>
+
+<section class="section-block"><h2>模型版本與來源</h2><ul>
+<li>模型版本：{{ flywheel.model_version }}</li>
+<li>父版本模型：{{ flywheel.parent_model_id|default:'—' }}</li>
+<li>任務：{{ flywheel.task_id|default:'—' }}</li>
+<li>資料集版本：{{ flywheel.dataset_version|default:'—' }}</li>
+<li>best.pt 參照：{{ flywheel.artifact_reference }}</li>
+<li>data.yaml 參照：{{ flywheel.data_yaml_reference|default:'—' }}</li>
+</ul></section>
+
+<section class="section-block"><h2>狀態維度</h2><ul>
+<li>審核狀態（教師）：{{ review_status }}</li>
+<li>驗證狀態（Golden Test）：{{ validation_status }}</li>
+<li>訓練用途：{{ training_usage }}</li>
+<li>部署狀態：{{ deployment_status }}</li>
+</ul><p class="muted">此四項為獨立流程概念，不合併為單一欄位。</p>
+{% if active_blocked_reason %}<p class="muted">ACTIVE 發布目前不可用：{{ active_blocked_reason }}</p>{% endif %}
+</section>
+
+<section class="section-block"><h2>固定規則模板</h2>{% for template in template_choices %}<p><strong>{{ template.title }}</strong>（{{ template.template_id }}）</p><p class="muted">模型類別：{{ template.model_classes|join:'、' }}</p>{% if template.motor_positions %}<p class="muted">{% for motor_id, motor_position in template.motor_positions.items %}{{ motor_id }} {{ motor_position }}{% if not forloop.last %}、{% endif %}{% endfor %}。</p>{% endif %}<p class="muted">{{ template.review_note }}</p>{% endfor %}</section>
+
+<section class="section-block"><h2>教師審核</h2>{% for template in template_choices %}<form method="post" action="{% url 'learning:teacher_vision_model_review' evidence.pk %}">{% csrf_token %}<input type="hidden" name="rule_template_id" value="{{ template.template_id }}"><label>教師意見（可選）<textarea name="note" rows="3">{{ review.current_note|default:'' }}</textarea></label><button class="button primary" name="action" value="candidate" type="submit">列為候選</button><button class="button secondary" name="action" value="return" type="submit">退回補件</button></form>{% empty %}<p class="empty-state">此模型沒有可用的固定模板。</p>{% endfor %}</section>
+
+<section class="section-block"><h2>收藏至模型倉庫</h2>
+{% if repository %}
+<p class="muted">此模型已入庫，無需重複收藏。倉庫紀錄：<strong>{{ repository.model_version }}</strong>（{{ repository.deployment_status }}）。</p>
+<p class="muted">來源 Evidence 檔案 SHA256：{{ repository.artifact_sha256|slice:":16" }}…</p>
+<p class="muted">來源檔案（入庫當時）：{{ repository.source_artifact_reference|default:"—" }}</p>
+<h3>不可變快照</h3>
+{% if repository.has_snapshot %}
+<p class="muted">快照 SHA256：{{ repository.snapshot_sha256|slice:":16" }}…（{{ repository.snapshot_size_bytes }} bytes）</p>
+<p class="muted">快照狀態：{{ repository.snapshot_status }}。原始學員檔案未被搬移或刪除。</p>
+<p class="muted">檔案完整性：{{ repository.integrity_status }}{% if repository.integrity_checked_at %}（{{ repository.integrity_checked_at|date:"Y-m-d H:i" }} 檢查）{% endif %}</p>
+{% if repository.integrity_detail.reason %}<p class="muted">{{ repository.integrity_detail.reason }}</p>{% endif %}
+{% if repository.integrity_blocked_reason %}<p class="muted">{{ repository.integrity_blocked_reason }}此模型不得作為訓練基底或發布。</p>{% endif %}
+{% else %}
+<p class="muted">尚未建立快照；此紀錄沒有可用的獨立副本。</p>
+{% endif %}
+<p class="muted">入庫不等於已驗證或已啟用；飛輪倉庫見 <a href="{% url 'learning:teacher_vision_flywheel' %}">資料飛輪倉庫</a>。Golden Test 評估見 <a href="{% url 'learning:teacher_golden_test_page' repository.model_id %}">Golden Test 評估中心</a>。</p>
+{% elif catalogue_blocked_reason %}
+<p class="muted">{{ catalogue_blocked_reason }}</p>
+<button class="button secondary" type="button" disabled aria-disabled="true">收藏（尚不可用）</button>
+{% else %}
+<p class="muted">將建立獨立檔案快照並寫入倉庫紀錄，原始 Evidence 與原始 best.pt 不搬移、不刪除。入庫後預設為未驗證、不可作為訓練基底、僅入庫狀態。</p>
+<form method="post" action="{% url 'learning:teacher_vision_model_catalogue' evidence.pk %}">{% csrf_token %}
+<label>模型版本<input name="model_version" value="V1" pattern="V[0-9]+"></label>
+<label>父版本 Model ID（V1 留空）<input name="parent_record_id" placeholder="選填"></label>
+<button class="button primary" type="submit">收藏至模型倉庫</button>
+</form>
+<p class="muted">飛輪倉庫見 <a href="{% url 'learning:teacher_vision_flywheel' %}">資料飛輪倉庫</a>。</p>
+{% endif %}
+</section>
+
+<section class="section-block"><h2>模型驗證紀錄</h2><p class="muted">驗證狀態：{{ validation_status }}。目前無驗證紀錄。</p><p class="muted">隔離執行環境：{{ runner.environment_label }}（{{ runner.environment }}）</p><p class="muted">{{ verification_blocked_reason }}</p></section>
+
+<section class="section-block"><h2>審核歷程</h2><ul>{% for item in review.history %}<li>{{ item.at }} · {{ item.teacher_name }} · {{ item.action }}{% if item.note %}：{{ item.note }}{% endif %}</li>{% empty %}<li>尚未審核。</li>{% endfor %}</ul></section>
+{% endblock %}

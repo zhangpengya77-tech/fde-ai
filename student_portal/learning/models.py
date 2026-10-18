@@ -1,3 +1,4 @@
+import sys
 import uuid
 import secrets
 
@@ -677,3 +678,500 @@ class EmailVerificationCode(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class VisionModelRecord(models.Model):
+    """模型倉庫持久化紀錄（PROP_DIRECTION_V1）。
+
+    設計原則（教師 2026-10-08 指令）：
+    1. 不複製既有 R07 提交紀錄：本表以 OneToOne 參照 Evidence，為「入庫登錄」而非第二套提交系統。
+    2. 四個狀態維度各自獨立欄位：審核狀態 / 驗證狀態 / 訓練用途 / 部署狀態，
+       不得合併為單一 status 欄位。
+    3. 血緣可追溯：parent_record 自我參照 + lineage_root 指向起源版本。
+    4. 班級隔離：cohort 為必填外鍵，查詢一律經由此欄位過濾。
+    5. 檔案完整性：artifact_sha256 為必填，供入庫後校驗。
+    6. DEMO_TEST_ONLY 不得成為正式訓練基礎：由 is_demo_test_only 旗標標記。
+
+    本表僅為「入庫登錄」，不代表模型已可推論、已驗證或已部署。
+    """
+
+    class ReviewStatus(models.TextChoices):
+        SUBMITTED = "SUBMITTED", "已提交"
+        CANDIDATE = "CANDIDATE", "候選"
+        REJECTED = "REJECTED", "不合格"
+        RETURNED = "RETURNED", "退回補件"
+
+    class ValidationStatus(models.TextChoices):
+        NOT_EVALUATED = "NOT_EVALUATED", "未驗證"
+        VALIDATED = "VALIDATED", "已驗證"
+        FAILED = "FAILED", "驗證失敗"
+
+    class TrainingUsage(models.TextChoices):
+        NOT_FOR_TRAINING = "NOT_FOR_TRAINING", "不可作為訓練基底"
+        TRAINING_BASE = "TRAINING_BASE", "可作為訓練基底"
+
+    class DeploymentStatus(models.TextChoices):
+        CATALOGUED = "CATALOGUED", "已入庫"
+        ACTIVE = "ACTIVE", "已啟用"
+        ARCHIVED = "ARCHIVED", "已封存"
+
+    class SnapshotStatus(models.TextChoices):
+        """不可變快照的存在狀態；與部署狀態無關，僅描述檔案本身。"""
+
+        PENDING = "PENDING", "尚未建立"
+        STORED = "STORED", "已建立"
+
+    class IntegrityStatus(models.TextChoices):
+        """檔案完整性檢查結果（教師觸發，不自動變更狀態）。"""
+
+        NOT_CHECKED = "NOT_CHECKED", "尚未檢查"
+        INTACT = "INTACT", "完整"
+        MISSING = "MISSING", "檔案不存在"
+        MODIFIED = "MODIFIED", "內容已變動"
+
+    model_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    evidence = models.OneToOneField(
+        Evidence,
+        on_delete=models.PROTECT,
+        related_name="repository_record",
+        help_text="來源 R07 模型證據；本表不複製其提交內容。",
+    )
+    task_id = models.CharField(max_length=32, help_text="所屬任務；本輪僅支援 PROP_DIRECTION。")
+    student = models.ForeignKey(
+        "StudentProfile", on_delete=models.PROTECT, related_name="vision_model_records"
+    )
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.PROTECT,
+        related_name="vision_model_records",
+        help_text="班級隔離依據；查詢一律經由此欄位過濾。",
+    )
+    model_version = models.CharField(max_length=16, default="V1")
+    parent_record = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="child_records",
+        help_text="父版本；V1 為空。",
+    )
+    lineage_root = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="descendant_records",
+        help_text="血緣起源版本；V1 指向自己。",
+    )
+    dataset_version = models.CharField(max_length=64, blank=True)
+    class_mapping = models.JSONField(
+        default=list, blank=True, help_text="類別索引對應表（學員類別 ID → 平台類別）。"
+    )
+    artifact_reference = models.CharField(max_length=255, help_text="best.pt 儲存參照。")
+    artifact_sha256 = models.CharField(
+        max_length=64, help_text="best.pt SHA256；入庫後用於驗證檔案完整性。"
+    )
+    artifact_size_bytes = models.PositiveBigIntegerField(default=0)
+    # --- 不可變快照（2026-10-08 指令「一、模型不可變快照」）---
+    # 入庫時在隔離倉庫建立獨立副本，使原始 Evidence 檔案被改動或遺失時，
+    # 倉庫仍保有入庫當下的完整內容。原始 best.pt 一律不搬移、不刪除。
+    snapshot_path = models.CharField(
+        max_length=255, blank=True, help_text="倉庫內獨立副本的相對路徑（Media 根目錄之下）。"
+    )
+    snapshot_sha256 = models.CharField(
+        max_length=64, blank=True, help_text="建立副本後重算的 SHA256，必須等於 artifact_sha256。"
+    )
+    snapshot_size_bytes = models.PositiveBigIntegerField(
+        default=0, help_text="副本位元組數；應等於 artifact_size_bytes。"
+    )
+    snapshot_status = models.CharField(
+        max_length=16,
+        choices=SnapshotStatus.choices,
+        default=SnapshotStatus.PENDING,
+        help_text="副本是否已成功建立；PENDING 代表尚無可用的獨立副本。",
+    )
+    source_artifact_reference = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="入庫當下的來源 Evidence 檔案參照，供追溯副本由何處複製而來。",
+    )
+    data_yaml_reference = models.CharField(max_length=255, blank=True)
+    is_demo_test_only = models.BooleanField(
+        default=False, help_text="檔名含 DEMO_TEST_ONLY；此類紀錄不得成為正式訓練基礎。"
+    )
+    review_status = models.CharField(
+        max_length=16, choices=ReviewStatus.choices, default=ReviewStatus.SUBMITTED
+    )
+    validation_status = models.CharField(
+        max_length=16, choices=ValidationStatus.choices, default=ValidationStatus.NOT_EVALUATED
+    )
+    training_usage = models.CharField(
+        max_length=20, choices=TrainingUsage.choices, default=TrainingUsage.NOT_FOR_TRAINING
+    )
+    deployment_status = models.CharField(
+        max_length=16, choices=DeploymentStatus.choices, default=DeploymentStatus.CATALOGUED
+    )
+    teacher_review = models.JSONField(default=dict, blank=True)
+    validation_history = models.JSONField(default=list, blank=True)
+    golden_test_summary = models.JSONField(default=dict, blank=True)
+    publication_scope = models.JSONField(default=list, blank=True, help_text="可取得此模型的班級清單。")
+    # --- 完整性檢查結果（2026-10-08 指令「二、模型完整性檢查」）---
+    # 僅記錄最近一次教師觸發的檢查結果，不自動變更任何狀態、不自動刪除檔案。
+    integrity_status = models.CharField(
+        max_length=16,
+        choices=IntegrityStatus.choices,
+        default="NOT_CHECKED",
+        help_text="最近一次完整性檢查結果：INTACT / MISSING / MODIFIED / NOT_CHECKED。",
+    )
+    integrity_checked_at = models.DateTimeField(null=True, blank=True)
+    integrity_detail = models.JSONField(
+        default=dict, blank=True, help_text="最近一次檢查的細節；不含任何本機絕對路徑。"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(model_version="V1") | models.Q(parent_record__isnull=True),
+                name="vision_record_v1_has_no_parent",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(is_demo_test_only=False)
+                | ~models.Q(training_usage="TRAINING_BASE"),
+                name="vision_record_demo_never_training_base",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(deployment_status="ACTIVE")
+                | models.Q(validation_status="VALIDATED"),
+                name="vision_record_active_requires_validated",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(deployment_status="ACTIVE")
+                | models.Q(is_demo_test_only=False),
+                name="vision_record_active_not_demo",
+            ),
+            # 完整性異常時不得作為訓練基底（檔案遺失／內容已變動）。
+            models.CheckConstraint(
+                condition=~models.Q(training_usage="TRAINING_BASE")
+                | models.Q(integrity_status__in=["NOT_CHECKED", "INTACT"]),
+                name="vision_record_broken_never_training_base",
+            ),
+            # 已建立副本時，快照欄位必須齊備，避免出現「有紀錄卻無副本」的空殼。
+            models.CheckConstraint(
+                condition=~models.Q(snapshot_status="STORED")
+                | (
+                    ~models.Q(snapshot_path="")
+                    & ~models.Q(snapshot_sha256="")
+                    & ~models.Q(source_artifact_reference="")
+                ),
+                name="vision_record_stored_snapshot_is_complete",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.model_version} · {self.artifact_reference}"
+
+    @property
+    def is_publishable(self) -> bool:
+        """是否可發布為訓練資源。
+
+        DEMO 樣本一律不可；且**檔案完整性異常時亦不可**，
+        避免已損壞或已遺失的模型被當作後續訓練基底或發布出去。
+        """
+        if self.integrity_status in {
+            self.IntegrityStatus.MISSING,
+            self.IntegrityStatus.MODIFIED,
+        }:
+            return False
+        return not self.is_demo_test_only and self.training_usage == self.TrainingUsage.TRAINING_BASE
+
+    @property
+    def has_snapshot(self) -> bool:
+        """是否已具備可用的獨立副本。"""
+        return (
+            self.snapshot_status == self.SnapshotStatus.STORED
+            and bool(self.snapshot_path)
+            and bool(self.snapshot_sha256)
+        )
+
+    def integrity_blocked_reason(self) -> str:
+        """檔案完整性異常時的阻擋原因；回傳空字串代表無異常。"""
+        if self.integrity_status == self.IntegrityStatus.MISSING:
+            return "模型檔案已遺失，不得作為訓練基底或發布。"
+        if self.integrity_status == self.IntegrityStatus.MODIFIED:
+            return "模型檔案內容已變動，與入庫紀錄不符，不得作為訓練基底或發布。"
+        return ""
+
+    def active_blocked_reason(self) -> str:
+        """不可啟用 ACTIVE 的原因；回傳空字串代表允許。"""
+        if self.is_demo_test_only:
+            return "DEMO_TEST_ONLY 樣本不得發布為正式訓練基礎或啟用 ACTIVE。"
+        integrity = self.integrity_blocked_reason()
+        if integrity:
+            return f"{integrity}（不得自動切換為 ACTIVE）"
+        if self.validation_status != self.ValidationStatus.VALIDATED:
+            return "未通過 Golden Test 驗證，不可啟用 ACTIVE。"
+        if self.review_status != self.ReviewStatus.CANDIDATE:
+            return "尚未由教師列為候選，不可啟用 ACTIVE。"
+        return ""
+
+
+class GoldenSet(models.Model):
+    """Golden Test Set（黃金測試集）版本紀錄（PROP_DIRECTION_V1）。
+
+    設計原則（教師 2026-10-09 第 23 輪指令）：
+    1. **重用既有結構**：本表對應既有 `live_backend/app/vision_center.py` 的
+       `golden_sets` 註冊表概念（golden_set_id / model_type / total_cases / status），
+       不建立第二套平行資料來源；Django 端僅補上教師後台所需的版本與鎖定能力。
+    2. 本輪僅支援 `PROP_DIRECTION_V1` 一個任務類型。
+    3. 版本一旦 `FROZEN`，不得再新增、修改或刪除其樣本，
+       確保同一版本在不同時間對同一顆模型評估的結果可比較。
+    4. 樣本只記錄標籤與標註來源，**不儲存、不載入、不推論任何 .pt**。
+
+    本表僅為「測試集登錄」，不代表模型已驗證或已部署。
+    """
+
+    class Status(models.TextChoices):
+        """測試集生命週期：草稿可調整，鎖定後不可再變更樣本。"""
+
+        DRAFT = "DRAFT", "草稿（可調整）"
+        FROZEN = "FROZEN", "已鎖定（不可覆寫樣本）"
+
+    class Label(models.TextChoices):
+        """PROP_DIRECTION_V1 的四個固定類別；與後端 PROP_CLASSES 一致。"""
+
+        CW_F = "CW_F", "順時針正面"
+        CCW_F = "CCW_F", "逆時針正面"
+        CW_B = "CW_B", "順時針背面"
+        CCW_B = "CCW_B", "逆時針背面"
+
+    class AnnotationSource(models.TextChoices):
+        """標註來源，用於追溯標籤是怎麼來的。"""
+
+        TEACHER_PHOTO = "TEACHER_PHOTO", "教師實拍"
+        TEACHER_CONFIRMED_IMPORT = "TEACHER_CONFIRMED_IMPORT", "教師確認後匯入"
+        EXISTING_DATASET = "EXISTING_DATASET", "既有資料集沿用"
+
+    class ConfirmationStatus(models.TextChoices):
+        """教師確認狀態；未確認的樣本不得計入正式評估。"""
+
+        PENDING = "PENDING", "待教師確認"
+        CONFIRMED = "CONFIRMED", "教師已確認"
+        REJECTED = "REJECTED", "教師退回"
+
+    # 本輪唯一支援的任務類型；與 vision_repository.SUPPORTED_TASK_IDS 一致。
+    SUPPORTED_TASK_IDS = ("PROP_DIRECTION",)
+
+    golden_set_id = models.CharField(
+        max_length=64, unique=True, help_text="測試集唯一識別碼，例如 PROP_GOLDEN_v1。"
+    )
+    task_id = models.CharField(
+        max_length=32, default="PROP_DIRECTION", help_text="所屬任務；本輪僅支援 PROP_DIRECTION。"
+    )
+    model_type = models.CharField(
+        max_length=32, default="PROP_DIRECTION", help_text="對應後端 MODEL_TYPES。"
+    )
+    name = models.CharField(max_length=120, help_text="測試集名稱。")
+    description = models.TextField(blank=True, help_text="測試集用途與取樣說明。")
+    version = models.CharField(max_length=32, default="v1", help_text="測試集版本，例如 v1 / v2。")
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.DRAFT,
+        help_text="DRAFT 可調整樣本；FROZEN 後不得再新增、修改或刪除樣本。",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="golden_sets_created",
+        help_text="建立此測試集的教師。",
+    )
+    cohort = models.ForeignKey(
+        Cohort,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="golden_sets",
+        help_text="隸屬班級；供教師權限過濾，可為空代表跨班共用測試集。",
+    )
+    frozen_at = models.DateTimeField(null=True, blank=True, help_text="鎖定時間；未鎖定為空。")
+    frozen_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="golden_sets_frozen",
+        help_text="執行鎖定的教師。",
+    )
+    # --- 版本化契約（2026-10-09 第 24 輪指令「三」）---
+    manifest_sha256 = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="鎖定當下的 Manifest SHA256；鎖定後不得改變，用以偵測樣本被更動。",
+    )
+    manifest_contract_version = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="產生 Manifest 時使用的契約版本，供未來格式演進判讀。",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            # 本輪只允許 PROP_DIRECTION。
+            models.CheckConstraint(
+                condition=models.Q(task_id="PROP_DIRECTION"),
+                name="golden_set_only_prop_direction",
+            ),
+            # 鎖定時必須留下時間與執行人，避免出現「已鎖定卻無法追溯」。
+            models.CheckConstraint(
+                condition=~models.Q(status="FROZEN")
+                | (models.Q(frozen_at__isnull=False) & models.Q(frozen_by__isnull=False)),
+                name="golden_set_frozen_requires_audit",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.golden_set_id}（{self.get_status_display()}）"
+
+    @property
+    def is_frozen(self) -> bool:
+        """是否已鎖定；鎖定後樣本不可再變更。"""
+        return self.status == self.Status.FROZEN
+
+    @property
+    def sample_count(self) -> int:
+        """樣本總數（含未確認）；供教師頁面顯示。"""
+        return self.samples.count()
+
+    @property
+    def confirmed_sample_count(self) -> int:
+        """教師已確認的樣本數；正式評估只採計此數量。"""
+        return self.samples.filter(confirmation_status=self.ConfirmationStatus.CONFIRMED).count()
+
+    def label_distribution(self) -> dict:
+        """回傳四類標籤的（已確認）樣本數量，缺少的類別補 0。
+
+        評估前必須確認四類皆有樣本，否則 Precision 會因類別缺失而失真。
+        """
+        counts = {label: 0 for label in self.Label.values}
+        rows = (
+            self.samples.filter(confirmation_status=self.ConfirmationStatus.CONFIRMED)
+            .values("label")
+            .order_by()
+        )
+        for row in rows:
+            label = row["label"]
+            if label in counts:
+                counts[label] += 1
+        return counts
+
+    def missing_labels(self) -> list:
+        """回傳尚無已確認樣本的類別；四類皆滿時回傳空清單。"""
+        distribution = self.label_distribution()
+        return [label for label, count in distribution.items() if count == 0]
+
+    def mutation_blocked_reason(self) -> str:
+        """是否允許變更樣本；回傳空字串代表允許。"""
+        if self.is_frozen:
+            return "此測試集版本已鎖定（FROZEN），不得再新增、修改或刪除樣本。"
+        return ""
+
+    @property
+    def manifest_binding_status(self) -> str:
+        """Manifest 綁定狀態：BOUND / UNBOUND / MISMATCH。
+
+        - UNBOUND：尚未鎖定，或鎖定時未寫入 Manifest 雜湊（舊資料）。
+        - BOUND：目前內容的 Manifest 雜湊等於鎖定當時記錄的雜湊。
+        - MISMATCH：內容與鎖定當時不一致 → 樣本被動過，必須調查。
+        """
+        recorded = str(self.manifest_sha256 or "").strip()
+        if not recorded:
+            return "UNBOUND"
+        from .golden_set import manifest_sha256
+
+        return "BOUND" if manifest_sha256(self) == recorded else "MISMATCH"
+
+
+class GoldenSetSample(models.Model):
+    """Golden Set 中的單一測試照片與其教師確認標籤。
+
+    設計原則：
+    1. 只記錄標籤、標註來源與確認狀態，**不載入、不推論任何模型檔案**。
+    2. 隸屬於某一 GoldenSet 版本；該版本鎖定後不得再變更本表資料。
+    3. 照片本身存放於 Media，沿用既有 private_media 機制，不另建儲存層。
+    """
+
+    Label = GoldenSet.Label
+    AnnotationSource = GoldenSet.AnnotationSource
+    ConfirmationStatus = GoldenSet.ConfirmationStatus
+
+    sample_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    golden_set = models.ForeignKey(
+        GoldenSet, on_delete=models.CASCADE, related_name="samples",
+        help_text="所屬測試集版本。",
+    )
+    image = models.FileField(
+        upload_to="golden_set/", help_text="教師確認的測試照片；只做檔案保存，不執行推論。"
+    )
+    label = models.CharField(
+        max_length=8, choices=GoldenSet.Label.choices, help_text="四類標籤之一。"
+    )
+    annotation_source = models.CharField(
+        max_length=32,
+        choices=GoldenSet.AnnotationSource.choices,
+        default=GoldenSet.AnnotationSource.TEACHER_PHOTO,
+        help_text="標籤來源，用於追溯。",
+    )
+    confirmation_status = models.CharField(
+        max_length=16,
+        choices=GoldenSet.ConfirmationStatus.choices,
+        default=GoldenSet.ConfirmationStatus.PENDING,
+        help_text="教師確認狀態；未確認不計入正式評估。",
+    )
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="golden_samples_confirmed",
+        help_text="確認此標籤的教師。",
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True, help_text="教師備註。")
+    content_sha256 = models.CharField(
+        max_length=64, blank=True, help_text="照片內容 SHA256，供去重與追溯；不涉及模型檔案。"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            # 已確認的樣本必須留下確認人與時間，避免無法追溯。
+            models.CheckConstraint(
+                condition=~models.Q(confirmation_status="CONFIRMED")
+                | (models.Q(confirmed_by__isnull=False) & models.Q(confirmed_at__isnull=False)),
+                name="golden_sample_confirmed_requires_audit",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.golden_set.golden_set_id} · {self.get_label_display()}"
+
+
+# ---------------------------------------------------------------------------
+# FROZEN 不可變性守衛掛載（第 25 輪 P1 修復）
+#
+# 修復前 FROZEN 只在服務層/View 層檢查，直接走 ORM 仍可改動樣本。
+# 這裡在模型定義完成後掛上 Model 層守衛，涵蓋：
+#   save() / delete() / QuerySet.update() / QuerySet.delete()
+#   / bulk_update() / bulk_create()
+#
+# 放在檔尾是刻意的：此刻所有模型都已定義完成，掛載不會造成循環匯入。
+# 詳見 learning/golden_set_guard.py 的說明與殘餘風險清單。
+# ---------------------------------------------------------------------------
+from . import golden_set_guard as _golden_set_guard  # noqa: E402
+
+_golden_set_guard.install(sys.modules[__name__])

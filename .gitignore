@@ -23,3 +23,45 @@ student_portal/private_media/
 student_portal/backup/
 .test-temp/
 student_portal/.test-temp/
+
+# DEMO 測試憑證（明文密碼）—— 絕不可進版本控制
+*password*.txt
+*帳密*.txt
+*.password.txt
+.fde-demo-credentials/
+
+# DEMO 執行期產物（P6 精確規則）—— 只忽略執行期產物。
+# 明確保留：demo/tools/**（驗收腳本與種子程式）、demo/*.md（文件）、demo/*.cmd（啟動腳本）、
+#           demo/runtime/seed_demo_downloads.py（種子程式）。
+demo/runtime/chrome-vision-test/
+demo/runtime/vision-center/
+demo/runtime/tmp/
+demo/runtime/state/
+demo/runtime/db/
+demo/runtime/downloads/
+demo/runtime/*.txt
+demo/runtime/*.json
+demo/screenshots/
+
+# ===== V2.0A 版本保存補充規則（2026-10-18 教師指令：六類排除）=====
+# ① .pt 模型檔——任何位置皆不進版本控制（DEMO 模型另存 D 槽 data_backup）
+*.pt
+# ② 上傳的圖片影片——DEMO 執行期學員上傳證據照
+demo/runtime/media_i4/
+# ③ 模型/資料庫/.bak 備份目錄（118M，含 best.pt/submission.pt/sqlite）
+demo/runtime/backups/
+# ⑤ 隧道網址檔——連線資訊絕不進版本控制
+demo/runtime/PUBLIC_ACCESS_*
+demo/runtime/TUNNEL_ACCESS_*
+# ⑥ 執行期 log/截圖/驗收 json（8.2M）
+demo/runtime/logs/
+# 含具體隧道網址的交付報告——依教師指令「隧道網址」排除，
+# 報告實體由 D 槽備份 D:\FDE-AI_V2.0A\ 保留（docs 複製＋一併複製的交付報告）
+docs/delivery/VISION_IMPORT_MAPPING_P0_2026-10-18.md
+docs/delivery/LAN_LOGIN_P0_FIX_2026-10-18.md
+# Agent 工作區中繼資料（memory 等，非專案原始碼）
+.workbuddy-ai/
+# 內建 FFmpeg static 二進位（201M；官方版可重抓，D 槽備份實體保留）
+tools/ffmpeg/
+# I5 修改前暫存備份
+*.i5-prebak

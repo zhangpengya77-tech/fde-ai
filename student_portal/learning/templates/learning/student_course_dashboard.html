@@ -20,6 +20,8 @@
 </section>
 <section class="section-block growth-entry">
   <div><p class="eyebrow">R01～R08</p><h2>我的學習成長日誌</h2><p class="muted">記錄課堂練習、作品與本期學習歷程。</p></div>
-  <a class="button primary" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">打開我的學習成長日誌</a>
+  {# 教師 2026-10-17 指示：總覽頁的「我的學習成長日誌」按鈕已直接連到 R01–R08，
+     這顆按鈕隱藏（不刪除）以避免出現兩條不同入口造成混淆。 #}
+  <a class="button primary is-hidden" href="{% url 'learning:student_growth_dashboard' enrollment.pk %}">打開我的學習成長日誌</a>
 </section>
 {% endblock %}

@@ -75,18 +75,24 @@ test('voice answer is limited to three short points', () => {
   assert.equal(live.voiceAnswerSummary('第一点。第二点。第三点。第四点。'), '第一点。第二点。第三点。');
 });
 
-test('voice ask auto speaks while text ask waits for manual playback', () => {
+test('every student question auto speaks while subtitle remains available', () => {
   const spoken = [];
   const speechReply = { supported: true, speak: (text) => { spoken.push(text); return true; } };
   assert.deepEqual(live.deliverAiAnswer('第一点。第二点。第三点。第四点。', { autoSpeak: true, speechReply }), { text: '第一点。第二点。第三点。第四点。', spoken: true });
-  assert.deepEqual(live.deliverAiAnswer('文字问题回答。', { autoSpeak: false, speechReply }), { text: '文字问题回答。', spoken: false });
-  assert.deepEqual(spoken, ['第一点。第二点。第三点。']);
+  assert.deepEqual(live.deliverAiAnswer('文字问题回答。', { autoSpeak: true, speechReply }), { text: '文字问题回答。', spoken: true });
+  assert.deepEqual(spoken, ['第一点。第二点。第三点。', '文字问题回答。']);
 });
 
 test('voice reply controls and embedded browser warning exist in Student Mode', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  for (const id of ['browserCapabilityWarning','copyCurrentLink','playAiAnswer','stopAiAnswer','currentStepHow','currentStepDoneWhen']) {
+  for (const id of ['browserCapabilityWarning','copyCurrentLink','currentStepHow','currentStepDoneWhen']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(html, /建议使用 Safari 打开本页面/);
+});
+
+test('Student Mode does not render playback or stop controls', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  assert.doesNotMatch(html, /id="playAiAnswer"/);
+  assert.doesNotMatch(html, /id="stopAiAnswer"/);
 });
