@@ -2777,6 +2777,7 @@ VISION_CENTER_STATUS_LABELS = {
     "ARCHIVED": "歷史版本",
     "REJECTED": "NG（未通過檢查）",
     "FAILED": "NG（檢查失敗）",
+    "DEMO_IMPORTED": "DEMO·類別放寬（未驗證）",
 }
 
 # 教師 2026-10-16 裁決：教師界面狀態統一為
@@ -2814,6 +2815,7 @@ def _vision_status_css(status):
         "REJECTED": "rejected",
         "FAILED": "rejected",
         "ARCHIVED": "archived",
+        "DEMO_IMPORTED": "warn",
     }.get(status, "submitted")
 
 
@@ -2969,6 +2971,17 @@ def _vision_model_row(model, *, validation_records=None):
         "can_activate": model.get("validation_status") == "VALIDATED"
         and status != "REJECTED",
         "class_names": model.get("class_names") or [],
+        # --- 受控放寬（2026-10-19）：映射版／臨時模型必須在畫面上可辨識 ---
+        "temporary_mapping": model.get("temporary_mapping") is True,
+        "temporary_mapping_label": model.get("temporary_mapping_label") or "映射版·臨時",
+        # --- DEMO 放寬（2026-10-19）：類別不一致但以筆誤別名對應後匯入的模型 ---
+        "demo_class_relaxed": model.get("demo_class_relaxed") is True,
+        "class_name_mapping": model.get("class_name_mapping") or {},
+        "class_name_mapping_display": "、".join(
+            f"{key}→{value}"
+            for key, value in (model.get("class_name_mapping") or {}).items()
+        ),
+        "class_name_mapping_note": model.get("class_name_mapping_note") or "",
         # --- P1：結構驗證狀態 vs 真實圖片辨識品質（兩者必須分別呈現）---
         "structure_validated": structure_ok,
         "structure_label": "已通過結構驗證" if structure_ok else "未通過結構驗證",
@@ -3114,7 +3127,7 @@ def teacher_vision_center(request):
     verifiable_models = [
         item
         for item in history_models
-        if item["status"] in {"VALIDATED", "CANDIDATE", "ACTIVE"}
+        if item["status"] in {"VALIDATED", "CANDIDATE", "ACTIVE", "DEMO_IMPORTED"}
     ]
 
     # --- P1：教師畫面必須明確揭露「尚未證實真實辨識品質」的模型 ---
@@ -3204,6 +3217,12 @@ def teacher_vision_center(request):
     if validation_result and validation_result.get("task_id") != task_id:
         validation_result = None
 
+    # 提交級驗證（場景①直接對 SUBMITTED 提交推理）的伺服器回傳結果（非 AJAX 備援）。
+    submission_validation_result = request.session.pop("vision_center_submission_result", None)
+    if submission_validation_result and submission_validation_result.get("task_id") != task_id:
+        submission_validation_result = None
+    active_sub = (request.GET.get("sub") or "").strip()
+
     # 教師指令③：「類別名對照表」於導入前預檢時寫入 session，此處「讀取」供場景①渲染。
     # 注意：此處只讀不消費（pop），否則渲染後 payload 即消失，教師提交對照表時
     # apply_mapping 會誤判「對照表已過期」。唯一消費點為 apply_mapping 本身。
@@ -3246,6 +3265,8 @@ def teacher_vision_center(request):
                 for item in history_models
             ),
             "validation_result": validation_result,
+            "submission_validation_result": submission_validation_result,
+            "active_sub": active_sub,
             "demo_simulation_enabled": getattr(settings, "VISION_DEMO_SIMULATION_ENABLED", False),
             "validation_history": task_history_records,
             "resources": resources,
@@ -3362,6 +3383,104 @@ def teacher_vision_center_validate(request):
 
 @teacher_required
 @require_POST
+def teacher_vision_center_validate_submission(request):
+    """步驟①補充：對 SUBMITTED 學員提交直接上傳圖片做真實推理（不匯入、不啟用）。
+
+    讓教師能在「① 學員模型」場景直接驗證待複核提交：載入該提交的 .pt 推理，
+    顯示槳葉方向預測與信心值。唯讀：不變更提交狀態、不切換 ACTIVE、
+    不動匯入閘門。對應 Live 路由 POST /api/v1/vision/submissions/{id}/validate-image。
+    """
+    task_id = _vision_task_id(request)
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    def _validate_error(detail, status_code=400):
+        if is_ajax:
+            return JsonResponse({"ok": False, "error": detail}, status=status_code)
+        messages.error(request, detail)
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
+
+    submission_id = (request.POST.get("submission_id") or "").strip()
+    expected = (request.POST.get("expected_class") or "").strip().upper() or None
+    try:
+        threshold = float(request.POST.get("confidence_threshold") or 0.5)
+    except (TypeError, ValueError):
+        threshold = 0.5
+    threshold = min(max(threshold, 0.05), 0.95)
+
+    upload = request.FILES.get("test_image")
+    if not submission_id:
+        return _validate_error("缺少提交編號。")
+    if not upload:
+        return _validate_error("請先選擇一張測試圖片。")
+    content = upload.read()
+    if not content:
+        return _validate_error("圖片檔案是空的，請重新選擇。")
+
+    try:
+        result = vision_api.validate_image_with_submission(
+            submission_id=submission_id,
+            image_bytes=content,
+            teacher_id=request.user.pk,
+            expected_class=expected,
+            confidence_threshold=threshold,
+        )
+    except RuntimeError as exc:
+        return _validate_error(f"無法執行圖片驗證：{exc}")
+
+    verdict = result.get("verdict") or {}
+    decision = verdict.get("decision") or "INSUFFICIENT_DATA"
+    model = result.get("model") or {}
+    detections = result.get("detections") or []
+    payload = {
+        "task_id": task_id,
+        "submission_id": submission_id,
+        "model_id": None,
+        "model_name": model.get("model_name") or submission_id,
+        "model_version": "",
+        "model_type": model.get("model_type") or task_id,
+        "class_names": ", ".join(model.get("class_names") or []),
+        "detection_count": result.get("detection_count", len(detections)),
+        "predicted_class": verdict.get("predicted_class"),
+        "predicted_confidence": (
+            round(float(verdict["predicted_confidence"]), 4)
+            if verdict.get("predicted_confidence") is not None
+            else None
+        ),
+        "expected_class": verdict.get("expected_class"),
+        "reason": verdict.get("reason") or "",
+        "reason_code": verdict.get("reason_code") or "",
+        "rule_version": verdict.get("rule_version") or "",
+        "confidence_threshold": verdict.get("confidence_threshold"),
+        "validated_at": result.get("validated_at") or "",
+        "verdict": decision,
+        "verdict_label": VISION_CENTER_VERDICT_LABELS.get(decision, decision),
+        "verdict_css": VISION_CENTER_VERDICT_CSS.get(decision, "incomplete"),
+        "evidence_source": "REAL_INFERENCE",
+        "boxes": [
+            {
+                "class": item.get("class"),
+                "confidence": round(float(item.get("confidence", 0)), 4),
+                "bbox": item.get("bbox"),
+            }
+            for item in detections[:20]
+        ],
+    }
+    request.session["vision_center_submission_result"] = payload
+
+    if is_ajax:
+        return JsonResponse({"ok": True, "result": payload, "submission_id": submission_id})
+
+    if decision == "MATCH":
+        messages.success(request, "圖片驗證完成：模型預測與您的標註相符。")
+    elif decision == "MISMATCH":
+        messages.error(request, "圖片驗證完成：模型預測與您的標註不相符。")
+    else:
+        messages.warning(request, "圖片驗證完成：資料不足，無法判定，請勿據此啟用模型。")
+    return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1&sub={submission_id}")
+
+
+@teacher_required
+@require_POST
 def teacher_vision_center_import(request):
     """步驟① → 步驟②：教師把學員提交導入為候選模型。
 
@@ -3397,29 +3516,69 @@ def teacher_vision_center_import(request):
             submission_id=submission_id, teacher_id=request.user.pk
         )
     except RuntimeError as exc:
-        messages.error(request, f"導入前檢查失敗：{exc}")
+        # D2：預檢本身失敗（逾時／連線失敗／提交狀態不可導入）也要留下原因。
+        text = _vision_error_text(exc, "導入前檢查失敗，請稍後再試。")
+        _vision_record_import_failure(
+            request, submission_id, f"導入前檢查失敗：{text}", _vision_error_code(exc),
+        )
+        messages.error(request, f"導入前檢查失敗：{text}")
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
 
     outcome = (preflight or {}).get("outcome")
     actual = preflight.get("class_names_actual") or []
     expected = preflight.get("class_names_expected") or []
     if outcome == "class_names_missing":
-        messages.error(
-            request,
-            "模型缺少類別名稱，請補充：這個 .pt 載入後沒有任何類別名。請用带有類別名的資料集重新訓練後再上傳，並由教師確認模型來源後重試。提交保持「待複核」，未被駁回。",
+        message = "模型缺少類別名稱，請補充：這個 .pt 載入後沒有任何類別名。請用带有類別名的資料集重新訓練後再上傳，並由教師確認模型來源後重試。提交保持「待複核」，未被駁回。"
+        _vision_record_import_failure(
+            request, submission_id, "模型缺少類別名稱，請補充後重試。", "model_class_names_missing",
         )
+        messages.error(request, message)
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
     if outcome == "mismatch":
-        messages.error(
-            request,
-            f"導入失敗：模型類別數量與「{task_meta['label']}」預期不一致（實際 {len(actual)} 類、預期 {len(expected)} 類），無法建立對照。提交保持「待複核」，未被駁回。",
+        message = f"導入失敗：模型類別數量與「{task_meta['label']}」預期不一致（實際 {len(actual)} 類、預期 {len(expected)} 類），無法建立對照。提交保持「待複核」，未被駁回。"
+        _vision_record_import_failure(
+            request, submission_id,
+            f"模型類別數量與任務預期不一致（實際 {len(actual)} 類、預期 {len(expected)} 類）。",
+            "model_class_names_mismatch",
         )
+        messages.error(request, message)
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
+    if outcome == "registered_mapping_ready":
+        # 受控放寬（2026-10-19）：此提交已在 live_backend/app/vision_class_mappings.json
+        # 登記筆誤映射，才允許 6→4 many-to-one 導入。映射表由 Live 端從設定檔讀取，
+        # 不從此處傳入，避免教師端臨時拼湊對照表繞過閘門。
+        messages.warning(
+            request,
+            "此提交已在設定檔登記「筆誤映射」（臨時）：6 類名稱將對照為 4 類後導入。"
+            "導入後的模型會標記為「映射版·臨時」，不是正式訓練模型。",
+        )
+        return _vision_import_with_dataset(
+            request, task_id=task_id, submission_id=submission_id, class_name_mapping=None,
+        )
+    if outcome == "demo_class_relaxed":
+        # DEMO 放寬（2026-10-19）：模型類別數量與任務預期不一致（6 類 vs 4 類），
+        # 但能在 DEMO 模式下用筆誤別名（CCE/CCF→CCW）對應到全部預期類別。
+        # 匯入後「不」標記為已驗證／已啟用，僅供 DEMO 模擬流程；不影響正式 ACTIVE 模型。
+        messages.warning(
+            request,
+            "類別不一致（DEMO 放行）：模型實際 6 類、預期 4 類；DEMO 模式下以筆誤別名"
+            "（CCE/CCF→CCW）對應後匯入，不會標記為已驗證／已啟用。此狀態僅供 DEMO 模擬。",
+        )
+        return _vision_import_with_dataset(
+            request, task_id=task_id, submission_id=submission_id, class_name_mapping=None,
+        )
     if outcome == "detection_model_required":
+        _vision_record_import_failure(
+            request, submission_id, "模型不是目標偵測（detect）模型，無法導入。", "model_must_be_detection_model",
+        )
         messages.error(request, "導入失敗：模型必須是目標偵測（detect）模型。提交保持「待複核」，未被駁回。")
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
     if outcome == "unloadable":
-        messages.error(request, f"導入失敗：模型無法載入（{preflight.get('reason') or '未知原因'}）。提交保持「待複核」，未被駁回。")
+        reason = preflight.get("reason") or "未知原因"
+        _vision_record_import_failure(
+            request, submission_id, f"模型無法載入（{reason}）。", "model_unloadable",
+        )
+        messages.error(request, f"導入失敗：模型無法載入（{reason}）。提交保持「待複核」，未被駁回。")
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
     if outcome == "mapping_required":
         # 教師指令③：進入類別名對照表，此時不建立資料集、不改動提交狀態。
@@ -3437,8 +3596,95 @@ def teacher_vision_center_import(request):
     )
 
 
+# D2（2026-10-19）：導入失敗原因對照表。
+# 教師頁只顯示這裡的中文說明，永不回顯原始例外字串——避免把 URL、憑證或
+# 內部堆疊資訊帶到畫面上。
+_VISION_IMPORT_ERROR_TEXTS = {
+    "vision_api_unavailable": "無法連線到推論服務（Live Backend），請確認服務已啟動後重試。",
+    "submission_not_importable": "此提交目前的狀態不可導入（可能已導入或已駁回）。",
+    "submission_already_imported": "此提交已導入過，請勿重複導入。",
+    "submission_file_missing": "提交的模型檔案不存在，請學員重新上傳。",
+    "model_class_names_mismatch": "模型類別數量與任務預期不一致，無法導入。",
+    "model_class_names_missing": "模型缺少類別名稱，請補充後重試。",
+    "model_class_names_mapping_required": "模型類別名稱與任務預期不同，需要提供類別名對照表。",
+    "model_must_be_detection_model": "模型不是目標偵測（detect）模型，無法導入。",
+    "smoke_inference_failed": "模型載入後的測試推論失敗，無法導入。",
+    "model_file_unreadable": "模型檔案無法讀取。",
+    "dataset_binding_mismatch": "資料集綁定不一致，請重新建立資料集後再試。",
+    "registered_class_mapping_stale": "已登記的類別映射與模型不符，請洽管理員更新設定檔。",
+    "model_quarantined": "此模型已隔離，無法啟用。",
+    "validated_model_required": "只有通過驗證的模型才能啟用。",
+    "dataset_in_use": "此資料集已被模型引用，不能隔離。",
+    "submission_has_models": "此提交已導入為模型，不能直接刪除；請先處理對應的模型版本。",
+    "submission_not_found": "找不到這筆提交（可能已被刪除）。",
+}
+
+
+def _vision_error_code(exc) -> str:
+    """從包裝層例外字串取出已知的錯誤代碼；未知時回傳 unknown。"""
+    raw = str(exc or "")
+    for key in _VISION_IMPORT_ERROR_TEXTS:
+        if key in raw:
+            return key
+    return "unknown"
+
+
+def _vision_error_text(exc, fallback: str = "導入失敗，請稍後再試。") -> str:
+    """把例外轉成教師可讀的繁體中文，不洩漏原始字串。"""
+    raw = str(exc or "")
+    for key, text in _VISION_IMPORT_ERROR_TEXTS.items():
+        if key in raw:
+            return text
+    return fallback
+
+
+def _vision_record_import_failure(request, submission_id, message: str, code: str = "") -> None:
+    """D2：把失敗原因寫回 Live 的 import_last_error（供教師頁持久顯示）。
+
+    Live 不可用時無法寫入持久紀錄，但教師訊息仍會顯示；此處吞掉例外是刻意的，
+    避免「記錄失敗」掩蓋真正的導入錯誤。
+    """
+    if not submission_id:
+        return
+    try:
+        vision_api.record_import_failure(
+            submission_id=submission_id,
+            message=message,
+            code=code,
+            teacher_id=request.user.pk,
+        )
+    except RuntimeError:
+        pass
+
+
+def _vision_quarantine_failed_dataset(request, dataset, submission_id: str, code: str) -> bool:
+    """D1：匯入失敗後隔離剛建立的資料集，避免留下可見孤兒。
+
+    只做補償式標記（quarantined=true），不刪除記錄或檔案；失敗時回傳 False，
+    由呼叫端在教師訊息中如實說明。
+    """
+    dataset_id = (dataset or {}).get("dataset_id")
+    if not dataset_id:
+        return False
+    try:
+        vision_api.quarantine_dataset(
+            dataset_id=dataset_id,
+            reason=f"import_failed:{code}",
+            source_submission_id=submission_id,
+            teacher_id=request.user.pk,
+        )
+        return True
+    except RuntimeError:
+        return False
+
+
 def _vision_import_with_dataset(request, *, task_id, submission_id, class_name_mapping):
-    """建立資料集綁定並呼叫 Live 匯入；失敗時完整顯示原因（教師指令⑤）。"""
+    """建立資料集綁定並呼叫 Live 匯入；失敗時完整顯示原因（教師指令⑤）。
+
+    D1/D2（2026-10-19）：
+    - 匯入失敗時立刻把剛建立的資料集標記隔離（不刪除），避免可見孤兒；
+    - 失敗原因寫入 import_last_error，教師頁以繁體中文持久顯示。
+    """
     try:
         dataset = vision_api.create_dataset(
             model_type=task_id,
@@ -3447,7 +3693,11 @@ def _vision_import_with_dataset(request, *, task_id, submission_id, class_name_m
             notes="AI 視覺模型中心自動建立",
         )
     except RuntimeError as exc:
-        messages.error(request, f"無法建立資料集綁定：{exc}")
+        text = _vision_error_text(exc, "無法建立資料集綁定。")
+        _vision_record_import_failure(
+            request, submission_id, f"資料集建立失敗：{text}", "dataset_create_failed",
+        )
+        messages.error(request, f"無法建立資料集綁定：{text}")
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
 
     imported_model_id = ""
@@ -3471,9 +3721,22 @@ def _vision_import_with_dataset(request, *, task_id, submission_id, class_name_m
                 or str(result.get("id") or "")
             )
     except RuntimeError as exc:
-        # 教師指令⑤：完整顯示 422 錯誤訊息（包裝層已不截斷）。
+        # D2：先轉成中文說明，再寫入失敗原因（不把原始例外字串寫進教師可見欄位）。
+        text = _vision_error_text(exc)
+        code = _vision_error_code(exc)
+        # D1 補償：匯入失敗 → 隔離本次剛建立的資料集，不留下可見孤兒。
+        quarantined = _vision_quarantine_failed_dataset(request, dataset, submission_id, code)
+        _vision_record_import_failure(request, submission_id, text, code)
         # 教師指令④：Live 端已保持 submission 為 SUBMITTED，此處僅提示。
-        messages.error(request, f"導入失敗：{exc}。提交保持「待複核」，未被駁回，請教師決定下一步。")
+        suffix = (
+            "本次建立的資料集已標記隔離，不會出現在資料集清單。"
+            if quarantined else
+            "注意：本次建立的資料集未能標記隔離，請管理員檢查資料集清單。"
+        )
+        messages.error(
+            request,
+            f"導入失敗：{text}{suffix}提交保持「待複核」，未被駁回，請教師決定下一步。",
+        )
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
 
     messages.success(request, "已導入為候選模型。導入只代表通過格式檢查，仍需完成圖片驗證才可啟用。")
@@ -3533,11 +3796,23 @@ def teacher_vision_center_activate(request):
     try:
         result = vision_api.activate_model(model_id=model_id, teacher_id=request.user.pk)
     except RuntimeError as exc:
-        messages.error(request, f"啟用失敗，原本的正式模型未變更：{exc}")
+        # D4（2026-10-19）：Live 端拒絕啟用隔離模型（model_quarantined），此處顯示
+        # 明確中文說明；其餘失敗沿用既有提示，不洩漏原始例外字串。
+        messages.error(
+            request,
+            f"啟用失敗，原本的正式模型未變更：{_vision_error_text(exc, '請稍後再試。')}",
+        )
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=3")
 
     activation = result.get("activation") or {}
     source = activation.get("inference_source") or {}
+    # 受控放寬（2026-10-19）：映射版模型啟用後必須留下明確警示，避免被誤認為正式模型。
+    if result.get("temporary_mapping") is True:
+        messages.warning(
+            request,
+            "注意：剛啟用的是「映射版·臨時」模型——類別名由筆誤對照而來，"
+            "不是用正確 4 類資料訓練的正式模型。建議儘快用正確資料重訓後替換。",
+        )
     if source.get("active_model_id") != model_id:
         messages.warning(
             request,
@@ -3577,6 +3852,43 @@ def teacher_vision_center_rollback(request):
         f"已回復到版本 {restored.get('version') or ''}。被替換的版本仍保留在歷史中。",
     )
     return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=3")
+
+
+@teacher_required
+@require_POST
+def teacher_vision_center_delete_submission(request):
+    """刪除一筆學員上傳的 .pt（教師明確操作）。
+
+    Live 端保證：有模型依賴時拒絕（422）、刪除前自動備份 store 與該提交目錄。
+    Django 端只轉發並把結果/失敗原因如實顯示給教師。
+    """
+    task_id = _vision_task_id(request)
+    submission_id = (request.POST.get("submission_id") or "").strip()
+    if not submission_id:
+        messages.error(request, "缺少提交編號，無法刪除。")
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
+    try:
+        result = vision_api.delete_submission(
+            submission_id=submission_id, teacher_id=request.user.pk
+        )
+    except RuntimeError as exc:
+        messages.error(
+            request,
+            f"刪除失敗，提交記錄與 .pt 檔均未變更：{_vision_error_text(exc, '請稍後再試。')}",
+        )
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
+
+    if result.get("file_removed"):
+        messages.success(
+            request,
+            f"已刪除學員上傳 {submission_id}：記錄與 .pt 檔均已移除，刪除前已自動備份。",
+        )
+    else:
+        messages.warning(
+            request,
+            f"已刪除提交記錄 {submission_id}，但實體 .pt 檔不存在（可能已被移除）；刪除前仍已自動備份。",
+        )
+    return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
 
 
 @teacher_required

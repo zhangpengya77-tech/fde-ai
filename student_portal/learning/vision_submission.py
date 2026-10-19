@@ -146,6 +146,36 @@ def validate_image_with_model(
     )
 
 
+def validate_image_with_submission(
+    *, submission_id, image_bytes, teacher_id, expected_class=None,
+    confidence_threshold=0.5, image_width=None, image_height=None,
+):
+    """區域一/二：對 SUBMITTED 學員提交直接跑真實推論（不要求匯入/啟用）。
+
+    唯讀操作：不改動提交狀態、不切換 ACTIVE。對應 Live 路由
+    POST /api/v1/vision/submissions/{submission_id}/validate-image。
+    """
+    if not image_bytes:
+        raise RuntimeError("image_required")
+    payload = {
+        "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+        "confidence_threshold": float(confidence_threshold),
+    }
+    if expected_class:
+        payload["expected_class"] = str(expected_class)
+    if image_width is not None:
+        payload["image_width"] = float(image_width)
+    if image_height is not None:
+        payload["image_height"] = float(image_height)
+    # 推論需要載入模型，給予較長逾時。
+    return _post(
+        f"/api/v1/vision/submissions/{submission_id}/validate-image",
+        payload,
+        timeout=max(settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS, 120),
+        teacher_id=teacher_id,
+    )
+
+
 def prop_check(*, image_bytes, input_reference="", confidence_threshold=0.5):
     """使用既有 ACTIVE PROP_DIRECTION 模型執行學員圖片辨識。"""
     if not image_bytes:
@@ -171,6 +201,32 @@ def prop_check(*, image_bytes, input_reference="", confidence_threshold=0.5):
         },
         timeout=max(settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS, 120),
     )
+
+
+def _delete(path, timeout=None, *, teacher_id=""):
+    """以 DELETE 呼叫 Live Backend（僅轉發；.pt 一律不進入 Django 進程）。"""
+    base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
+    headers = {}
+    if teacher_id:
+        headers["X-FDE-Role"] = "teacher"
+        headers["X-FDE-Teacher-ID"] = str(teacher_id)
+    request = Request(f"{base}{path}", headers=headers, method="DELETE")
+    seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
+    try:
+        with urlopen(request, timeout=seconds) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise _rejected(exc) from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError("vision_api_unavailable") from exc
+
+
+def delete_submission(*, submission_id, teacher_id):
+    """刪除一筆學員上傳（store 記錄＋.pt 實體檔；有模型依賴時會被拒絕）。
+
+    刪除動作由 Live Backend 執行（自動先備份）；Django 端只轉發並回報結果。
+    """
+    return _delete(f"/api/v1/vision/submissions/{submission_id}", teacher_id=teacher_id)
 
 
 def prop_check_status():
@@ -288,6 +344,27 @@ def create_dataset(*, model_type, dataset_version, teacher_id, notes=""):
     return _post(
         "/api/v1/vision/datasets",
         {"model_type": model_type, "dataset_version": dataset_version, "notes": notes},
+        teacher_id=teacher_id,
+    )
+
+
+def quarantine_dataset(*, dataset_id, reason, teacher_id, source_submission_id=""):
+    """D1（2026-10-19）：匯入失敗後隔離剛建立的資料集（不刪除，可還原）。"""
+    return _post(
+        f"/api/v1/vision/datasets/{dataset_id}/quarantine",
+        {
+            "reason": str(reason or "import_failed"),
+            "source_submission_id": str(source_submission_id or ""),
+        },
+        teacher_id=teacher_id,
+    )
+
+
+def record_import_failure(*, submission_id, message, code="", teacher_id):
+    """D2（2026-10-19）：把 Django 端發生的導入失敗原因寫回 Live 的 import_last_error。"""
+    return _post(
+        f"/api/v1/vision/submissions/{submission_id}/import-failure",
+        {"message": str(message or ""), "code": str(code or "")},
         teacher_id=teacher_id,
     )
 

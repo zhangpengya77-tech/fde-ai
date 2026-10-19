@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import time
 import os
 import httpx
@@ -442,6 +443,43 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         except ValueError: return error_response("invalid_scenario", "Unsupported Mock Vision scenario.", 400)
         return json_response(orchestrator.process(sid, detections, frame_id, "MOCK_VISION", {"mock": True}))
 
+    # M1 閉環：遙控器標定向導（fde_rc_calibrator.js）自動存盤的最新設備檔案，
+    # 供 /sim/ 首次連接該遙控器時導入；未標定/目錄缺失時回 ok:false，不臆造資料。
+    rc_calib_dir = Path(os.environ.get("FDE_RC_CALIB_DIR") or r"C:\Users\admin\WorkBuddy AI\2026-10-05-17-47-38")
+
+    async def latest_rc_profile(_request):
+        try:
+            if not rc_calib_dir.is_dir():
+                return json_response({"ok": False, "reason": "no-directory"})
+            candidates = sorted(rc_calib_dir.glob("fde-rc-calibration-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for candidate in candidates:
+                try:
+                    payload = json.loads(candidate.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                profile = payload.get("profile") if isinstance(payload, dict) else None
+                if not isinstance(profile, dict) or not isinstance(profile.get("id"), str):
+                    continue
+                if payload.get("schema") != "fde.device-profile/1":
+                    continue
+                # 纵深防御：缺轴/异构 profile 一律跳过，避免返回不完整档被误当有效。
+                axes = profile.get("axes")
+                if not isinstance(axes, dict) or not all(
+                    isinstance(axes.get(k), dict) and isinstance(axes[k].get("source"), int)
+                    for k in ("roll", "pitch", "yaw", "throttle")
+                ):
+                    continue
+                return json_response({
+                    "ok": True,
+                    "file": candidate.name,
+                    "savedAtMs": payload.get("savedAtMs"),
+                    "profile": profile,
+                    "calibration": payload.get("calibration"),
+                })
+        except OSError:
+            return json_response({"ok": False, "reason": "read-failed"})
+        return json_response({"ok": False, "reason": "no-valid-profile"})
+
     async def confirm(request):
         sid = request.path_params["session_id"]
         try: session = sessions.confirm(sid)
@@ -580,6 +618,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         Route("/api/rag/health", lambda _r: json_response({"status": "ok"}), methods=["GET"]),
         Mount("/src", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "src")), name="root-src"),
         Mount("/flight-health", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "flight-health"), html=True), name="flight-health"),
+        # M0 方向纠偏：在线无人机巡检仿真训练入口（FDE-Power-Inspection-Simulator vite build 产物）。
+        # 默认指向 D 盘仿真器 repo 的 dist；可用 FDE_SIM_DIST 覆盖；dist 缺失时该路由返回 404 而不影响启动。
+        Mount("/sim", app=StaticFiles(directory=str(Path(os.environ.get("FDE_SIM_DIST") or "D:/FDE-Power-Inspection-Simulator/dist")), html=True, check_dir=False), name="simulator"),
         Route("/api/downloads", downloads_manifest, methods=["GET"]),
         Route("/api/downloads/{download_id}/file", download_file, methods=["GET"]),
         Route("/api/live/health", health, methods=["GET"]),
@@ -609,6 +650,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         Route("/api/live/sessions/{session_id}/classroom-validation/events", classroom_validation_event, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/classroom-validation/report", classroom_validation_report, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/simulate", simulate, methods=["POST"]),
+        Route("/api/rc/latest-profile", latest_rc_profile, methods=["GET"]),
         Route("/api/live/sessions/{session_id}/camera/start", camera_started, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/auto/start", auto_started, methods=["POST"]),
         Route("/api/live/sessions/{session_id}/auto/stop", auto_stopped, methods=["POST"]),

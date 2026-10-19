@@ -5,6 +5,7 @@ import io
 import json
 import math
 import os
+import shutil
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,18 @@ GOLDEN_SET_STATUSES = ("ACTIVE",)
 MODEL_ID_PREFIX = {"PROP_DIRECTION": "PROP", "FOUR_SIDE_HOVER": "HOVER"}
 # Recognised model container signatures: ZIP archive (most YOLO/PyTorch exports) or pickle.
 _MODEL_SIGNATURES = (b"PK\x03\x04", b"\x80\x02", b"\x80\x03", b"\x80\x04")
+
+# 受控放寬（2026-10-19）：只有設定檔中已登記「筆誤映射」的提交，才允許 many-to-one
+# 的 6→4 類別對照。映射表集中在設定檔，不寫死在程式各處；未登記者仍走原本硬拒邏輯。
+VISION_CLASS_MAPPINGS_FILE = "vision_class_mappings.json"
+DEFAULT_DEDUP_IOU_THRESHOLD = 0.5
+
+# 候選框最低信心（2026-10-20 R07 最小修復）：ultralytics 的 model.predict 預設
+# conf=0.25，會連同低信心候選框一起靜默過濾，導致即使模型實際有輸出，平台仍回報
+# NO_DETECTION（「模型未檢測到任何目標」）。此常數只決定「哪些候選框進入後續
+# 判定」，與教師最終驗收門檻 confidence_threshold（預設 0.5）完全獨立：
+# 有候選框但低於教師門檻時，仍依既有契約如實回報 LOW_CONFIDENCE，不會被標為通過。
+CANDIDATE_BOX_MIN_CONF = 0.001
 
 PROP_RULE_VERSION = "PROP_RULE_v1"
 HOVER_RULE_VERSION = "HOVER_RULE_v1"
@@ -88,17 +101,158 @@ def normalize_class_name_mapping(mapping) -> dict[str, str]:
     return {str(key).strip(): str(value).strip() for key, value in dict(mapping or {}).items()}
 
 
-def apply_class_name_mapping(actual: list[str], expected: list[str], mapping) -> list[str]:
-    """依教師對照表把模型實際類別名轉為任務預期名稱（必須是映滿到 expected 的雙射）。
+def apply_class_name_mapping(actual: list[str], expected: list[str], mapping, *, allow_many_to_one: bool = False) -> list[str]:
+    """依教師對照表把模型實際類別名轉為任務預期名稱。
+
+    預設要求「映滿到 expected 的雙射」（原有行為，不變）。
+    `allow_many_to_one=True` 僅供受控放寬使用：允許多個實際類別名對應到同一個
+    預期類別（筆誤通道合併），但仍要求每個預期類別都被覆蓋、且不得映射到
+    expected 以外的名稱，避免把模型「降級」成少一類而靜默通過。
 
     順序以模型類別編號為準：回傳值与 actual 等長，逐項替换。
     """
     table = normalize_class_name_mapping(mapping)
     if not table:
         raise ValueError("invalid_class_name_mapping")
-    if sorted(table) != sorted(actual) or sorted(table.values()) != sorted(expected):
+    if sorted(table) != sorted(actual):
+        raise ValueError("invalid_class_name_mapping")
+    if allow_many_to_one:
+        if set(table.values()) != set(expected):
+            raise ValueError("invalid_class_name_mapping")
+    elif sorted(table.values()) != sorted(expected):
         raise ValueError("invalid_class_name_mapping")
     return [table[name] for name in actual]
+
+
+def _demo_normalize_class(name: str) -> str:
+    """DEMO 專用：把單一類別名正規化為任務預期風格，並合併筆誤通道。
+
+    - 分隔符統一為底線（- / _ 視為相同）。
+    - CCE / CCF 視為 CCW 的筆誤（與 CCW-F / CCW-B 合併為同一預期類別）。
+    不改動原模型檔，純前端／匯入層別名。
+    """
+    s = str(name).strip().upper().replace("-", "_")
+    if s.startswith("CCE") or s.startswith("CCF"):
+        s = "CCW" + s[3:]
+    return s
+
+
+def demo_class_alias_for(actual: list[str], expected: list[str]) -> dict | None:
+    """DEMO 專用：把模型實際類別名對應到任務預期類別的別名映射。
+
+    僅當「每個實際類別都能對應」且「對應後涵蓋全部預期類別」時回傳映射；
+    否則回傳 None（不強行放寬）。例如 6 類模型
+    [CCE-F, CCF-b, CCW-F, CCW-B, CW-F, CW-B] 會對應成 4 類
+    [CCW_F, CCW_B, CCW_F, CCW_B, CW_F, CW_B]，去重後恰為預期 4 類。
+    """
+    expected_set = set(expected)
+    mapping: dict[str, str] = {}
+    for name in actual:
+        norm = _demo_normalize_class(name)
+        if norm not in expected_set:
+            return None
+        mapping[name] = norm
+    if set(mapping.values()) != expected_set:
+        return None
+    return mapping
+
+
+def vision_class_mappings_path() -> Path:
+    """設定檔位置；可用環境變數覆寫（測試或不同環境用）。"""
+    override = os.environ.get("FDE_VISION_CLASS_MAPPINGS")
+    if override:
+        return Path(override)
+    return Path(__file__).with_name(VISION_CLASS_MAPPINGS_FILE)
+
+
+def load_registered_class_mappings() -> dict:
+    """讀取「受控放寬」登記表；檔案缺失或格式錯誤時回傳空表（等同全部硬拒）。"""
+    path = vision_class_mappings_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    submissions = data.get("submissions") if isinstance(data, dict) else None
+    if not isinstance(submissions, dict):
+        return {}
+    return {
+        str(key): dict(value)
+        for key, value in submissions.items()
+        if isinstance(value, dict)
+    }
+
+
+def registered_class_mapping(submission_id: str | None) -> dict | None:
+    """取得某提交已登記的筆誤映射；未登記或設定不完整時回傳 None。"""
+    if not submission_id:
+        return None
+    entry = load_registered_class_mappings().get(str(submission_id))
+    if not entry:
+        return None
+    table = normalize_class_name_mapping(entry.get("name_mapping") or {})
+    if not table:
+        return None
+    return {"mapping": table, "entry": entry}
+
+
+def _box_iou(first, second) -> float:
+    try:
+        ax1, ay1, ax2, ay2 = [float(value) for value in first]
+        bx1, by1, bx2, by2 = [float(value) for value in second]
+    except (TypeError, ValueError):
+        return 0.0
+    inter_x1, inter_y1 = max(ax1, bx1), max(ay1, by1)
+    inter_x2, inter_y2 = min(ax2, bx2), min(ay2, by2)
+    intersection = max(0.0, inter_x2 - inter_x1) * max(0.0, inter_y2 - inter_y1)
+    if intersection <= 0:
+        return 0.0
+    area_first = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_second = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union = area_first + area_second - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+def map_detection_classes(detections, mapping) -> list[dict]:
+    """把原始偵測結果的類別名換成映射後名稱，並保留原始名稱於 class_raw。"""
+    table = normalize_class_name_mapping(mapping)
+    mapped = []
+    for detection in detections or []:
+        item = dict(detection)
+        raw = str(item.get("class"))
+        item["class_raw"] = raw
+        item["class"] = table.get(raw, raw)
+        mapped.append(item)
+    return mapped
+
+
+def dedupe_mapped_detections(detections, iou_threshold: float = DEFAULT_DEDUP_IOU_THRESHOLD) -> list[dict]:
+    """同一映射後類別、同一個框（IoU ≥ 門檻）只留信心值最高的一筆，不重複計數。"""
+    kept: list[dict] = []
+    ordered = sorted(
+        detections or [],
+        key=lambda item: float(item.get("confidence") or 0),
+        reverse=True,
+    )
+    for item in ordered:
+        cls = str(item.get("class"))
+        box = item.get("bbox") or item.get("box") or [0, 0, 0, 0]
+        duplicated = any(
+            str(other.get("class")) == cls
+            and _box_iou(box, other.get("bbox") or other.get("box") or [0, 0, 0, 0]) >= iou_threshold
+            for other in kept
+        )
+        if not duplicated:
+            kept.append(item)
+    return kept
+
+
+def apply_mapping_to_detections(detections, mapping, *, iou_threshold: float = DEFAULT_DEDUP_IOU_THRESHOLD) -> tuple[list[dict], int]:
+    """映射類別名並去重；回傳 (去重後偵測結果, 被合併的筆數)。"""
+    mapped = map_detection_classes(detections, mapping)
+    deduped = dedupe_mapped_detections(mapped, iou_threshold)
+    return deduped, len(mapped) - len(deduped)
 
 
 class ModelValidator(Protocol):
@@ -107,6 +261,7 @@ class ModelValidator(Protocol):
 
 class ModelRunner(Protocol):
     def predict(self, path: Path, image_bytes: bytes) -> list[dict]: ...
+    def get_names(self, path: Path) -> list[str]: ...
 
 
 class UltralyticsModelValidator:
@@ -180,7 +335,7 @@ class UltralyticsModelRunner:
             image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
             if image is None:
                 raise ValueError("invalid_image")
-            prediction = model.predict(source=image, verbose=False)[0]
+            prediction = model.predict(source=image, conf=CANDIDATE_BOX_MIN_CONF, verbose=False)[0]
             names = prediction.names
             output = []
             for box in prediction.boxes:
@@ -193,6 +348,29 @@ class UltralyticsModelRunner:
             return output
         except Exception as exc:
             raise ModelValidationError("active_model_inference_failed") from exc
+
+    def get_names(self, path: Path) -> list[str]:
+        """Return the model's full class-name list from model.names (cached per path).
+
+        Used by submission-level validation so the teacher sees the model's ACTUAL
+        classes (read dynamically) rather than the hardcoded PROP_CLASSES/HOVER_CLASSES.
+        """
+        try:
+            from ultralytics import YOLO
+
+            key = str(path)
+            model = self._models.get(key)
+            if model is None:
+                model = YOLO(key, task="detect")
+                self._models[key] = model
+            names = getattr(model, "names", None)
+            if isinstance(names, dict):
+                return [names[k] for k in sorted(names)]
+            if names is not None:
+                return list(names)
+            return []
+        except Exception:
+            return []
 
 
 class JsonStore:
@@ -241,7 +419,28 @@ class VisionCenter:
             raise ModelValidationError("active_model_required")
         if not image_bytes:
             raise ModelValidationError("image_required")
-        return model, self.model_runner.predict(Path(model["file_path"]), image_bytes)
+        detections = self.model_runner.predict(Path(model["file_path"]), image_bytes)
+        detections, _mapping_info = self._apply_recorded_mapping(model, detections)
+        return model, detections
+
+    @staticmethod
+    def _apply_recorded_mapping(model: dict, detections: list[dict]) -> tuple[list[dict], dict]:
+        """把模型紀錄中已存的類別對照套用到偵測結果，並依映射後類別去重。
+
+        未記錄對照表（正常 4 類模型）時原樣回傳，行為與修改前完全一致。
+        """
+        mapping = normalize_class_name_mapping(model.get("class_name_mapping") or {})
+        if not mapping:
+            return [dict(item) for item in detections or []], {"mapping_applied": False}
+        deduped, removed = apply_mapping_to_detections(detections or [], mapping)
+        return deduped, {
+            "mapping_applied": True,
+            "mapping_source": model.get("class_name_mapping_source") or "recorded",
+            "temporary_mapping": bool(model.get("temporary_mapping")),
+            "temporary_mapping_label": model.get("temporary_mapping_label") or "",
+            "class_name_mapping": mapping,
+            "deduped_count": removed,
+        }
 
     # ---- Teacher single-image validation against one specific model ----
     def validate_image_with_model(
@@ -268,8 +467,14 @@ class VisionCenter:
         if not path.exists() or not os.access(str(path), os.R_OK):
             raise ModelValidationError("model_file_unreadable")
         model_type = model["model_type"]
-        classes = list(PROP_CLASSES if model_type == "PROP_DIRECTION" else HOVER_CLASSES)
+        # 動態讀取模型實際類別：優先用模型紀錄已存的 class_names，
+        # 否則直接從 .pt 頭讀取。不再寫死 PROP_CLASSES / HOVER_CLASSES（見第 4 步）。
+        classes = list(model.get("class_names") or [])
+        if not classes:
+            classes = self.model_runner.get_names(path)
         detections = self.model_runner.predict(path, image_bytes)
+        # 映射版模型：套用紀錄中的類別對照並去重，否則畫面會顯示原始筆誤名稱。
+        detections, mapping_info = self._apply_recorded_mapping(model, detections)
         best = max(detections, key=lambda item: item.get("confidence", 0), default=None)
         verdict = {
             "rule_version": rule_version or (PROP_RULE_VERSION if model_type == "PROP_DIRECTION" else HOVER_RULE_VERSION),
@@ -306,9 +511,116 @@ class VisionCenter:
                 "model_name": model.get("model_name", ""), "version": model.get("version", ""),
                 "status": model.get("status"), "validation_status": model.get("validation_status"),
                 "file_hash": model.get("file_hash"), "class_names": classes,
+                "temporary_mapping": bool(model.get("temporary_mapping")),
+                "temporary_mapping_label": model.get("temporary_mapping_label") or "",
             },
             "detections": detections,
             "detection_count": len(detections),
+            "mapping": mapping_info,
+            "verdict": verdict,
+            "image_width": image_width,
+            "image_height": image_height,
+            "validated_at": utc_now(),
+        }
+
+    # ---- Teacher single-image validation against one SUBMITTED submission (pre-import) ----
+    def validate_image_with_submission(
+        self, submission_id: str, image_bytes: bytes,
+        *, expected_class: str | None = None, confidence_threshold: float = 0.5,
+        rule_version: str | None = None, image_width: float | None = None,
+        image_height: float | None = None,
+    ) -> dict:
+        """Run REAL inference with a SUBMITTED (not-yet-imported) submission's .pt.
+
+        This is the missing piece that lets a teacher verify a student submission
+        BEFORE it is imported/enabled: it loads the raw .pt from
+        submissions/<type>/<submission_id>/submission.pt directly, runs inference,
+        and returns detections with the model's ACTUAL class names (read dynamically
+        from model.names — never from the hardcoded PROP_CLASSES/HOVER_CLASSES).
+
+        Read-only: does not mutate submission status and does NOT require the model
+        to be imported/enabled. A SUBMITTED submission is sufficient, which is exactly
+        the state ``sub-5d87f027`` (and any freshly uploaded student model) is in.
+        """
+        submission = self._find("submissions", "submission_id", submission_id)
+        if not image_bytes:
+            raise ModelValidationError("image_required")
+        path = Path(submission["file_path"])
+        if not path.exists() or not os.access(str(path), os.R_OK):
+            raise ModelValidationError("model_file_unreadable")
+        model_type = submission["task_id"]
+        # Dynamic class names straight from the model head — no hardcoded constants.
+        classes = self.model_runner.get_names(path)
+        # 第 4 步：把模型實際類別名／數量記錄到提交紀錄（僅 metadata，
+        # 不改變 SUBMITTED 狀態、不動匯入閘門）。
+        if classes:
+            submission.update(class_names=classes, class_count=len(classes))
+            self.store.save()
+        detections = self.model_runner.predict(path, image_bytes)
+        # 受控放寬：僅對設定檔中已登記「筆誤映射」的提交套用 6→4 對照並去重。
+        # 未登記者原樣回報模型實際類別名——不猜、不自動映射、不改任何狀態。
+        registered = registered_class_mapping(submission_id)
+        if registered:
+            detections, deduped = apply_mapping_to_detections(detections, registered["mapping"])
+            mapping_info = {
+                "mapping_applied": True,
+                "mapping_source": "registered_typo_mapping",
+                "temporary_mapping": True,
+                "temporary_mapping_label": "映射版·臨時",
+                "class_name_mapping": registered["mapping"],
+                "class_name_mapping_note": str(registered["entry"].get("reason") or ""),
+                "deduped_count": deduped,
+            }
+        else:
+            mapping_info = {"mapping_applied": False}
+        best = max(detections, key=lambda item: item.get("confidence", 0), default=None)
+        verdict = {
+            "rule_version": rule_version or (PROP_RULE_VERSION if model_type == "PROP_DIRECTION" else HOVER_RULE_VERSION),
+            "predicted_class": best.get("class") if best else None,
+            "predicted_confidence": round(float(best.get("confidence", 0)), 6) if best else None,
+            "expected_class": expected_class,
+            "confidence_threshold": float(confidence_threshold),
+            "decision": "INSUFFICIENT_DATA",
+            "reason": "模型未偵測到任何目標。",
+            "reason_code": "NO_DETECTION",
+        }
+        if best is None:
+            pass
+        elif float(best.get("confidence", 0)) < float(confidence_threshold):
+            verdict.update(
+                decision="INSUFFICIENT_DATA",
+                reason="信心值低於門檻，不足以判定。",
+                reason_code="LOW_CONFIDENCE",
+            )
+        elif expected_class:
+            if best.get("class") == expected_class:
+                verdict.update(decision="MATCH", reason="預測類別與教師標註相符。", reason_code="OK")
+            else:
+                verdict.update(
+                    decision="MISMATCH",
+                    reason=f"預測為 {best.get('class')}，教師標註為 {expected_class}。",
+                    reason_code="CLASS_MISMATCH",
+                )
+        else:
+            verdict.update(decision="DETECTED", reason="已取得預測類別，教師未提供標註可比對。", reason_code="NO_ANNOTATION")
+        return {
+            "submission_id": submission_id,
+            "model": {
+                "model_id": None,
+                "submission_id": submission_id,
+                "model_type": model_type,
+                "model_name": submission.get("original_filename", ""),
+                "version": "",
+                "status": submission.get("status"),
+                "validation_status": None,
+                "file_hash": submission.get("file_hash"),
+                "class_names": classes,
+                "temporary_mapping": bool(mapping_info.get("temporary_mapping")),
+                "temporary_mapping_label": mapping_info.get("temporary_mapping_label") or "",
+            },
+            "detections": detections,
+            "detection_count": len(detections),
+            "mapping": mapping_info,
             "verdict": verdict,
             "image_width": image_width,
             "image_height": image_height,
@@ -391,7 +703,13 @@ class VisionCenter:
         }
 
     def list_models(self, model_type: str | None = None) -> list[dict]:
-        return [dict(item) for item in self.store.data["models"] if model_type is None or item["model_type"] == model_type]
+        # 隔離（quarantine）記錄不進列表，但記錄與檔案都保留、可用 get_model 直接取回，
+        # 並可用 demo/tools/restore_quarantine.py 還原（2026-10-19 孤兒清理）。
+        return [
+            dict(item) for item in self.store.data["models"]
+            if (model_type is None or item["model_type"] == model_type)
+            and not item.get("quarantined")
+        ]
 
     def get_model(self, model_id: str) -> dict:
         return dict(self._find("models", "model_id", model_id))
@@ -400,7 +718,7 @@ class VisionCenter:
         found = next((item for item in self.store.data["models"] if item["model_type"] == model_type and item["status"] == "ACTIVE"), None)
         return dict(found) if found else None
 
-    def upload_model(self, *, model_type: str, model_name: str, version: str, content: bytes, dataset_id: str, dataset_version: str, rule_version: str, uploaded_by: str, notes: str = "", source_group: str | None = None, source_submission_id: str | None = None, source_student_id: str | None = None, class_name_mapping=None) -> dict:
+    def upload_model(self, *, model_type: str, model_name: str, version: str, content: bytes, dataset_id: str, dataset_version: str, rule_version: str, uploaded_by: str, notes: str = "", source_group: str | None = None, source_submission_id: str | None = None, source_student_id: str | None = None, class_name_mapping=None, demo_relaxed: bool = False) -> dict:
         if model_type not in MODEL_TYPES:
             raise ModelValidationError("unsupported_model_type")
         if not content or len(content) > self.max_model_bytes:
@@ -421,7 +739,7 @@ class VisionCenter:
         file_size = len(content)
         record = {
             "model_id": model_id, "model_type": model_type, "model_name": str(model_name).strip(), "version": str(version).strip(),
-            "file_path": str(path), "file_hash": file_hash, "file_size": file_size, "class_names": [],
+            "file_path": str(path), "file_hash": file_hash, "file_size": file_size, "class_names": [], "class_count": 0,
             "source_group": None if source_group is None else str(source_group).strip(),
             "source_submission_id": source_submission_id, "source_student_id": source_student_id, "dataset_id": dataset_id,
             "dataset_version": dataset_version, "rule_version": str(rule_version).strip(), "uploaded_by": uploaded_by,
@@ -437,11 +755,54 @@ class VisionCenter:
             if details.get("task") != "detect":
                 raise ModelValidationError("model_must_be_detection_model")
             actual = [str(name) for name in (details.get("class_names") or [])]
+            # 第 4 步：記錄模型實際類別數（不依賴類別含義，不影響匯入閘門）。
+            record["class_count"] = len(actual)
             if not actual:
                 # 教師指令③：names 為空不直接駁回——拋出可識別的缺少類別名錯誤。
                 raise ModelClassNamesMissingError(model_type)
             if actual == expected:
-                record.update(class_names=expected, validation_status="VALIDATED", status="VALIDATED")
+                record.update(class_names=expected, class_count=len(expected), validation_status="VALIDATED", status="VALIDATED")
+            elif demo_relaxed and class_name_mapping:
+                # DEMO 放寬匯入：套用筆誤別名對應，但「不」標記 VALIDATED、
+                # 「不」納入 ACTIVE 閘門——DEMO 結果不得被視為已驗證或已啟用。
+                try:
+                    normalized = apply_class_name_mapping(actual, expected, class_name_mapping, allow_many_to_one=True)
+                except ValueError as exc:
+                    raise ModelValidationError("model_class_names_mismatch") from exc
+                effective = [name for name in expected if name in set(normalized)]
+                record.update(
+                    class_names=effective, class_count=len(effective), class_count_raw=len(actual),
+                    validation_status="DEMO_IMPORTED", status="DEMO_IMPORTED",
+                    class_name_mapping=normalize_class_name_mapping(class_name_mapping),
+                    class_name_mapping_source="demo_class_alias",
+                    class_name_mapping_note="DEMO 類別放寬：CCE/CCF 筆誤別名對應到 CCW（僅 DEMO，不影響正式模型）",
+                    temporary_mapping=True,
+                    temporary_mapping_label="DEMO·類別放寬",
+                    demo_class_relaxed=True,
+                )
+            elif registered_class_mapping(source_submission_id):
+                # 受控放寬（2026-10-19）：僅限設定檔已登記「筆誤映射」的提交。
+                # 允許 many-to-one，但映射表必須來自設定檔，不接受呼叫端臨時拼湊。
+                registered = registered_class_mapping(source_submission_id)
+                try:
+                    normalized = apply_class_name_mapping(actual, expected, registered["mapping"], allow_many_to_one=True)
+                except ValueError as exc:
+                    raise ModelValidationError("registered_class_mapping_stale") from exc
+                entry = registered["entry"]
+                # 映射後的有效類別集是「去重後的 4 類」，不是原始 6 個通道；
+                # 原始通道數另存 class_count_raw 以便追溯。
+                effective = [name for name in expected if name in set(normalized)]
+                record.update(
+                    class_names=effective, class_count=len(effective),
+                    class_count_raw=len(actual),
+                    validation_status="VALIDATED", status="VALIDATED",
+                    class_name_mapping=registered["mapping"],
+                    class_name_mapping_source="registered_typo_mapping",
+                    class_name_mapping_note=str(entry.get("reason") or ""),
+                    temporary_mapping=True,
+                    temporary_mapping_label="映射版·臨時",
+                    temporary_mapping_registered_at=entry.get("registered_at"),
+                )
             elif len(actual) != len(expected):
                 raise ModelValidationError("model_class_names_mismatch")
             elif not class_name_mapping:
@@ -449,7 +810,7 @@ class VisionCenter:
                 raise ModelClassNamesMappingRequiredError(model_type, actual, expected)
             else:
                 normalized = apply_class_name_mapping(actual, expected, class_name_mapping)
-                record.update(class_names=normalized, validation_status="VALIDATED", status="VALIDATED",
+                record.update(class_names=normalized, class_count=len(normalized), validation_status="VALIDATED", status="VALIDATED",
                               class_name_mapping=normalize_class_name_mapping(class_name_mapping))
             if details.get("smoke_inference") is not True:
                 raise ModelValidationError("smoke_inference_failed")
@@ -501,6 +862,11 @@ class VisionCenter:
         failed switch leaves the task on its original model rather than with no model.
         """
         model = self._find("models", "model_id", model_id)
+        # D4（2026-10-19）：隔離模型一律不得啟用。隔離代表該記錄已被判定為不可用
+        # （例如孤兒記錄、檔案遺失）；即使檔案日後被放回，也不得繞過隔離直接啟用。
+        # 此檢查置於最前，優先於既有的 VALIDATED / REJECTED 判斷，且不改動其餘流程。
+        if model.get("quarantined"):
+            raise ValueError("model_quarantined")
         if model["validation_status"] != "VALIDATED" or model["status"] == "REJECTED":
             raise ValueError("validated_model_required")
         path = Path(model["file_path"])
@@ -574,6 +940,52 @@ class VisionCenter:
     def list_submissions(self, task_id: str | None = None, status: str | None = None) -> list[dict]:
         return [dict(item) for item in self.store.data["submissions"] if (task_id is None or item["task_id"] == task_id) and (status is None or item["status"] == status)]
 
+    def delete_submission(self, submission_id: str, *, deleted_by: str) -> dict:
+        """Delete one student submission record and its uploaded .pt file (teacher-only).
+
+        Teacher directive 2026-10-20 ("教師後台增加刪除功能"). Safety rails:
+        - refuses with a traceable error when any model references this submission
+          (source_submission_id), so a deletion can never orphan model lineage,
+          teacher review records or the ACTIVE pointer;
+        - writes a timestamped backup (store JSON + the submission folder) under
+          <root>/backups/<stamp>-delete-<submission_id>/ BEFORE mutating anything;
+        - removes only this submission's own record and folder; no other record,
+          model, dataset or Evidence is touched.
+        """
+        submission = self._find("submissions", "submission_id", submission_id)
+        dependents = sorted({
+            str(item.get("model_id")) for item in self.store.data["models"]
+            if item.get("source_submission_id") == submission_id
+        })
+        if dependents:
+            raise ModelValidationError("submission_has_models:" + ",".join(dependents))
+        folder = Path(submission["file_path"]).parent
+        stamp = utc_now().replace(":", "").replace(".", "-")
+        backup_dir = self.root / "backups" / f"{stamp}-delete-{submission_id}"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.store.path, backup_dir / "vision_center.json")
+        if folder.exists():
+            shutil.copytree(folder, backup_dir / "submission_file", dirs_exist_ok=True)
+        self.store.data["submissions"] = [
+            item for item in self.store.data["submissions"]
+            if item.get("submission_id") != submission_id
+        ]
+        self.store.save()
+        file_removed = False
+        if folder.exists():
+            shutil.rmtree(folder)
+            file_removed = True
+        return {
+            "submission_id": submission_id,
+            "task_id": submission.get("task_id"),
+            "student_id": submission.get("student_id"),
+            "deleted_by": deleted_by,
+            "deleted_at": utc_now(),
+            "record_removed": True,
+            "file_removed": file_removed,
+            "backup_path": str(backup_dir),
+        }
+
     def approve_demo_submission(self, submission_id: str, *, approved_by: str) -> dict:
         """Approve one inert R07 attachment for the isolated DEMO adapter only."""
         if not self.demo_simulation_enabled:
@@ -644,22 +1056,50 @@ class VisionCenter:
 
     def import_submission(self, submission_id: str, *, model_name: str, version: str, dataset_id: str, dataset_version: str, rule_version: str, uploaded_by: str, notes: str = "", class_name_mapping=None) -> dict:
         submission = self._find("submissions", "submission_id", submission_id)
-        if submission["status"] != "SUBMITTED":
-            raise ValueError("submission_not_importable")
-        if not Path(submission["file_path"]).exists():
-            raise ValueError("submission_file_missing")
-        # 先做唯讀預檢（載入 .pt 取得實際類別名）。預檢失敗時不建立任何模型或資料集
-        # 紀錄，提交保持 SUBMITTED——教師指令③④（2026-10-18）：不直接駁回、
-        # 顯示失敗原因，由教師決定（補充類別名／提供對照表／手動駁回）。
-        self._inspect_submission_for_import(submission, class_name_mapping=class_name_mapping)
+        # D2（2026-10-19）：狀態檢查、檔案檢查、冪等防護與預檢都必須留下失敗原因。
+        # 先前只有 upload_model 的例外會寫入 import_last_error，導致預檢失敗時
+        # 教師頁的「上次導入嘗試失敗」永遠空白。
+        try:
+            if submission["status"] != "SUBMITTED":
+                raise ValueError("submission_not_importable")
+            if not Path(submission["file_path"]).exists():
+                raise ValueError("submission_file_missing")
+            # 冪等防護（2026-10-19）：同一個提交不得匯入出第二個模型。
+            # 正常情況 status 檢查已擋住重複匯入；此處額外防護「狀態被人工改回 SUBMITTED」
+            # 或併發重送的情形，避免產生重複模型與孤兒 dataset。
+            # REJECTED 的紀錄不算（那是失敗嘗試留下的，允許修正後重試）。
+            already = next(
+                (
+                    item for item in self.store.data["models"]
+                    if item.get("source_submission_id") == submission_id
+                    and item.get("status") != "REJECTED"
+                ),
+                None,
+            )
+            if already is not None:
+                raise ValueError("submission_already_imported")
+            # 先做唯讀預檢（載入 .pt 取得實際類別名）。預檢失敗時不建立任何模型或資料集
+            # 紀錄，提交保持 SUBMITTED——教師指令③④（2026-10-18）：不直接駁回、
+            # 顯示失敗原因，由教師決定（補充類別名／提供對照表／手動駁回）。
+            preflight = self._inspect_submission_for_import(submission, class_name_mapping=class_name_mapping)
+        except Exception as exc:
+            if self._record_import_failure(submission, f"import_failed:{exc}", code=str(exc)):
+                self.store.save()
+            raise
         content = Path(submission["file_path"]).read_bytes()
+        # DEMO 放寬：若預檢自動產生了別名映射（類別不一致但可對應），轉發給
+        # upload_model 並標記 demo_relaxed——「不」標記 VALIDATED、「不」啟用。
+        # 此分支僅在本 Live 實例啟用 FDE_DEMO_SIMULATED_INFERENCE 時生效。
+        demo_relaxed = bool(isinstance(preflight, dict) and preflight.get("demo_class_relaxed"))
+        demo_mapping = preflight.get("class_name_mapping") if demo_relaxed else class_name_mapping
         try:
             model = self.upload_model(
                 model_type=submission["task_id"], model_name=model_name, version=version,
                 content=content, dataset_id=dataset_id, dataset_version=dataset_version,
                 rule_version=rule_version, uploaded_by=uploaded_by, notes=notes,
                 source_group=submission["group_id"], source_submission_id=submission_id,
-                source_student_id=submission["student_id"], class_name_mapping=class_name_mapping,
+                source_student_id=submission["student_id"], class_name_mapping=demo_mapping,
+                demo_relaxed=demo_relaxed,
             )
         except Exception as exc:
             # 教師指令④：匯入失敗不自動把 submission 改成 REJECTED；保持 SUBMITTED，
@@ -668,19 +1108,60 @@ class VisionCenter:
                 status="SUBMITTED",
                 import_attempted_at=utc_now(),
                 import_last_error=f"import_failed:{exc}",
+                import_last_error_code=str(exc),
             )
             self.store.save()
             raise
         submission.update(status="IMPORTED", imported_model_id=model["model_id"], imported_at=utc_now(),
-                          import_attempted_at=utc_now(), import_last_error=None)
+                          import_attempted_at=utc_now(), import_last_error=None,
+                          import_last_error_code=None)
         self.store.save()
         return dict(model)
+
+    def _record_import_failure(self, submission: dict, message: str, *, code: str = "", recorded_by: str = "") -> bool:
+        """寫入導入失敗原因（D2，2026-10-19）。
+
+        已成功導入（IMPORTED）的提交不得被標記為失敗：重複點擊導入只是無效操作，
+        不應讓一筆成功紀錄看起來像失敗。回傳是否實際寫入。
+        """
+        if submission.get("status") == "IMPORTED":
+            return False
+        submission.update(
+            import_attempted_at=utc_now(),
+            import_last_error=str(message or code or "import_failed"),
+            import_last_error_code=str(code or ""),
+        )
+        if recorded_by:
+            submission["import_last_error_by"] = str(recorded_by)
+        return True
+
+    def record_import_failure(self, submission_id: str, *, message: str, code: str = "", recorded_by: str = "") -> dict:
+        """Django 端回報的失敗（預檢失敗、逾時、連線失敗等）寫回 import_last_error。
+
+        Live 內部的失敗由 import_submission 自行記錄；此入口只補齊「失敗發生在
+        Django 端」的情況，讓教師頁有持久、可理解的失敗原因。
+        """
+        submission = self._find("submissions", "submission_id", submission_id)
+        recorded = self._record_import_failure(submission, message, code=code, recorded_by=recorded_by)
+        if recorded:
+            self.store.save()
+        return {
+            "submission_id": submission_id,
+            "recorded": recorded,
+            "status": submission.get("status"),
+            "import_last_error": submission.get("import_last_error") or "",
+        }
 
     def _inspect_submission_for_import(self, submission: dict, *, class_name_mapping=None) -> dict:
         """唯讀預檢：載入提交的 .pt，回報實際類別名與任務預期的關係。
 
         不做任何狀態或磁盤寫入。names 為空／數量一致但名稱不同／數量不符分別拋出
         可識別的例外，供匯入端與教師 UI 區分處理（教師指令③）。
+
+        DEMO 放寬（僅當本 Live 實例啟用 FDE_DEMO_SIMULATED_INFERENCE）：當模型類別
+        數量與任務預期不一致、但能透過「筆誤別名」（CCE/CCF→CCW）對應到全部預期
+        類別時，自動產生對照表並回報 demo_class_relaxed=True，交由 import_submission
+        以「不標記 VALIDATED／不啟用」的方式匯入。不影響正式（非 DEMO）匯入邏輯。
         """
         model_type = submission["task_id"]
         path = Path(submission["file_path"])
@@ -691,22 +1172,51 @@ class VisionCenter:
             raise ModelValidationError("model_must_be_detection_model")
         if not actual:
             raise ModelClassNamesMissingError(model_type)
+
+        auto_alias_used = False
+        # DEMO 放寬：未提供對照表且類別數量不一致時，嘗試用筆誤別名對應。
+        if (self.demo_simulation_enabled and not class_name_mapping
+                and len(actual) != len(expected)):
+            alias = demo_class_alias_for(actual, expected)
+            if alias is not None:
+                class_name_mapping = alias
+                auto_alias_used = True
+
         if actual != expected:
-            if len(actual) != len(expected):
+            registered = registered_class_mapping(submission["submission_id"])
+            if registered:
+                # 受控放寬：已登記筆誤映射 → 允許 many-to-one，但映射必須有效。
+                try:
+                    apply_class_name_mapping(actual, expected, registered["mapping"], allow_many_to_one=True)
+                except ValueError as exc:
+                    raise ModelValidationError("registered_class_mapping_stale") from exc
+            elif class_name_mapping and auto_alias_used:
+                # DEMO 自動別名：允許 many-to-one（筆誤通道合併）。
+                try:
+                    apply_class_name_mapping(actual, expected, class_name_mapping, allow_many_to_one=True)
+                except ValueError as exc:
+                    raise ModelValidationError("model_class_names_mismatch") from exc
+            elif len(actual) != len(expected):
                 raise ModelValidationError("model_class_names_mismatch")
-            if class_name_mapping is None:
+            elif class_name_mapping is None:
                 raise ModelClassNamesMappingRequiredError(model_type, actual, expected)
-            apply_class_name_mapping(actual, expected, class_name_mapping)
+            else:
+                apply_class_name_mapping(actual, expected, class_name_mapping)
         if details.get("smoke_inference") is not True:
             raise ModelValidationError("smoke_inference_failed")
-        return {"task_id": model_type, "class_names_actual": actual, "class_names_expected": expected}
+        demo_relaxed = bool(self.demo_simulation_enabled and auto_alias_used)
+        return {
+            "task_id": model_type, "class_names_actual": actual, "class_names_expected": expected,
+            "demo_class_relaxed": demo_relaxed, "class_name_mapping": class_name_mapping,
+        }
 
     def preflight_import(self, submission_id: str) -> dict:
         """教師頁導入前的唯讀檢查：回報結局而不改動任何狀態。
 
-        outcome: ready（類別名與預期一致）｜mapping_required（數量一致、名稱不同，
+        outcome: ready（類別名與預期一致）｜registered_mapping_ready（數量不符，但在
+        設定檔已登記筆誤映射，可受控放行）｜mapping_required（數量一致、名稱不同，
         應提供對照表）｜class_names_missing（模型缺少類別名稱，請補充）｜
-        mismatch（數量不符）｜detection_model_required（非 detect 任務）。
+        mismatch（數量不符且未登記）｜detection_model_required（非 detect 任務）。
         """
         submission = self._find("submissions", "submission_id", submission_id)
         if submission["status"] != "SUBMITTED":
@@ -722,14 +1232,38 @@ class VisionCenter:
                 "submission_id": submission_id, "task_id": model_type,
                 "outcome": "unloadable", "reason": str(exc),
                 "class_names_actual": [], "class_names_expected": expected,
+                "registered_mapping": None, "temporary_mapping": False,
             }
         actual = [str(name) for name in (details.get("class_names") or [])]
+        registered = registered_class_mapping(submission_id)
+        mapping_info = None
         if details.get("task") != "detect":
             outcome = "detection_model_required"
         elif not actual:
             outcome = "class_names_missing"
         elif len(actual) != len(expected):
             outcome = "mismatch"
+            if self.demo_simulation_enabled:
+                alias = demo_class_alias_for(actual, expected)
+                if alias is not None:
+                    outcome = "demo_class_relaxed"
+                    mapping_info = {
+                        "class_name_mapping": alias,
+                        "class_name_mapping_note": "DEMO 類別放寬：CCE/CCF 筆誤別名對應到 CCW（僅 DEMO，不影響正式模型）",
+                        "temporary_mapping": True,
+                        "demo_class_relaxed": True,
+                    }
+            if outcome == "mismatch" and registered:
+                try:
+                    apply_class_name_mapping(actual, expected, registered["mapping"], allow_many_to_one=True)
+                    outcome = "registered_mapping_ready"
+                    mapping_info = {
+                        "class_name_mapping": registered["mapping"],
+                        "class_name_mapping_note": str(registered["entry"].get("reason") or ""),
+                        "temporary_mapping": True,
+                    }
+                except ValueError:
+                    outcome = "mismatch"
         elif actual != expected:
             outcome = "mapping_required"
         else:
@@ -737,6 +1271,9 @@ class VisionCenter:
         return {
             "submission_id": submission_id, "task_id": model_type,
             "outcome": outcome, "class_names_actual": actual, "class_names_expected": expected,
+            "registered_mapping": mapping_info,
+            "temporary_mapping": bool(mapping_info),
+            "demo_class_relaxed": bool(mapping_info and isinstance(mapping_info, dict) and mapping_info.get("demo_class_relaxed")),
         }
 
     # ---- Golden Test Set registry ----
@@ -845,8 +1382,43 @@ class VisionCenter:
         self.store.save()
         return dict(record)
 
+    def quarantine_dataset(self, dataset_id: str, *, reason: str = "", source_submission_id: str = "", quarantined_by: str = "") -> dict:
+        """D1（2026-10-19）：把資料集標記為隔離，不刪除任何記錄或檔案。
+
+        用途：教師匯入流程先建立 dataset 再呼叫 Live 匯入；若匯入失敗，該 dataset
+        會成為沒有模型引用的可見孤兒。Django 端在失敗後呼叫此入口做補償式隔離，
+        讓它不出現在正常清單，但記錄、來源提交與失敗原因全部保留，可事後追查或還原。
+        """
+        dataset = self._find("datasets", "dataset_id", dataset_id)
+        if dataset.get("quarantined"):
+            return dict(dataset)
+        referenced = [
+            item["model_id"] for item in self.store.data["models"]
+            if item.get("dataset_id") == dataset_id
+        ]
+        if referenced:
+            # 已被模型引用的資料集不是孤兒；隔離它會讓既有模型失去可追溯的來源。
+            raise ValueError("dataset_in_use")
+        dataset.update(
+            quarantined=True,
+            quarantined_at=utc_now(),
+            quarantine_reason=str(reason or "import_failed"),
+            quarantined_by=str(quarantined_by or ""),
+            quarantine_origin="import_failure_compensation",
+        )
+        if source_submission_id:
+            dataset["source_submission_id"] = str(source_submission_id)
+        self._write_dataset_metadata(dataset)
+        self.store.save()
+        return dict(dataset)
+
     def list_datasets(self, model_type: str | None = None) -> list[dict]:
-        return [dict(item) for item in self.store.data["datasets"] if model_type is None or item["model_type"] == model_type]
+        # 同上：隔離的 dataset 不進列表，但仍可用 _find / 直接 ID 取回。
+        return [
+            dict(item) for item in self.store.data["datasets"]
+            if (model_type is None or item["model_type"] == model_type)
+            and not item.get("quarantined")
+        ]
 
     def build_next_dataset(self, parent_dataset_id: str, hard_example_ids: list[str], new_samples: list[dict], created_by: str) -> dict:
         parent = self._find("datasets", "dataset_id", parent_dataset_id)

@@ -96,8 +96,11 @@ test('auto scheduler starts only after backend acceptance and stops with camera'
   const backendStart = source.indexOf('/auto/start');
   const schedulerStart = source.indexOf('autoScheduler.start()', backendStart);
   assert.ok(backendStart >= 0 && schedulerStart > backendStart);
+  // P1-4：stopCamera 经 stopCameraStream 停止 auto scheduler；pagehide 只停 stream 不动 session。
   const stopCamera = source.slice(source.indexOf('async function stopCamera()'), source.indexOf('async function startAutoObservation()'));
-  assert.match(stopCamera, /stopAutoObservation\(\)/);
+  assert.match(stopCamera, /stopCameraStream\(\)/);
+  const stopCameraStream = source.slice(source.indexOf('function stopCameraStream()'), source.indexOf('async function stopCamera()'));
+  assert.match(stopCameraStream, /stopAutoObservation\(\)/);
 });
 
 test('auto mode requires camera and session and exposes start stop controls', () => {

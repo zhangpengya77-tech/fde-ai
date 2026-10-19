@@ -108,6 +108,11 @@ urlpatterns = [
         name="teacher_vision_center_validate",
     ),
     path(
+        "teacher/vision-center/validate-submission/",
+        views.teacher_vision_center_validate_submission,
+        name="teacher_vision_center_validate_submission",
+    ),
+    path(
         "teacher/vision-center/import/",
         views.teacher_vision_center_import,
         name="teacher_vision_center_import",
@@ -126,6 +131,11 @@ urlpatterns = [
         "teacher/vision-center/rollback/",
         views.teacher_vision_center_rollback,
         name="teacher_vision_center_rollback",
+    ),
+    path(
+        "teacher/vision-center/delete-submission/",
+        views.teacher_vision_center_delete_submission,
+        name="teacher_vision_center_delete_submission",
     ),
     path(
         "teacher/vision-center/upload/",

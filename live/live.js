@@ -1577,7 +1577,10 @@
       image.close();
     }
 
-    async function stopCamera() {
+    // 纯停相机 hardware/UI：不动 session、不清持久化——pagehide／回任务地图等场景使用。
+    // P1-4 修复：pagehide（刷新／导航离开）不得销毁 coach session 与持久化，
+    // 否则每次重载都丢失训练进度（含 VISION_MODEL_NOT_READY）。
+    function stopCameraStream() {
       stopAutoObservation();
       previewMonitor?.stop();
       stopStream(stream);
@@ -1595,6 +1598,11 @@
       setCameraState(cameras.length ? 'STOPPED' : 'ERROR', cameras.length ? 'checking' : 'offline');
       if (elements.cameraWaiting) elements.cameraWaiting.textContent = 'STOPPED';
       updateAssistantVisualAction();
+    }
+
+    // 用户显式停止摄像头 = 结束训练会话：释放 session（DELETE + 清除持久化）。
+    async function stopCamera() {
+      stopCameraStream();
       if (sessionId) {
         const oldSession = sessionId;
         sessionId = null;
@@ -1953,7 +1961,7 @@
     });
     async function refreshMap() {
       handsFreeVoice?.pause();
-      await stopCamera();
+      await stopCameraStream();
       const id = await ensureSession();
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`));
       renderCurrentTraining(state.training);
@@ -1973,7 +1981,7 @@
       if (elements.classroomValidationReport) elements.classroomValidationReport.textContent = JSON.stringify(report, null, 2);
     });
 
-    return { refreshHealth, refreshCameraDevices, initializeStudentMode: ensureSession, startCamera, maybeAutoStartCamera, switchCameraSource, capture, stopCamera, startAutoObservation, stopAutoObservation, pauseVoiceCoach: () => handsFreeVoice?.pause() };
+    return { refreshHealth, refreshCameraDevices, initializeStudentMode: ensureSession, startCamera, maybeAutoStartCamera, switchCameraSource, capture, stopCamera, stopCameraStream, startAutoObservation, stopAutoObservation, pauseVoiceCoach: () => handsFreeVoice?.pause() };
   }
 
   function escapeHtml(value) {
@@ -2165,7 +2173,8 @@
       controller.refreshHealth();
       controller.refreshCameraDevices();
       controller.initializeStudentMode().catch(() => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }));
-      window.addEventListener('pagehide', () => { controller.pauseVoiceCoach(); controller.stopCamera(); });
+      // P1-4：pagehide 只停相机/语音，不销毁 session——刷新/导航后 ensureSession 仍能复用同一会话。
+      window.addEventListener('pagehide', () => { controller.pauseVoiceCoach(); controller.stopCameraStream(); });
     });
   }
 

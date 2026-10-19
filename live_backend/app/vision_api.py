@@ -233,6 +233,25 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         except (KeyError, ValueError, ModelValidationError, binascii.Error) as exc:
             return error_response("submission_failed", str(exc), 422)
 
+    async def delete_submission(request: Request):
+        """Delete one student submission record and its uploaded .pt (teacher-only).
+
+        Refuses with a traceable 422 when any model depends on the submission, and
+        always writes a timestamped backup before mutating the store.
+        """
+        teacher_id, denied = _teacher(request)
+        if denied:
+            return denied
+        try:
+            result = center.delete_submission(
+                request.path_params["submission_id"], deleted_by=teacher_id
+            )
+            return json_response(result)
+        except KeyError:
+            return error_response("submission_not_found", "Submission was not found.", 404)
+        except (ValueError, ModelValidationError) as exc:
+            return error_response("submission_delete_failed", str(exc), 422)
+
     async def import_submission(request: Request):
         teacher_id, denied = _teacher(request)
         if denied:
@@ -270,6 +289,48 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("submission_not_found", "Submission was not found.", 404)
         except (ValueError, ModelValidationError) as exc:
             return error_response("import_preflight_failed", str(exc), 422)
+
+    async def record_import_failure(request: Request):
+        """D2（2026-10-19）：記錄 Django 端發生的導入失敗原因（預檢、逾時、連線等）。
+
+        只寫入既有 import_last_error 欄位與其代碼，不改動提交狀態。
+        """
+        teacher_id, denied = _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _json(request)
+            return json_response(center.record_import_failure(
+                request.path_params["submission_id"],
+                message=str(payload.get("message") or ""),
+                code=str(payload.get("code") or ""),
+                recorded_by=teacher_id,
+            ))
+        except KeyError:
+            return error_response("submission_not_found", "Submission was not found.", 404)
+        except ValueError as exc:
+            return error_response("import_failure_record_failed", str(exc), 422)
+
+    async def quarantine_dataset(request: Request):
+        """D1（2026-10-19）：把匯入失敗後留下的資料集標記隔離（不刪除）。
+
+        供 Django 匯入封裝層在補償時呼叫；已被模型引用的資料集會拒絕隔離。
+        """
+        teacher_id, denied = _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _json(request)
+            return json_response(center.quarantine_dataset(
+                request.path_params["dataset_id"],
+                reason=str(payload.get("reason") or ""),
+                source_submission_id=str(payload.get("source_submission_id") or ""),
+                quarantined_by=teacher_id,
+            ))
+        except KeyError:
+            return error_response("dataset_not_found", "Dataset was not found.", 404)
+        except ValueError as exc:
+            return error_response("dataset_quarantine_failed", str(exc), 422)
 
     async def golden_sets(request: Request):
         if request.method == "GET":
@@ -343,6 +404,39 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         except (ValueError, ModelValidationError, binascii.Error) as exc:
             return error_response("image_validation_failed", str(exc), 422)
 
+    # ---- Teacher single-image validation against a SUBMITTED submission (pre-import) ----
+    async def validate_submission_image(request: Request):
+        """Run real inference with one SUBMITTED submission's .pt on one uploaded image.
+
+        Read-only: does not require the submission to be imported/enabled. Lets a
+        teacher verify a student submission (e.g. ``sub-5d87f027``) before enabling it,
+        which is the gap that previously blocked the teacher review flow.
+        """
+        teacher_id, denied = _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _json(request)
+            image_base64 = payload.get("image_base64") or ""
+            if not image_base64:
+                raise ModelValidationError("image_required")
+            image_bytes = base64.b64decode(image_base64, validate=True)
+            expected = payload.get("expected_class") or None
+            result = center.validate_image_with_submission(
+                request.path_params["submission_id"], image_bytes,
+                expected_class=expected,
+                confidence_threshold=float(payload.get("confidence_threshold", 0.5)),
+                rule_version=payload.get("rule_version") or None,
+                image_width=payload.get("image_width"),
+                image_height=payload.get("image_height"),
+            )
+            result["validated_by"] = teacher_id
+            return json_response(result)
+        except KeyError:
+            return error_response("submission_not_found", "Submission was not found.", 404)
+        except (ValueError, ModelValidationError, binascii.Error) as exc:
+            return error_response("image_validation_failed", str(exc), 422)
+
     # ---- Version history & rollback ----
     async def model_history(request: Request):
         _teacher_id, denied = _teacher(request)
@@ -385,13 +479,17 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         Route("/api/v1/vision/hover-video", hover_video, methods=["POST"]),
         Route("/api/v1/vision/datasets", datasets, methods=["GET", "POST"]),
         Route("/api/v1/vision/datasets/{dataset_id}/build-next", build_next, methods=["POST"]),
+        Route("/api/v1/vision/datasets/{dataset_id}/quarantine", quarantine_dataset, methods=["POST"]),
         Route("/api/v1/vision/datasets/{dataset_id}/export", export_dataset, methods=["GET"]),
         Route("/api/v1/vision/hard-examples", hard_examples, methods=["GET"]),
         Route("/api/v1/vision/hard-examples/{sample_id}/review", review_hard_example, methods=["POST"]),
         Route("/api/v1/vision/camera-profiles", camera_profiles, methods=["POST"]),
         Route("/api/v1/vision/submissions", submissions, methods=["GET", "POST"]),
+        Route("/api/v1/vision/submissions/{submission_id}", delete_submission, methods=["DELETE"]),
         Route("/api/v1/vision/submissions/{submission_id}/import-preflight", import_preflight, methods=["POST"]),
         Route("/api/v1/vision/submissions/{submission_id}/import", import_submission, methods=["POST"]),
+        Route("/api/v1/vision/submissions/{submission_id}/import-failure", record_import_failure, methods=["POST"]),
+        Route("/api/v1/vision/submissions/{submission_id}/validate-image", validate_submission_image, methods=["POST"]),
         Route("/api/v1/vision/golden-sets", golden_sets, methods=["GET", "POST"]),
         Route("/api/v1/vision/golden-sets/{golden_set_id}", golden_set_detail, methods=["GET"]),
         Route("/api/v1/vision/models/{model_id}/golden-sets", model_golden_sets, methods=["GET"]),

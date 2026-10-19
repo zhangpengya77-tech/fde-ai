@@ -34,6 +34,8 @@
 .vc-cta.primary[disabled]{background:#b7c6cc;border-color:#b7c6cc;cursor:not-allowed}
 .vc-cta.ghost{background:#fff;color:#087f91;border-color:#087f91}
 .vc-cta.ghost:hover{background:#eef7f9}
+.vc-cta.danger{background:#fff;color:#b3261e;border-color:#b3261e}
+.vc-cta.danger:hover{background:#fdecea}
 .vc-cta.block{width:100%}
 .vc-badge{display:inline-block;padding:3px 10px;font-size:12px;font-weight:700;border:1px solid;border-radius:999px}
 .vc-badge.active{background:#e8f5f1;border-color:#1a987d;color:#12695a}
@@ -260,11 +262,62 @@
               <input type="hidden" name="task_id" value="{{ task_id }}">
               <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>開始圖片驗證</button>
             </form>
+            <form method="post" action="{% url 'learning:teacher_vision_center_delete_submission' %}" class="inline-form"
+                  onsubmit="return confirm('確定要刪除這筆學員上傳嗎？\n\n將移除：提交記錄與 .pt 實體檔。刪除前會自動備份（store 與該提交目錄），需要時可從備份還原。\n已導入為模型的提交會被拒絕刪除。');">
+              {% csrf_token %}
+              <input type="hidden" name="submission_id" value="{{ item.submission_id }}">
+              <input type="hidden" name="task_id" value="{{ task_id }}">
+              <button class="vc-cta danger" type="submit" {% if not api_online %}disabled{% endif %}>刪除上傳</button>
+            </form>
             {% if item.demo_active %}<span class="vc-badge imported">DEMO 已啟用（非真實驗證）</span>{% endif %}
+            {% if item.model_row and item.model_row.demo_class_relaxed %}<span class="vc-badge warn">類別不一致（DEMO 放行）</span>{% endif %}
           </div>
+
+          <details class="vc-verify">
+            <summary>上傳圖片驗證（直接對此提交推理，不匯入）</summary>
+            <form method="post" action="{% url 'learning:teacher_vision_center_validate_submission' %}" enctype="multipart/form-data" class="vc-sub-validate-form">
+              {% csrf_token %}
+              <input type="hidden" name="task_id" value="{{ task_id }}">
+              <input type="hidden" name="submission_id" value="{{ item.submission_id }}">
+              <label class="vc-f"><span>這張圖的正確答案（可留空）</span>
+                <select name="expected_class">
+                  <option value="">不標註（只看模型辨識）</option>
+                  {% for c in class_options %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                </select>
+              </label>
+              <label class="vc-upload vc-upload-sm" for="vc-sub-image-{{ forloop.counter }}">
+                <div class="vc-upload-text">選擇／拖曳一張圖片</div>
+                <input type="file" name="test_image" id="vc-sub-image-{{ forloop.counter }}" accept="image/*">
+              </label>
+              <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>開始 AI 辨識</button>
+            </form>
+            <div class="vc-note" data-role="loading" style="display:none">辨識中，請稍候…</div>
+            <div class="vc-note bad" data-role="err" style="display:none"></div>
+            <div class="vc-sub-result" data-role="result" style="display:none;margin-top:12px">
+              <div class="vc-verdict-big" data-role="verdict"></div>
+              <div class="vc-v-row"><span>AI 預測類別</span><span data-role="class"></span></div>
+              <div class="vc-v-row"><span>信心值</span><span data-role="conf"></span></div>
+              <div class="vc-v-row"><span>說明</span><span data-role="reason"></span></div>
+              <div class="vc-imgbox"><div class="vc-imgbox-label">原圖</div><img data-role="orig" alt="原圖"></div>
+              <canvas data-role="canvas"></canvas>
+              <div class="vc-note bad" data-role="nodetect" style="display:none">未辨識到槳葉，請更換照片。</div>
+            </div>
+          </details>
         </div>
         {% endfor %}
       </div>
+    {% endif %}
+
+    {% if submission_validation_result and submission_validation_result.submission_id == active_sub %}
+    <div class="vc-card" id="vc-sub-server-result">
+      <h2>剛才的提交驗證結果</h2>
+      <div class="vc-verdict-big {{ submission_validation_result.verdict_css }}">{{ submission_validation_result.verdict_label }}</div>
+      <div class="vc-v-row"><span>提交編號</span><span>{{ submission_validation_result.submission_id }}</span></div>
+      <div class="vc-v-row"><span>AI 預測類別</span><span>{{ submission_validation_result.predicted_class|default:"無" }}</span></div>
+      <div class="vc-v-row"><span>信心值</span><span>{% if submission_validation_result.predicted_confidence != None %}{{ submission_validation_result.predicted_confidence }}{% else %}—{% endif %}</span></div>
+      <div class="vc-v-row"><span>說明</span><span>{{ submission_validation_result.reason }}</span></div>
+      <p class="muted" style="font-size:13px;margin:10px 0 0">本判定來自<strong>真實推論</strong>（直接對該提交的 .pt 推理），<strong>不是 DEMO 模擬</strong>。單張圖不足以代表整體品質，建議多張重複驗證。</p>
+    </div>
     {% endif %}
 
     <details class="vc-admin" style="margin-top:18px">
@@ -417,6 +470,7 @@
           <span class="vc-hero-name">{{ active_model.model_name|default:active_model.model_id }}</span>
           <span class="vc-hero-meta">版本 {{ active_model.version }}</span>
           <span class="vc-badge active">正式使用</span>
+          {% if active_model.temporary_mapping %}<span class="vc-badge candidate">{{ active_model.temporary_mapping_label }}</span>{% endif %}
           <span class="vc-hero-meta">啟用時間：{{ active_model.activated_at_display|default:"—" }}</span>
         </div>
       </div>
@@ -436,11 +490,18 @@
           <div class="vc-sub-head">
             <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
             <span class="vc-badge {{ m.status_css }}">{{ m.status_label }}</span>
+            {% if m.temporary_mapping %}<span class="vc-badge candidate">{{ m.temporary_mapping_label }}</span>{% endif %}
+            {% if m.demo_class_relaxed %}<span class="vc-badge warn">類別不一致（DEMO 放行）</span>{% endif %}
           </div>
           <div class="vc-meta">
             來源：{{ m.source_label|default:"—" }}｜上傳：{{ m.uploaded_at_display|default:"—" }}<br>
             圖片驗證依據：<span class="vc-badge {{ m.image_evidence_css }}">{{ m.image_evidence_label }}</span>
           </div>
+          {% if m.temporary_mapping %}
+          <div class="vc-note bad" style="margin-top:10px">
+            <strong>{{ m.temporary_mapping_label }}</strong>：這是臨時映射模型，不是正式訓練模型。類別名對照：{{ m.class_name_mapping_display }}{% if m.class_name_mapping_note %}。{{ m.class_name_mapping_note }}{% endif %}
+          </div>
+          {% endif %}
           {% if m.recognition_quality_proven %}
             <div class="vc-note ok" style="margin-top:10px">已有真實圖片驗證依據（最近一次：{{ m.last_image_validation.predicted_class|default:"無" }}／信心值 {% if m.last_image_validation.predicted_confidence != None %}{{ m.last_image_validation.predicted_confidence }}{% else %}—{% endif %}）。</div>
           {% else %}
@@ -449,7 +510,7 @@
           <div class="vc-actions">
             {% if m.can_activate %}
               <form method="post" action="{% url 'learning:teacher_vision_center_activate' %}" class="inline-form"
-                    onsubmit="return confirm('確定要把這個模型設為正式使用嗎？目前的正式模型會保留為歷史版本。');">
+                    onsubmit="return confirm('{% if m.temporary_mapping %}【映射版·臨時】這個模型的類別名是由筆誤對照而來，不是正式訓練模型。確定仍要設為正式使用嗎？目前的正式模型會保留為歷史版本。{% else %}確定要把這個模型設為正式使用嗎？目前的正式模型會保留為歷史版本。{% endif %}');">
                 {% csrf_token %}
                 <input type="hidden" name="task_id" value="{{ task_id }}">
                 <input type="hidden" name="model_id" value="{{ m.model_id }}">
@@ -476,6 +537,8 @@
             <div class="vc-sub-head">
               <span class="vc-sub-title">{{ h.model_name|default:h.model_id }}（{{ h.version }}）</span>
               <span class="vc-badge {{ h.status_css }}">{{ h.status_label }}</span>
+              {% if h.temporary_mapping %}<span class="vc-badge candidate">{{ h.temporary_mapping_label }}</span>{% endif %}
+              {% if h.demo_class_relaxed %}<span class="vc-badge warn">類別不一致（DEMO 放行）</span>{% endif %}
             </div>
             <div class="vc-meta">上傳：{{ h.uploaded_at_display|default:"—" }}</div>
           </div>
@@ -765,6 +828,72 @@
         });
     });
   }
+
+  // ---- 場景①：對 SUBMITTED 提交直接上傳圖片驗證（不匯入） ----
+  document.querySelectorAll('.vc-sub-validate-form').forEach(function (form) {
+    var card = form.closest('.vc-sub') || form.parentElement;
+    var result = card.querySelector('[data-role="result"]');
+    var errBox = card.querySelector('[data-role="err"]');
+    var loading = card.querySelector('[data-role="loading"]');
+    var fileInput = form.querySelector('input[type="file"]');
+    var canvas = result.querySelector('[data-role="canvas"]');
+
+    function subVerdict(r) {
+      if (r.verdict === 'MATCH') return { text: '通過', cls: 'pass' };
+      if (r.verdict === 'MISMATCH') return { text: '不通過', cls: 'fail' };
+      return { text: '需要檢查', cls: 'check' };
+    }
+    function subDraw(imgUrl, boxes) {
+      var img = new Image();
+      img.onload = function () {
+        var maxW = canvas.parentElement.clientWidth - 20;
+        var scale = maxW / img.naturalWidth;
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = Math.max(2, canvas.width * 0.006);
+        ctx.strokeStyle = '#ff3b30'; ctx.fillStyle = '#ff3b30';
+        ctx.font = Math.round(canvas.width * 0.032) + 'px sans-serif';
+        ctx.textBaseline = 'top';
+        (boxes || []).forEach(function (b) {
+          var x1 = b.bbox[0] * scale, y1 = b.bbox[1] * scale, x2 = b.bbox[2] * scale, y2 = b.bbox[3] * scale;
+          ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+          var label = b.class + ' ' + (b.confidence != null ? Math.round(b.confidence * 100) + '%' : '');
+          ctx.fillText(label, x1, y1 + 2);
+        });
+      };
+      img.src = imgUrl;
+    }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errBox.style.display = 'none';
+      if (!fileInput.files.length) { errBox.textContent = '請先選擇一張測試圖片。'; errBox.style.display = 'block'; return; }
+      var file = fileInput.files[0];
+      var localUrl = URL.createObjectURL(file);
+      result.querySelector('[data-role="orig"]').src = localUrl;
+      loading.style.display = 'block';
+      result.style.display = 'none';
+      var fd = new FormData(form);
+      fetch(form.action, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          loading.style.display = 'none';
+          if (!data.ok) { errBox.textContent = data.error || '驗證失敗，請重試。'; errBox.style.display = 'block'; return; }
+          var r = data.result;
+          var v = subVerdict(r);
+          var big = result.querySelector('[data-role="verdict"]');
+          big.textContent = v.text; big.className = 'vc-verdict-big ' + v.cls;
+          result.querySelector('[data-role="class"]').textContent = r.predicted_class || '無';
+          result.querySelector('[data-role="conf"]').textContent = (r.predicted_confidence != null) ? r.predicted_confidence : '—';
+          result.querySelector('[data-role="reason"]').textContent = r.reason || '';
+          result.querySelector('[data-role="nodetect"]').style.display = (r.reason_code === 'NO_DETECTION') ? 'block' : 'none';
+          subDraw(localUrl, r.boxes);
+          result.style.display = 'block';
+        })
+        .catch(function () { loading.style.display = 'none'; errBox.textContent = '網路錯誤，請重試。'; errBox.style.display = 'block'; });
+    });
+  });
 })();
 </script>
 {% endblock %}

@@ -458,11 +458,15 @@ class VisionCenterOnlineTests(TestCase):
         self.assertContains(response, "仍需完成圖片驗證")
         import_sub.assert_called_once()
 
+    @patch("learning.views.vision_api.record_import_failure")
+    @patch("learning.views.vision_api.quarantine_dataset")
     @patch("learning.views.vision_api.create_dataset")
     @patch("learning.views.vision_api.import_submission")
     @patch("learning.views.vision_api.preflight_import")
-    def test_import_failure_is_reported_in_full_without_auto_reject(self, preflight, import_sub, create_ds):
-        """教師指令④⑤：完整顯示失敗原因，並告知提交未被自動駁回。"""
+    def test_import_failure_is_reported_in_full_without_auto_reject(
+        self, preflight, import_sub, create_ds, quarantine_ds, record_failure,
+    ):
+        """教師指令④⑤ + D2（2026-10-19）：顯示可理解的失敗原因，不駁回、不回顯原始代碼。"""
         create_ds.return_value = {"dataset_id": "ds-1", "dataset_version": "v1"}
         import_sub.side_effect = RuntimeError("vision_api_rejected:422:model_class_names_mismatch")
         preflight.return_value = dict(self.READY_PREFLIGHT)
@@ -472,8 +476,16 @@ class VisionCenterOnlineTests(TestCase):
             follow=True,
         )
         self.assertContains(response, "導入失敗")
-        self.assertContains(response, "model_class_names_mismatch")
+        self.assertContains(response, "模型類別數量與任務預期不一致")
+        # D2：原始錯誤代碼不得出現在教師畫面
+        self.assertNotContains(response, "model_class_names_mismatch")
         self.assertContains(response, "提交保持「待複核」，未被駁回")
+        # D1：匯入失敗後隔離剛建立的資料集
+        quarantine_ds.assert_called_once()
+        self.assertEqual(quarantine_ds.call_args.kwargs["dataset_id"], "ds-1")
+        # D2：失敗原因寫回 Live
+        record_failure.assert_called_once()
+        self.assertEqual(record_failure.call_args.kwargs["code"], "model_class_names_mismatch")
 
     @patch("learning.views.vision_api.create_dataset")
     @patch("learning.views.vision_api.import_submission")
@@ -847,3 +859,81 @@ class VisionSubmissionWrapperTests(TestCase):
             str(runtime_error),
             "vision_api_rejected:422:import_failed:model_class_names_mismatch",
         )
+
+
+class VisionCenterDeleteSubmissionTests(VisionCenterOnlineTests):
+    """刪除學員上傳（教師指令 2026-10-20：教師後台增加刪除功能）。
+
+    Django 層只驗證行為契約：按鈕存在、轉發、成功／失敗訊息如實；
+    真正的 store／檔案刪除與備份由 Live 端測試（test_vision_submission_delete.py）把關。
+    """
+
+    def _pending(self, submission_id="sub-abc123", filename="best.pt"):
+        return [{
+            "submission_id": submission_id,
+            "original_filename": filename,
+            "student_id": "DEMO-STU-0001",
+            "group_id": "DEMO-VERIFY",
+            "status": "SUBMITTED",
+            "file_hash": "0" * 64,
+            "file_size": 5_503_222,
+            "uploaded_at": "2026-10-20T03:00:00Z",
+            "imported_model_id": None,
+        }]
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions")
+    def test_pending_submission_shows_delete_button(self, subs, _health):
+        """待複核清單必須提供「刪除上傳」按鈕（附提交編號與確認對話框）。"""
+        subs.return_value = self._pending()
+        with self._patch_common([self._model("PROP_1", status="ACTIVE")]):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "1"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, reverse("learning:teacher_vision_center_delete_submission")
+        )
+        self.assertContains(response, "刪除上傳")
+        self.assertContains(response, "sub-abc123")
+        self.assertContains(response, "刪除前會自動備份")
+
+    @patch("learning.views.vision_api.delete_submission")
+    def test_delete_success_reports_record_and_file_removed(self, delete_sub):
+        delete_sub.return_value = {
+            "submission_id": "sub-abc123",
+            "record_removed": True,
+            "file_removed": True,
+            "backup_path": "backups/x-delete-sub-abc123",
+        }
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_delete_submission"),
+            {"task_id": self.TASK, "submission_id": "sub-abc123"},
+            follow=True,
+        )
+        self.assertContains(response, "已刪除學員上傳 sub-abc123")
+        self.assertContains(response, "已自動備份")
+        delete_sub.assert_called_once_with(submission_id="sub-abc123", teacher_id=self.teacher.pk)
+
+    @patch("learning.views.vision_api.delete_submission")
+    def test_delete_failure_maps_dependency_error_and_changes_nothing(self, delete_sub):
+        """有模型依賴時，Live 拒絕刪除；Django 必須如實顯示中文原因。"""
+        delete_sub.side_effect = RuntimeError(
+            "vision_api_rejected:422:submission_has_models:PROP_20261019_DEMO-A_v1_994d"
+        )
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_delete_submission"),
+            {"task_id": self.TASK, "submission_id": "sub-imported"},
+            follow=True,
+        )
+        self.assertContains(response, "刪除失敗")
+        self.assertContains(response, "均未變更")
+        self.assertContains(response, "此提交已導入為模型，不能直接刪除")
+
+    def test_delete_without_submission_id_is_refused(self):
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_delete_submission"),
+            {"task_id": self.TASK},
+            follow=True,
+        )
+        self.assertContains(response, "缺少提交編號")
