@@ -19,6 +19,7 @@ import { ExamFlightController } from './flight-controller';
 import { WindField } from './wind';
 import { ExamHud, type ExamHudMode } from './panel';
 import { ExamSession, type TrajectoryPoint } from './session';
+import { ExamInput } from './exam-input';
 import type { FlightSample } from './subjects';
 import type { ExamStickCommand, ExamFlightSnapshot } from './types';
 
@@ -115,12 +116,15 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   resize();
   window.addEventListener('resize', resize);
 
-  // ---- 輸入（鍵盤，教學用） ----
-  const pressed = new Set<string>();
+  // ---- 輸入：既有輸入管線（搖桿標定 → InputNormalizer → ChannelMapper；鍵盤備援）----
+  // 不另寫映射、不改標定檔：複用 PilotInputPipeline、GamepadInputAdapter、
+  // KeyboardInputAdapter 與 ProfileStore；有搖桿就用搖桿，否則回退鍵盤。
+  const examInput = new ExamInput();
+  void examInput.start();
+
   const onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
     const code = e.code;
-    pressed.add(code);
     if (code === 'Digit1') controller.setMode('manual');
     else if (code === 'Digit2') controller.setMode('attitude');
     else if (code === 'Digit3') controller.setMode('position');
@@ -128,30 +132,17 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       controller.arm();
       controller.takeoff(1.5);
     } else if (code === 'KeyL') controller.land();
-    else if (code === 'KeyR') restart();
+    else if (code === 'KeyG') examInput.togglePreference();
     else if (code === 'Enter') finish();
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'Space'].includes(code)) {
-      e.preventDefault();
-    }
-  };
-  const onKeyUp = (e: KeyboardEvent): void => {
-    pressed.delete(e.code);
+    else if (code === 'Escape') restart();
   };
   window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
 
-  const down = (code: string): boolean => pressed.has(code);
-  const computeCommand = (): ExamStickCommand => {
-    const throttle =
-      0.5 +
-      (down('ShiftLeft') || down('ShiftRight') ? 0.5 : 0) -
-      (down('ControlLeft') || down('ControlRight') ? 0.5 : 0);
-    return {
-      pitch: (down('KeyW') ? 1 : 0) - (down('KeyS') ? 1 : 0),
-      roll: (down('KeyD') ? 1 : 0) - (down('KeyA') ? 1 : 0),
-      yaw: (down('KeyE') ? 1 : 0) - (down('KeyQ') ? 1 : 0),
-      throttle: Math.min(1, Math.max(0, throttle)),
-    };
+  /** 本幀搖桿指令（來源：遙控器標定管線或鍵盤備援）。 */
+  const pollCommand = (): ExamStickCommand => {
+    const result = examInput.tick();
+    const c = result.command;
+    return { roll: c.roll, pitch: c.pitch, yaw: c.yaw, throttle: c.throttle };
   };
 
   // ---- 回放 ----
@@ -294,7 +285,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
         replaying = false;
       }
     } else {
-      const cmd = computeCommand();
+      const cmd = pollCommand();
       wind.step(dt);
       controller.applyWind(wind.currentVector());
       const snap = controller.update(cmd, dt);
@@ -305,6 +296,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       sceneHandle.setWindArrow(wind.currentVector());
       hud.setDrone(snap.position.x, snap.position.z, snap.headingDeg);
       hud.setMode(snap.mode as ExamHudMode);
+      hud.setInputInfo(examInput.getInfo());
       updateSafety();
     }
     renderer.render(scene, camera);
@@ -317,7 +309,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
+      examInput.dispose();
       hud.dispose();
       sceneHandle.dispose();
       renderer.dispose();

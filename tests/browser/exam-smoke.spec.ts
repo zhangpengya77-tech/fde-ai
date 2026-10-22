@@ -23,6 +23,10 @@ test('exam mode mounts, runs, and produces a report', async ({ page }) => {
   // 即時面板小地圖 canvas。
   await expect(page.locator('.exam-hud canvas')).toBeVisible();
 
+  // 輸入來源與生效標定資訊（沿用 HUD 資訊；無搖桿時顯示鍵盤備援）。
+  await expect(page.getByText('輸入來源：').first()).toBeVisible();
+  await expect(page.getByText('生效標定：').first()).toBeVisible();
+
   // 操作提示含起飛說明。
   await expect(page.getByText('起飛').first()).toBeVisible();
 

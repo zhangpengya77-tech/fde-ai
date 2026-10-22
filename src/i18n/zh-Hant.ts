@@ -249,11 +249,12 @@ export const zhHant = {
       itemNotCovered: '（本模擬未涵蓋）',
       officialStandard: '官方通過標準',
     },
-    controlsHint: 'W/A/S/D 俯仰與橫滾 · Q/E 偏航 · Shift/Ctrl 油門升降 · 1/2/3 切換模式 · T 起飛 · L 降落 · Enter 產生成績單 · R 重新測驗',
+    controlsHint: 'W/A/S/D 俯仰橫滾 · Q/E 偏航 · R/F 油門升降 · 1/2/3 模式 · T 起飛 · L 降落 · G 切換輸入來源 · Enter 成績單 · Esc 重新測驗',
     takeoffKey: '起飛 (T)',
     landKey: '降落 (L)',
+    inputSourceKey: '切換輸入來源 (G)',
     finishKey: '產生成績單 (Enter)',
-    restartKey: '重新測驗 (R)',
+    restartKey: '重新測驗 (Esc)',
   },
 } as const;
 

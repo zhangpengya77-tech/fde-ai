@@ -11,6 +11,7 @@
  */
 
 import type { ExamField } from './field';
+import type { ExamInputInfo } from './exam-input';
 
 export type ExamHudMode = 'manual' | 'attitude' | 'position';
 
@@ -52,6 +53,8 @@ export class ExamHud {
   private readonly modeLabel: HTMLElement;
   private readonly guidanceButton: HTMLButtonElement;
   private readonly statusLabel: HTMLElement;
+  private readonly inputLine: HTMLElement;
+  private readonly profileLine: HTMLElement;
 
   private mode: ExamHudMode = 'position';
   private examMode = false;
@@ -87,6 +90,14 @@ export class ExamHud {
     info.appendChild(this.statusLabel);
     this.root.appendChild(info);
 
+    // 輸入來源與生效標定（沿用 HUD 資訊：來源／profile 檔名／四軸映射）。
+    this.inputLine = document.createElement('div');
+    this.inputLine.style.cssText = 'margin-top:4px;color:#ffd;';
+    this.root.appendChild(this.inputLine);
+    this.profileLine = document.createElement('div');
+    this.profileLine.style.cssText = 'margin-top:2px;font-size:11px;color:#bcd;max-width:260px;word-break:break-all;';
+    this.root.appendChild(this.profileLine);
+
     this.guidanceButton = document.createElement('button');
     this.guidanceButton.style.cssText = 'margin-top:4px;width:100%;padding:4px;';
     this.guidanceButton.addEventListener('click', () => this.toggleGuidance());
@@ -116,6 +127,26 @@ export class ExamHud {
   setTrajectory(points: Array<{ x: number; z: number }>): void {
     this.trajectory = points;
     this.render();
+  }
+
+  /** 顯示目前輸入來源與生效標定（搖桿／鍵盤、profile 檔名與四軸映射）。 */
+  setInputInfo(info: ExamInputInfo): void {
+    const sourceText = info.sourceKind === 'adapter' ? `搖桿（${info.sourceLabel}）` : '鍵盤（備援）';
+    const prefText = info.preference === 'keyboard' ? ' · 已手動切換為鍵盤' : '';
+    this.inputLine.textContent = `輸入來源：${sourceText}${prefText}`;
+    if (info.hasProfile) {
+      const origin = info.profileOrigin && info.profileOrigin !== 'local' ? `[${info.profileOrigin}] ` : '';
+      const file = info.profileFile ? ` ${info.profileFile}` : '';
+      this.profileLine.textContent = `生效標定：${origin}${info.profileLabel}${file}\n映射 ${info.mapping}`;
+      this.profileLine.style.color = info.conflict ? '#ffb86b' : '#bcd';
+      if (info.conflict) this.profileLine.textContent += `\n⚠ 與伺服器最新擷取檔映射不同（${info.conflictMapping}）`;
+    } else if (info.connectedWithoutProfile) {
+      this.profileLine.style.color = '#ffb86b';
+      this.profileLine.textContent = '搖桿已連接但無生效標定 → 使用鍵盤（請先用標定精靈或等待自動匯入）';
+    } else {
+      this.profileLine.style.color = '#bcd';
+      this.profileLine.textContent = '生效標定：—（未連接搖桿）';
+    }
   }
 
   getGuidanceEnabled(): boolean {
