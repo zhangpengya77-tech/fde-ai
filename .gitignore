@@ -7,3 +7,11 @@ coverage/
 .superpowers/
 *.log
 *.tsbuildinfo
+
+# RC / exam reference & generated artifacts (do not commit)
+screenshots/*.png
+docs/caa-source/*.pdf
+docs/caa-source/*.png
+.backup-*/
+__pycache__/
+probe-realtime-result.txt
