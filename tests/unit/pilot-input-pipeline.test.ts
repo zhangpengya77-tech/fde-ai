@@ -112,9 +112,9 @@ describe('PilotInputPipeline source priority', () => {
 describe('PilotInputPipeline stale / safety contract', () => {
   it('enters hover once the controller link is stale past 250 ms but keeps throttle', () => {
     const adapter = new FakeAdapter('RadioMaster');
-    // Mode 2 throttle is reversed: raw -1 (stick forward) is full throttle.
+    // 美國手 Mode 2 草稿：油門在 axis2（單向，頂部 = +1 = 全油門）。
     // Freeze the timestamp so the following poll reports a 300 ms-old sample.
-    adapter.emit({ channels: [0, 0, 0, -1], connected: true }, { frozenTimestamp: 5_000 });
+    adapter.emit({ channels: [0, 0, 1, 0], connected: true }, { frozenTimestamp: 5_000 });
     const profile = createMode2Profile('RadioMaster');
     const pipeline = new PilotInputPipeline({
       adapters: [adapter],
@@ -135,7 +135,7 @@ describe('PilotInputPipeline stale / safety contract', () => {
 
   it('recovers to manual the moment a fresh sample arrives', () => {
     const adapter = new FakeAdapter('RadioMaster');
-    adapter.emit({ channels: [0, 0, 0, -1], connected: true }, { frozenTimestamp: 5_000 });
+    adapter.emit({ channels: [0, 0, 1, 0], connected: true }, { frozenTimestamp: 5_000 });
     const pipeline = new PilotInputPipeline({
       adapters: [adapter],
       keyboard: () => KEYBOARD_COMMAND,
@@ -144,7 +144,7 @@ describe('PilotInputPipeline stale / safety contract', () => {
 
     pipeline.poll(5_000);
     pipeline.poll(5_300); // stale -> hover
-    adapter.emit({ channels: [0, 0, 0, -1], connected: true }); // device sends fresh data again
+    adapter.emit({ channels: [0, 0, 1, 0], connected: true }); // device sends fresh data again
     const recovered = pipeline.poll(5_310); // fresh again
     expect(recovered.command.flightMode).toBe('manual');
   });

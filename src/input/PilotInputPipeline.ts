@@ -1,5 +1,5 @@
 import { ChannelMapper } from './ChannelMapper';
-import { InputNormalizer } from './InputNormalizer';
+import { InputNormalizer, type NormalizedChannels } from './InputNormalizer';
 import type { DeviceProfile } from './device-profile';
 import type { PilotInputAdapter } from './PilotInputAdapter';
 import type { PilotCommand } from '../flight/types';
@@ -11,6 +11,23 @@ export type PilotInputSource =
 export interface PipelineResult {
   command: PilotCommand;
   source: PilotInputSource;
+  /**
+   * 診斷用中間值：raw 通道 → 歸一化 → 指令。
+   *
+   * 只為了讓 HUD 能「一眼看出哪一層出錯」而存在：raw 與 norm 都對、只有
+   * command 反了 → 問題在映射；command 對但機體往別的方向走 → 問題在飛控
+   * 的航向旋轉或場景。鍵盤來源沒有這個欄位（鍵盤本來就直接產生指令）。
+   */
+  trace?: PipelineTrace;
+}
+
+export interface PipelineTrace {
+  /** 裝置回報的原始通道值（未校正、未歸一化）。 */
+  readonly rawChannels: readonly number[];
+  readonly normalized: NormalizedChannels;
+  readonly profile: DeviceProfile;
+  /** 這筆樣本是否已判定為斷線/過期（過期時 command 會被強制成懸停）。 */
+  readonly stale: boolean;
 }
 
 export interface PilotInputPipelineOptions {
@@ -76,12 +93,18 @@ export class PilotInputPipeline {
       return {
         command,
         source: { kind: 'adapter', id: key, label: profile.label, adapterId: key },
+        trace: {
+          rawChannels: raw.channels,
+          normalized,
+          profile,
+          stale: mapper.isStale({ raw, normalized, profile, nowMs: now }),
+        },
       };
     }
 
     return {
       command: this.options.keyboard(),
-      source: { kind: 'keyboard', label: '键盘' },
+      source: { kind: 'keyboard', label: '鍵盤' },
     };
   }
 

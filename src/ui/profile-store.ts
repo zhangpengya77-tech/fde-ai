@@ -13,10 +13,44 @@ export interface ProfileKeyValueStore {
   keys(): Promise<string[]>;
 }
 
+/**
+ * Provenance of a stored profile, so a reload can still answer "where did the
+ * profile I am flying with come from?" instead of collapsing every local file
+ * into a generic "IndexedDB".
+ */
+export interface StoredOrigin {
+  /** Same vocabulary as the UI origin labels, minus the transient `draft`. */
+  readonly kind: 'live' | 'bundled' | 'manual' | 'guided' | 'imported' | 'suggestion';
+  /** Capture file name for `live` / `bundled` imports. */
+  readonly file?: string;
+}
+
+/** Kinds a stored document may carry; anything else is ignored. */
+const STORED_ORIGIN_KINDS = ['live', 'bundled', 'manual', 'guided', 'imported', 'suggestion'] as const;
+
+/**
+ * A profile as the store returns it: the validated profile plus the timestamp
+ * of when it was last written. Callers compare the timestamp against a newer
+ * online capture to decide whether an automatic upgrade is allowed.
+ */
+export interface StoredProfileResult {
+  readonly profile: DeviceProfile;
+  readonly savedAtMs: number;
+  readonly origin?: StoredOrigin;
+}
+
 /** Persisted, validated device-profile storage keyed by device id. */
 export interface ProfileStore {
-  read(id: string): Promise<DeviceProfile | null>;
-  write(profile: DeviceProfile): Promise<void>;
+  read(id: string): Promise<StoredProfileResult | null>;
+  /**
+   * Writes the profile. `savedAtMs` defaults to `Date.now()` (a local manual
+   * save, which must always beat older captures). Auto-imports pass the
+   * capture's own timestamp so provenance survives: a stale capture imported
+   * earlier must NOT look like a fresh manual save, otherwise a newer verified
+   * capture could never replace it (the exact failure the teacher hit when the
+   * 08-20 source-swapped profile shadowed the 10-21 restored one).
+   */
+  write(profile: DeviceProfile, savedAtMs?: number, origin?: StoredOrigin): Promise<void>;
   list(): Promise<DeviceProfile[]>;
   remove(id: string): Promise<void>;
 }
@@ -67,7 +101,7 @@ export interface IDBFactoryLike {
 function promisify<T>(request: IdbRequest): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result as T);
-    request.onerror = () => reject(new Error('本地标定数据库请求失败'));
+    request.onerror = () => reject(new Error('本地標定資料庫請求失敗'));
   });
 }
 
@@ -93,7 +127,7 @@ export class IndexedDbKeyValueStore implements ProfileKeyValueStore {
         }
       };
       request.onsuccess = () => resolve(request.result as IdbDatabase);
-      request.onerror = () => reject(new Error('无法打开本地标定数据库'));
+      request.onerror = () => reject(new Error('無法開啟本地標定資料庫'));
     });
     return this.dbPromise;
   }
@@ -142,9 +176,28 @@ export function createMemoryKeyValueStore(): ProfileKeyValueStore {
 
 export function createProfileStore(kv: ProfileKeyValueStore): ProfileStore {
   return {
-    read: async (id) => fromStoredDeviceProfile(await kv.get(PROFILE_KEY_PREFIX + id)),
-    write: async (profile) => {
-      await kv.put(PROFILE_KEY_PREFIX + profile.id, toStoredDeviceProfile(profile, Date.now()));
+    read: async (id) => {
+      const doc = await kv.get(PROFILE_KEY_PREFIX + id);
+      const profile = fromStoredDeviceProfile(doc);
+      if (!profile) return null;
+      const rawSavedAt =
+        typeof doc === 'object' && doc !== null ? (doc as { savedAtMs?: unknown }).savedAtMs : undefined;
+      const savedAtMs = typeof rawSavedAt === 'number' && Number.isFinite(rawSavedAt) ? rawSavedAt : 0;
+      const rawOrigin =
+        typeof doc === 'object' && doc !== null ? (doc as { origin?: unknown }).origin : undefined;
+      const origin =
+        typeof rawOrigin === 'object' &&
+        rawOrigin !== null &&
+        (STORED_ORIGIN_KINDS as readonly string[]).includes((rawOrigin as { kind?: string }).kind ?? '')
+          ? (rawOrigin as StoredOrigin)
+          : undefined;
+      return { profile, savedAtMs, ...(origin ? { origin } : {}) };
+    },
+    write: async (profile, savedAtMs, origin) => {
+      await kv.put(
+        PROFILE_KEY_PREFIX + profile.id,
+        toStoredDeviceProfile(profile, savedAtMs ?? Date.now(), origin),
+      );
     },
     list: async () => {
       const keys = (await kv.keys()).filter((key) => key.startsWith(PROFILE_KEY_PREFIX));

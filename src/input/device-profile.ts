@@ -46,14 +46,26 @@ function linearBipolar(): AxisBinding['calibration'] {
 }
 
 /**
- * The Mode 2 default: left stick pitch/roll, right stick yaw/throttle.
+ * The Mode 2 (美國手) default, matched to the 2026-10-22 real-hardware probe of
+ * the RadioMaster Pocket (fde-stick-axis-probe-2026-10-22T00-08-20-141Z.json):
  *
- * Throttle is marked reversed because a standard-mapping gamepad reports -1 when
- * the throttle stick is pushed fully forward and +1 at the idle stop.
+ *   axis0 = 右搖桿左右（右推 = +1）  -> roll  (reverse=false: 右打 = roll +1 = 右移)
+ *   axis1 = 右搖桿上下（上推 = +1）  -> pitch (reverse=false: 上推 = pitch +1 = 前進)
+ *   axis2 = 左搖桿上下（底部休止 -1） -> throttle, unipolar (reverse=false: 頂 = 1)
+ *   axis3 = 左搖桿左右（右推 = +1）  -> yaw   (reverse=false: 右打 = 航向角增)
  *
- * This is a *starting point only*: the design requires the calibration wizard to
- * run the first time any external controller is used, so it deliberately stays
- * linear with no deadzone and no expo.
+ * 2026-10-22 真機實測 axis1 推上為正，歷史紀錄 -1 已不適用：早期 live probe 與
+ * 2026-10-21 pitchroll-restore 檔把「上推」記成 -1，draft 的 pitch 因此一直帶
+ * reverse=true。軸向探針實測（右桿上推峰值 +0.984）證明原始值為正，reverse=true
+ * 會把前推變成後退，故改為 false。roll←axis0 已另行實測驗證（右打為正、峰值
+ * 1.000），兩個 source 都不再動。
+ *
+ * This replaces the earlier standard-gamepad guess (yaw=axis2/throttle=axis3
+ * with a reversed throttle), which was wrong for this device: the teacher got
+ * stuck with a scrambled left stick before a profile existed. It is still a
+ * *starting point only* - the calibration wizard runs the first time any
+ * external controller is used - but the starting point now matches the verified
+ * stick layout instead of guessing.
  */
 export function createMode2Profile(id: string, options: CreateProfileOptions = {}): DeviceProfile {
   return {
@@ -63,13 +75,15 @@ export function createMode2Profile(id: string, options: CreateProfileOptions = {
     mode: 'mode2',
     axes: {
       roll: binding(0, 'bipolar', linearBipolar()),
+      // 2026-10-22 真機實測 axis1 推上為正，歷史紀錄 -1 已不適用：pitch 不反轉。
       pitch: binding(1, 'bipolar', linearBipolar()),
-      yaw: binding(2, 'bipolar', linearBipolar()),
-      throttle: binding(3, 'unipolar', {
+      yaw: binding(3, 'bipolar', linearBipolar()),
+      // 單向油門：底部休止 = -1 對應 0，推到頂 = +1 對應 1。
+      throttle: binding(2, 'unipolar', {
         min: -1,
         center: -1,
         max: 1,
-        reverse: true,
+        reverse: false,
         deadzone: 0,
         expo: 0,
       }),
@@ -86,10 +100,25 @@ export interface StoredDeviceProfile {
   readonly schema: 'fde.device-profile/1';
   readonly profile: DeviceProfile;
   readonly savedAtMs: number;
+  /**
+   * Optional provenance so a reload can still say where this profile came
+   * from (manual save / guided calibration / auto-imported capture file).
+   * Older documents simply omit it.
+   */
+  readonly origin?: { kind: string; file?: string };
 }
 
-export function toStoredDeviceProfile(profile: DeviceProfile, savedAtMs: number): StoredDeviceProfile {
-  return { schema: 'fde.device-profile/1', profile, savedAtMs };
+export function toStoredDeviceProfile(
+  profile: DeviceProfile,
+  savedAtMs: number,
+  origin?: { kind: string; file?: string },
+): StoredDeviceProfile {
+  return {
+    schema: 'fde.device-profile/1',
+    profile,
+    savedAtMs,
+    ...(origin ? { origin } : {}),
+  };
 }
 
 export function fromStoredDeviceProfile(stored: unknown): DeviceProfile | null {

@@ -41,18 +41,49 @@ function map(mapper: ChannelMapper, profile: DeviceProfile, sample: RawPilotInpu
   return mapper.map({ raw: sample, normalized, profile, nowMs });
 }
 
-describe('DeviceProfile', () => {
-  it('ships a Mode 2 default that keeps Roll, Pitch, Yaw, Throttle on axes 0-3', () => {
-    const profile = createMode2Profile('RadioMaster EdgeTX (Vendor: 0483)');
+/**
+ * 標準對應遊戲手把形狀的顯式 profile（軸 0-3：Roll/Pitch/Yaw/Throttle，
+ * 油門單向且反向）。ChannelMapper 的行為測試用它，不依賴預設草稿的軸序。
+ */
+function explicitProfile(id = 'pad'): DeviceProfile {
+  const base = createMode2Profile(id);
+  return {
+    ...base,
+    axes: {
+      roll: { source: 0, kind: 'bipolar', calibration: calibration() },
+      pitch: { source: 1, kind: 'bipolar', calibration: calibration() },
+      yaw: { source: 2, kind: 'bipolar', calibration: calibration() },
+      throttle: {
+        source: 3,
+        kind: 'unipolar',
+        calibration: calibration({ min: -1, center: -1, max: 1, reverse: true }),
+      },
+    },
+  };
+}
 
-    expect(profile.id).toBe('RadioMaster EdgeTX (Vendor: 0483)');
+describe('DeviceProfile', () => {
+  it('ships the 美國手 Mode 2 default (verified stick layout)', () => {
+    const profile = createMode2Profile('RadioMaster Pocket Joystick (Vendor: 1209 Product: 4f54)');
+
+    expect(profile.id).toBe('RadioMaster Pocket Joystick (Vendor: 1209 Product: 4f54)');
     expect(profile.mode).toBe('mode2');
+    // Live Gamepad-API probe 2026-10-20（非標準對應裝置）：
+    // axis0=右搖桿左右、axis1=右搖桿上下、axis2=左搖桿上下（油門）、
+    // axis3=左搖桿左右。舊草稿 yaw=2/throttle=3 是標準手把猜測，對本裝置全錯。
     expect(profile.axes.roll.source).toBe(0);
     expect(profile.axes.pitch.source).toBe(1);
-    expect(profile.axes.yaw.source).toBe(2);
-    expect(profile.axes.throttle.source).toBe(3);
+    expect(profile.axes.yaw.source).toBe(3);
+    expect(profile.axes.throttle.source).toBe(2);
     expect(profile.axes.roll.kind).toBe('bipolar');
     expect(profile.axes.throttle.kind).toBe('unipolar');
+    // 方向：右推=roll+1（右移）；上推=pitch+1（前進）；右打=yaw+1（航向角增）；
+    // 油門頂=+1。2026-10-22 真機實測 axis1 推上為正，歷史紀錄 -1 已不適用，
+    // 因此 pitch 不再反轉（舊草稿的 reverse=true 會把前推變成後退）。
+    expect(profile.axes.roll.calibration.reverse).toBe(false);
+    expect(profile.axes.pitch.calibration.reverse).toBe(false);
+    expect(profile.axes.yaw.calibration.reverse).toBe(false);
+    expect(profile.axes.throttle.calibration.reverse).toBe(false);
   });
 
   it('treats every controller brand through the same Mode 2 contract without brand-specific branches', () => {
@@ -61,10 +92,10 @@ describe('DeviceProfile', () => {
     const unknown = createMode2Profile('Unknown Teaching Dongle');
 
     for (const profile of [radioMaster, radioLink, unknown]) {
-      expect(profile.axes.roll.source).toBe(0);
-      expect(profile.axes.pitch.source).toBe(1);
-      expect(profile.axes.yaw.source).toBe(2);
-      expect(profile.axes.throttle.source).toBe(3);
+      expect(profile.axes.roll.source).toBe(radioMaster.axes.roll.source);
+      expect(profile.axes.pitch.source).toBe(radioMaster.axes.pitch.source);
+      expect(profile.axes.yaw.source).toBe(radioMaster.axes.yaw.source);
+      expect(profile.axes.throttle.source).toBe(radioMaster.axes.throttle.source);
       expect(profile.axes.roll.kind).toBe(radioMaster.axes.roll.kind);
       expect(profile.axes.throttle.kind).toBe(radioMaster.axes.throttle.kind);
       expect(profile.unsupported).toBe(false);
@@ -90,7 +121,7 @@ describe('DeviceProfile', () => {
 
 describe('ChannelMapper', () => {
   it('maps normalized channels straight through while the controller is connected', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const command = map(mapper, profile, raw([0.4, -0.6, 0.2, 0]), 5_000);
 
@@ -102,7 +133,7 @@ describe('ChannelMapper', () => {
   });
 
   it('keeps Roll, Pitch and Yaw inside [-1, 1] and Throttle inside [0, 1]', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const command = map(mapper, profile, raw([9, -9, 9, 9]), 5_000);
 
@@ -116,7 +147,7 @@ describe('ChannelMapper', () => {
   });
 
   it('saturates a non-reversed throttle axis to full and idle', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     profile.axes.throttle.calibration = calibration({ reverse: false });
     const mapper = new ChannelMapper(profile);
 
@@ -127,7 +158,7 @@ describe('ChannelMapper', () => {
   });
 
   it('applies a reversed axis exactly as the profile records it', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     profile.axes.roll.calibration = calibration({ reverse: true });
 
     const mapper = new ChannelMapper(profile);
@@ -135,7 +166,7 @@ describe('ChannelMapper', () => {
   });
 
   it('enters hover and blocks input when the device reports itself disconnected', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const command = map(mapper, profile, raw([0.8, 0, 0, 0], { connected: false }), 5_000);
 
@@ -146,7 +177,7 @@ describe('ChannelMapper', () => {
   });
 
   it('holds the last known throttle instead of zeroing it on disconnect', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
 
     map(mapper, profile, raw([0, 0, 0, 0]), 5_000);
@@ -157,7 +188,7 @@ describe('ChannelMapper', () => {
   });
 
   it('enters hover once input goes stale past 250 ms and recovers with fresh input', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const sample = raw([0.1, 0, 0, 0], { timestampMs: 5_000 });
 
@@ -171,7 +202,7 @@ describe('ChannelMapper', () => {
   });
 
   it('never produces random input before a real sample arrives', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const command = map(mapper, profile, raw([0, 0, 0, 0], { connected: false }), 5_001);
 
@@ -185,7 +216,7 @@ describe('ChannelMapper', () => {
   });
 
   it('keeps the gimbal neutral when no gimbal axis is bound', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const command = map(mapper, profile, raw([0, 0, 0, 0]), 5_000);
     expect(command.gimbalYaw).toBe(0);
@@ -193,7 +224,7 @@ describe('ChannelMapper', () => {
   });
 
   it('forwards gimbal axes when the profile binds them', () => {
-    const base = createMode2Profile('pad');
+    const base = explicitProfile();
     const profile: DeviceProfile = {
       ...base,
       gimbal: {
@@ -209,7 +240,7 @@ describe('ChannelMapper', () => {
   });
 
   it('reports the pilot arm intent only while the mapped arm button is held', () => {
-    const base = createMode2Profile('pad');
+    const base = explicitProfile();
     const profile: DeviceProfile = { ...base, armButton: 0 };
     const mapper = new ChannelMapper(profile);
 
@@ -218,7 +249,7 @@ describe('ChannelMapper', () => {
   });
 
   it('reports stale when the sample is older than 250 ms', () => {
-    const profile = createMode2Profile('pad');
+    const profile = explicitProfile();
     const mapper = new ChannelMapper(profile);
     const sample = raw([0, 0, 0, 0], { timestampMs: 5_000 });
 
