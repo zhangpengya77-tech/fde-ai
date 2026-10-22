@@ -9,6 +9,33 @@ export interface F450Entity {
   dispose(): void;
 }
 
+/** 機體姿態的歐拉角順序：先偏航（世界 Y），再俯仰（本地 X），最後橫滾（本地 Z）。 */
+export const AIRCRAFT_ATTITUDE_ORDER = 'YXZ' as const;
+
+/**
+ * 飛行快照 → 機體模型的姿態歐拉角（弧度）。
+ *
+ * 本地座標：機頭 −Z、右側 +X、上方 +Y。三個角度的符號都由「駕駛員看到的
+ * 效果」決定，不是由航太慣例決定：
+ *
+ *  - pitchDeg > 0（cmd.pitch > 0，前進）：**機頭下壓**。繞本地 +X 軸轉正角會把
+ *    −Z 抬向 +Y（機頭上揚），所以要用 **負角**。2026-10-22 教師回報「前進時
+ *    機頭朝上不對」就是這裡少了負號。
+ *  - rollDeg > 0（cmd.roll > 0，右移）：**右側下沉**。繞本地 +Z 軸轉正角會把
+ *    +X 抬向 +Y（右側上揚），所以同樣用 **負角**。
+ *  - headingDeg > 0（右轉）：繞世界 Y 軸 **負角**（右手座標系中 +Y 逆時針），
+ *    這樣 heading 90° 時機頭剛好朝 +X，與飛控 (sin h, −cos h) 一致。
+ */
+export function aircraftAttitudeEuler(
+  snapshot: Pick<FlightSnapshot, 'headingDeg' | 'pitchDeg' | 'rollDeg'>,
+): { x: number; y: number; z: number } {
+  return {
+    x: THREE.MathUtils.degToRad(-snapshot.pitchDeg),
+    y: THREE.MathUtils.degToRad(-snapshot.headingDeg),
+    z: THREE.MathUtils.degToRad(-snapshot.rollDeg),
+  };
+}
+
 function mesh(
   geometry: THREE.BufferGeometry,
   material: THREE.Material,
@@ -124,10 +151,8 @@ export function createProgrammaticF450(): F450Entity {
     source: 'programmatic',
     update(snapshot: FlightSnapshot, deltaSeconds: number): void {
       group.position.set(snapshot.position.x, snapshot.position.y + 0.5, snapshot.position.z);
-      group.rotation.order = 'YXZ';
-      group.rotation.y = THREE.MathUtils.degToRad(-snapshot.headingDeg);
-      group.rotation.x = THREE.MathUtils.degToRad(snapshot.pitchDeg);
-      group.rotation.z = THREE.MathUtils.degToRad(-snapshot.rollDeg);
+      const attitude = aircraftAttitudeEuler(snapshot);
+      group.rotation.set(attitude.x, attitude.y, attitude.z, AIRCRAFT_ATTITUDE_ORDER);
       gimbalYaw.rotation.y = THREE.MathUtils.degToRad(0);
       gimbalPitch.rotation.x = THREE.MathUtils.degToRad(-25);
 

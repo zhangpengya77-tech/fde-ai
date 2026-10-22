@@ -16,6 +16,19 @@ const MAX_ATTITUDE_DEG = 18;
 const MAX_ALTITUDE_M = 50;
 const POSITION_EPSILON_M = 0.04;
 
+/**
+ * 無輸入（四軸歸一化值全部落在死區內）時，殘餘速度以此時間常數指數衰減到 0。
+ *
+ * 為什麼需要：手動模式下速度目標由指令決定，放開搖桿後 `approach()` 仍要
+ * 7 m/s² 才能把 8 m/s 停下來（滑行約 4.5 m）；若搖桿靜止值沒落在校正 center
+ * 上，殘餘指令更會讓機體持續漂移。這裡只在「完全沒有輸入」時衰減，任何
+ * 有效輸入（含小舵量）都照原物理前進，飛行手感不變。
+ */
+const NO_INPUT_VELOCITY_TAU_S = 0.3;
+
+/** 歸一化值小於此值視為「沒有輸入」（死區已把死區內的值歸零）。 */
+const NO_INPUT_EPSILON = 1e-3;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -216,6 +229,7 @@ export class SimpleFlightController implements FlightControllerAdapter {
       mode: this.mode,
       position: { ...this.position },
       homePoint: { ...this.homePoint },
+      velocity: { ...this.velocity },
       rollDeg: this.rollDeg,
       pitchDeg: this.pitchDeg,
       yawDeg: this.headingDeg,
@@ -234,25 +248,75 @@ export class SimpleFlightController implements FlightControllerAdapter {
     this.position.y = difference >= 0 ? Math.min(nextY, targetY) : Math.max(nextY, targetY);
   }
 
+  /**
+   * 手動飛行：把搖桿指令旋轉到世界座標。
+   *
+   * 方向約定（全專案唯一一套，必須與機體模型和雲台相機一致）：
+   *   機頭 = ( sin h, 0, −cos h)   ← heading 0 朝 −Z，heading 90 朝 +X
+   *   右側 = ( cos h, 0,  sin h)   ← heading 0 朝 +X，heading 90 朝 +Z
+   *
+   * 這套約定由兩個地方釘住，改任何一處都要同步：
+   *   1. 機體模型 `group.rotation.y = −heading`（create-programmatic-f450.ts），
+   *      把本地 −Z（機頭）轉到世界 (sin h, −cos h)；
+   *   2. 雲台相機 forward = (cos p·sin h, sin p, −cos p·cos h)（create-app.ts），
+   *      heading 90 時 forward.x = +1。
+   *
+   * 2026-10-22 修正：原本寫成
+   *   targetX = right·cos h − forward·sin h
+   *   targetZ = −forward·cos h − right·sin h
+   * 兩個 sin 項的符號都反了 —— 等於把機頭方向鏡射到 Z 軸另一側。heading 0
+   * 時看不出來（sin 0 = 0），但 heading 45° 時前進方向偏了整整 90°（前推變
+   * 橫移、右打變前後移動，即教師回報的「症狀 C」），heading 90° 時更是完全
+   * 反著飛。修正後 heading 0 的行為與修正前完全相同。
+   */
   private updateManual(command: PilotCommand, delta: number): void {
     this.headingDeg = normalizeHeading(this.headingDeg + clamp(command.yaw, -1, 1) * MAX_YAW_RATE_DEG_PER_SECOND * delta);
 
-    const headingRadians = this.headingDeg * Math.PI / 180;
-    const forward = clamp(command.pitch, -1, 1) * MAX_HORIZONTAL_SPEED_MPS;
-    const right = clamp(command.roll, -1, 1) * MAX_HORIZONTAL_SPEED_MPS;
-    const targetX = right * Math.cos(headingRadians) - forward * Math.sin(headingRadians);
-    const targetZ = -forward * Math.cos(headingRadians) - right * Math.sin(headingRadians);
-    const targetY = (clamp(command.throttle, 0, 1) - 0.5) * MAX_VERTICAL_SPEED_MPS * 2;
+    if (this.isNeutralCommand(command)) {
+      // 無輸入：不要把殘餘速度當成指令目標繼續積分，指數衰減到 0。
+      this.decayVelocity(delta);
+    } else {
+      const headingRadians = this.headingDeg * Math.PI / 180;
+      const sin = Math.sin(headingRadians);
+      const cos = Math.cos(headingRadians);
+      const forward = clamp(command.pitch, -1, 1) * MAX_HORIZONTAL_SPEED_MPS;
+      const right = clamp(command.roll, -1, 1) * MAX_HORIZONTAL_SPEED_MPS;
+      // velocity = forward · 機頭 + right · 右側
+      const targetX = forward * sin + right * cos;
+      const targetZ = -forward * cos + right * sin;
+      const targetY = (clamp(command.throttle, 0, 1) - 0.5) * MAX_VERTICAL_SPEED_MPS * 2;
 
-    this.velocity.x = approach(this.velocity.x, targetX, DEFAULT_HORIZONTAL_ACCELERATION_MPS2 * delta);
-    this.velocity.z = approach(this.velocity.z, targetZ, DEFAULT_HORIZONTAL_ACCELERATION_MPS2 * delta);
-    this.velocity.y = approach(this.velocity.y, targetY, 5 * delta);
+      this.velocity.x = approach(this.velocity.x, targetX, DEFAULT_HORIZONTAL_ACCELERATION_MPS2 * delta);
+      this.velocity.z = approach(this.velocity.z, targetZ, DEFAULT_HORIZONTAL_ACCELERATION_MPS2 * delta);
+      this.velocity.y = approach(this.velocity.y, targetY, 5 * delta);
+    }
 
     this.position.x += this.velocity.x * delta;
     this.position.z += this.velocity.z * delta;
     this.position.y = clamp(this.position.y + this.velocity.y * delta, 0, MAX_ALTITUDE_M);
     this.rollDeg = approach(this.rollDeg, clamp(command.roll, -1, 1) * MAX_ATTITUDE_DEG, 75 * delta);
     this.pitchDeg = approach(this.pitchDeg, clamp(command.pitch, -1, 1) * MAX_ATTITUDE_DEG, 75 * delta);
+  }
+
+  /** 四軸歸一化值是否全部落在死區內（= 駕駛員沒有給任何指令）。 */
+  private isNeutralCommand(command: PilotCommand): boolean {
+    return (
+      Math.abs(command.pitch) <= NO_INPUT_EPSILON &&
+      Math.abs(command.roll) <= NO_INPUT_EPSILON &&
+      Math.abs(command.yaw) <= NO_INPUT_EPSILON &&
+      Math.abs(command.throttle) <= NO_INPUT_EPSILON
+    );
+  }
+
+  /** v(t+dt) = v(t) · e^(-dt/τ)：只縮小不反向，衰減到接近 0 時直接歸零。 */
+  private decayVelocity(delta: number): void {
+    const decay = Math.exp(-delta / NO_INPUT_VELOCITY_TAU_S);
+    this.velocity.x *= decay;
+    this.velocity.y *= decay;
+    this.velocity.z *= decay;
+    if (Math.abs(this.velocity.x) < 1e-3) this.velocity.x = 0;
+    if (Math.abs(this.velocity.y) < 1e-3) this.velocity.y = 0;
+    if (Math.abs(this.velocity.z) < 1e-3) this.velocity.z = 0;
   }
 
   private updateMission(delta: number): void {

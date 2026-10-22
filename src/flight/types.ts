@@ -36,6 +36,8 @@ export interface FlightSnapshot {
   mode: FlightMode;
   position: Vector3Like;
   homePoint: Vector3Like;
+  /** Current velocity (m/s); world axes, `y` is altitude. */
+  velocity: Vector3Like;
   rollDeg: number;
   pitchDeg: number;
   yawDeg: number;
