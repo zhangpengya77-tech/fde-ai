@@ -73,7 +73,7 @@ export class MissionEngine {
       this.state !== 'FAILED' &&
       telemetry.safetyState === 'COLLISION'
     ) {
-      this.fail('发生碰撞，任务自动结束，请降落。');
+      this.fail('發生碰撞，任務自動結束，請降落。');
       return;
     }
 
@@ -116,7 +116,7 @@ export class MissionEngine {
    */
   requestCapture(): CapturePermission {
     if (this.state !== 'AIM_CAMERA') {
-      return { ok: false, reason: '当前不在拍摄步骤。' };
+      return { ok: false, reason: '當前不在拍攝步驟。' };
     }
     this.lastReasons = [];
     this.state = 'CAPTURE';
@@ -147,7 +147,7 @@ export class MissionEngine {
   /** Trainee asks to return home; only valid after inspection completes. */
   requestReturn(): CapturePermission {
     if (this.state !== 'INSPECTION_COMPLETE') {
-      return { ok: false, reason: '巡检尚未完成，暂不能返航。' };
+      return { ok: false, reason: '巡檢尚未完成，暫不能返航。' };
     }
     this.state = 'RETURN';
     return { ok: true };

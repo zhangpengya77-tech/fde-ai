@@ -18,22 +18,22 @@ export type MissionState =
   | 'COMPLETE'
   | 'FAILED';
 
-/** Chinese labels for every state (used directly by the UI). */
+/** 繁體中文標籤（UI 直接顯示）。 */
 export const MISSION_STATE_LABEL: Record<MissionState, string> = {
-  IDLE: '待开始',
-  READY: '准备',
-  TAKEOFF: '起飞',
-  FLY_TO_TARGET: '前往巡检点',
-  POSITION_FOR_INSPECTION: '进入巡检位置',
-  AIM_CAMERA: '调整云台',
-  CAPTURE: '拍摄',
-  VALIDATE_PHOTO: '照片检查',
-  AI_INSPECTION: 'AI 缺陷检查',
-  INSPECTION_COMPLETE: '巡检完成',
+  IDLE: '待開始',
+  READY: '準備',
+  TAKEOFF: '起飛',
+  FLY_TO_TARGET: '前往巡檢點',
+  POSITION_FOR_INSPECTION: '進入巡檢位置',
+  AIM_CAMERA: '調整雲台',
+  CAPTURE: '拍攝',
+  VALIDATE_PHOTO: '照片檢查',
+  AI_INSPECTION: 'AI 缺陷檢查',
+  INSPECTION_COMPLETE: '巡檢完成',
   RETURN: '返航',
   LAND: '降落',
-  COMPLETE: '任务完成',
-  FAILED: '任务失败',
+  COMPLETE: '任務完成',
+  FAILED: '任務失敗',
 };
 
 /**
@@ -55,22 +55,22 @@ export const MISSION_STEP_ORDER: MissionState[] = [
   'COMPLETE',
 ];
 
-/** One-line teaching instruction for the current step. */
+/** 當前步驟的一行式教學提示。 */
 export const MISSION_STEP_HINT: Record<MissionState, string> = {
-  IDLE: '任务待开始。',
-  READY: '请解锁飞行器准备起飞。',
-  TAKEOFF: '正在起飞，保持悬停姿态。',
-  FLY_TO_TARGET: '请飞向输电塔右侧的绝缘子串巡检点。',
-  POSITION_FOR_INSPECTION: '请进入巡检拍摄区并保持安全距离。',
-  AIM_CAMERA: '请调整云台使绝缘子串进入画面并居中。',
-  CAPTURE: '正在拍摄巡检照片。',
-  VALIDATE_PHOTO: '正在检查照片质量。',
-  AI_INSPECTION: '正在执行缺陷检测。',
-  INSPECTION_COMPLETE: '巡检完成，请安全离开设备并返航。',
-  RETURN: '正在返航至返航基准点。',
+  IDLE: '任務待開始。',
+  READY: '請解鎖飛行器準備起飛。',
+  TAKEOFF: '正在起飛，保持懸停姿態。',
+  FLY_TO_TARGET: '請飛向輸電塔右側的絕緣子串巡檢點。',
+  POSITION_FOR_INSPECTION: '請進入巡檢拍攝區並保持安全距離。',
+  AIM_CAMERA: '請調整雲台使絕緣子串進入畫面並置中。',
+  CAPTURE: '正在拍攝巡檢照片。',
+  VALIDATE_PHOTO: '正在檢查照片品質。',
+  AI_INSPECTION: '正在執行缺陷檢測。',
+  INSPECTION_COMPLETE: '巡檢完成，請安全離開設備並返航。',
+  RETURN: '正在返航至返航基準點。',
   LAND: '正在降落。',
-  COMPLETE: '任务完成，感谢训练。',
-  FAILED: '任务失败，请降落并重新开始。',
+  COMPLETE: '任務完成，感謝訓練。',
+  FAILED: '任務失敗，請降落並重新開始。',
 };
 
 /** Real telemetry fed to the engine every frame. */

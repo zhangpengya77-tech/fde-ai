@@ -108,13 +108,13 @@ export class ProjectionPhotoValidator {
     const unsafe = sample.safetyState === 'DANGER' || sample.safetyState === 'COLLISION';
 
     const reasons: string[] = [];
-    if (!targetVisible) reasons.push('巡检目标未进入画面');
-    if (tooFar) reasons.push('距离过远');
-    if (tooClose) reasons.push('距离过近');
-    if (badAngle) reasons.push('云台方向偏差过大');
-    if (tooSmall) reasons.push('目标过小');
-    if (!sample.insideInspectionZone) reasons.push('未进入巡检拍摄区');
-    if (unsafe) reasons.push('拍摄位置存在安全风险');
+    if (!targetVisible) reasons.push('巡檢目標未進入畫面');
+    if (tooFar) reasons.push('距離過遠');
+    if (tooClose) reasons.push('距離過近');
+    if (badAngle) reasons.push('雲台方向偏差過大');
+    if (tooSmall) reasons.push('目標過小');
+    if (!sample.insideInspectionZone) reasons.push('未進入巡檢拍攝區');
+    if (unsafe) reasons.push('拍攝位置存在安全風險');
 
     const valid =
       targetVisible &&

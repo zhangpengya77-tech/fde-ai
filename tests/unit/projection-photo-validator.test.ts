@@ -59,51 +59,51 @@ describe('ProjectionPhotoValidator', () => {
     );
     expect(result.targetVisible).toBe(false);
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('巡检目标未进入画面');
+    expect(result.reasons).toContain('巡檢目標未進入畫面');
     expect(result.angleErrorDeg).toBeGreaterThan(DEFAULT_PHOTO_VALIDATOR_CONFIG.maxAngleErrorDeg);
   });
 
   it('rejects when the target is too far away', () => {
     const result = validator.validate(withZone(aimedAt({ x: TARGET.x + 7.4, y: 8, z: 4 }), true));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('距离过远');
+    expect(result.reasons).toContain('距離過遠');
   });
 
   it('rejects when the target is too close (approaching the structure)', () => {
     const result = validator.validate(aimedAt({ x: TARGET.x + 0.5, y: 8, z: 4 }));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('距离过近');
+    expect(result.reasons).toContain('距離過近');
   });
 
   it('rejects when the gimbal aim is off (target framed but not centred)', () => {
     // Same good position, but the camera points far off the target.
     const result = validator.validate(sample({ cameraForward: { x: -0.2, y: 0, z: 1 } }));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('云台方向偏差过大');
+    expect(result.reasons).toContain('雲台方向偏差過大');
   });
 
   it('rejects a capture outside the inspection zone', () => {
     const result = validator.validate(withZone(sample(), false));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('未进入巡检拍摄区');
+    expect(result.reasons).toContain('未進入巡檢拍攝區');
   });
 
   it('rejects a capture taken in DANGER', () => {
     const result = validator.validate(sample({ safetyState: 'DANGER' }));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('拍摄位置存在安全风险');
+    expect(result.reasons).toContain('拍攝位置存在安全風險');
   });
 
   it('rejects a capture taken in COLLISION', () => {
     const result = validator.validate(sample({ safetyState: 'COLLISION' }));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('拍摄位置存在安全风险');
+    expect(result.reasons).toContain('拍攝位置存在安全風險');
   });
 
   it('rejects when the target is framed but far too small (tiny target radius)', () => {
     const result = validator.validate(aimedAt({ x: TARGET.x + 2, y: 8, z: 4 }, { targetRadius: 0.001 }));
     expect(result.valid).toBe(false);
-    expect(result.reasons).toContain('目标过小');
+    expect(result.reasons).toContain('目標過小');
   });
 
   it('reports the real distance and a growing coverage as the aircraft approaches', () => {

@@ -3,10 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { MockInspectionAI } from '../../src/ai/MockInspectionAI';
 import type { InspectionAIInput } from '../../src/inspection/types';
 
+/**
+ * The mock is a *scenario script*, not a vision model: it answers for the one
+ * target it was configured with. The request carries no ground truth (see
+ * `inspection-ai-contract.test.ts`), so nothing here can compare the scene's
+ * answer against itself.
+ */
 function input(overrides: Partial<InspectionAIInput> = {}): InspectionAIInput {
   return {
+    requestId: 'req-1',
     targetId: 'INS-T1-RIGHT',
-    defectType: 'MISSING_INSULATOR_DISC',
+    image: { dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==' },
     distanceToTarget: 2.4,
     angleErrorDeg: 3,
     coverageRatio: 0.5,
@@ -42,9 +49,15 @@ describe('MockInspectionAI', () => {
   });
 
   it('returns no defect for a different target', async () => {
-    const result = await ai.inspect(input({ targetId: 'INS-T2-LEFT', defectType: 'MISSING_INSULATOR_DISC' }));
+    const result = await ai.inspect(input({ targetId: 'INS-T2-LEFT' }));
     expect(result.defectDetected).toBe(false);
     expect(result.defectType).toBeNull();
     expect(result.confidence).toBe(0);
+  });
+
+  it('returns unavailable when there is no image to judge', async () => {
+    const result = await ai.inspect(input({ image: null }));
+    expect(result.source).toBe('unavailable');
+    expect(result.defectDetected).toBe(false);
   });
 });

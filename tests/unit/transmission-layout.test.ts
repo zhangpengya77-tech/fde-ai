@@ -66,7 +66,7 @@ describe('buildTransmissionLayout - inspection target', () => {
     expect(layout.target.id).toBe('INS-T1-RIGHT');
     expect(layout.target.position).toEqual({ x: TOWER_1_BASE.x + 1.6, y: 8, z: TOWER_1_BASE.z });
     expect(layout.target.defectType).toBe('MISSING_INSULATOR_DISC');
-    expect(layout.target.label).toContain('绝缘子');
+    expect(layout.target.label).toContain('絕緣子');
   });
 });
 

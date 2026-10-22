@@ -220,7 +220,7 @@ describe('MissionEngine - retry loop and failure', () => {
 describe('MissionEngine - display helpers', () => {
   it('exposes ordered progress and Chinese labels', () => {
     const engine = new MissionEngine();
-    expect(engine.stepInfo().label).toBe('待开始');
+    expect(engine.stepInfo().label).toBe('待開始');
     inspectReady(engine);
     expect(engine.currentState).toBe('AIM_CAMERA');
     const info = engine.stepInfo();

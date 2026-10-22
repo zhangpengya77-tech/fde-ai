@@ -68,9 +68,9 @@ export const DEFAULT_SCORE_CONFIG: ScoreConfig = {
   statusCheckRatio: 0.5,
 
   labels: {
-    EXCELLENT: 'EXCELLENT（优秀）',
-    PASS: 'PASS（通过）',
-    NEEDS_PRACTICE: 'NEEDS_PRACTICE（需要加强）',
-    FAIL: 'FAIL（未通过）',
+    EXCELLENT: 'EXCELLENT（優秀）',
+    PASS: 'PASS（通過）',
+    NEEDS_PRACTICE: 'NEEDS_PRACTICE（需要加強）',
+    FAIL: 'FAIL（未通過）',
   },
 };

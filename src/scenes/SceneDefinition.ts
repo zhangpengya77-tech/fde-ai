@@ -149,7 +149,7 @@ export function buildTransmissionLayout(): TransmissionLayout {
     id: 'INS-T1-RIGHT',
     position: { x: TOWER_1_BASE.x + 1.6, y: 8, z: TOWER_1_BASE.z },
     defectType: 'MISSING_INSULATOR_DISC',
-    label: '输电塔右侧绝缘子串（缺片）',
+    label: '輸電塔右側絕緣子串（缺片）',
   };
 
   const obstacles: ObstacleSpec[] = [{ id: 'OBS-TREE', position: { x: 2, y: 0, z: -7 }, radius: 1.4 }];

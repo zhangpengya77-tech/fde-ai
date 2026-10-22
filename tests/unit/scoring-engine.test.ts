@@ -118,7 +118,7 @@ describe('ScoringEngine V1', () => {
     expect(result.dimensions.missionCompletion.score).toBeLessThan(25);
     expect(result.dimensions.missionCompletion.reasons.join()).toContain('未完成');
     expect(result.totalScore).toBeLessThan(90);
-    expect(result.majorIssues.join()).toContain('任务未完成');
+    expect(result.majorIssues.join()).toContain('任務未完成');
   });
 
   it('a FAILED mission is significantly deducted and capped at the failed cap', () => {
@@ -136,9 +136,9 @@ describe('ScoringEngine V1', () => {
     // raw total would be 75, the failed cap limits it to 59.
     expect(result.totalScore).toBe(DEFAULT_SCORE_CONFIG.capFailedTotal);
     expect(result.capped).toBe(true);
-    expect(result.capReason).toContain('任务失败');
+    expect(result.capReason).toContain('任務失敗');
     expect(result.grade).toBe('FAIL');
-    expect(result.majorIssues.join()).toContain('任务失败');
+    expect(result.majorIssues.join()).toContain('任務失敗');
   });
 
   it('COLLISION forces the total cap no matter how good the rest looks', () => {
@@ -267,7 +267,7 @@ describe('ScoringEngine V1', () => {
     const photo = result.dimensions.photoQuality;
     expect(photo.score).toBeLessThan(15);
     expect(photo.score).toBeGreaterThanOrEqual(15 * DEFAULT_SCORE_CONFIG.validPhotoFloorRatio);
-    expect(photo.reasons.join()).toContain('占比偏小');
+    expect(photo.reasons.join()).toContain('佔比偏小');
   });
 
   it('no valid photo zeroes photo quality with the real rejection reasons', () => {
@@ -280,7 +280,7 @@ describe('ScoringEngine V1', () => {
     expect(photo.score).toBe(0);
     expect(photo.status).toBe('POOR');
     expect(photo.reasons.join()).toContain('云台方向偏差过大');
-    expect(result.majorIssues.join()).toContain('未获得有效巡检照片');
+    expect(result.majorIssues.join()).toContain('未取得有效巡檢照片');
   });
 
   it('a retry after a bad shot is scored on the final valid photo and keeps the failed attempt on record', () => {
@@ -296,10 +296,10 @@ describe('ScoringEngine V1', () => {
     // 15 - 1.5 (one failed attempt before the valid final shot)
     expect(photo.score).toBeCloseTo(13.5, 5);
     expect(photo.status).toBe('GOOD');
-    expect(photo.reasons.join()).toContain('共拍摄 2 次');
+    expect(photo.reasons.join()).toContain('共拍攝 2 次');
     expect(photo.reasons.join()).toContain('不合格');
     // The suggestion for re-aiming comes from the real first-shot reason.
-    expect(result.suggestions.join()).toContain('先稳定悬停');
+    expect(result.suggestions.join()).toContain('先穩定懸停');
   });
 
   it('shooting outside the inspection zone costs inspection-position points', () => {
@@ -310,7 +310,7 @@ describe('ScoringEngine V1', () => {
       }),
     );
     expect(outside.dimensions.inspectionPosition.score).toBe(0);
-    expect(outside.dimensions.inspectionPosition.reasons.join()).toContain('未进入巡检拍摄区');
+    expect(outside.dimensions.inspectionPosition.reasons.join()).toContain('未進入巡檢拍攝區');
 
     const inZoneNoPhoto = engine.score(
       session({
@@ -319,7 +319,7 @@ describe('ScoringEngine V1', () => {
     );
     // entered the zone but never produced a valid photo => 50% of the max
     expect(inZoneNoPhoto.dimensions.inspectionPosition.score).toBeCloseTo(7.5, 5);
-    expect(inZoneNoPhoto.dimensions.inspectionPosition.reasons.join()).toContain('未获得有效照片');
+    expect(inZoneNoPhoto.dimensions.inspectionPosition.reasons.join()).toContain('未取得有效照片');
   });
 
   it('capturing off the ideal distance or from a dangerous pose costs position points', () => {
@@ -338,7 +338,7 @@ describe('ScoringEngine V1', () => {
       }),
     );
     expect(unsafe.dimensions.inspectionPosition.score).toBeCloseTo(12, 5);
-    expect(unsafe.dimensions.inspectionPosition.reasons.join()).toContain('危险位置');
+    expect(unsafe.dimensions.inspectionPosition.reasons.join()).toContain('危險位置');
   });
 
   it('an obviously long detour path costs efficiency points', () => {
@@ -348,8 +348,8 @@ describe('ScoringEngine V1', () => {
     const efficiency = result.dimensions.flightEfficiency;
     // ratio 4 > badPathRatio 3 => poorPathRatio 0.2 => 10 * 0.2 = 2
     expect(efficiency.score).toBeCloseTo(2, 5);
-    expect(efficiency.reasons.join()).toContain('绕行');
-    expect(result.suggestions.join()).toContain('提前规划');
+    expect(efficiency.reasons.join()).toContain('繞行');
+    expect(result.suggestions.join()).toContain('提前規劃');
   });
 
   it('a reasonable path and on-time mission keeps full efficiency marks', () => {
@@ -365,7 +365,7 @@ describe('ScoringEngine V1', () => {
       session({ captureAttempts: [capture(1)], durationMs: 300_000 }),
     );
     expect(result.dimensions.flightEfficiency.score).toBe(8);
-    expect(result.dimensions.flightEfficiency.reasons.join()).toContain('耗时');
+    expect(result.dimensions.flightEfficiency.reasons.join()).toContain('耗時');
   });
 
   it('unstable stick input scores lower than smooth input', () => {
@@ -376,9 +376,9 @@ describe('ScoringEngine V1', () => {
       session({ captureAttempts: [capture(1)], fullStickCount: 8, inputReversalCount: 14, hoverInputDeviation: 0.16, hoverSampleCount: 30 }),
     );
     expect(smooth.dimensions.controlStability.score).toBe(10);
-    expect(smooth.dimensions.controlStability.reasons.join()).toContain('平稳');
+    expect(smooth.dimensions.controlStability.reasons.join()).toContain('平穩');
     expect(rough.dimensions.controlStability.score).toBeLessThan(6);
-    expect(rough.dimensions.controlStability.reasons.join()).toContain('满杆');
+    expect(rough.dimensions.controlStability.reasons.join()).toContain('滿桿');
     expect(rough.totalScore).toBeLessThan(smooth.totalScore);
   });
 
@@ -427,7 +427,7 @@ describe('ScoringEngine V1', () => {
     expect(first.totalScore).toBe(second.totalScore);
     expect(first.suggestions.length).toBeGreaterThanOrEqual(1);
     expect(first.suggestions.length).toBeLessThanOrEqual(3);
-    expect(first.suggestions.join()).toContain('减速'); // DANGER -> distance warning
+    expect(first.suggestions.join()).toContain('減速'); // DANGER -> distance warning
   });
 
   it('a flawless run still gets one short positive suggestion', () => {

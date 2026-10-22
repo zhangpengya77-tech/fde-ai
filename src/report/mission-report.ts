@@ -91,7 +91,7 @@ export function buildReportSummary(report: MissionReport): MissionReportSummary 
     status: report.status,
     totalScore: report.score.totalScore,
     grade: report.score.grade,
-    gradeLabel: report.score.capped ? `${report.score.grade}（封顶）` : report.score.grade,
+    gradeLabel: report.score.capped ? `${report.score.grade}（封頂）` : report.score.grade,
     hadCollision: report.hazardSummary.some((hazard) => hazard.state === 'COLLISION'),
   };
 }
@@ -149,9 +149,9 @@ export function parseReport(text: string): MissionReport | null {
     schemaVersion: 1,
     reportId,
     missionId,
-    taskName: typeof obj.taskName === 'string' ? obj.taskName : '未命名任务',
-    targetId: typeof obj.targetId === 'string' ? obj.targetId : '未知目标',
-    targetName: typeof obj.targetName === 'string' ? obj.targetName : '未知目标',
+    taskName: typeof obj.taskName === 'string' ? obj.taskName : '未命名任務',
+    targetId: typeof obj.targetId === 'string' ? obj.targetId : '未知目標',
+    targetName: typeof obj.targetName === 'string' ? obj.targetName : '未知目標',
     createdAt: typeof obj.createdAt === 'number' ? obj.createdAt : 0,
     startedAt: typeof obj.startedAt === 'number' ? obj.startedAt : 0,
     finishedAt: typeof obj.finishedAt === 'number' ? obj.finishedAt : 0,

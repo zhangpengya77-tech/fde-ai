@@ -86,11 +86,11 @@ export class ScoringEngine {
     if (collisionCount > 0 && total > config.capCollisionTotal) {
       total = config.capCollisionTotal;
       capped = true;
-      capReason = `发生碰撞，总分受限（最高 ${config.capCollisionTotal} 分）`;
+      capReason = `發生碰撞，總分受限（最高 ${config.capCollisionTotal} 分）`;
     } else if (session.missionFailed && total > config.capFailedTotal) {
       total = config.capFailedTotal;
       capped = true;
-      capReason = `任务失败，总分受限（最高 ${config.capFailedTotal} 分）`;
+      capReason = `任務失敗，總分受限（最高 ${config.capFailedTotal} 分）`;
     }
 
     const majorIssues = this.buildMajorIssues(session, collisionCount, capped, capReason);
@@ -112,29 +112,29 @@ export class ScoringEngine {
 
   private scoreMissionCompletion(session: ScoreSession): ScoreDimension {
     const max = this.config.weights.missionCompletion;
-    const label = '任务完成';
+    const label = '任務完成';
 
     if (session.missionFailed) {
-      return makeDimension(label, max, max * this.config.failedMissionRatio, ['任务失败，巡检未完成'], this.config);
+      return makeDimension(label, max, max * this.config.failedMissionRatio, ['任務失敗，巡檢未完成'], this.config);
     }
 
     if (session.reachedInspectionComplete) {
       if (session.missionFinalState === 'COMPLETE') {
-        return makeDimension(label, max, max, ['完成全部巡检步骤并安全降落'], this.config);
+        return makeDimension(label, max, max, ['完成全部巡檢步驟並安全降落'], this.config);
       }
       // Evidence obtained, but the return/land steps were skipped.
-      return makeDimension(label, max, max * INCOMPLETE_LANDING_RATIO, ['巡检取证已完成，但未按流程返航降落'], this.config);
+      return makeDimension(label, max, max * INCOMPLETE_LANDING_RATIO, ['巡檢取證已完成，但未按流程返航降落'], this.config);
     }
 
     const reference = INSPECTION_COMPLETE_INDEX > 0 ? INSPECTION_COMPLETE_INDEX : 1;
     const ratio = clamp(session.missionBestStepIndex / reference, 0, 1) * this.config.incompleteStepRatio;
     const stepLabel =
-      MISSION_STATE_LABEL[MISSION_STEP_ORDER[Math.min(session.missionBestStepIndex, MISSION_STEP_ORDER.length - 1)] as MissionState] ?? '未知步骤';
+      MISSION_STATE_LABEL[MISSION_STEP_ORDER[Math.min(session.missionBestStepIndex, MISSION_STEP_ORDER.length - 1)] as MissionState] ?? '未知步驟';
     return makeDimension(
       label,
       max,
       max * ratio,
-      [`任务未完成：最远到达「${stepLabel}」步骤（${session.missionBestStepIndex + 1} / ${reference + 1} 步）`],
+      [`任務未完成：最遠到達「${stepLabel}」步驟（${session.missionBestStepIndex + 1} / ${reference + 1} 步）`],
       this.config,
     );
   }
@@ -144,7 +144,7 @@ export class ScoringEngine {
   private scoreFlightSafety(session: ScoreSession): ScoreDimension {
     const config = this.config;
     const max = config.weights.flightSafety;
-    const label = '飞行安全';
+    const label = '飛行安全';
 
     let score = max;
     const reasons: string[] = [];
@@ -157,24 +157,24 @@ export class ScoringEngine {
 
     if (collisions.length > 0) {
       score -= collisions.length * config.collisionPenalty;
-      reasons.push(`发生 ${collisions.length} 次碰撞`);
+      reasons.push(`發生 ${collisions.length} 次碰撞`);
     }
     if (dangers.length > 0) {
       score -= dangers.length * config.dangerEpisodePenalty;
       score -= dangerSeconds * config.dangerSecondPenalty;
-      reasons.push(`发生 ${dangers.length} 次 DANGER（危险接近），累计 ${dangerSeconds.toFixed(1)} 秒`);
+      reasons.push(`發生 ${dangers.length} 次 DANGER（危險接近），累計 ${dangerSeconds.toFixed(1)} 秒`);
       if (dangerSeconds >= config.severeDangerSeconds) {
         score -= config.severeDangerPenalty;
-        reasons.push('DANGER 累计时间过长，属于严重违规');
+        reasons.push('DANGER 累計時間過長，屬於嚴重違規');
       }
     }
     if (warnings.length > 0) {
       score -= warnings.length * config.warningEpisodePenalty;
       score -= warningSeconds * config.warningSecondPenalty;
-      reasons.push(`发生 ${warnings.length} 次 WARNING，累计 ${warningSeconds.toFixed(1)} 秒`);
+      reasons.push(`發生 ${warnings.length} 次 WARNING，累計 ${warningSeconds.toFixed(1)} 秒`);
     }
     if (reasons.length === 0) {
-      reasons.push('全程保持安全距离，未触发 WARNING / DANGER / COLLISION');
+      reasons.push('全程保持安全距離，未觸發 WARNING / DANGER / COLLISION');
     }
 
     return makeDimension(label, max, score, reasons, config);
@@ -185,7 +185,7 @@ export class ScoringEngine {
   private scoreInspectionPosition(session: ScoreSession): ScoreDimension {
     const config = this.config;
     const max = config.weights.inspectionPosition;
-    const label = '巡检位置';
+    const label = '巡檢位置';
     const reasons: string[] = [];
 
     const validAttempt = [...session.captureAttempts].reverse().find((attempt) => attempt.photoValidation.valid);
@@ -201,26 +201,26 @@ export class ScoringEngine {
         Math.abs(distance - config.idealDistanceM) > config.idealDistanceToleranceM;
       if (offIdeal) {
         score -= config.offIdealDistancePenalty;
-        reasons.push(`拍摄距离 ${distance.toFixed(1)} m 偏离理想距离 ${config.idealDistanceM} m`);
+        reasons.push(`拍攝距離 ${distance.toFixed(1)} m 偏離理想距離 ${config.idealDistanceM} m`);
       }
       if (validAttempt.photoValidation.angleErrorDeg > config.goodAngleErrorDeg) {
-        reasons.push(`最终拍摄角度偏差 ${validAttempt.photoValidation.angleErrorDeg.toFixed(1)}°`);
+        reasons.push(`最終拍攝角度偏差 ${validAttempt.photoValidation.angleErrorDeg.toFixed(1)}°`);
       }
     } else if (session.enteredInspectionZone) {
       score = max * config.zoneWithoutPhotoRatio;
-      reasons.push('进入过巡检拍摄区，但未获得有效照片');
+      reasons.push('進入過巡檢拍攝區，但未取得有效照片');
     } else {
       score = max * config.neverZoneRatio;
-      reasons.push('未进入巡检拍摄区');
+      reasons.push('未進入巡檢拍攝區');
     }
 
     if (unsafeShot) {
       score -= config.unsafeShotPenalty;
-      reasons.push(`第 ${unsafeShot.index} 次拍摄时处于 ${unsafeShot.safetyState} 危险位置`);
+      reasons.push(`第 ${unsafeShot.index} 次拍攝時處於 ${unsafeShot.safetyState} 危險位置`);
     }
 
     if (reasons.length === 0) {
-      reasons.push(`在巡检区内以合理距离（${config.idealDistanceM} m 左右）对准目标拍摄`);
+      reasons.push(`在巡檢區內以合理距離（${config.idealDistanceM} m 左右）對準目標拍攝`);
     }
 
     return makeDimension(label, max, score, reasons, config);
@@ -231,11 +231,11 @@ export class ScoringEngine {
   private scorePhotoQuality(session: ScoreSession): ScoreDimension {
     const config = this.config;
     const max = config.weights.photoQuality;
-    const label = '照片质量';
+    const label = '照片品質';
 
     const attempts = session.captureAttempts;
     if (attempts.length === 0) {
-      return makeDimension(label, max, 0, ['未拍摄任何照片'], config);
+      return makeDimension(label, max, 0, ['未拍攝任何照片'], config);
     }
 
     const validIndex = attempts.map((attempt) => attempt.photoValidation.valid).lastIndexOf(true);
@@ -245,7 +245,7 @@ export class ScoringEngine {
         label,
         max,
         0,
-        [`最终照片不合格：${last.photoValidation.reasons.join('；') || '未说明原因'}`],
+        [`最終照片不合格：${last.photoValidation.reasons.join('；') || '未說明原因'}`],
         config,
       );
     }
@@ -254,7 +254,7 @@ export class ScoringEngine {
     const failedBefore = attempts.slice(0, validIndex).filter((attempt) => !attempt.photoValidation.valid).length;
 
     let score = max;
-    const reasons: string[] = [`共拍摄 ${attempts.length} 次，最终照片合格`];
+    const reasons: string[] = [`共拍攝 ${attempts.length} 次，最終照片合格`];
     if (failedBefore > 0) {
       score -= failedBefore * config.failedAttemptPenalty;
       reasons.push(`其中 ${failedBefore} 次不合格（已重拍修正）`);
@@ -263,16 +263,16 @@ export class ScoringEngine {
     const photo = final.photoValidation;
     if (photo.coverageRatio < config.goodCoverageRatio) {
       score -= config.lowCoveragePenalty;
-      reasons.push(`目标占比偏小（${Math.round(photo.coverageRatio * 100)}%）`);
+      reasons.push(`目標佔比偏小（${Math.round(photo.coverageRatio * 100)}%）`);
     }
     if (photo.angleErrorDeg > config.goodAngleErrorDeg) {
       score -= config.offAnglePenalty;
-      reasons.push(`瞄准偏差 ${photo.angleErrorDeg.toFixed(1)}° 偏大`);
+      reasons.push(`瞄準偏差 ${photo.angleErrorDeg.toFixed(1)}° 偏大`);
     }
     const offIdeal = Math.abs(photo.distanceToTarget - config.idealDistanceM) > config.idealDistanceToleranceM;
     if (offIdeal) {
       score -= config.offIdealDistancePenalty;
-      reasons.push(`拍摄距离 ${photo.distanceToTarget.toFixed(1)} m 偏离理想值`);
+      reasons.push(`拍攝距離 ${photo.distanceToTarget.toFixed(1)} m 偏離理想值`);
     }
 
     // A valid photo never falls below the floor; quality is still told apart.
@@ -280,7 +280,7 @@ export class ScoringEngine {
     score = Math.max(score, floor);
     if (score >= max) {
       reasons.length = 0;
-      reasons.push('目标完整进入画面，距离和角度合格');
+      reasons.push('目標完整進入畫面，距離和角度合格');
     }
 
     return makeDimension(label, max, score, reasons, config);
@@ -291,7 +291,7 @@ export class ScoringEngine {
   private scoreFlightEfficiency(session: ScoreSession): ScoreDimension {
     const config = this.config;
     const max = config.weights.flightEfficiency;
-    const label = '飞行效率';
+    const label = '飛行效率';
 
     // Simple teaching baseline: climb + descent + there-and-back horizontal.
     // No optimal-path algorithm - this only flags obviously wasteful flying.
@@ -313,15 +313,15 @@ export class ScoringEngine {
       score = max * (config.poorPathRatio + (1 - config.poorPathRatio) * t);
     }
 
-    const reasons: string[] = [`实际航程 ${session.pathLengthM.toFixed(1)} m / 基本航程 ${required.toFixed(1)} m（${ratio.toFixed(2)} 倍）`];
+    const reasons: string[] = [`實際航程 ${session.pathLengthM.toFixed(1)} m / 基本航程 ${required.toFixed(1)} m（${ratio.toFixed(2)} 倍）`];
     if (ratio > config.goodPathRatio) {
-      reasons.push('航线绕行较多');
+      reasons.push('航線繞行較多');
     }
 
     const durationSec = session.durationMs / 1000;
     if (durationSec > config.maxDurationSec) {
       score -= config.overtimePenalty;
-      reasons.push(`任务耗时 ${Math.floor(durationSec / 60)} 分 ${Math.round(durationSec % 60)} 秒，超出教学时长`);
+      reasons.push(`任務耗時 ${Math.floor(durationSec / 60)} 分 ${Math.round(durationSec % 60)} 秒，超出教學時長`);
     }
 
     return makeDimension(label, max, score, reasons, config);
@@ -332,26 +332,26 @@ export class ScoringEngine {
   private scoreControlStability(session: ScoreSession): ScoreDimension {
     const config = this.config;
     const max = config.weights.controlStability;
-    const label = '操纵稳定性';
+    const label = '操縱穩定性';
 
     let score = max;
     const reasons: string[] = [];
 
     if (session.fullStickCount > config.goodFullStickCount) {
       score -= (session.fullStickCount - config.goodFullStickCount) * config.fullStickPenalty;
-      reasons.push(`大幅满杆 ${session.fullStickCount} 次`);
+      reasons.push(`大幅滿桿 ${session.fullStickCount} 次`);
     }
     if (session.inputReversalCount > config.goodReversalCount) {
       score -= (session.inputReversalCount - config.goodReversalCount) * config.reversalPenalty;
-      reasons.push(`高频反复修正 ${session.inputReversalCount} 次`);
+      reasons.push(`高頻反覆修正 ${session.inputReversalCount} 次`);
     }
     if (session.hoverSampleCount > 0 && session.hoverInputDeviation > config.goodHoverDeviation) {
       const over = (session.hoverInputDeviation - config.goodHoverDeviation) / config.goodHoverDeviation;
       score -= config.hoverDeviationPenalty * over;
-      reasons.push(`悬停阶段输入波动较大（平均幅度 ${session.hoverInputDeviation.toFixed(2)}）`);
+      reasons.push(`懸停階段輸入波動較大（平均幅度 ${session.hoverInputDeviation.toFixed(2)}）`);
     }
     if (reasons.length === 0) {
-      reasons.push('操纵输入平稳，无大幅满杆与反复修正');
+      reasons.push('操縱輸入平穩，無大幅滿桿與反覆修正');
     }
 
     return makeDimension(label, max, score, reasons, config);
@@ -362,18 +362,18 @@ export class ScoringEngine {
   private buildMajorIssues(session: ScoreSession, collisionCount: number, capped: boolean, capReason: string | null): string[] {
     const issues: string[] = [];
     if (capped && capReason) issues.push(capReason);
-    if (collisionCount > 0 && !capped) issues.push(`发生 ${collisionCount} 次碰撞`);
+    if (collisionCount > 0 && !capped) issues.push(`發生 ${collisionCount} 次碰撞`);
 
     const dangers = session.hazardEpisodes.filter((episode) => episode.state === 'DANGER');
     if (dangers.length > 0) {
-      issues.push(`发生 ${dangers.length} 次 DANGER 危险接近`);
+      issues.push(`發生 ${dangers.length} 次 DANGER 危險接近`);
     }
     if (!session.reachedInspectionComplete && !session.missionFailed) {
-      issues.push('任务未完成：未取得巡检取证');
+      issues.push('任務未完成：未取得巡檢取證');
     }
     const hasValid = session.captureAttempts.some((attempt) => attempt.photoValidation.valid);
     if (!hasValid && session.captureAttempts.length > 0) {
-      issues.push('未获得有效巡检照片');
+      issues.push('未取得有效巡檢照片');
     }
 
     const horizontal = Math.hypot(
@@ -382,7 +382,7 @@ export class ScoringEngine {
     );
     const required = Math.max(session.maxAltitudeM + 2 * horizontal, 1);
     if (session.pathLengthM / required >= this.config.badPathRatio) {
-      issues.push('航线绕行明显过多');
+      issues.push('航線繞行明顯過多');
     }
     return issues;
   }
@@ -400,9 +400,9 @@ export class ScoringEngine {
     const suggestions: string[] = [];
 
     if (collisionCount > 0) {
-      suggestions.push('发生碰撞：总分已按安全规则限制，请先在空旷区练习悬停与航线保持，再重新巡检。');
+      suggestions.push('發生碰撞：總分已按安全規則限制，請先在空曠區練習懸停與航線保持，再重新巡檢。');
     } else if (session.missionFailed) {
-      suggestions.push('任务未完成即结束：请按清单逐步执行，完成取证后再返航。');
+      suggestions.push('任務未完成即結束：請按清單逐步執行，完成取證後再返航。');
     }
 
     const dangerSeconds =
@@ -410,22 +410,22 @@ export class ScoringEngine {
         .filter((episode) => episode.state === 'DANGER')
         .reduce((sum, episode) => sum + episode.durationMs, 0) / 1000;
     if (dangerSeconds > 0) {
-      suggestions.push('接近导线或杆塔时距离过近，建议提前减速并保持安全距离。');
+      suggestions.push('接近導線或桿塔時距離過近，建議提前減速並保持安全距離。');
     }
 
     const validIndex = session.captureAttempts.map((attempt) => attempt.photoValidation.valid).lastIndexOf(true);
     if (validIndex < 0) {
       if (session.captureAttempts.length > 0) {
-        suggestions.push('未获得合格照片：请检查拍摄距离、云台角度与安全位置后重拍。');
+        suggestions.push('未取得合格照片：請檢查拍攝距離、雲台角度與安全位置後重拍。');
       } else if (!session.missionFailed) {
-        suggestions.push('未拍摄巡检照片：进入拍摄区并对准绝缘子串后再按拍摄。');
+        suggestions.push('未拍攝巡檢照片：進入拍攝區並對準絕緣子串後再按拍攝。');
       }
     } else {
       const firstInvalid = session.captureAttempts
         .slice(0, validIndex)
         .find((attempt) => !attempt.photoValidation.valid);
       if (firstInvalid) {
-        suggestions.push('首次拍照不合格后已重拍成功：建议先稳定悬停，再微调云台拍摄。');
+        suggestions.push('首次拍照不合格後已重拍成功：建議先穩定懸停，再微調雲台拍攝。');
       }
     }
 
@@ -435,19 +435,19 @@ export class ScoringEngine {
     );
     const required = Math.max(session.maxAltitudeM + 2 * horizontal, 1);
     if (session.pathLengthM / required > config.goodPathRatio) {
-      suggestions.push('航线绕行较多，可提前规划接近路线。');
+      suggestions.push('航線繞行較多，可提前規劃接近路線。');
     }
 
     if (dimensions.controlStability.status === 'POOR') {
-      suggestions.push('操纵波动较大，可尝试小杆量、短行程修正。');
+      suggestions.push('操縱波動較大，可嘗試小桿量、短行程修正。');
     }
 
     if (suggestions.length === 0) {
       const minutes = Math.floor(session.durationMs / MINUTE_MS);
       suggestions.push(
         minutes > 0
-          ? `操作流畅，${minutes} 分 ${Math.round((session.durationMs % MINUTE_MS) / 1000)} 秒完成巡检，保持当前节奏。`
-          : '操作流畅，保持当前节奏。',
+          ? `操作流暢，${minutes} 分 ${Math.round((session.durationMs % MINUTE_MS) / 1000)} 秒完成巡檢，保持當前節奏。`
+          : '操作流暢，保持當前節奏。',
       );
     }
 
