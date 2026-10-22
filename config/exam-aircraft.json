@@ -1,0 +1,32 @@
+{
+  "$comment": "考試機型參數檔（獨立疊加）。來源：附件十二 樣機規格（質量/軸距）＋ 模擬假設（maxTilt/maxSpeed/acceleration/drag/inertia，非官方、可調）。疊加於模擬，不影響原有巡檢機型、搖桿映射、標定檔、飛控航向旋轉修正。級別（重量級距）與樣機規格是兩件事。畫面標示「非官方測驗，僅供練習」。",
+  "meta": {
+    "disclaimer": "非官方測驗，僅供練習",
+    "overlay": true,
+    "constraint": "不改搖桿映射、標定檔、飛控航向旋轉修正；考試機用本獨立參數檔疊加。"
+  },
+  "levels": [
+    { "level": "I", "weightClass": "未達25公斤（≥4kg）", "massKg": null, "sampleAircraft": "附件十二樣機：軸距90–110cm、起飛重量≥4kg", "fieldFigure": "附錄6 圖11（未達25公斤）p233", "retreatDistanceM": 12, "pentaAirspaceM": "80×20", "note": "本模擬預設級距（考試機 4kg／100cm）。" },
+    { "level": "II", "weightClass": "25~150公斤", "massKg": null, "fieldFigure": "附錄6 圖12（25~150公斤）p234", "retreatDistanceM": 18, "pentaAirspaceM": "120×30", "note": "25公斤以上實機。" },
+    { "level": "III", "weightClass": "150公斤以上", "massKg": null, "fieldFigure": "附錄6 圖13（150公斤以上）p234", "retreatDistanceM": 24, "pentaAirspaceM": "160×40", "note": "150公斤以上。" }
+  ],
+  "defaultLevel": "I",
+  "levelSourceNote": "級別 I/II/III 對應重量級距，依 AC 107-005D 附錄6 場地（圖11/圖12/圖13，p233–234）與科目準則後退距離（p164）、五邊空域（p165）；級別I樣機軸距90–110cm、起飛重量≥4kg 依管理規則附件十二（AC 107-005D（十四）p3 引用）。未達2公斤為另行之級別（附錄6 圖9 p232；（二十五）不限操作模式 p5），本模擬預設以未達25公斤級別I 為準。",
+  "sampleAircraft": {
+    "name": "考試樣機（預設）",
+    "level": "I",
+    "massKg": { "value": 4.0, "source": "附件十二 樣機規格（級別I ≥4kg）", "adjustable": true },
+    "diagonalSpanCm": { "value": 100, "rangeCm": [90, 110], "source": "附件十二 樣機規格（級別I 軸距90–110cm）", "adjustable": true },
+    "maxTiltDeg": { "value": 25, "source": "模擬假設，非官方", "adjustable": true },
+    "maxHorizontalSpeedMps": { "value": 8, "source": "模擬假設，非官方", "adjustable": true },
+    "accelerationMps2": { "value": 2.5, "source": "模擬假設，非官方", "adjustable": true },
+    "dragCoefficient": { "value": 0.6, "source": "模擬假設，非官方", "adjustable": true, "note": "放桿/減速時的速度衰減係數（越大停得越快）" },
+    "inertia": {
+      "note": "重機型慣性：起停有延遲，非現有輕型瞬時響應。以一階時間常數 + 速率限制模型呈現（模擬假設）。",
+      "source": "模擬假設，非官方",
+      "horizontalVelocityTimeConstantS": { "value": 0.7, "adjustable": true, "note": "水平速度趨向指令值的時間常數；越大越遲鈍、起停延遲越明顯" },
+      "attitudeTimeConstantS": { "value": 0.45, "adjustable": true, "note": "傾角趨向指令傾角的時間常數" },
+      "attitudeRateLimitDegPerS": { "value": 45, "adjustable": true, "note": "傾角變化速率上限（度/秒）" }
+    }
+  }
+}
