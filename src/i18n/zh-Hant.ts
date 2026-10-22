@@ -200,6 +200,61 @@ export const zhHant = {
   // 方向驗收
   calAcceptTitle: '方向驗收（右桿 pitch / roll）',
   calAcceptHint: '三項都要綠燈：前推 Pitch 為正且機身前進、右打 Roll 為正且機身右移、放開後機體停止。需先在飛行狀態（解鎖並起飛）。',
+
+  // CAA 專業基本級術科考場模擬（考試機獨立疊加）
+  exam: {
+    title: 'CAA 專業基本級術科考場模擬（練習）',
+    disclaimer: '非官方測驗，僅供練習；所有 S/U/N 為模擬判定，非官方測驗結果。',
+    topDisclaimer: '非官方測驗 · 僅供練習',
+    modes: {
+      manual: '手動',
+      attitude: '姿態',
+      position: '定位',
+    },
+    subjects: {
+      B: '定點起降及四面停懸',
+      C: '8字水平圓',
+    },
+    panel: {
+      title: '考試即時面板',
+      mode: '模式',
+      guidance: '引導',
+      exam: '考試中',
+      practice: '練習',
+      wind: '風',
+      safety: '安全宣告',
+    },
+    majorFailure: {
+      outOfOperationArea: '失控／離開操作區',
+      hitCone: '撞擊角錐',
+      crash: '墜落',
+      beyondExamineeRear: '超越應考人後方',
+      examinerIntervene: '需監評從旁協助',
+      disorder: '未遵守秩序／規定',
+      identityFraud: '身分不符／舞弊',
+    },
+    report: {
+      title: '術科測驗報告表（仿附錄5）',
+      simulatedPass: '本模擬評判：通過',
+      simulatedFail: '本模擬評判：不通過',
+      majorFailureSection: '重大違失',
+      ratingS: 'S 操作程序均正確無誤',
+      ratingU: 'U 判定為不合格',
+      ratingN: 'N 未執行',
+      note: '備註',
+      replay: '航跡回放',
+      finish: '產生成績單',
+      restart: '重新測驗',
+      itemSimulated: '（本模擬自動判定）',
+      itemNotCovered: '（本模擬未涵蓋）',
+      officialStandard: '官方通過標準',
+    },
+    controlsHint: 'W/A/S/D 俯仰與橫滾 · Q/E 偏航 · Shift/Ctrl 油門升降 · 1/2/3 切換模式 · T 起飛 · L 降落 · Enter 產生成績單 · R 重新測驗',
+    takeoffKey: '起飛 (T)',
+    landKey: '降落 (L)',
+    finishKey: '產生成績單 (Enter)',
+    restartKey: '重新測驗 (R)',
+  },
 } as const;
 
 export type ZhHant = typeof zhHant;
