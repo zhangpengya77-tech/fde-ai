@@ -12,6 +12,7 @@
 
 import type { ExamField } from './field';
 import type { ExamInputInfo } from './exam-input';
+import { zhHant as L } from '../i18n/zh-Hant';
 
 export type ExamHudMode = 'manual' | 'attitude' | 'position';
 
@@ -36,6 +37,11 @@ export function isGuidanceForcedOff(examMode: boolean): boolean {
   return examMode;
 }
 
+/** 固定顯示的免責聲明（HUD／成績單／頂部橫幅共用同一句，避免各入口措辭漂移）。 */
+export function examDisclaimerText(): string {
+  return L.exam.disclaimer;
+}
+
 export interface ExamHudOptions {
   widthPx?: number;
   heightPx?: number;
@@ -55,6 +61,7 @@ export class ExamHud {
   private readonly statusLabel: HTMLElement;
   private readonly inputLine: HTMLElement;
   private readonly profileLine: HTMLElement;
+  private readonly disclaimerLine: HTMLElement;
 
   private mode: ExamHudMode = 'position';
   private examMode = false;
@@ -102,6 +109,12 @@ export class ExamHud {
     this.guidanceButton.style.cssText = 'margin-top:4px;width:100%;padding:4px;';
     this.guidanceButton.addEventListener('click', () => this.toggleGuidance());
     this.root.appendChild(this.guidanceButton);
+
+    // 固定免責聲明：面板常駐顯示（航跡回放時報告面板會被隱藏，只靠頂部橫幅不夠）。
+    this.disclaimerLine = document.createElement('div');
+    this.disclaimerLine.textContent = L.exam.disclaimer;
+    this.disclaimerLine.style.cssText = 'margin-top:4px;font-size:11px;color:#ffd76b;max-width:260px;';
+    this.root.appendChild(this.disclaimerLine);
 
     parent.appendChild(this.root);
     this.render();

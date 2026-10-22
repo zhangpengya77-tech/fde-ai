@@ -264,7 +264,6 @@ export class ExamFlightController {
    *               上限內被抵銷，超出部分才飄移。
    */
   private updateHorizontal(command: ExamStickCommand, delta: number): void {
-    const windUncompensated = this.computeUncompensatedWind();
     const maxSpeed = this.params.maxHorizontalSpeedMps;
 
     if (this.mode === 'manual') {
@@ -320,6 +319,10 @@ export class ExamFlightController {
     }
 
     // 風飄移：只有「未被定位保持抵銷」的部分作用於位置。
+    // 必須在 positionHoldActive 更新「之後」才取未補償風：搖桿剛回中的那一帧
+    // 定位保持即應生效，否則那一帧仍吃全額風（機體被吹走 wind·dt），之後雖鎖定
+    // 位置卻已留下偏移；放桿／再給桿會反覆觸發，有風時懸停永遠不成立。
+    const windUncompensated = this.computeUncompensatedWind();
     this.position.x += (this.velocity.x + windUncompensated.x) * delta;
     this.position.z += (this.velocity.z + windUncompensated.z) * delta;
   }

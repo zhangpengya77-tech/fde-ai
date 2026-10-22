@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildExamField } from '../../src/exam/field';
 import { loadExamConfig } from '../../src/exam/config';
-import { minimapProject, isGuidanceForcedOff } from '../../src/exam/panel';
+import { minimapProject, isGuidanceForcedOff, examDisclaimerText } from '../../src/exam/panel';
 
 const config = loadExamConfig();
 const field = buildExamField(config);
@@ -30,5 +30,16 @@ describe('面板 — 引導開關', () => {
   });
   it('考試模式 → 強制關閉（不得有輔助）', () => {
     expect(isGuidanceForcedOff(true)).toBe(true);
+  });
+});
+
+describe('面板 — 免責聲明', () => {
+  it('HUD 免責聲明含「模擬判定，非官方測驗結果」', () => {
+    expect(examDisclaimerText()).toContain('模擬判定，非官方測驗結果');
+  });
+  it('HUD 免責聲明與頂部橫幡為同一套 i18n 文案（措辭不漂移）', () => {
+    // 頂部橫幡（exam-app.ts）與 HUD 皆取自 zhHant.exam，勿各自硬編字串。
+    expect(examDisclaimerText()).toContain('非官方');
+    expect(examDisclaimerText()).toContain('僅供練習');
   });
 });
