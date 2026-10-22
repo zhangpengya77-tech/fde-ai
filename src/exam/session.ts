@@ -2,7 +2,7 @@
  * 考試會話錄製（CAA 專業基本級術科模擬）。
  *
  * 職責：在考試進行期間每幀記錄飛行樣本（FlightSample），並累積航跡點（供回放）；
- * 考試結束時彙整——呼叫科目 B/C/D 判定、重大違失偵測，並建構仿附錄5 成績單。
+ * 考試結束時彙整——呼叫科目 B/C/D/F 判定、重大違失偵測，並建構仿附錄5 成績單。
  *
  * 科目分段：實際考試每科為一次獨立飛行（起飛→動作→降落）。同一場次連續應考
  * 多科時，若各科判定都掃描全部樣本，科目間的直飛航段會互相污染（例如科目 D 的
@@ -19,6 +19,7 @@ import type { ExamField } from './field';
 import type { FlightSample, SubjectBResult, SubjectCResult } from './subjects';
 import { judgeSubjectB, judgeSubjectC } from './subjects';
 import { judgeSubjectD, type SubjectDResult } from './subject-d';
+import { judgeSubjectF, type SubjectFResult, type SubjectFTrigger } from './subject-f';
 import { detectMajorFailures, type MajorFailureReport, type ManualMajorFailureFlags } from './major-failures';
 import { buildExamReport, type ExamReport } from './scoring';
 import { loadExamLevelInfo } from './config';
@@ -41,6 +42,7 @@ export interface ExamSessionResult {
   subjectB: SubjectBResult;
   subjectC: SubjectCResult;
   subjectD: SubjectDResult;
+  subjectF: SubjectFResult;
   majorFailure: MajorFailureReport;
   report: ExamReport;
   trajectory: TrajectoryPoint[];
@@ -57,6 +59,8 @@ export class ExamSession {
   private currentSubject: ExamSubjectKey | null = null;
   /** 是否呼叫過 startSubject（false → 單科飛行，各科判定看全樣本）。 */
   private tagged = false;
+  /** 科目 F「緊急返航」觸發事件（監評人員在空中任一位置下達）；null = 未觸發。 */
+  private emergencyTrigger: SubjectFTrigger | null = null;
 
   /**
    * 標記後續錄製樣本所屬的應考科目。
@@ -70,6 +74,21 @@ export class ExamSession {
   /** 目前標記的科目（未標記時為 null）。 */
   getCurrentSubject(): ExamSubjectKey | null {
     return this.currentSubject;
+  }
+
+  /**
+   * 監評人員下達「緊急返航」（科目 F 觸發）。
+   * @param t 觸發時間（樣本時間軸）
+   * @param x 觸發當下機位（世界座標，用於判斷「較近一側」與原處懸停漂移）
+   * @param z 同上
+   */
+  triggerEmergency(t: number, x: number, z: number): void {
+    this.emergencyTrigger = { t, x, z };
+  }
+
+  /** 已記錄的緊急返航觸發事件（null = 未觸發）。 */
+  getEmergencyTrigger(): SubjectFTrigger | null {
+    return this.emergencyTrigger;
   }
 
   /** 每幀記錄一筆飛行樣本（snapshot）。 */
@@ -98,6 +117,7 @@ export class ExamSession {
     this.subjectTags = [];
     this.currentSubject = null;
     this.tagged = false;
+    this.emergencyTrigger = null;
     this.startedAtMs = 0;
     this.endedAtMs = 0;
   }
@@ -129,6 +149,7 @@ export class ExamSession {
       configRetreatDistanceM: levelInfo.retreatDistanceM,
       level: levelInfo.level,
     });
+    const subjectF = judgeSubjectF(this.samplesFor('F'), config, field, this.emergencyTrigger);
     const majorFailure = detectMajorFailures(
       this.samples,
       field,
@@ -141,6 +162,7 @@ export class ExamSession {
       subjectB,
       subjectC,
       subjectD,
+      subjectF,
       majorFailure,
       headerValues: options.headerValues,
       testTime: {
@@ -152,6 +174,7 @@ export class ExamSession {
       subjectB,
       subjectC,
       subjectD,
+      subjectF,
       majorFailure,
       report,
       trajectory: [...this.trajectory],

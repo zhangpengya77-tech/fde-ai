@@ -109,10 +109,11 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   wrap.appendChild(subjectBar);
 
   const subjectButtons = new Map<string, HTMLButtonElement>();
-  const SUBJECT_KEYS: Array<{ key: 'B' | 'C' | 'D'; label: string }> = [
+  const SUBJECT_KEYS: Array<{ key: 'B' | 'C' | 'D' | 'F'; label: string }> = [
     { key: 'B', label: `B ${L.exam.subjects.B}` },
     { key: 'C', label: `C ${L.exam.subjects.C}` },
     { key: 'D', label: `D ${L.exam.subjects.D}` },
+    { key: 'F', label: `F ${L.exam.subjects.F}` },
   ];
   const renderSubjectBar = (): void => {
     const current = session.getCurrentSubject();
@@ -124,13 +125,13 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     ).join('');
     subjectBar.innerHTML = `<div style="opacity:.75;margin-bottom:2px">${L.exam.subjectBarTitle}${
       current ? ` · ${L.exam.subjectCurrent} ${current}` : ''
-    }</div><div>${btns}</div><div style="opacity:.6;margin-top:2px;font-size:11px">${L.exam.subjectBarHint}</div>`;
+    }</div><div>${btns}</div><div style="opacity:.6;margin-top:2px;font-size:11px">${L.exam.subjectBarHint}<br>${L.exam.examinerKey}</div>`;
     subjectButtons.clear();
     subjectBar.querySelectorAll('button').forEach((el) => {
       const btn = el as HTMLButtonElement;
       subjectButtons.set(btn.dataset.subject ?? '', btn);
       btn.addEventListener('click', () => {
-        const key = btn.dataset.subject as 'B' | 'C' | 'D';
+        const key = btn.dataset.subject as 'B' | 'C' | 'D' | 'F';
         session.startSubject(key);
         renderSubjectBar();
       });
@@ -143,6 +144,16 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   reportHost.style.cssText =
     'position:absolute;inset:0;background:rgba(8,18,28,0.92);color:#fff;overflow:auto;padding:24px;display:none;z-index:10;font:13px/1.5 sans-serif;';
   wrap.appendChild(reportHost);
+
+  // 緊急返航橫幅（監評人員下達時閃爍，科目 F）。
+  const emergencyBanner = document.createElement('div');
+  emergencyBanner.textContent = L.exam.emergencyBanner;
+  emergencyBanner.style.cssText =
+    'position:absolute;top:44px;left:50%;transform:translateX(-50%);background:rgba(200,30,30,0.92);color:#fff;padding:8px 18px;border-radius:10px;font:bold 15px sans-serif;z-index:6;display:none;max-width:80%;text-align:center;';
+  wrap.appendChild(emergencyBanner);
+  let emergencyBannerUntil = 0;
+  /** 最近一帧飛控快照（供監評觸發按鍵讀取當下機位與高度）。 */
+  let lastSnap: ExamFlightSnapshot | null = null;
 
   // ---- Three.js ----
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -181,10 +192,29 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       controller.takeoff(1.5);
     } else if (code === 'KeyL') controller.land();
     else if (code === 'KeyG') examInput.togglePreference();
+    else if (code === 'KeyE') triggerEmergency();
     else if (code === 'Enter') finish();
     else if (code === 'Escape') restart();
   };
   window.addEventListener('keydown', onKeyDown);
+
+  /**
+   * 監評人員下達「緊急返航」（科目 F 觸發，官方準則第 3 條：在空中任一位置）。
+   * 須在空中（y > 0.15m）才生效；記錄觸發時間與當下機位——判定以「較近一側」
+   * 八字圓為降落目標，並要求立即原處懸停於觸發點。
+   */
+  const triggerEmergency = (): void => {
+    if (!lastSnap || lastSnap.position.y <= 0.15) {
+      emergencyBanner.textContent = L.exam.emergencyIgnored;
+      emergencyBanner.style.display = 'block';
+      emergencyBannerUntil = performance.now() + 1500;
+      return;
+    }
+    session.triggerEmergency(simTime, lastSnap.position.x, lastSnap.position.z);
+    emergencyBanner.textContent = L.exam.emergencyBanner;
+    emergencyBanner.style.display = 'block';
+    emergencyBannerUntil = performance.now() + 4000;
+  };
 
   /** 本幀搖桿指令（來源：遙控器標定管線或鍵盤備援）。 */
   const pollCommand = (): ExamStickCommand => {
@@ -215,6 +245,9 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     renderSubjectBar();
     sceneHandle.clearTrajectory();
     reportHost.style.display = 'none';
+    emergencyBanner.style.display = 'none';
+    emergencyBannerUntil = 0;
+    lastSnap = null;
     simTime = 0;
   };
 
@@ -338,6 +371,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       wind.step(dt);
       controller.applyWind(wind.currentVector());
       const snap = controller.update(cmd, dt);
+      lastSnap = snap;
       session.record(toFlightSample(snap, simTime));
       simTime += dt;
       sceneHandle.setDronePose(snap.position, snap.headingDeg);
@@ -347,6 +381,10 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       hud.setMode(snap.mode as ExamHudMode);
       hud.setInputInfo(examInput.getInfo());
       updateSafety();
+      if (emergencyBannerUntil > 0 && performance.now() > emergencyBannerUntil) {
+        emergencyBanner.style.display = 'none';
+        emergencyBannerUntil = 0;
+      }
     }
     renderer.render(scene, camera);
   };

@@ -179,6 +179,8 @@ export interface ExamConfig {
     subjectF: {
       /** 下達緊急返航後，水平速度應收斂到 holdSpeedMps 以下的時限（s）。 */
       immediateHoldS: number;
+      /** 「立即」的量化：原處懸停平台須在觸發後此時限內開始（s）。模擬假設。 */
+      immediateHoldWithinS: number;
       holdSpeedMps: number;
       /** 原處懸停期間的最大位置漂移（m）。 */
       holdDriftToleranceM: number;

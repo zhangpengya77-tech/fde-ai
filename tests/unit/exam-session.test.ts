@@ -102,6 +102,45 @@ function genSubjectD(): FlightSample[] {
   return out;
 }
 
+/**
+ * 科目 F 合成飛行：起飛 → 巡航至 (8,−8) → 監評人員下達緊急返航（回傳觸發事件）
+ * → 原處懸停 4s → 飛回右內圈上方 1.5m → 1.0 m/s 穩定下降 → 圓心降落。
+ */
+function genSubjectF(): { samples: FlightSample[]; trigger: { t: number; x: number; z: number } } {
+  const out: FlightSample[] = [];
+  const alt = 1.5;
+  const push = (tt: number, x: number, y: number, z: number, h: number, sp: number, vyy: number) =>
+    out.push(s(tt, x, y, z, h, sp, vyy));
+  for (let i = 0; i <= 40; i++) push(i * DT, 0, Math.min(alt, 0.75 * (i * DT)), 0, 0, 0, i * DT < 2 ? 0.75 : 0);
+  let t = 2;
+  // 巡航至觸發點 (8,−8)（較近一側為右圓）。
+  const cruiseN = 60;
+  for (let i = 1; i <= cruiseN; i++) {
+    const f = i / cruiseN;
+    push(t + i * DT, 8 * f, alt, -8 * f, 0, 3, 0);
+  }
+  t += cruiseN * DT;
+  const trigger = { t, x: 8, z: -8 };
+  // 原處懸停 4s。
+  for (let i = 1; i <= 80; i++) push(t + i * DT, 8, alt, -8, 0, 0, 0);
+  t += 4;
+  // 飛回右內圈圓心 (6,−16) 上方 1.5m。
+  const right = field.figure8.rightCircle.center;
+  const flyN = 60;
+  for (let i = 1; i <= flyN; i++) {
+    const f = i / flyN;
+    push(t + i * DT, 8 + (right.x - 8) * f, alt, -8 + (right.z + 8) * f, 0, 3, 0);
+  }
+  t += flyN * DT;
+  // 1.0 m/s 穩定下降至圓心。
+  const descN = 90;
+  for (let i = 1; i <= descN; i++) {
+    const f = i / descN;
+    push(t + i * DT, right.x, Math.max(0, alt * (1 - f)), right.z, 0, 0, -1.0);
+  }
+  return { samples: out, trigger };
+}
+
 describe('考試會話 — 錄製與彙整', () => {
   it('記錄 B 飛行並 finalize → 科目B=S、無重大違失、成績單 simulatedPass 反映', () => {
     const sess = new ExamSession();
@@ -124,7 +163,7 @@ describe('考試會話 — 錄製與彙整', () => {
     expect(minX).toBeLessThan(-10);
   });
 
-  it('同一會話可連續記錄 B/C/D → 三科皆判定且 simulatedPass=true', () => {
+  it('同一會話可連續記錄 B/C/D/F → 四科皆判定且 simulatedPass=true', () => {
     const sess = new ExamSession();
     // 實際考試：每科一次獨立飛行，起飛前標記所屬科目（否則科目間互相污染）。
     sess.startSubject('B');
@@ -133,14 +172,31 @@ describe('考試會話 — 錄製與彙整', () => {
     genSubjectC().forEach((smp) => sess.record(smp));
     sess.startSubject('D');
     genSubjectD().forEach((smp) => sess.record(smp));
+    sess.startSubject('F');
+    const f = genSubjectF();
+    f.samples.forEach((smp) => sess.record(smp));
+    // 監評人員在空中下達緊急返航（觸發事件）。
+    sess.triggerEmergency(f.trigger.t, f.trigger.x, f.trigger.z);
     const res = sess.finalize(config, field);
     expect(res.subjectB.rating).toBe('S');
     expect(res.subjectC.rating).toBe('S');
     expect(res.subjectD.rating).toBe('S');
+    expect(res.subjectF.rating).toBe('S');
     expect(res.report.items[1].rating).toBe('S');
     expect(res.report.items[2].rating).toBe('S');
     expect(res.report.items[3].rating).toBe('S');
+    expect(res.report.items[5].rating).toBe('S');
     expect(res.report.simulatedPass).toBe(true);
+  });
+
+  it('科目 F 未下達緊急返航 → subjectF=N（未執行）且 simulatedPass=false', () => {
+    const sess = new ExamSession();
+    sess.startSubject('F');
+    genSubjectF().samples.forEach((smp) => sess.record(smp));
+    const res = sess.finalize(config, field);
+    expect(res.subjectF.rating).toBe('N');
+    expect(res.subjectF.failReasonKeys).toContain('subjectF.notTriggered');
+    expect(res.report.simulatedPass).toBe(false);
   });
 
   it('startSubject 切換後各科只看到自己的切片（D 的直飛不污染 C 的八字）', () => {
