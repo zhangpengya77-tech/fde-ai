@@ -17,6 +17,7 @@
  */
 
 import type { ExamField } from './field';
+import { nearerFigure8Circle, subjectDWaypoints } from './field';
 import type { PilotPoint } from './scripted-pilot';
 
 /** 圓弧取樣（角度制，deg）。 */
@@ -124,4 +125,55 @@ export function pathLength(points: PilotPoint[]): number {
     total += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
   }
   return total;
+}
+
+// ---------------------------------------------------------------------------
+// 科目 D：側面停懸及前進、後退（p164）
+// ---------------------------------------------------------------------------
+
+/** 科目D 的一個動作（飛到哪個定點、機頭朝向）。 */
+export interface SubjectDStep {
+  point: PilotPoint;
+  /** 機頭朝向（度）：270 = 朝左側面（−X）、90 = 朝右側面（+X）。 */
+  headingDeg: number;
+}
+
+/**
+ * 科目D 官方動作序列（六個「定點懸停」）：
+ *   左側面一輪 P3 → P7 → H，再右側面一輪 P7 → P3 → H。
+ * 出發點為 H（起降點）；首 Step 之前的「轉機頭朝左側面懸停」由呼叫端另行 hold。
+ */
+export function subjectDSteps(field: ExamField): SubjectDStep[] {
+  const w = subjectDWaypoints(field);
+  return [
+    { point: { x: w.p3.x, z: w.p3.z }, headingDeg: 270 },
+    { point: { x: w.p7.x, z: w.p7.z }, headingDeg: 270 },
+    { point: { x: w.h.x, z: w.h.z }, headingDeg: 270 },
+    { point: { x: w.p7.x, z: w.p7.z }, headingDeg: 90 },
+    { point: { x: w.p3.x, z: w.p3.z }, headingDeg: 90 },
+    { point: { x: w.h.x, z: w.h.z }, headingDeg: 90 },
+  ];
+}
+
+/** 科目D 側向往返的兩條邊（P3↔P7）長度（m）；即該級距之後退距離。 */
+export function subjectDRetreatLegsM(field: ExamField): { first: number; second: number } {
+  const w = subjectDWaypoints(field);
+  return {
+    first: Math.hypot(w.p7.x - w.p3.x, w.p7.z - w.p3.z),
+    second: Math.hypot(w.p7.x - w.p3.x, w.p7.z - w.p3.z),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 科目 F：緊急處置程序（p166）
+// ---------------------------------------------------------------------------
+
+/** 科目F 較近一側八字圓（降落目標）與其圓心。 */
+export function subjectFLandingTarget(
+  field: ExamField,
+  fromX: number,
+  fromZ: number,
+): { side: 'left' | 'right'; center: PilotPoint; radiusM: number } {
+  const near = nearerFigure8Circle(field, fromX, fromZ);
+  return { side: near.side, center: { x: near.circle.center.x, z: near.circle.center.z }, radiusM: near.circle.radiusM };
 }

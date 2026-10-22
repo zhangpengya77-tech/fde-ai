@@ -217,15 +217,17 @@ export class ScriptedPilot {
     let desiredGroundVx = vRefX + this.gain * errX - this.damping * (ctrlVx - vRefX);
     let desiredGroundVz = vRefZ + this.gain * errZ - this.damping * (ctrlVz - vRefZ);
 
-    // 放桿判斷：位置誤差夠小，且對地速度夠小。hold 模式額外接受「對空速度夠小」
-    // ——涵蓋剛起飞/風尚未被定位保持抵銷的瞬間（那時對空速度為 0，直接放桿
-    // 由定位保持釘住，比用桿頂風更快也更穩）。
+    // 放桿判斷：位置誤差夠小，且「對空速度」夠小。
+    //
+    // 為什麼不能只以對地速度為準：有風時懸停的對空速度≈風速（頂風維持定點），
+    // 此時若因對地速度小就放桿，定位保持會以「滯後速度」接手——機體仍以空速
+    // 慣性滑行約 wind·τ（風 5m/s、τ=0.7s → 3.5m），遠超定位漂移容差，且放桿／
+    // 再給桿反覆觸發會形成 ground speed 0.1~0.4 m/s 的極限環，把懸停平台打碎。
+    // 故放桿一律以對空速度收斂為準（涵蓋剛起飛與無風收斂兩種時機）。
     if (!release) {
       const errMag = Math.hypot(errX, errZ);
-      const groundSpd = Math.hypot(groundVx, groundVz);
       const airSpd = Math.hypot(snapshot.velocity.x, snapshot.velocity.z);
-      const settled = groundSpd <= this.settleSpeed || (this.mode === 'hold' && airSpd <= this.settleSpeed);
-      if (errMag <= this.settlePosition && settled) release = true;
+      if (errMag <= this.settlePosition && airSpd <= this.settleSpeed) release = true;
     }
 
     // 頂風修正：期望對空速度 = 期望對地速度 − 本帧真正會作用的風。

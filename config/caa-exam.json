@@ -16,7 +16,6 @@
     "downloadedTo": "docs/caa-source/",
     "pageRefNote": "page 欄位為 AC 107-005D 內頁印刷頁碼。"
   },
-
   "appendixIndex": {
     "附錄1": "系統知識填答表",
     "附錄2至4": "各構造測驗基準（無人飛機／無人直昇機／無人多旋翼機）",
@@ -26,7 +25,6 @@
     "附件十二": "管理規則 附件十二 術科測驗用遙控無人機規格（考試機規格來源）",
     "page": 3
   },
-
   "general": {
     "modes": {
       "manual": {
@@ -77,7 +75,6 @@
     "toleranceNote": "（二十三）術科測驗項目與準則所列容許偏差值依重量級距設定，適用於同構造各型遙控無人機；個別型式因性能有調整必要者經本局核定後補充。（page 5）—具體分級容許值未於正文逐項讀到，見 nullsReport。",
     "page": 5
   },
-
   "aircraft": {
     "source": "管理規則 附件十二「術科測驗用遙控無人機規格」＋原廠型別規格",
     "note": "基本級測驗級別須遵照樣機規範；最大起飛重量按原廠型別規格數據。級別（重量級距）與樣機規格是兩件事。",
@@ -112,7 +109,10 @@
     "sampleAircraftDefaults": {
       "massKg": 4.0,
       "diagonalSpanCm": 100,
-      "diagonalSpanRangeCm": [90, 110],
+      "diagonalSpanRangeCm": [
+        90,
+        110
+      ],
       "maxTiltDeg": null,
       "maxHorizontalSpeedMps": null,
       "accelerationMps2": null,
@@ -121,7 +121,6 @@
       "inertia": "重機型慣性反映在響應：起停有延遲，非現有輕型瞬時響應（自行實作，數值來源=機型原廠規格）。"
     }
   },
-
   "field": {
     "source": "附錄6 圖11「未達25公斤無人直昇機與多旋翼機測場及空域規劃示意圖」",
     "weightClass": "未達25公斤（≥2公斤）",
@@ -135,10 +134,30 @@
       "circleDiameterM": 12,
       "circleRadiusM": 6,
       "sharedCrossingPoint": "P4",
-      "cones": ["P1", "P2", "P3", "P4", "P5", "P6", "P7"],
-      "leftArcOrder": ["P4", "P1", "P2", "P3", "P4"],
+      "cones": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7"
+      ],
+      "leftArcOrder": [
+        "P4",
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
       "leftArcDirection": "counterclockwise",
-      "rightArcOrder": ["P4", "P5", "P6", "P7", "P4"],
+      "rightArcOrder": [
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P4"
+      ],
       "rightArcDirection": "clockwise",
       "page": 233
     },
@@ -161,7 +180,10 @@
     "examinerPosition": {
       "observedInFigure": {
         "stationToCenterM": 4,
-        "stationMarkingsM": [0.6, 0.6],
+        "stationMarkingsM": [
+          0.6,
+          0.6
+        ],
         "source": "附錄6 圖11（未達25公斤）監評人員/應考人站位放大框（高解析重繪）",
         "confidence": "數值可讀，精確站位距離未完全確定"
       },
@@ -170,9 +192,11 @@
       "page": 233
     },
     "coneToEdgeMarginM": null,
-    "views": ["考生視角", "考場俯視圖"]
+    "views": [
+      "考生視角",
+      "考場俯視圖"
+    ]
   },
-
   "subjects": {
     "phase": "第一階段（A/B 實作；C–G 介面）",
     "A_preflight": {
@@ -199,10 +223,18 @@
         "完成定點降落後口誦「結束」"
       ],
       "params": {
-        "takeoffHeightM": [1, 2],
+        "takeoffHeightM": [
+          1,
+          2
+        ],
         "hoverSecondsMin": 5,
         "rotationStepDeg": 90,
-        "fourSideOrder": ["右", "內", "左", "外"],
+        "fourSideOrder": [
+          "右",
+          "內",
+          "左",
+          "外"
+        ],
         "landWithinMarking": true,
         "mustNotFullyExitHMarking": true
       },
@@ -220,7 +252,10 @@
         "後退返航起降點H，機頭朝外並維持等高懸停，口誦「結束」"
       ],
       "params": {
-        "heightM": [1, 2],
+        "heightM": [
+          1,
+          2
+        ],
         "hoverSecondsMin": 5,
         "equalAltitude": true,
         "equalSpeed": true,
@@ -241,7 +276,11 @@
         "側面前進至P7定點懸停；側面後退至P3定點懸停；側面前進至H定點懸停"
       ],
       "params": {
-        "retreatDistanceByLevelM": { "I": 12, "II": 18, "III": 24 },
+        "retreatDistanceByLevelM": {
+          "I": 12,
+          "II": 18,
+          "III": 24
+        },
         "hoverSecondsMin": 5
       },
       "page": 164
@@ -256,9 +295,18 @@
       ],
       "params": {
         "minOperationAirspaceByLevelM": {
-          "I": { "length": 80, "width": 20 },
-          "II": { "length": 120, "width": 30 },
-          "III": { "length": 160, "width": 40 }
+          "I": {
+            "length": 80,
+            "width": 20
+          },
+          "II": {
+            "length": 120,
+            "width": 30
+          },
+          "III": {
+            "length": 160,
+            "width": 40
+          }
         },
         "operationAltitudeM": 20
       },
@@ -274,7 +322,10 @@
         "儘速飛回相對較近一側八字內圈上方約1~2公尺處，調整下降率後精準降落於較近一側八字內圈"
       ],
       "params": {
-        "landInnerCircleAltitudeM": [1, 2]
+        "landInnerCircleAltitudeM": [
+          1,
+          2
+        ]
       },
       "page": 166
     },
@@ -287,7 +338,6 @@
       "page": 167
     }
   },
-
   "majorFailures": {
     "rule": "不得有任何一項重大違失（任一項即不通過）",
     "items": [
@@ -298,11 +348,15 @@
     ],
     "page": 160
   },
-
   "reportForm": {
     "source": "附錄5 術科測驗報告表（基本級 無人多旋翼機）",
     "page": 220,
-    "headerFields": ["測驗日期", "申請人姓名", "身分證字號", "測驗級別 I/II/III"],
+    "headerFields": [
+      "測驗日期",
+      "申請人姓名",
+      "身分證字號",
+      "測驗級別 I/II/III"
+    ],
     "items": [
       "飛行前檢查",
       "定點起降及四面停懸",
@@ -312,14 +366,25 @@
       "緊急處置程序",
       "飛行後檢查"
     ],
-    "itemColumns": ["S", "U", "N", "備註"],
+    "itemColumns": [
+      "S",
+      "U",
+      "N",
+      "備註"
+    ],
     "hasMajorFailureSection": true,
     "hasOverall": true,
     "testNote": "□一般測驗  □定位模式",
-    "testTimeFields": ["起", "迄"],
-    "signatures": ["監評人員簽證", "成績登錄", "民用航空局複核"]
+    "testTimeFields": [
+      "起",
+      "迄"
+    ],
+    "signatures": [
+      "監評人員簽證",
+      "成績登錄",
+      "民用航空局複核"
+    ]
   },
-
   "simAssist": {
     "disclaimer": "模擬判定，非官方測驗結果",
     "note": "官方未給量化容許偏差；以下閾值為我方自設之輔助判定，用於由原始量測產生各科 S/U/N（模擬判定）。每項來源「模擬假設，非官方」，可調。同時記錄原始量測供人工審閱。",
@@ -343,10 +408,39 @@
       "maxTurnPauseS": 0.5,
       "mustNotExitFigure8Marking": true
     },
+    "subjectD": {
+      "hoverHeightTargetM": 1.5,
+      "hoverHeightToleranceM": 0.3,
+      "hoverTimeRequiredS": 5,
+      "hoverTimeToleranceS": 0.2,
+      "positionHoldDriftToleranceM": 0.5,
+      "sideHeadingToleranceDeg": 10,
+      "retreatDistanceToleranceM": 1.0,
+      "note": "科目 D（側面停懸及前進、後退 p164）量化閾值。來源「模擬假設，非官方」，可調。官方僅給質性描述：機頭朝側面、至 P3/P7/H 定點懸停 5 秒、定點等高。"
+    },
+    "subjectF": {
+      "immediateHoldS": 3,
+      "holdSpeedMps": 0.3,
+      "holdDriftToleranceM": 1.0,
+      "maxDescentRateMps": -1.5,
+      "approachAltitudeM": [
+        1,
+        2
+      ],
+      "innerCircleToleranceM": 1.0,
+      "coneHitHeightM": 0.8,
+      "note": "科目 F（緊急處置程序 p166）量化閾值。來源「模擬假設，非官方」，可調。官方僅給質性描述：立即原處懸停、以合理下滑角度穩定進場、不得壓到標線或撞擊角錐、飛回較近一側八字內圈上方約1~2公尺後精準降落。"
+    },
     "recordRawMeasurements": true,
-    "rawMeasurementFields": ["positionDeviationM", "altitudeM", "hoverSeconds", "trajectory", "horizontalSpeedMps", "headingDeg"]
+    "rawMeasurementFields": [
+      "positionDeviationM",
+      "altitudeM",
+      "hoverSeconds",
+      "trajectory",
+      "horizontalSpeedMps",
+      "headingDeg"
+    ]
   },
-
   "scoring": {
     "source": "附錄5 術科測驗報告表備註",
     "page": 220,
@@ -367,7 +461,6 @@
     "simulatedBySimAssist": true,
     "pendingNote": "未取得逐項量化容許偏差 / 逐項扣分點數者，畫面顯示「待補官方標準」，不自創及格線。S/U/N 由 simAssist 模擬假設閾值產生，屬「模擬判定，非官方測驗結果」。"
   },
-
   "nullsReport": [
     "aircraft.levelPresets[].massKg：樣機規格數值由原廠型別規格填入，未自行估算。",
     "aircraft.sampleAircraftDefaults.maxTiltDeg / maxHorizontalSpeedMps / accelerationMps2 / dragCoefficient：見 exam-aircraft.json，來源標「模擬假設，非官方」，可調。",
@@ -376,6 +469,8 @@
     "field.examinerPosition.examinerDistanceM：圖11 見 4M/0.6M/0.6M 站位標註，精確站位距離未完全確定，維持 null（observedInFigure 已記錄）。",
     "field.coneToEdgeMarginM：角錐至邊緣精確距離未讀到，暫留 null。",
     "general.toleranceNote：（二十三）容許偏差值依重量級距設定，逐項分級量化容許值未於正文讀到，暫留 null（科目準則以 1~2m 高度、5 秒懸停、不得偏出標示範圍等質性描述為準）。",
-    "扣分規則：官方以 S/U/N 逐項 + 重大違失（任一 U 或違失即不通過）評定，非百分制；逐項扣分點數表未讀到，暫留 null（未取得者畫面顯示「待補官方標準」，不自創及格線）。"
+    "扣分規則：官方以 S/U/N 逐項 + 重大違失（任一 U 或違失即不通過）評定，非百分制；逐項扣分點數表未讀到，暫留 null（未取得者畫面顯示「待補官方標準」，不自創及格線）。",
+    "科目 D（側面停懸及前進、後退）之後退距離 retreatDistanceByLevelM（I=12/II=18/III=24）取自 p164 科目準則表；但場地幾何（附錄6 圖11）之八字圓直徑固定 12m，故 P3↔P7 實際間距為 12m，僅與級距 I 相符。級距 II/III 需搭配較大八字場地（圖12/圖13），本模擬場幾何為級距 I，故 II/III 的後退距離無法在當前場地複現——判定以「場地實際 P3↔P7 間距」為準，並在原始量測記錄兩者差異，不自創及格線。",
+    "科目 F（緊急處置程序）「較近一側八字內圈」之官方定義未於正文讀到（內圈指圓內區域或八字內側區域未明確定義），本模擬以「較近一側八字圓（半徑 6m）之圓內」為模擬假設，非官方；landInnerCircleAltitudeM [1,2] 取自 p166 科目準則。"
   ]
 }

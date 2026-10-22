@@ -23,8 +23,16 @@ import { ExamInput } from './exam-input';
 import type { FlightSample } from './subjects';
 import type { ExamStickCommand, ExamFlightSnapshot } from './types';
 
-/** 純函式：飛控快照 → 考試錄製樣本（供科目判定與重大違失偵測）。可單元測試。 */
+/**
+ * 純函式：飛控快照 → 考試錄製樣本（供科目判定與重大違失偵測）。可單元測試。
+ *
+ * 對地速度：定位保持生效時風已被飛控抵銷（snapshot.positionHoldCompensating），
+ * 有效風為 0；否則全額風作用於機體。兩者不可混——否則「放桿懸停」會被記成
+ * 風速大小的對地速度，靜止判定永遠不成立。
+ */
 export function toFlightSample(snapshot: ExamFlightSnapshot, t: number): FlightSample {
+  const windEffX = snapshot.positionHoldCompensating ? 0 : snapshot.windVector.x;
+  const windEffZ = snapshot.positionHoldCompensating ? 0 : snapshot.windVector.z;
   return {
     t,
     x: snapshot.position.x,
@@ -32,6 +40,8 @@ export function toFlightSample(snapshot: ExamFlightSnapshot, t: number): FlightS
     z: snapshot.position.z,
     headingDeg: snapshot.headingDeg,
     speedMps: snapshot.horizontalSpeedMps,
+    // 對地速度：有風時懸停的對空速度≈風速，靜止／停頓判定必須用對地速度。
+    groundSpeedMps: Math.hypot(snapshot.velocity.x + windEffX, snapshot.velocity.z + windEffZ),
     vy: snapshot.verticalSpeedMps,
     mode: snapshot.mode,
   };
@@ -89,6 +99,44 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   wrap.appendChild(hudHost);
   const hud = new ExamHud(field, hudHost);
   hud.setExamMode(examMode);
+
+  // ---- 應考科目列 ----
+  // 實際考試每科一次獨立飛行；起飛前標記所屬科目，finalize 時各科判定只看
+  // 自己的樣本切片（避免科目間航段互相污染，如 D 的直飛切進 C 的八字盒）。
+  const subjectBar = document.createElement('div');
+  subjectBar.style.cssText =
+    'position:absolute;top:8px;left:8px;z-index:5;background:rgba(0,0,0,0.55);color:#cfe;padding:6px 10px;border-radius:8px;font:12px sans-serif;max-width:46%;';
+  wrap.appendChild(subjectBar);
+
+  const subjectButtons = new Map<string, HTMLButtonElement>();
+  const SUBJECT_KEYS: Array<{ key: 'B' | 'C' | 'D'; label: string }> = [
+    { key: 'B', label: `B ${L.exam.subjects.B}` },
+    { key: 'C', label: `C ${L.exam.subjects.C}` },
+    { key: 'D', label: `D ${L.exam.subjects.D}` },
+  ];
+  const renderSubjectBar = (): void => {
+    const current = session.getCurrentSubject();
+    const btns = SUBJECT_KEYS.map(
+      ({ key, label }) =>
+        `<button data-subject="${key}" style="margin:2px 4px 2px 0;padding:3px 10px;border-radius:6px;border:1px solid #4a7;cursor:pointer;font:12px sans-serif;${
+          current === key ? 'background:#2d6;color:#04240f;font-weight:bold;' : 'background:rgba(20,40,55,0.9);color:#cfe;'
+        }">${label}</button>`,
+    ).join('');
+    subjectBar.innerHTML = `<div style="opacity:.75;margin-bottom:2px">${L.exam.subjectBarTitle}${
+      current ? ` · ${L.exam.subjectCurrent} ${current}` : ''
+    }</div><div>${btns}</div><div style="opacity:.6;margin-top:2px;font-size:11px">${L.exam.subjectBarHint}</div>`;
+    subjectButtons.clear();
+    subjectBar.querySelectorAll('button').forEach((el) => {
+      const btn = el as HTMLButtonElement;
+      subjectButtons.set(btn.dataset.subject ?? '', btn);
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.subject as 'B' | 'C' | 'D';
+        session.startSubject(key);
+        renderSubjectBar();
+      });
+    });
+  };
+  renderSubjectBar();
 
   // 成績單面板（預設隱藏）。
   const reportHost = document.createElement('div');
@@ -164,6 +212,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     stopReplay();
     controller.reset();
     session.clear();
+    renderSubjectBar();
     sceneHandle.clearTrajectory();
     reportHost.style.display = 'none';
     simTime = 0;

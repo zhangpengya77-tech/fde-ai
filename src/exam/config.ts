@@ -22,6 +22,13 @@ export interface OfficialModeDef {
   page: number | null;
 }
 
+/** 科目 A／G（飛行前／後檢查）的官方條文（p161／p167）。 */
+export interface SubjectChecklist {
+  name: string;
+  criteria: string[];
+  page: number;
+}
+
 export interface ExamConfig {
   meta: {
     disclaimer: string;
@@ -96,7 +103,31 @@ export interface ExamConfig {
       };
       page: number;
     };
+    /** 科目 D：側面停懸及前進、後退（p164）。 */
+    D: {
+      name: string;
+      criteria: string[];
+      params: {
+        retreatDistanceByLevelM: Record<string, number>;
+        hoverSecondsMin: number;
+      };
+      page: number;
+    };
+    /** 科目 F：緊急處置程序（p166）。 */
+    F: {
+      name: string;
+      criteria: string[];
+      params: {
+        landInnerCircleAltitudeM: [number, number];
+      };
+      page: number;
+    };
+    /** 科目 A／G：飛行前／後檢查（p161／p167）。 */
+    A: SubjectChecklist;
+    G: SubjectChecklist;
   };
+  /** 目前級距（exam-aircraft.json defaultLevel，例 'I'）。 */
+  level: string;
   majorFailures: { rule: string; items: string[]; page: number | null };
   reportForm: {
     source: string;
@@ -135,6 +166,30 @@ export interface ExamConfig {
       altitudeToleranceM: number;
       maxTurnPauseS: number;
       mustNotExitFigure8Marking: boolean;
+    };
+    subjectD: {
+      hoverHeightTargetM: number;
+      hoverHeightToleranceM: number;
+      hoverTimeRequiredS: number;
+      hoverTimeToleranceS: number;
+      positionHoldDriftToleranceM: number;
+      sideHeadingToleranceDeg: number;
+      retreatDistanceToleranceM: number;
+    };
+    subjectF: {
+      /** 下達緊急返航後，水平速度應收斂到 holdSpeedMps 以下的時限（s）。 */
+      immediateHoldS: number;
+      holdSpeedMps: number;
+      /** 原處懸停期間的最大位置漂移（m）。 */
+      holdDriftToleranceM: number;
+      /** 進場下降率上限（m/s，負值）；超過視為不穩定進場。 */
+      maxDescentRateMps: number;
+      /** 進場至目標上方時的高度區間（m，官方 landInnerCircleAltitudeM）。 */
+      approachAltitudeM: [number, number];
+      /** 降落點距較近圓心的容許距離（m）。 */
+      innerCircleToleranceM: number;
+      /** 進場/下降窗口內撞擊角錐的高度門檻（m）。 */
+      coneHitHeightM: number;
     };
     recordRawMeasurements: boolean;
     rawMeasurementFields: string[];
@@ -194,7 +249,14 @@ export function loadExamConfig(): ExamConfig {
       timeLimit: { totalMinutes: number; page?: number };
     };
     field: ExamConfig['field'];
-    subjects: { B_takeoff_four_side_hover: ExamConfig['subjects']['B']; C_figure8: ExamConfig['subjects']['C'] };
+    subjects: {
+      B_takeoff_four_side_hover: ExamConfig['subjects']['B'];
+      C_figure8: ExamConfig['subjects']['C'];
+      D_side_hover_forward_backward: ExamConfig['subjects']['D'];
+      F_emergency: ExamConfig['subjects']['F'];
+      A_preflight: ExamConfig['subjects']['A'];
+      G_postflight: ExamConfig['subjects']['G'];
+    };
     majorFailures: ExamConfig['majorFailures'];
     reportForm: ExamConfig['reportForm'];
     scoring: ExamConfig['scoring'];
@@ -213,7 +275,15 @@ export function loadExamConfig(): ExamConfig {
     wind: raw.general.wind,
     timeLimit: { totalMinutes: raw.general.timeLimit.totalMinutes, page: raw.general.timeLimit.page ?? null },
     field: raw.field,
-    subjects: { B: raw.subjects.B_takeoff_four_side_hover, C: raw.subjects.C_figure8 },
+    subjects: {
+      B: raw.subjects.B_takeoff_four_side_hover,
+      C: raw.subjects.C_figure8,
+      D: raw.subjects.D_side_hover_forward_backward,
+      F: raw.subjects.F_emergency,
+      A: raw.subjects.A_preflight,
+      G: raw.subjects.G_postflight,
+    },
+    level: loadExamLevelInfo().level,
     majorFailures: raw.majorFailures,
     reportForm: raw.reportForm,
     scoring: raw.scoring,
@@ -222,7 +292,15 @@ export function loadExamConfig(): ExamConfig {
   };
 }
 
-/** 考試機參數（含慣性）。來源標註見 exam-aircraft.json。 */
+/** 目前級距與其官方參數（exam-aircraft.json）。 */
+export interface ExamLevelInfo {
+  level: string;
+  /** 科目 D 後退距離（p164 retreatDistanceByLevelM）。 */
+  retreatDistanceM: number | null;
+  /** 級距對應之場地圖（附錄6 圖11/12/13）。 */
+  fieldFigure: string | null;
+}
+
 export function loadExamAircraftParams(): ExamAircraftParams {
   const raw = examAircraftJson as unknown as {
     sampleAircraft: {
@@ -248,5 +326,24 @@ export function loadExamAircraftParams(): ExamAircraftParams {
     horizontalVelocityTimeConstantS: a.inertia.horizontalVelocityTimeConstantS.value,
     attitudeTimeConstantS: a.inertia.attitudeTimeConstantS.value,
     attitudeRateLimitDegPerS: a.inertia.attitudeRateLimitDegPerS.value,
+  };
+}
+
+/**
+ * 目前級距（exam-aircraft.json defaultLevel）與科目 D 後退距離。
+ * 級距 II/III 需搭配較大場地（附錄6 圖12/圖13），本模擬場幾何為級距 I，
+ * 故 retreatDistanceM 可能與場地實際 P3↔P7 間距不符——由呼叫端比對並記錄。
+ */
+export function loadExamLevelInfo(): ExamLevelInfo {
+  const raw = examAircraftJson as unknown as {
+    defaultLevel?: string;
+    levels?: Array<{ level?: string; retreatDistanceM?: number | null; fieldFigure?: string | null }>;
+  };
+  const level = raw.defaultLevel ?? 'I';
+  const found = (raw.levels ?? []).find((l) => l.level === level);
+  return {
+    level,
+    retreatDistanceM: found?.retreatDistanceM ?? null,
+    fieldFigure: found?.fieldFigure ?? null,
   };
 }

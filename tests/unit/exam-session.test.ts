@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildExamField } from '../../src/exam/field';
 import { loadExamConfig } from '../../src/exam/config';
 import { ExamSession } from '../../src/exam/session';
+import { subjectDSteps } from '../../src/exam/scripted-programs';
 import type { FlightSample } from '../../src/exam/subjects';
 
 const config = loadExamConfig();
@@ -66,6 +67,41 @@ function genSubjectC(): FlightSample[] {
   return out;
 }
 
+/** 科目 D 官方序列的定點（左側面一輪 + 右側面一輪）。 */
+function genSubjectD(): FlightSample[] {
+  const out: FlightSample[] = [];
+  const alt = 1.5;
+  const push = (tt: number, x: number, y: number, z: number, h: number, sp: number, vyy: number) =>
+    out.push(s(tt, x, y, z, h, sp, vyy));
+  // 起飛爬升
+  for (let i = 0; i <= 40; i++) push(i * DT, 0, Math.min(alt, 0.75 * (i * DT)), 0, 0, 0, i * DT < 2 ? 0.75 : 0);
+  let t = 2;
+  const steps = subjectDSteps(field);
+  let curX = 0;
+  let curZ = 0;
+  let heading = 0;
+  steps.forEach((step) => {
+    const dx = step.point.x - curX;
+    const dz = step.point.z - curZ;
+    const dist = Math.hypot(dx, dz);
+    const dur = Math.max(dist / 3, 0.5);
+    const n = Math.max(2, Math.round(dur / DT));
+    const dh = step.headingDeg - heading;
+    for (let i = 1; i <= n; i++) {
+      const f = i / n;
+      push(t + i * DT, curX + dx * f, alt, curZ + dz * f, heading + dh * f, 3, 0);
+    }
+    t += n * DT;
+    curX = step.point.x;
+    curZ = step.point.z;
+    heading = step.headingDeg;
+    for (let i = 1; i <= 110; i++) push(t + i * DT, curX, alt, curZ, heading, 0, 0);
+    t += 5.5;
+  });
+  for (let i = 1; i <= 40; i++) push(t + i * DT, curX, Math.max(0, alt * (1 - i / 40)), curZ, heading, 0, -0.75);
+  return out;
+}
+
 describe('考試會話 — 錄製與彙整', () => {
   it('記錄 B 飛行並 finalize → 科目B=S、無重大違失、成績單 simulatedPass 反映', () => {
     const sess = new ExamSession();
@@ -88,13 +124,37 @@ describe('考試會話 — 錄製與彙整', () => {
     expect(minX).toBeLessThan(-10);
   });
 
-  it('同一會話可連續記錄 B 與 C → 兩科皆判定', () => {
+  it('同一會話可連續記錄 B/C/D → 三科皆判定且 simulatedPass=true', () => {
     const sess = new ExamSession();
-    [...genSubjectB(), ...genSubjectC()].forEach((smp) => sess.record(smp));
+    // 實際考試：每科一次獨立飛行，起飛前標記所屬科目（否則科目間互相污染）。
+    sess.startSubject('B');
+    genSubjectB().forEach((smp) => sess.record(smp));
+    sess.startSubject('C');
+    genSubjectC().forEach((smp) => sess.record(smp));
+    sess.startSubject('D');
+    genSubjectD().forEach((smp) => sess.record(smp));
     const res = sess.finalize(config, field);
     expect(res.subjectB.rating).toBe('S');
     expect(res.subjectC.rating).toBe('S');
+    expect(res.subjectD.rating).toBe('S');
+    expect(res.report.items[1].rating).toBe('S');
+    expect(res.report.items[2].rating).toBe('S');
+    expect(res.report.items[3].rating).toBe('S');
     expect(res.report.simulatedPass).toBe(true);
+  });
+
+  it('startSubject 切換後各科只看到自己的切片（D 的直飛不污染 C 的八字）', () => {
+    const sess = new ExamSession();
+    sess.startSubject('C');
+    genSubjectC().forEach((smp) => sess.record(smp));
+    // 同一會話接著飛 D：D 的 P3↔P7 往返直線會切進八字盒。
+    sess.startSubject('D');
+    genSubjectD().forEach((smp) => sess.record(smp));
+    const res = sess.finalize(config, field);
+    expect(res.subjectC.rating).toBe('S');
+    expect(res.subjectC.raw.maxPathDeviationM).toBe(0);
+    // 未應考 B → B 為未執行。
+    expect(res.subjectB.rating).toBe('N');
   });
 
   it('clear() 後樣本數歸零', () => {

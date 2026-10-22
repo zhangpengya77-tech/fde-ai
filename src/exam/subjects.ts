@@ -29,12 +29,23 @@ export interface FlightSample {
   z: number;
   /** 航向角（度，0=機頭朝 −Z）。 */
   headingDeg: number;
-  /** 水平速度（m/s）。 */
+  /** 水平速度（m/s，對空）。 */
   speedMps: number;
+  /**
+   * 水平速度（m/s，對地）＝對空速度＋風。有風時「定點懸停」的對空速度約等於
+   * 風速，若以對空速度判靜止會把懸誤判為運動——故靜止判定一律以此欄為準。
+   * 舊資料（未記錄）回退為 speedMps。
+   */
+  groundSpeedMps?: number;
   /** 垂直速度（m/s）。 */
   vy: number;
   /** 當前操作模式。 */
   mode: 'manual' | 'attitude' | 'position';
+}
+
+/** 取樣本的對地水平速度（m/s）；未記錄時回退對空速度。 */
+export function groundSpeedOf(s: FlightSample): number {
+  return s.groundSpeedMps ?? s.speedMps;
 }
 
 export interface JudgmentCheck {
@@ -99,7 +110,7 @@ function median(values: number[]): number {
 }
 
 /** 懸停「靜止」門檻。模擬假設（量測穩健度）。 */
-const HOVER = {
+export const HOVER = {
   stillSpeedMps: 0.3,
   stillVyMps: 0.3,
   headingRateDegPerS: 6,
@@ -107,7 +118,8 @@ const HOVER = {
   airborneAltM: 0.15,
 };
 
-interface Plateau {
+/** 一個懸停平台（水平靜止 + 高度穩定 + 航向穩定的連續區間）。 */
+export interface Plateau {
   headingDeg: number;
   startT: number;
   endT: number;
@@ -118,8 +130,11 @@ interface Plateau {
   samples: FlightSample[];
 }
 
-/** 偵測懸停平台（水平靜止 + 高度穩定 + 航向穩定）。 */
-function detectHoverPlateaus(samples: FlightSample[]): Plateau[] {
+/**
+ * 偵測懸停平台（水平靜止 + 高度穩定 + 航向穩定）。
+ * 匯出供科目 D／F 判定共用（同一套「靜止」定義，避免各科門檻漂移）。
+ */
+export function detectHoverPlateaus(samples: FlightSample[]): Plateau[] {
   const plateaus: Plateau[] = [];
   let cur: FlightSample[] = [];
 
@@ -146,7 +161,8 @@ function detectHoverPlateaus(samples: FlightSample[]): Plateau[] {
 
   for (let i = 0; i < samples.length; i += 1) {
     const s = samples[i];
-    let still = s.y > HOVER.airborneAltM && s.speedMps < HOVER.stillSpeedMps && Math.abs(s.vy) < HOVER.stillVyMps;
+    // 「靜止」以對地速度為準：有風時懸停的對空速度≈風速，用對空速度會永遠判不出懸停。
+    let still = s.y > HOVER.airborneAltM && groundSpeedOf(s) < HOVER.stillSpeedMps && Math.abs(s.vy) < HOVER.stillVyMps;
     if (still && i > 0) {
       const dt = Math.max(1e-3, s.t - samples[i - 1].t);
       const rate = Math.abs(angleDelta(s.headingDeg, samples[i - 1].headingDeg)) / dt;
@@ -377,7 +393,8 @@ export function judgeSubjectC(samples: FlightSample[], config: ExamConfig, field
   let runStart = -1;
   let runLast = -1;
   window.forEach((s, i) => {
-    const still = s.speedMps < 0.3 && Math.abs(s.vy) < 0.3;
+    // 靜止以「對地速度與垂直速度皆近零」為準（有風時對空速度≈風速，不可用）。
+    const still = groundSpeedOf(s) < 0.3 && Math.abs(s.vy) < 0.3;
     if (still) {
       if (runStart < 0) runStart = i;
       runLast = i;

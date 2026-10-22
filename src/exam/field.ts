@@ -237,4 +237,52 @@ export function conePosition(field: ExamField, id: string): FieldPoint2D | null 
   return field.figure8.cones[id] ?? null;
 }
 
+/**
+ * 科目 D 側向機動的兩個端角錐（P3 左、P7 右）與其橫向間距。
+ *
+ * 官方（p164）描述「側面前進至P3／側面後退至P7」，即機頭朝側面時沿機頭方向
+ * 在 P3↔P7 之間往返；P3↔P7 間距即該級距之後退距離
+ * （config.subjects.D.params.retreatDistanceByLevelM，級距 I = 12m）。
+ *
+ * 注意：本場幾何的八字圓直徑固定 12m（級距 I），故 P3↔P7 恆為 12m；
+ * 級距 II/III 的 18m/24m 需搭配較大場地（附錄6 圖12/圖13），當前場地無法
+ * 重現——由判定端如實記錄差異，不自創及格線。
+ */
+export function subjectDWaypoints(field: ExamField): {
+  p3: FieldPoint2D;
+  p7: FieldPoint2D;
+  h: FieldPoint2D;
+  /** P3↔P7 橫向間距（m，由場幾何導出）。 */
+  retreatSpacingM: number;
+} {
+  const p3 = conePosition(field, 'P3') ?? { x: -field.figure8.radiusM, z: field.figure8.center.z - field.figure8.radiusM };
+  const p7 = conePosition(field, 'P7') ?? { x: field.figure8.radiusM, z: field.figure8.center.z - field.figure8.radiusM };
+  return {
+    p3,
+    p7,
+    h: field.landingPointH.position,
+    retreatSpacingM: Math.hypot(p7.x - p3.x, p7.z - p3.z),
+  };
+}
+
+/** 較近一側八字圓（科目 F「相對較近一側八字內圈」用）。 */
+export function nearerFigure8Circle(
+  field: ExamField,
+  x: number,
+  z: number,
+): { side: 'left' | 'right'; circle: ExamFigure8Circle; distanceM: number } {
+  const l = field.figure8.leftCircle;
+  const r = field.figure8.rightCircle;
+  const dl = Math.hypot(x - l.center.x, z - l.center.z);
+  const dr = Math.hypot(x - r.center.x, z - r.center.z);
+  return dl <= dr
+    ? { side: 'left', circle: l, distanceM: dl }
+    : { side: 'right', circle: r, distanceM: dr };
+}
+
+/** 點到圓心的距離（m）。 */
+export function distanceToCircleCenter(circle: ExamFigure8Circle, x: number, z: number): number {
+  return Math.hypot(x - circle.center.x, z - circle.center.z);
+}
+
 export type { Vector3Like };

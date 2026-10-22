@@ -5,23 +5,25 @@
  * 產出仿附錄5 的七項 S/U/N 表 + 重大違失欄 + 總評。不依賴 DOM/Three.js。
  *
  * 重要：
- *  - 附錄5 七項中，本模擬僅實作 B（定點起降及四面停懸）與 C（8字水平圓）的
- *    自動判定；其餘五項（飛行前/後檢查、側面停懸、高度保持五邊、緊急處置）
- *    非本模擬涵蓋，標記為「未涵蓋（N）」並附註，絕不自創及格線。
+ *  - 附錄5 七項中，本模擬僅實作 B（定點起降及四面停懸）、C（8字水平圓）與
+ *    D（側面停懸及前進、後退）的自動判定；其餘四項（飛行前/後檢查、高度保持
+ *    五邊、緊急處置）非本模擬涵蓋，標記為「未涵蓋（N）」並附註，絕不自創及格線。
  *  - 總評區分兩層：
  *      · officialPassStandard：附錄5 原文「所有項目皆為 S（無 U、無重大違失）」；
- *      · simulatedPass：本模擬評判，僅看已實作之 B、C 與重大違失，供教學練習用。
+ *      · simulatedPass：本模擬評判，僅看已實作之 B、C、D 與重大違失，供教學練習用。
  *  - 所有 S/U/N 均為「模擬判定，非官方測驗結果」（config.scoring.judgmentLabel）。
  */
 
 import type { ExamConfig } from './config';
 import { REPORT_ITEMS } from './config';
 import type { SubjectBResult, SubjectCResult, ExamRating } from './subjects';
+import type { SubjectDResult } from './subject-d';
 import type { MajorFailureReport } from './major-failures';
 
 /** 附錄5 七項中，本模擬實作自動判定的項目索引（依 config.reportForm.items 順序）。 */
 const SUBJECT_B_REPORT_INDEX = 1; // 定點起降及四面停懸
 const SUBJECT_C_REPORT_INDEX = 2; // 8字水平圓
+const SUBJECT_D_REPORT_INDEX = 3; // 側面停懸及前進、後退
 
 export interface ExamReportHeaderField {
   field: string;
@@ -74,12 +76,13 @@ export interface BuildExamReportParams {
   config: ExamConfig;
   subjectB: SubjectBResult | null;
   subjectC: SubjectCResult | null;
+  subjectD?: SubjectDResult | null;
   majorFailure: MajorFailureReport;
   headerValues?: Record<string, string>;
   testTime?: { from: string; to: string };
 }
 
-function ratingOf(subject: SubjectBResult | SubjectCResult | null): ExamRating | null {
+function ratingOf(subject: SubjectBResult | SubjectCResult | SubjectDResult | null): ExamRating | null {
   if (!subject) return null;
   // 未執行（N）以 rating 直接表達；executed=false 時 rating 已為 'N'。
   return subject.rating;
@@ -89,7 +92,7 @@ function ratingOf(subject: SubjectBResult | SubjectCResult | null): ExamRating |
  * 建構仿附錄5 術科測驗報告表。
  */
 export function buildExamReport(params: BuildExamReportParams): ExamReport {
-  const { config, subjectB, subjectC, majorFailure } = params;
+  const { config, subjectB, subjectC, subjectD, majorFailure } = params;
   const headerValues = params.headerValues ?? {};
   const testTime = params.testTime ?? { from: '—', to: '—' };
 
@@ -118,18 +121,23 @@ export function buildExamReport(params: BuildExamReportParams): ExamReport {
   if (subjectC) {
     setItem(SUBJECT_C_REPORT_INDEX, ratingOf(subjectC), subjectC.executed ? '自動判定' : '未執行（未起飛）', true);
   }
+  if (subjectD) {
+    setItem(SUBJECT_D_REPORT_INDEX, ratingOf(subjectD), subjectD.executed ? '自動判定' : '未執行（未起飛）', true);
+  }
 
-  // 本模擬評判：已實作之 B、C 皆為 S 且無重大違失。
-  const bOk = subjectB !== null && subjectB.rating === 'S';
-  const cOk = subjectC !== null && subjectC.rating === 'S';
-  const simulatedPass = bOk && cOk && !majorFailure.hasAny;
+  // 本模擬評判：已實作之 B、C、D 皆為 S 且無重大違失。
+  const bOk = subjectB !== null && subjectB !== undefined && subjectB.rating === 'S';
+  const cOk = subjectC !== null && subjectC !== undefined && subjectC.rating === 'S';
+  const dOk = subjectD !== null && subjectD !== undefined && subjectD.rating === 'S';
+  const simulatedPass = bOk && cOk && dOk && !majorFailure.hasAny;
 
   const reasons: string[] = [];
   if (!bOk) reasons.push(subjectB ? `科目B=${subjectB.rating}` : '科目B=未測');
   if (!cOk) reasons.push(subjectC ? `科目C=${subjectC.rating}` : '科目C=未測');
+  if (!dOk) reasons.push(subjectD ? `科目D=${subjectD.rating}` : '科目D=未測');
   if (majorFailure.hasAny) reasons.push('有重大違失');
   const simulatedPassDetail = simulatedPass
-    ? '本模擬評判：科目 B、C 均 S 且無重大違失'
+    ? '本模擬評判：科目 B、C、D 均 S 且無重大違失'
     : `本模擬評判：不通過（${reasons.join('；')}）`;
 
   return {
