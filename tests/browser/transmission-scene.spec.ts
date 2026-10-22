@@ -114,7 +114,7 @@ test.describe('P1-4 transmission-line inspection scene', () => {
     expect(await canvasHasVisiblePixels(page)).toBe(true);
 
     // Mission panel shows the inspection target.
-    await expect(page.locator('[data-inspection-target]')).toContainText('绝缘子');
+    await expect(page.locator('[data-inspection-target]')).toContainText('絕緣子');
 
     expect(pageErrors).toEqual([]);
 
@@ -159,13 +159,13 @@ test.describe('P1-4 transmission-line inspection scene', () => {
     expect(['WARNING', 'DANGER']).toContain(nearTower.safetyState);
     expect(nearTower.safetyState).not.toBe('SAFE');
     await teleport(page, { x: -11, y: 8, z: 4 });
-    await expect(page.locator('[data-safety-status]')).toHaveText(/警告|危险/, { timeout: 8000 });
+    await expect(page.locator('[data-safety-status]')).toHaveText(/警告|危險/, { timeout: 8000 });
 
     // Near the conductor -> WARNING from the wire.
     const nearWire = await evaluateAt(page, { x: 0, y: 11, z: 4 });
     expect(['WARNING', 'DANGER']).toContain(nearWire.safetyState);
     await teleport(page, { x: 0, y: 11, z: 4 });
-    await expect(page.locator('[data-safety-status]')).toHaveText(/警告|危险/, { timeout: 8000 });
+    await expect(page.locator('[data-safety-status]')).toHaveText(/警告|危險/, { timeout: 8000 });
 
     const wireResult = await lastResult(page);
     expect(wireResult.distanceToWire).toBeLessThan(5);
@@ -200,7 +200,7 @@ test.describe('P1-4 transmission-line inspection scene', () => {
 
     // Live teleport inside the zone flips the HUD indicator.
     await teleport(page, { x: target.x + 2, y: target.y, z: target.z });
-    await expect(page.locator('[data-inspection-zone]')).toHaveText('已进入', { timeout: 8000 });
+    await expect(page.locator('[data-inspection-zone]')).toHaveText('已進入', { timeout: 8000 });
     const result = await lastResult(page);
     expect(result.insideInspectionZone).toBe(true);
     await expect(page.locator('[data-distance-target]')).toContainText('m');

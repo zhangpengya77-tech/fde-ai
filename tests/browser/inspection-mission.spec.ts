@@ -107,9 +107,9 @@ async function setGimbalPitch(page: Page, deg: number): Promise<void> {
 async function armTakeoffAndFly(page: Page): Promise<void> {
   await page.locator('[data-action="arm"]').click();
   await page.locator('[data-action="takeoff"]').click();
-  // Wait for the climb to FINISH (mode "飞行中"): teleporting while still
+  // Wait for the climb to FINISH (mode "飛行中"): teleporting while still
   // "taking-off" would be pulled back to the takeoff target altitude.
-  await expect(page.locator('[data-flight-state]')).toHaveText('飞行中', { timeout: 15_000 });
+  await expect(page.locator('[data-flight-state]')).toHaveText('飛行中', { timeout: 15_000 });
   await waitForMissionState(page, 'FLY_TO_TARGET');
 }
 
@@ -143,8 +143,8 @@ test.describe('P1-5 inspection mission loop', () => {
     // with a teaching reason and leaves the mission untouched.
     await captureMission(page);
     expect(await missionState(page)).toBe('IDLE');
-    await expect(page.locator('[data-photo-result]')).toHaveText('无法拍摄');
-    await expect(page.locator('[data-photo-reasons]')).toHaveText('当前不在拍摄步骤。');
+    await expect(page.locator('[data-photo-result]')).toHaveText('無法拍攝');
+    await expect(page.locator('[data-photo-reasons]')).toHaveText('當前不在拍攝步驟。');
 
     expect(pageErrors).toEqual([]);
   });
@@ -164,7 +164,7 @@ test.describe('P1-5 inspection mission loop', () => {
     // The checklist reflects the real pose: inside the zone, at a safe distance.
     await expect(page.locator('[data-check-target]')).toHaveText('✓');
     await expect(page.locator('[data-check-safety]')).toHaveText('✓');
-    await expect(page.locator('[data-inspection-zone]')).toHaveText('已进入');
+    await expect(page.locator('[data-inspection-zone]')).toHaveText('已進入');
 
     // --- Failed shot: gimbal pitched up 20 deg, far outside the 15 deg aim tollerance.
     await aimAtTarget(page);
@@ -173,11 +173,11 @@ test.describe('P1-5 inspection mission loop', () => {
 
     const bad = await photoResult(page);
     expect(bad.valid).toBe(false);
-    expect(bad.reasons.join()).toContain('云台');
+    expect(bad.reasons.join()).toContain('雲台');
     // The retry loop returns to aiming - the trainee must reposition / re-aim.
     expect(await missionState(page)).toBe('AIM_CAMERA');
     await expect(page.locator('[data-photo-result]')).toHaveText('照片不合格');
-    await expect(page.locator('[data-photo-reasons]')).toContainText('云台');
+    await expect(page.locator('[data-photo-reasons]')).toContainText('雲台');
     await expect(page.locator('[data-check-evidence]')).toHaveText('—');
 
     // --- Good shot: re-aim and shoot again - now it validates and runs the AI.
@@ -210,14 +210,14 @@ test.describe('P1-5 inspection mission loop', () => {
     expect(ai.confidence).toBeGreaterThan(0.5);
     expect(ai.confidence).toBeLessThanOrEqual(0.99);
     await expect(page.locator('[data-photo-result]')).toHaveText('照片合格');
-    await expect(page.locator('[data-ai-state]')).toHaveText('已检测');
-    await expect(page.locator('[data-ai-detail]')).toContainText('绝缘子片缺失');
+    await expect(page.locator('[data-ai-state]')).toHaveText('已檢測');
+    await expect(page.locator('[data-ai-detail]')).toContainText('絕緣子片缺失');
     await expect(page.locator('[data-check-evidence]')).toHaveText('✓');
 
     expect(pageErrors).toEqual([]);
 
     // Screenshot A: a validated capture - photo preview, checklist all ticked.
-    await expect(page.locator('[data-inspection-zone]')).toHaveText('已进入');
+    await expect(page.locator('[data-inspection-zone]')).toHaveText('已進入');
     await foldCalibrationPanel(page);
     await page.waitForTimeout(2500);
     await page.screenshot({ path: `screenshots/p1-5-capture-${testInfo.project.name}.png`, fullPage: true });
@@ -235,7 +235,7 @@ test.describe('P1-5 inspection mission loop', () => {
     // A real collision aborts the mission regardless of the current step.
     await teleport(page, COLLISION_POS);
     await waitForMissionState(page, 'FAILED');
-    await expect(page.locator('[data-mission-hint]')).toContainText('任务失败');
+    await expect(page.locator('[data-mission-hint]')).toContainText('任務失敗');
     await expect(page.locator('[data-safety-status]')).toHaveClass(/safety-collision/);
 
     expect(pageErrors).toEqual([]);
@@ -263,7 +263,7 @@ test.describe('P1-5 inspection mission loop', () => {
     await waitForMissionState(page, 'LAND');
     await waitForMissionState(page, 'COMPLETE');
 
-    await expect(page.locator('[data-mission-step]')).toHaveText('任务完成');
+    await expect(page.locator('[data-mission-step]')).toHaveText('任務完成');
     await expect(page.locator('[data-mission-progress]')).toHaveText('12 / 12');
     await expect(page.locator('[data-mission-state]')).toHaveText('完成');
     // Landed back at the home point, so the live-pose checks have reset.

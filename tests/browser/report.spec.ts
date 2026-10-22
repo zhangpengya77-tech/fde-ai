@@ -68,7 +68,7 @@ async function aimAtTarget(page: Page): Promise<void> {
 async function armTakeoffAndFly(page: Page): Promise<void> {
   await page.locator('[data-action="arm"]').click();
   await page.locator('[data-action="takeoff"]').click();
-  await expect(page.locator('[data-flight-state]')).toHaveText('飞行中', { timeout: 15_000 });
+  await expect(page.locator('[data-flight-state]')).toHaveText('飛行中', { timeout: 15_000 });
   await waitForMissionState(page, 'FLY_TO_TARGET');
 }
 
@@ -125,7 +125,7 @@ test.describe('P1-7 trainee mission report', () => {
     // is clicked, so it genuinely shows the history list (FIND-1 fix). The reports
     // overlay covers the calibration panel, so its fold timing does not affect it.
     await openReportFromList(page, `screenshots/p1-7-reports-list-${testInfo.project.name}.png`);
-    await expect(page.locator('[data-report-detail]')).toContainText('教学评分（六项）');
+    await expect(page.locator('[data-report-detail]')).toContainText('教學評分（六項）');
     await expect(page.locator('[data-report-detail] .report-dim')).toHaveCount(6);
     // A valid capture renders its photo in both the captures list and the
     // valid-photo gallery, so we assert at least one is present.
@@ -158,9 +158,9 @@ test.describe('P1-7 trainee mission report', () => {
     // Photos from the real capture.
     await expect(detail.locator('.report-photo').first()).toHaveAttribute('src', /^data:image\/png;base64,/);
     // Mock AI clearly marked, not real YOLO.
-    await expect(detail).toContainText('模拟 AI');
-    await expect(detail).toContainText('非真实 YOLO');
-    await expect(detail).toContainText('绝缘子片缺失');
+    await expect(detail).toContainText('模擬 AI');
+    await expect(detail).toContainText('非真實 YOLO');
+    await expect(detail).toContainText('絕緣子片缺失');
 
     expect(pageErrors).toEqual([]);
   });
@@ -177,7 +177,7 @@ test.describe('P1-7 trainee mission report', () => {
     await expect(page.locator('[data-reports-list] .report-item').first()).toBeVisible({ timeout: 10_000 });
 
     const item = page.locator('[data-reports-list] .report-item').first();
-    await expect(item).toContainText('输电塔右侧绝缘子串巡检');
+    await expect(item).toContainText('輸電塔右側絕緣子串巡檢');
     // Completed run is shown with a status and a score.
     await expect(item).toContainText('完成');
     await expect(item).toContainText('分');
@@ -201,9 +201,9 @@ test.describe('P1-7 trainee mission report', () => {
     // Switch to the teacher perspective; the report stays visible but is framed
     // as a read-only teacher review (no multi-user isolation assumed).
     await page.locator('[data-report-role-tab="teacher"]').click();
-    await expect(page.locator('[data-report-role]')).toHaveText('教师查看（只读）');
+    await expect(page.locator('[data-report-role]')).toHaveText('教師查看（唯讀）');
     await expect(page.locator('[data-report-teacher-note]')).toBeVisible();
-    await expect(page.locator('[data-report-detail]')).toContainText('教师查看模式（只读）');
+    await expect(page.locator('[data-report-detail]')).toContainText('教師查看模式（唯讀）');
     // The report content is still present in teacher view.
     await expect(page.locator('[data-report-detail] .report-dim')).toHaveCount(6);
 
@@ -258,12 +258,12 @@ test.describe('P1-7 trainee mission report', () => {
     await expect(page.locator('[data-reports-overlay]')).toBeVisible();
     await expect(page.locator('[data-reports-list] .report-item').first()).toBeVisible({ timeout: 10_000 });
     const item = page.locator('[data-reports-list] .report-item').first();
-    await expect(item).toContainText('失败');
+    await expect(item).toContainText('失敗');
     await expect(item.locator('.report-collision')).toContainText('碰撞');
 
     await item.click();
     await expect(page.locator('[data-report-detail]')).toBeVisible();
-    await expect(page.locator('[data-report-detail]')).toContainText('失败');
+    await expect(page.locator('[data-report-detail]')).toContainText('失敗');
     await expect(page.locator('[data-report-detail]')).toContainText('COLLISION');
 
     expect(pageErrors).toEqual([]);

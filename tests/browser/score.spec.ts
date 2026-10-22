@@ -79,7 +79,7 @@ async function setGimbalPitch(page: Page, deg: number): Promise<void> {
 async function armTakeoffAndFly(page: Page): Promise<void> {
   await page.locator('[data-action="arm"]').click();
   await page.locator('[data-action="takeoff"]').click();
-  await expect(page.locator('[data-flight-state]')).toHaveText('飞行中', { timeout: 15_000 });
+  await expect(page.locator('[data-flight-state]')).toHaveText('飛行中', { timeout: 15_000 });
   await waitForMissionState(page, 'FLY_TO_TARGET');
 }
 
@@ -138,7 +138,7 @@ test.describe('P1-6 teaching score panel', () => {
 
     // The score panel appears with the total, grade and all six dimensions.
     await expect(page.locator('[data-score-panel]')).toBeVisible();
-    await expect(page.locator('[data-mission-step]')).toHaveText('任务完成');
+    await expect(page.locator('[data-mission-step]')).toHaveText('任務完成');
 
     const total = await scoreTotal(page);
     expect(total).toBeGreaterThan(0);
@@ -187,7 +187,7 @@ test.describe('P1-6 teaching score panel', () => {
 
     // Deliberate dangerous approach: 2 m from tower T1 for ~3 seconds.
     await teleport(page, DANGER_POS);
-    await expect(page.locator('[data-safety-status]')).toHaveText('危险', { timeout: 8000 });
+    await expect(page.locator('[data-safety-status]')).toHaveText('危險', { timeout: 8000 });
     await page.waitForTimeout(3000);
 
     await completeInspectionLoop(page);
@@ -201,7 +201,7 @@ test.describe('P1-6 teaching score panel', () => {
     await expect(page.locator('[data-score-dimension="flight-safety"] [data-score-reason]')).toContainText('DANGER');
     await expect(page.locator('[data-score-dimension="flight-safety"]')).toHaveAttribute('data-score-status', /CHECK|POOR/);
     // The safety-first suggestion is present for a dangerous approach.
-    await expect(page.locator('[data-score-suggestion-list]')).toContainText('减速');
+    await expect(page.locator('[data-score-suggestion-list]')).toContainText('減速');
 
     expect(pageErrors).toEqual([]);
 
@@ -277,7 +277,7 @@ test.describe('P1-6 teaching score panel', () => {
     // 15 - 1.5 (one failed attempt before the valid final shot).
     expect(await dimensionValue(page, 'photo-quality')).toBe('13.5 / 15');
     const reason = await page.locator('[data-score-dimension="photo-quality"] [data-score-reason]').textContent();
-    expect(reason).toContain('共拍摄 2 次');
+    expect(reason).toContain('共拍攝 2 次');
     expect(reason).toContain('不合格');
 
     expect(pageErrors).toEqual([]);
@@ -296,7 +296,7 @@ test.describe('P1-6 teaching score panel', () => {
 
     // The trainee gives up and lands without any photo.
     await page.locator('[data-action="land"]').click();
-    await expect(page.locator('[data-flight-state]')).toHaveText('已解锁', { timeout: 15_000 });
+    await expect(page.locator('[data-flight-state]')).toHaveText('已解鎖', { timeout: 15_000 });
 
     // Scoring still happens for an unfinished run - and it cannot pass.
     await expect(page.locator('[data-score-panel]')).toBeVisible();
@@ -307,7 +307,7 @@ test.describe('P1-6 teaching score panel', () => {
     // 4 of the 8 steps to inspection completion => 25 * 4/8 = 12.5.
     expect(await dimensionValue(page, 'mission-completion')).toBe('12.5 / 25');
     await expect(page.locator('[data-score-dimension="mission-completion"] [data-score-reason]')).toContainText('未完成');
-    await expect(page.locator('[data-score-suggestion-list]')).toContainText('未拍摄巡检照片');
+    await expect(page.locator('[data-score-suggestion-list]')).toContainText('未拍攝巡檢照片');
 
     expect(pageErrors).toEqual([]);
   });

@@ -6,7 +6,7 @@ test('opens the Chinese training simulator with a rendered Three.js scene', asyn
 
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'FDE 无人机电力巡检数字孪生训练系统' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'FDE 無人機電力巡檢數位孿生訓練系統' })).toBeVisible();
   await expect(page.locator('[data-app-status="ready"]')).toBeVisible();
 
   const canvas = page.locator('canvas[data-scene="training"]');

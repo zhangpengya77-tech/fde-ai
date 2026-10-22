@@ -79,7 +79,7 @@ test.describe('P1-3 pilot input: simulated USB gamepad', () => {
     await page.goto('/');
 
     const inputSource = page.locator('[data-input-source]');
-    await expect(inputSource).toHaveText(/遥控器/, { timeout: 15_000 });
+    await expect(inputSource).toHaveText(/遙控器/, { timeout: 15_000 });
 
     // Raw RC data must reach the live channel monitor through the whole pipeline.
     const channelOne = page.locator('[data-channel-raw="0"]');
@@ -121,7 +121,7 @@ test.describe('P1-3 pilot input: simulated USB gamepad', () => {
     await page.goto('/');
 
     const inputSource = page.locator('[data-input-source]');
-    await expect(inputSource).toHaveText(/遥控器/, { timeout: 15_000 });
+    await expect(inputSource).toHaveText(/遙控器/, { timeout: 15_000 });
 
     await page.locator('[data-action="arm"]').click();
     await page.locator('[data-action="takeoff"]').click();
@@ -135,11 +135,11 @@ test.describe('P1-3 pilot input: simulated USB gamepad', () => {
     });
 
     // The app must drop back to the keyboard source.
-    await expect(inputSource).toHaveText('键盘', { timeout: 8_000 });
+    await expect(inputSource).toHaveText('鍵盤', { timeout: 8_000 });
 
     // A lost link is a safety event: the aircraft must hover and hold altitude,
     // never snap the throttle to zero and drop.
-    await expect(page.locator('[data-flight-mode]')).toHaveText('悬停', { timeout: 8_000 });
+    await expect(page.locator('[data-flight-mode]')).toHaveText('懸停', { timeout: 8_000 });
     await page.waitForTimeout(3_000);
     const altitudeAfter = await page.evaluate(altitudeNumber);
     expect(altitudeAfter).toBeGreaterThan(2.5);
