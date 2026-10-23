@@ -4,6 +4,7 @@ import { buildExamReport } from '../../src/exam/scoring';
 import type { SubjectBResult, SubjectCResult, JudgmentCheck } from '../../src/exam/subjects';
 import type { SubjectDResult } from '../../src/exam/subject-d';
 import type { SubjectFResult } from '../../src/exam/subject-f';
+import type { SubjectAResult, SubjectGResult } from '../../src/exam/subject-ag';
 import type { MajorFailureReport } from '../../src/exam/major-failures';
 
 const config = loadExamConfig();
@@ -84,6 +85,40 @@ function makeF(rating: 'S' | 'U' | 'N', executed = true): SubjectFResult {
   };
 }
 
+function makeA(rating: 'S' | 'U' | 'N', executed = true): SubjectAResult {
+  return {
+    rating,
+    executed,
+    checks: emptyChecks(),
+    failReasonKeys: [],
+    raw: {
+      stationOrder: ['nose', 'left', 'tail', 'right'],
+      walkaroundCCW: true,
+      checklistPreOk: 10,
+      checklistPreTotal: 10,
+      knowledgeOk: 9,
+      knowledgeTotal: 9,
+      controllerOk: 6,
+      controllerTotal: 6,
+    },
+  };
+}
+
+function makeG(rating: 'S' | 'U' | 'N', executed = true): SubjectGResult {
+  return {
+    rating,
+    executed,
+    checks: emptyChecks(),
+    failReasonKeys: [],
+    raw: {
+      stationOrder: ['nose', 'left', 'tail', 'right'],
+      walkaroundCCW: true,
+      checklistPostOk: 10,
+      checklistPostTotal: 10,
+    },
+  };
+}
+
 function mf(hasAny: boolean): MajorFailureReport {
   return {
     rule: config.majorFailures.rule,
@@ -101,10 +136,21 @@ function mf(hasAny: boolean): MajorFailureReport {
   };
 }
 
-describe('成績單 — 完美（B=S, C=S, D=S, F=S, 無違失）', () => {
-  it('simulatedPass=true；B/C/D/F 列為 S；其餘三項 rating=null', () => {
-    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), majorFailure: mf(false) });
+describe('成績單 — 完美（A=S, B=S, C=S, D=S, F=S, G=S, 無違失）', () => {
+  it('simulatedPass=true；A/B/C/D/F/G 列為 S；僅 E 未涵蓋', () => {
+    const r = buildExamReport({
+      config,
+      subjectA: makeA('S'),
+      subjectB: makeB('S'),
+      subjectC: makeC('S'),
+      subjectD: makeD('S'),
+      subjectF: makeF('S'),
+      subjectG: makeG('S'),
+      majorFailure: mf(false),
+    });
     expect(r.simulatedPass).toBe(true);
+    expect(r.items[0].rating).toBe('S');
+    expect(r.items[0].simulated).toBe(true);
     expect(r.items[1].rating).toBe('S');
     expect(r.items[1].simulated).toBe(true);
     expect(r.items[2].rating).toBe('S');
@@ -113,7 +159,9 @@ describe('成績單 — 完美（B=S, C=S, D=S, F=S, 無違失）', () => {
     expect(r.items[3].simulated).toBe(true);
     expect(r.items[5].rating).toBe('S');
     expect(r.items[5].simulated).toBe(true);
-    [0, 4, 6].forEach((i) => {
+    expect(r.items[6].rating).toBe('S');
+    expect(r.items[6].simulated).toBe(true);
+    [4].forEach((i) => {
       expect(r.items[i].rating).toBeNull();
       expect(r.items[i].simulated).toBe(false);
     });
@@ -123,7 +171,7 @@ describe('成績單 — 完美（B=S, C=S, D=S, F=S, 無違失）', () => {
 
 describe('成績單 — B=U → 不通過', () => {
   it('simulatedPass=false 且原因含 科目B=U', () => {
-    const r = buildExamReport({ config, subjectB: makeB('U'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), majorFailure: mf(false) });
+    const r = buildExamReport({ config, subjectB: makeB('U'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), subjectA: makeA('S'), subjectG: makeG('S'), majorFailure: mf(false) });
     expect(r.simulatedPass).toBe(false);
     expect(r.items[1].rating).toBe('U');
     expect(r.simulatedPassDetail).toContain('科目B=U');
@@ -132,7 +180,7 @@ describe('成績單 — B=U → 不通過', () => {
 
 describe('成績單 — C 未測（null）→ 不通過', () => {
   it('items[2].rating=null 且 simulatedPass=false', () => {
-    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: null, subjectD: makeD('S'), subjectF: makeF('S'), majorFailure: mf(false) });
+    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: null, subjectD: makeD('S'), subjectF: makeF('S'), subjectA: makeA('S'), subjectG: makeG('S'), majorFailure: mf(false) });
     expect(r.items[2].rating).toBeNull();
     expect(r.simulatedPass).toBe(false);
   });
@@ -140,20 +188,20 @@ describe('成績單 — C 未測（null）→ 不通過', () => {
 
 describe('成績單 — D 未測／U → 不通過（新增科目 D）', () => {
   it('subjectD=null → items[3].rating=null 且 simulatedPass=false', () => {
-    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectF: makeF('S'), majorFailure: mf(false) });
+    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectF: makeF('S'), subjectA: makeA('S'), subjectG: makeG('S'), majorFailure: mf(false) });
     expect(r.items[3].rating).toBeNull();
     expect(r.items[3].simulated).toBe(false);
     expect(r.simulatedPass).toBe(false);
     expect(r.simulatedPassDetail).toContain('科目D=未測');
   });
   it('subjectD=U → simulatedPass=false 且原因含 科目D=U', () => {
-    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('U'), subjectF: makeF('S'), majorFailure: mf(false) });
+    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('U'), subjectF: makeF('S'), subjectA: makeA('S'), subjectG: makeG('S'), majorFailure: mf(false) });
     expect(r.items[3].rating).toBe('U');
     expect(r.simulatedPass).toBe(false);
     expect(r.simulatedPassDetail).toContain('科目D=U');
   });
   it('B/C 皆 S 但 D 未執行（N）→ 不通過', () => {
-    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('N', false), subjectF: makeF('S'), majorFailure: mf(false) });
+    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('N', false), subjectF: makeF('S'), subjectA: makeA('S'), subjectG: makeG('S'), majorFailure: mf(false) });
     expect(r.items[3].rating).toBe('N');
     expect(r.simulatedPass).toBe(false);
   });
@@ -180,9 +228,37 @@ describe('成績單 — F 未觸發／U → 不通過（新增科目 F）', () =
   });
 });
 
+describe('成績單 — A/G 未測／U → 不通過（新增地面檢查科目）', () => {
+  it('subjectA=null（未進行飛行前檢查）→ items[0].rating=null 且 simulatedPass=false', () => {
+    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), subjectG: makeG('S'), majorFailure: mf(false) });
+    expect(r.items[0].rating).toBeNull();
+    expect(r.items[0].simulated).toBe(false);
+    expect(r.simulatedPass).toBe(false);
+    expect(r.simulatedPassDetail).toContain('科目A=未測');
+  });
+  it('subjectA=U → simulatedPass=false 且原因含 科目A=U', () => {
+    const r = buildExamReport({ config, subjectA: makeA('U'), subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), subjectG: makeG('S'), majorFailure: mf(false) });
+    expect(r.items[0].rating).toBe('U');
+    expect(r.simulatedPass).toBe(false);
+    expect(r.simulatedPassDetail).toContain('科目A=U');
+  });
+  it('subjectG=null（未進行飛行後檢查）→ items[6].rating=null 且 simulatedPass=false', () => {
+    const r = buildExamReport({ config, subjectA: makeA('S'), subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), majorFailure: mf(false) });
+    expect(r.items[6].rating).toBeNull();
+    expect(r.simulatedPass).toBe(false);
+    expect(r.simulatedPassDetail).toContain('科目G=未測');
+  });
+  it('subjectG=U → simulatedPass=false 且原因含 科目G=U', () => {
+    const r = buildExamReport({ config, subjectA: makeA('S'), subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), subjectG: makeG('U'), majorFailure: mf(false) });
+    expect(r.items[6].rating).toBe('U');
+    expect(r.simulatedPass).toBe(false);
+    expect(r.simulatedPassDetail).toContain('科目G=U');
+  });
+});
+
 describe('成績單 — 重大違失 → 不通過', () => {
   it('majorFailure.hasAny=true → simulatedPass=false 且原因含 重大違失', () => {
-    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), majorFailure: mf(true) });
+    const r = buildExamReport({ config, subjectB: makeB('S'), subjectC: makeC('S'), subjectD: makeD('S'), subjectF: makeF('S'), subjectA: makeA('S'), subjectG: makeG('S'), majorFailure: mf(true) });
     expect(r.majorFailure.hasAny).toBe(true);
     expect(r.simulatedPass).toBe(false);
     expect(r.simulatedPassDetail).toContain('重大違失');

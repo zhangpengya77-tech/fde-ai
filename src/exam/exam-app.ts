@@ -20,6 +20,7 @@ import { WindField } from './wind';
 import { ExamHud, type ExamHudMode } from './panel';
 import { ExamSession, type TrajectoryPoint } from './session';
 import { ExamInput } from './exam-input';
+import { GroundCheckPanel } from './ground-panel';
 import type { FlightSample } from './subjects';
 import type { ExamStickCommand, ExamFlightSnapshot } from './types';
 
@@ -109,11 +110,13 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   wrap.appendChild(subjectBar);
 
   const subjectButtons = new Map<string, HTMLButtonElement>();
-  const SUBJECT_KEYS: Array<{ key: 'B' | 'C' | 'D' | 'F'; label: string }> = [
+  const SUBJECT_KEYS: Array<{ key: 'A' | 'B' | 'C' | 'D' | 'F' | 'G'; label: string }> = [
+    { key: 'A', label: `A ${L.exam.subjects.A}` },
     { key: 'B', label: `B ${L.exam.subjects.B}` },
     { key: 'C', label: `C ${L.exam.subjects.C}` },
     { key: 'D', label: `D ${L.exam.subjects.D}` },
     { key: 'F', label: `F ${L.exam.subjects.F}` },
+    { key: 'G', label: `G ${L.exam.subjects.G}` },
   ];
   const renderSubjectBar = (): void => {
     const current = session.getCurrentSubject();
@@ -131,8 +134,9 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       const btn = el as HTMLButtonElement;
       subjectButtons.set(btn.dataset.subject ?? '', btn);
       btn.addEventListener('click', () => {
-        const key = btn.dataset.subject as 'B' | 'C' | 'D' | 'F';
+        const key = btn.dataset.subject as 'A' | 'B' | 'C' | 'D' | 'F' | 'G';
         session.startSubject(key);
+        groundPanel.setSubject(key === 'A' || key === 'G' ? key : null);
         renderSubjectBar();
       });
     });
@@ -154,6 +158,13 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   let emergencyBannerUntil = 0;
   /** 最近一帧飛控快照（供監評觸發按鍵讀取當下機位與高度）。 */
   let lastSnap: ExamFlightSnapshot | null = null;
+
+  // 地面檢查面板（科目 A／G：繞行航站＋附件3 檢查表；預設隱藏）。
+  // 位置在應考科目列（左上）之下，避免遮擋。
+  const groundHost = document.createElement('div');
+  groundHost.style.cssText = 'position:absolute;top:120px;left:8px;z-index:5;display:none;max-height:calc(100% - 130px);';
+  wrap.appendChild(groundHost);
+  const groundPanel = new GroundCheckPanel(groundHost, session);
 
   // ---- Three.js ----
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -242,6 +253,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     stopReplay();
     controller.reset();
     session.clear();
+    groundPanel.setSubject(null);
     renderSubjectBar();
     sceneHandle.clearTrajectory();
     reportHost.style.display = 'none';
@@ -397,6 +409,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
       examInput.dispose();
+      groundPanel.dispose();
       hud.dispose();
       sceneHandle.dispose();
       renderer.dispose();

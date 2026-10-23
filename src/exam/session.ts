@@ -1,8 +1,9 @@
 /**
  * 考試會話錄製（CAA 專業基本級術科模擬）。
  *
- * 職責：在考試進行期間每幀記錄飛行樣本（FlightSample），並累積航跡點（供回放）；
- * 考試結束時彙整——呼叫科目 B/C/D/F 判定、重大違失偵測，並建構仿附錄5 成績單。
+ * 職責：在考試進行期間每幀記錄飛行樣本（FlightSample）與地面檢查事件（科目 A／G），
+ * 並累積航跡點（供回放）；考試結束時彙整——呼叫科目 A/B/C/D/F/G 判定、重大違失
+ * 偵測，並建構仿附錄5 成績單。
  *
  * 科目分段：實際考試每科為一次獨立飛行（起飛→動作→降落）。同一場次連續應考
  * 多科時，若各科判定都掃描全部樣本，科目間的直飛航段會互相污染（例如科目 D 的
@@ -20,6 +21,15 @@ import type { FlightSample, SubjectBResult, SubjectCResult } from './subjects';
 import { judgeSubjectB, judgeSubjectC } from './subjects';
 import { judgeSubjectD, type SubjectDResult } from './subject-d';
 import { judgeSubjectF, type SubjectFResult, type SubjectFTrigger } from './subject-f';
+import {
+  createGroundCheckLog,
+  judgeSubjectA,
+  judgeSubjectG,
+  type GroundCheckLog,
+  type SubjectAResult,
+  type SubjectGResult,
+} from './subject-ag';
+import type { StationId } from './checklist';
 import { detectMajorFailures, type MajorFailureReport, type ManualMajorFailureFlags } from './major-failures';
 import { buildExamReport, type ExamReport } from './scoring';
 import { loadExamLevelInfo } from './config';
@@ -39,10 +49,12 @@ export interface FinalizeOptions {
 }
 
 export interface ExamSessionResult {
+  subjectA: SubjectAResult;
   subjectB: SubjectBResult;
   subjectC: SubjectCResult;
   subjectD: SubjectDResult;
   subjectF: SubjectFResult;
+  subjectG: SubjectGResult;
   majorFailure: MajorFailureReport;
   report: ExamReport;
   trajectory: TrajectoryPoint[];
@@ -61,6 +73,8 @@ export class ExamSession {
   private tagged = false;
   /** 科目 F「緊急返航」觸發事件（監評人員在空中任一位置下達）；null = 未觸發。 */
   private emergencyTrigger: SubjectFTrigger | null = null;
+  /** 地面檢查記錄（科目 A／G：繞行航站、附件3 勾選、系統知識、搖桿開關）。 */
+  private ground: GroundCheckLog = createGroundCheckLog();
 
   /**
    * 標記後續錄製樣本所屬的應考科目。
@@ -91,6 +105,36 @@ export class ExamSession {
     return this.emergencyTrigger;
   }
 
+  // ---- 地面檢查記錄（科目 A／G）----
+
+  /** 記錄繞行到訪航站（官方：逆時針 機頭→左側→機尾→右側）。 */
+  recordStation(station: StationId): void {
+    this.ground.stations.push(station);
+  }
+
+  /** 記錄附件3 檢查項勾選（phase：飛行前（A）／飛行後（G）；ok=true 為「是」。）。 */
+  recordChecklist(itemId: string, phase: 'pre' | 'post', ok: boolean): void {
+    const entry = this.ground.checklist[itemId] ?? {};
+    if (phase === 'pre') entry.pre = ok;
+    else entry.post = ok;
+    this.ground.checklist[itemId] = entry;
+  }
+
+  /** 記錄系統知識自評（科目 A）。 */
+  recordKnowledge(itemId: string, familiar: boolean): void {
+    this.ground.knowledge[itemId] = familiar;
+  }
+
+  /** 記錄搖桿／開關功能自評（科目 A）。 */
+  recordControllerCheck(itemId: string, ok: boolean): void {
+    this.ground.controller[itemId] = ok;
+  }
+
+  /** 地面檢查記錄（唯讀）。 */
+  getGroundCheckLog(): GroundCheckLog {
+    return this.ground;
+  }
+
   /** 每幀記錄一筆飛行樣本（snapshot）。 */
   record(sample: FlightSample): void {
     if (this.startedAtMs === 0) this.startedAtMs = Date.now();
@@ -118,6 +162,7 @@ export class ExamSession {
     this.currentSubject = null;
     this.tagged = false;
     this.emergencyTrigger = null;
+    this.ground = createGroundCheckLog();
     this.startedAtMs = 0;
     this.endedAtMs = 0;
   }
@@ -142,6 +187,7 @@ export class ExamSession {
    */
   finalize(config: ExamConfig, field: ExamField, options: FinalizeOptions = {}): ExamSessionResult {
     this.endedAtMs = Date.now();
+    const subjectA = judgeSubjectA(this.ground);
     const subjectB = judgeSubjectB(this.samplesFor('B'), config, field);
     const subjectC = judgeSubjectC(this.samplesFor('C'), config, field);
     const levelInfo = loadExamLevelInfo();
@@ -150,6 +196,7 @@ export class ExamSession {
       level: levelInfo.level,
     });
     const subjectF = judgeSubjectF(this.samplesFor('F'), config, field, this.emergencyTrigger);
+    const subjectG = judgeSubjectG(this.ground);
     const majorFailure = detectMajorFailures(
       this.samples,
       field,
@@ -159,10 +206,12 @@ export class ExamSession {
     );
     const report = buildExamReport({
       config,
+      subjectA,
       subjectB,
       subjectC,
       subjectD,
       subjectF,
+      subjectG,
       majorFailure,
       headerValues: options.headerValues,
       testTime: {
@@ -171,10 +220,12 @@ export class ExamSession {
       },
     });
     return {
+      subjectA,
       subjectB,
       subjectC,
       subjectD,
       subjectF,
+      subjectG,
       majorFailure,
       report,
       trajectory: [...this.trajectory],

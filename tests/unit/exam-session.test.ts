@@ -3,7 +3,16 @@ import { buildExamField } from '../../src/exam/field';
 import { loadExamConfig } from '../../src/exam/config';
 import { ExamSession } from '../../src/exam/session';
 import { subjectDSteps } from '../../src/exam/scripted-programs';
+import {
+  CHECKLIST_ITEMS,
+  CONTROLLER_CHECK_ITEMS,
+  SYSTEM_KNOWLEDGE_ITEMS,
+} from '../../src/exam/checklist';
 import type { FlightSample } from '../../src/exam/subjects';
+
+const CHECKLIST_IDS = CHECKLIST_ITEMS.map((i) => i.id);
+const KNOWLEDGE_IDS = SYSTEM_KNOWLEDGE_ITEMS.map((i) => i.id);
+const CONTROLLER_IDS = CONTROLLER_CHECK_ITEMS.map((i) => i.id);
 
 const config = loadExamConfig();
 const field = buildExamField(config);
@@ -163,7 +172,7 @@ describe('考試會話 — 錄製與彙整', () => {
     expect(minX).toBeLessThan(-10);
   });
 
-  it('同一會話可連續記錄 B/C/D/F → 四科皆判定且 simulatedPass=true', () => {
+  it('同一會話可連續記錄 B/C/D/F → 四科皆判定為 S（simulatedPass 另見完整考試測試）', () => {
     const sess = new ExamSession();
     // 實際考試：每科一次獨立飛行，起飛前標記所屬科目（否則科目間互相污染）。
     sess.startSubject('B');
@@ -186,7 +195,50 @@ describe('考試會話 — 錄製與彙整', () => {
     expect(res.report.items[2].rating).toBe('S');
     expect(res.report.items[3].rating).toBe('S');
     expect(res.report.items[5].rating).toBe('S');
+    // 未做 A／G 地面檢查 → simulatedPass 不成立（完整考試流程見下一個測試）。
+    expect(res.report.simulatedPass).toBe(false);
+  });
+
+  it('完整考試：A 飛行前檢查 → B/C/D/F → G 飛行後檢查 → 六科皆 S', () => {
+    const sess = new ExamSession();
+    // 科目 A：飛行前 360 度檢查（逆時針繞行＋附件3 飛行前欄＋知識＋遙控器）。
+    sess.startSubject('A');
+    ['nose', 'left', 'tail', 'right'].forEach((st) => sess.recordStation(st as 'nose'));
+    CHECKLIST_IDS.forEach((id) => sess.recordChecklist(id, 'pre', true));
+    KNOWLEDGE_IDS.forEach((id) => sess.recordKnowledge(id, true));
+    CONTROLLER_IDS.forEach((id) => sess.recordControllerCheck(id, true));
+    // 科目 B/C/D/F。
+    sess.startSubject('B');
+    genSubjectB().forEach((smp) => sess.record(smp));
+    sess.startSubject('C');
+    genSubjectC().forEach((smp) => sess.record(smp));
+    sess.startSubject('D');
+    genSubjectD().forEach((smp) => sess.record(smp));
+    sess.startSubject('F');
+    const f = genSubjectF();
+    f.samples.forEach((smp) => sess.record(smp));
+    sess.triggerEmergency(f.trigger.t, f.trigger.x, f.trigger.z);
+    // 科目 G：飛行後 360 度檢查（逆時針繞行＋附件3 飛行後欄）。
+    sess.startSubject('G');
+    ['nose', 'left', 'tail', 'right'].forEach((st) => sess.recordStation(st as 'nose'));
+    CHECKLIST_IDS.forEach((id) => sess.recordChecklist(id, 'post', true));
+    const res = sess.finalize(config, field);
+    expect(res.subjectA.rating).toBe('S');
+    expect(res.subjectG.rating).toBe('S');
+    expect(res.report.items[0].rating).toBe('S');
+    expect(res.report.items[6].rating).toBe('S');
     expect(res.report.simulatedPass).toBe(true);
+    // 僅 E（高度保持五邊飛行）未涵蓋。
+    expect(res.report.items[4].rating).toBeNull();
+  });
+
+  it('未進行飛行前檢查（無地面記錄）→ subjectA=N 且 simulatedPass=false', () => {
+    const sess = new ExamSession();
+    sess.startSubject('B');
+    genSubjectB().forEach((smp) => sess.record(smp));
+    const res = sess.finalize(config, field);
+    expect(res.subjectA.rating).toBe('N');
+    expect(res.report.simulatedPass).toBe(false);
   });
 
   it('科目 F 未下達緊急返航 → subjectF=N（未執行）且 simulatedPass=false', () => {
