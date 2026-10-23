@@ -191,3 +191,106 @@ describe('ExamFlightController — 模式與慣性', () => {
     expect(c.snapshot().altitudeM).toBeGreaterThan(1.4);
   });
 });
+
+describe('ExamFlightController — 起飛／懸停／降落狀態鏈（教師實測回報）', () => {
+  it('未解鎖時 takeoff 無效（狀態維持 idle）', () => {
+    const c = new ExamFlightController(PARAMS);
+    c.takeoff(1.5);
+    expect(c.snapshot().state).toBe('idle');
+    expect(c.snapshot().altitudeM).toBe(0);
+  });
+
+  it('起飛後高度確實上升，並在目標高度穩定', () => {
+    const c = new ExamFlightController(PARAMS);
+    c.arm();
+    c.takeoff(1.5);
+    const heights: number[] = [];
+    for (let i = 0; i < 150; i += 1) {
+      c.update(NEUTRAL, 0.02);
+      if (i % 15 === 0) heights.push(c.snapshot().altitudeM);
+    }
+    expect(heights[heights.length - 1]).toBeGreaterThan(1.4);
+    expect(Math.max(...heights)).toBeLessThan(1.6);
+  });
+
+  it('實體搖桿油門在底部（0）時，自動起飛完成後不會被拉回地面（油門鎖定）', () => {
+    const c = new ExamFlightController(PARAMS);
+    const BOTTOM: ExamStickCommand = { roll: 0, pitch: 0, yaw: 0, throttle: 0 };
+    c.arm();
+    c.takeoff(1.5);
+    stepFor(c, BOTTOM, 4);
+    const s = c.snapshot();
+    expect(s.state).toBe('flying');
+    expect(s.altitudeM).toBeGreaterThan(1.4);
+  });
+
+  it('刻意改變油門（>12%）後交還手動垂直控制：油門 0.3 下降', () => {
+    const c = new ExamFlightController(PARAMS);
+    const BOTTOM: ExamStickCommand = { roll: 0, pitch: 0, yaw: 0, throttle: 0 };
+    const LOWER: ExamStickCommand = { roll: 0, pitch: 0, yaw: 0, throttle: 0.3 };
+    c.arm();
+    c.takeoff(1.5);
+    stepFor(c, BOTTOM, 3);
+    const before = c.snapshot().altitudeM;
+    stepFor(c, LOWER, 1);
+    expect(c.snapshot().altitudeM).toBeLessThan(before - 0.2);
+  });
+
+  it('hover() 在自由飛行時煞停水平速度並維持高度；起飛程序中無效', () => {
+    const c = new ExamFlightController(PARAMS);
+    c.arm();
+    c.takeoff(1.5);
+    expect(c.hover()).toBe(false); // 起飛程序中
+    stepFor(c, NEUTRAL, 3);
+    stepFor(c, FORWARD, 1.5);
+    const moving = c.snapshot();
+    expect(Math.hypot(moving.velocity.x, moving.velocity.z)).toBeGreaterThan(0.5);
+    expect(c.hover()).toBe(true);
+    const alt = c.snapshot().altitudeM;
+    stepFor(c, NEUTRAL, 1);
+    const after = c.snapshot();
+    expect(Math.hypot(after.velocity.x, after.velocity.z)).toBeLessThan(0.05);
+    expect(Math.abs(after.altitudeM - alt)).toBeLessThan(0.1);
+  });
+
+  it('已落地後可直接再解鎖起飛（不需 reset）', () => {
+    const c = new ExamFlightController(PARAMS);
+    c.arm();
+    c.takeoff(1.5);
+    stepFor(c, NEUTRAL, 3);
+    c.land();
+    stepFor(c, NEUTRAL, 5);
+    expect(c.snapshot().state).toBe('landed');
+    c.arm();
+    expect(c.snapshot().state).toBe('armed');
+    c.takeoff(1.5);
+    stepFor(c, NEUTRAL, 3);
+    expect(c.snapshot().state).toBe('flying');
+    expect(c.snapshot().altitudeM).toBeGreaterThan(1.4);
+  });
+
+  it('飛行中重複 takeoff 不會改變既有目標高度', () => {
+    const c = new ExamFlightController(PARAMS);
+    c.arm();
+    c.takeoff(1.5);
+    stepFor(c, NEUTRAL, 3);
+    const alt = c.snapshot().altitudeM;
+    c.takeoff(3);
+    stepFor(c, NEUTRAL, 2);
+    expect(c.snapshot().altitudeM).toBeCloseTo(alt, 1);
+  });
+
+  it('isTakingOff / isLanding 反映程序狀態', () => {
+    const c = new ExamFlightController(PARAMS);
+    c.arm();
+    c.takeoff(1.5);
+    expect(c.isTakingOff()).toBe(true);
+    expect(c.isLanding()).toBe(false);
+    stepFor(c, NEUTRAL, 3);
+    expect(c.isTakingOff()).toBe(false);
+    c.land();
+    expect(c.isLanding()).toBe(true);
+    stepFor(c, NEUTRAL, 5);
+    expect(c.isLanding()).toBe(false);
+  });
+});

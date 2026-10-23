@@ -42,6 +42,12 @@ const DEFAULT_POSITION_HOLD_MAX_WIND_MPS = 10;
 /** 油門中位死區（|throttle−0.5| 小於此值視為回中）。 */
 const THROTTLE_CENTER_EPSILON = 0.02;
 
+/**
+ * 自動起飛完成後解除油門鎖定的門檻（|throttle − 起飛完成值| 超過此值視為
+ * 駕駛員刻意改變油門）。模擬假設，非官方：實體搖桿雜訊遠小於此值。
+ */
+const TAKEOFF_THROTTLE_RELEASE_EPSILON = 0.12;
+
 const EPS = 1e-6;
 
 function clamp(value: number, min: number, max: number): number {
@@ -87,6 +93,15 @@ export class ExamFlightController {
   private positionHoldTarget: Vector3Like | null = null;
   /** 回拉增益（m/s 每 m）：超出 maxSpeed 部分被夾斷。模擬假設，非官方。 */
   private static readonly RETURN_GAIN = 2.0;
+  /**
+   * 自動起飛完成當下的油門值（油門鎖定）。
+   *
+   * 實體遙控器油門搖桿靜止在底部（正規化 0），若起飛完成後直接套用「油門
+   * −0.5 → 垂直速度」，機體會在到達 1.5m 後立刻被當成全速下降而落地——教師
+   * 實測「按了起飛卻沒進入飛行狀態」即此原因。起飛完成後先以完成當下油門為
+   * 基準鎖定定高；駕駛員刻意改變油門（> 12%）才交還手動垂直控制。
+   */
+  private takeoffThrottleLatch: number | null = null;
   private readonly yawRateLimitDegPerS: number;
   private readonly positionHoldMaxWindMps: number;
 
@@ -100,7 +115,8 @@ export class ExamFlightController {
   }
 
   arm(): void {
-    if (this.state !== 'idle') return;
+    // 落地後可再次解鎖起飛（否則每次起飛前都要 Esc 重置，流程卡死）。
+    if (this.state !== 'idle' && this.state !== 'landed') return;
     this.state = 'armed';
   }
 
@@ -108,12 +124,39 @@ export class ExamFlightController {
     if (this.state !== 'armed') return;
     this.targetAltitudeM = Math.max(0.5, targetAltitudeM);
     this.holdAltitudeM = null;
+    this.takeoffThrottleLatch = null;
     this.state = 'flying';
+  }
+
+  /**
+   * 懸停：煞停水平速度並鎖定當前高度與位置（定位模式下由位置保持接手）。
+   * 只在自由飛行（非起飛／降落程序）時有效；搖桿再給桿即交還控制。
+   */
+  hover(): boolean {
+    if (this.state !== 'flying' || this.targetAltitudeM !== null) return false;
+    this.takeoffThrottleLatch = null;
+    this.velocity.x = 0;
+    this.velocity.z = 0;
+    this.holdAltitudeM = this.position.y;
+    this.positionHoldTarget = { ...this.position };
+    this.positionHoldActive = this.mode === 'position';
+    return true;
   }
 
   land(): void {
     if (this.state !== 'flying') return;
     this.targetAltitudeM = 0;
+    this.takeoffThrottleLatch = null;
+  }
+
+  /** 起飛程序中（已離地、尚未到達目標高度）。 */
+  isTakingOff(): boolean {
+    return this.state === 'flying' && this.targetAltitudeM !== null && this.targetAltitudeM > 0;
+  }
+
+  /** 降落程序中（垂直趨近地面）。 */
+  isLanding(): boolean {
+    return this.state === 'flying' && this.targetAltitudeM === 0;
   }
 
   setMode(mode: ExamFlightMode): void {
@@ -196,6 +239,9 @@ export class ExamFlightController {
         this.velocity.y = 0;
         this.holdAltitudeM = this.targetAltitudeM;
         this.targetAltitudeM = null;
+        // 以起飛完成當下油門為鎖定基準：實體搖桿底部休止（0）不應被解讀為
+        // 「全速下降」，否則自動起飛會立刻落回地面。
+        this.takeoffThrottleLatch = command.throttle;
       }
       return;
     }
@@ -354,6 +400,17 @@ export class ExamFlightController {
       this.position.y = clamp(this.position.y + this.velocity.y * delta, 0, 120);
       this.holdAltitudeM = null;
       return;
+    }
+
+    // 自動起飛完成後的油門鎖定（見 takeoffThrottleLatch）：油門維持在起飛
+    // 完成值附近 → 定高；刻意改變超過門檻 → 交還手動垂直控制。
+    if (this.takeoffThrottleLatch !== null) {
+      if (Math.abs(command.throttle - this.takeoffThrottleLatch) <= TAKEOFF_THROTTLE_RELEASE_EPSILON) {
+        if (this.holdAltitudeM === null) this.holdAltitudeM = this.position.y;
+        this.updateVerticalTarget(this.holdAltitudeM, delta);
+        return;
+      }
+      this.takeoffThrottleLatch = null;
     }
 
     const offCenter = clamp(command.throttle, 0, 1) - 0.5;

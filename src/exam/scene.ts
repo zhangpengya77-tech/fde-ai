@@ -46,6 +46,101 @@ function circlePoints(center: { x: number; z: number }, radius: number, y: numbe
   return pts;
 }
 
+/**
+ * 考試機四軸模型（程序化，無外部 GLB 依賴）。
+ *
+ * 依「機身／四臂／四馬達／四槳／機頭」組成，馬達對角約 1.1m（附件十二級別 I
+ * 樣機軸距 90–110cm）。最低點（起落架）在 y=0，故 setDronePose 直接把飛控
+ * 高度寫入 group.position.y，地面待命時機體落在起降點上、不會埋入地面。
+ *
+ * 顏色刻意提高對比：深灰機身＋白頂蓋＋紅色前臂（機頭方向）＋黃色機頭錐＋
+ * 綠色槳轂，避免在綠色地面上只剩一個黑點。
+ */
+function createExamQuad(
+  track: <T extends THREE.BufferGeometry | THREE.Material>(item: T) => T,
+): { group: THREE.Group; rotors: THREE.Group[] } {
+  const group = new THREE.Group();
+  group.name = 'ExamDrone';
+
+  const graphite = track(new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.5, metalness: 0.25 }));
+  const white = track(new THREE.MeshStandardMaterial({ color: 0xe8ece7, roughness: 0.45 }));
+  const red = track(new THREE.MeshStandardMaterial({ color: 0xd8493f, roughness: 0.45 }));
+  const metal = track(new THREE.MeshStandardMaterial({ color: 0x9aa39d, metalness: 0.75, roughness: 0.3 }));
+  const prop = track(new THREE.MeshStandardMaterial({ color: 0x1b1f1d, roughness: 0.55 }));
+  const accent = track(new THREE.MeshStandardMaterial({ color: 0x69d696, emissive: 0x123321, roughness: 0.4 }));
+  const noseMat = track(new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x6b4f00 }));
+
+  const bodyGeo = track(new THREE.BoxGeometry(0.34, 0.12, 0.34));
+  const body = new THREE.Mesh(bodyGeo, graphite);
+  body.position.y = 0.11;
+  body.castShadow = true;
+  group.add(body);
+
+  const canopyGeo = track(new THREE.BoxGeometry(0.24, 0.05, 0.26));
+  const canopy = new THREE.Mesh(canopyGeo, white);
+  canopy.position.y = 0.19;
+  group.add(canopy);
+
+  const stripGeo = track(new THREE.BoxGeometry(0.2, 0.02, 0.04));
+  const strip = new THREE.Mesh(stripGeo, accent);
+  strip.position.set(0, 0.22, 0.02);
+  group.add(strip);
+
+  // 四臂：前兩支紅色（機頭方向 −Z），後兩支白色；馬達對角 1.1m。
+  const armGeo = track(new THREE.BoxGeometry(0.74, 0.05, 0.07));
+  const motorGeo = track(new THREE.CylinderGeometry(0.055, 0.065, 0.1, 12));
+  const propGeo = track(new THREE.BoxGeometry(0.32, 0.008, 0.04));
+  const hubGeo = track(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 10));
+  const rotors: THREE.Group[] = [];
+  const armAngles: Array<{ angle: number; material: THREE.Material }> = [
+    { angle: Math.PI * 0.75, material: red }, // 左前
+    { angle: Math.PI * 1.25, material: red }, // 右前
+    { angle: Math.PI * 0.25, material: white }, // 右後
+    { angle: Math.PI * 1.75, material: white }, // 左後
+  ];
+  for (const { angle, material } of armAngles) {
+    const mx = Math.cos(angle) * 0.5;
+    const mz = Math.sin(angle) * 0.5;
+    const arm = new THREE.Mesh(armGeo, material);
+    arm.position.set(mx / 2, 0.11, mz / 2);
+    arm.rotation.y = -angle;
+    group.add(arm);
+
+    const motor = new THREE.Mesh(motorGeo, metal);
+    motor.position.set(mx, 0.16, mz);
+    group.add(motor);
+
+    const rotor = new THREE.Group();
+    rotor.position.set(mx, 0.22, mz);
+    const blade = new THREE.Mesh(propGeo, prop);
+    blade.castShadow = true;
+    rotor.add(blade);
+    const hub = new THREE.Mesh(hubGeo, accent);
+    rotor.add(hub);
+    group.add(rotor);
+    rotors.push(rotor);
+  }
+
+  // 機頭指示：黃色小錐朝 −Z。
+  const noseGeo = track(new THREE.ConeGeometry(0.06, 0.18, 10));
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.set(0, 0.12, -0.26);
+  group.add(nose);
+
+  // 起落架：兩支橫桿，最低點 y≈0（地面待命時貼地）。
+  const skidGeo = track(new THREE.CylinderGeometry(0.015, 0.015, 0.34, 6));
+  for (const x of [-0.12, 0.12]) {
+    const skid = new THREE.Mesh(skidGeo, graphite);
+    skid.rotation.z = Math.PI / 2;
+    skid.position.set(x, 0.02, 0.02);
+    group.add(skid);
+  }
+
+  return { group, rotors };
+}
+
+
 export function createExamScene(scene: THREE.Scene, field: ExamField): ExamSceneHandle {
   const disposables: Array<THREE.BufferGeometry | THREE.Material> = [];
   const track = <T extends THREE.BufferGeometry | THREE.Material>(item: T): T => {
@@ -166,24 +261,13 @@ export function createExamScene(scene: THREE.Scene, field: ExamField): ExamScene
   examiner.position.set(field.examinerPosition.position.x, 0.06, field.examinerPosition.position.z);
   scene.add(examiner);
 
-  // 機體標記（小方塊 + 機頭指示）。
-  const drone = new THREE.Group();
-  drone.name = 'ExamDrone';
-  const body = new THREE.Mesh(
-    track(new THREE.BoxGeometry(0.5, 0.18, 0.5)),
-    track(new THREE.MeshStandardMaterial({ color: 0x222831, roughness: 0.5 })),
-  );
-  body.castShadow = true;
-  drone.add(body);
-  const nose = new THREE.Mesh(
-    track(new THREE.ConeGeometry(0.12, 0.5, 10)),
-    track(new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x6b4f00 })),
-  );
-  // 機頭指示朝 −Z（heading 0 前方）。
-  nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0, -0.35);
-  drone.add(nose);
-  scene.add(drone);
+  // 機體：可辨識的四軸模型（機身＋四臂＋四馬達＋四槳＋機頭指示）。
+  // 尺寸對照附件十二級別 I 樣機軸距 90–110cm（馬達對角約 1.1m）；顏色提高
+  // 對比（深灰機身＋白頂蓋＋前臂紅色＋機頭黃錐），確保在考生視角與全景下
+  // 都可辨識。此模型即考試模式實際渲染的機體，由同一飛控 setDronePose 驅動，
+  // 不存在「展示用假飛機」。
+  const drone = createExamQuad(track);
+  scene.add(drone.group);
 
   // 航跡線（動態）。
   const trajGeo = track(new THREE.BufferGeometry());
@@ -194,6 +278,8 @@ export function createExamScene(scene: THREE.Scene, field: ExamField): ExamScene
   );
   scene.add(trajectory);
 
+  let lastDroneUpdateMs = performance.now();
+
   // 風向箭頭（動態）。
   const windArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0.1, 0), 3, 0x4fa3ff, 0.8, 0.5);
   scene.add(windArrow);
@@ -201,8 +287,16 @@ export function createExamScene(scene: THREE.Scene, field: ExamField): ExamScene
   return {
     field,
     setDronePose(position, headingDeg) {
-      drone.position.set(position.x, position.y, position.z);
-      drone.rotation.y = -(headingDeg * Math.PI) / 180;
+      drone.group.position.set(position.x, position.y, position.z);
+      drone.group.rotation.y = -(headingDeg * Math.PI) / 180;
+      // 槳葉旋轉（純視覺，不影響飛控與科目判定）：待命慢轉、離地快轉。
+      const now = performance.now();
+      const dt = Math.min(Math.max((now - lastDroneUpdateMs) / 1000, 0), 0.1);
+      lastDroneUpdateMs = now;
+      const spin = position.y > 0.02 ? 30 : 5;
+      drone.rotors.forEach((rotor, i) => {
+        rotor.rotation.y += spin * dt * (i % 2 === 0 ? 1 : -1);
+      });
     },
     appendTrajectory(x, z) {
       trajPositions.push(x, 0.12, z);
