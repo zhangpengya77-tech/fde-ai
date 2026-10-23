@@ -74,7 +74,7 @@ export interface ExamField {
   figure8: ExamFigure8;
   landingPointH: ExamLandingPoint;
   examinerPosition: ExamExaminerStation;
-  /** 應考人站位（起降點 H 附近）；用於「超越應考人後方」重大違失判定。 */
+  /** 應考人站位（起降點 H 附近，config.simAssist.examineeRear，模擬假設非官方）；用於「超越應考人後方」重大違失判定。 */
   examineePosition: FieldPoint2D;
   /** 應考人後方界線（z 大於此值即視為超越應考人後方，單位 m）。 */
   behindLimitZ: number;
@@ -93,7 +93,7 @@ const H_OUTER_MARKING_M = 1.8;
 const H_INNER_TARGET_M = 0.5;
 /** 監評站位至八字中心距離（圖11 觀察 4m），置於 H 與八字中心連線上。 */
 const EXAMINER_STATION_TO_CENTER_M = 4;
-/** 應考人後方界線（相對 examineePosition.z 的容許後退量，m）。 */
+/** 應考人後方界線預設容許後退量（m）。實際值由 config.simAssist.examineeRear 提供，此為後備預設。 */
 const BEHIND_MARGIN_M = 3;
 /** 角錐碰撞半徑（含機體半徑的近似，m）。 */
 const CONE_HIT_RADIUS_M = 0.8;
@@ -147,7 +147,12 @@ export function buildExamField(config: ExamConfig): ExamField {
     rightArcOrder: fig.rightArcOrder,
   };
 
-  const examineePosition: FieldPoint2D = { x: 0, z: 0 };
+  // 應考人站位與後方容許距離：config.simAssist.examineeRear（模擬假設，非官方，
+  // 可調）。官方精確站位距離未讀到（見 field.examinerPosition nullsReport），
+  // 故以起降點 H 為站位參考；讀不到時回退此處預設，不用猜測值。
+  const rear = config.simAssist?.examineeRear;
+  const examineePosition: FieldPoint2D = rear?.position ?? { x: 0, z: 0 };
+  const behindMarginM = rear?.behindMarginM ?? BEHIND_MARGIN_M;
   // 監評站位：八字中心往 H 方向 4m（z = crossZ + 4 = -12）。
   const examinerPosition: ExamExaminerStation = {
     position: { x: 0, z: crossZ + EXAMINER_STATION_TO_CENTER_M },
@@ -170,7 +175,7 @@ export function buildExamField(config: ExamConfig): ExamField {
     },
     examinerPosition,
     examineePosition,
-    behindLimitZ: examineePosition.z + BEHIND_MARGIN_M,
+    behindLimitZ: examineePosition.z + behindMarginM,
     sourcePage: op.page,
   };
 }

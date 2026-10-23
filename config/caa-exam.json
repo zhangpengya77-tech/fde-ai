@@ -430,6 +430,74 @@
       "coneHitHeightM": 0.8,
       "note": "科目 F（緊急處置程序 p166）量化閾值。來源「模擬假設，非官方」，可調。官方僅給質性描述：接獲「緊急返航」後立即原處懸停、自行判斷高度距離後以合理下滑角度穩定進場、不得壓到標線或撞擊角錐、儘速飛回相對較近一側八字內圈上方約1~2公尺後精準降落。immediateHoldWithinS=5 為「立即」的模擬量化（反應＋減速時限），非官方。"
     },
+    "camera": {
+      "disclaimer": "模擬假設，非官方，可調",
+      "defaultView": "examinee",
+      "views": {
+        "examinee": {
+          "eyeHeightM": 1.6,
+          "standoffBehindHM": 7,
+          "note": "考生視角（預設）：相機置於應考人站位（起降點 H 後方 standoffBehindHM 公尺、眼高 eyeHeightM），看向機體使機體保持畫面中央；起飛前即可見機體停於起降點。"
+        },
+        "follow": {
+          "distanceM": 9,
+          "heightM": 4.5,
+          "note": "追隨視角：相機在機體後方 distanceM、上方 heightM，跟随机體。"
+        },
+        "overview": {
+          "heightM": 34,
+          "distanceM": 46,
+          "lookAtZ": -10,
+          "note": "俯視全景：考場全景相機。"
+        }
+      }
+    },
+    "examineeRear": {
+      "disclaimer": "模擬假設，非官方，可調",
+      "position": { "x": 0, "z": 0 },
+      "behindMarginM": 3,
+      "countsTowardFail": false,
+      "note": "重大違失①「超越應考人後方」：官方精確站位距離未讀到（附錄6 圖11 p233 只見 4M/0.6M/0.6M 站位標註，見 field.examinerPosition）。站位與後方容許距離為模擬假設（起降點 H 為站位參考、後退 3m 為容許），未確認前本項只在成績單顯示警示，不計入 simulatedPass 否決（countsTowardFail=false）。"
+    },
+    "windPresets": {
+      "disclaimer": "風況選項為教學／監評切換用；「微風」「接近門檻」為模擬假設（非官方），可調。",
+      "semantics": "陣風＝瞬時風速的峰值上限（≥ 平均風）。瞬時風速在「平均風」與「陣峰」之間波動，陣風不再疊加於平均風之上（2026-10-23 修正）。",
+      "defaultPreset": "calm",
+      "presets": [
+        {
+          "key": "calm",
+          "label": "無風",
+          "meanMps": 0,
+          "gustMps": 0,
+          "official": true,
+          "note": "預設風況。平均 0、陣峰 0。"
+        },
+        {
+          "key": "breeze",
+          "label": "微風",
+          "meanMps": 2,
+          "gustMps": 4,
+          "official": false,
+          "note": "模擬假設，非官方：平均 2、陣峰 4 m/s。"
+        },
+        {
+          "key": "nearThreshold",
+          "label": "接近門檻",
+          "meanMps": 7,
+          "gustMps": 9,
+          "official": false,
+          "note": "模擬假設，非官方：平均 7、陣峰 9 m/s，刻意壓在宣告門檻（7.5／10）之下。"
+        },
+        {
+          "key": "declaration",
+          "label": "觸發宣告",
+          "meanMps": 7.5,
+          "gustMps": 10,
+          "official": true,
+          "note": "官方門檻值（general.wind p4）：平均 7.5 m/s（15 節）或陣峰 10 m/s（20 節）即需安全宣告。"
+        }
+      ]
+    },
     "recordRawMeasurements": true,
     "rawMeasurementFields": [
       "positionDeviationM",
@@ -466,6 +534,7 @@
     "field.landingPointH.markingCircleDiameterM：圖11 起降點放大框高解析可讀 1.8M（外標示）/0.5M（內靶），但幾何意涵未完全確定，依約束不猜，直徑維持 null（observedInFigure 已記錄）。",
     "field.safetyLine：官方安全線尺寸未讀到，暫留 null。",
     "field.examinerPosition.examinerDistanceM：圖11 見 4M/0.6M/0.6M 站位標註，精確站位距離未完全確定，維持 null（observedInFigure 已記錄）。",
+    "field.examinerPosition 站位放大框（附錄6 圖11 p233 右下放大框；2026-10-23 以 12–14 倍重繪逐項核對）：P（應考人）與 h（起降點）為 1M 寬 × 0.6M 深之相鄰方框，兩框間隔 0.6M；監評人員框 4M 寬 × 0.6M 深，與 h 間隔 0.6M。主圖另有「7M」垂直標註：自 H 所在橫線至下方站位標記（P/h/監評人員疊圖）。解讀：應考人站位在起降點後方（0.6M 間隔，框中心距約 1.2M），且站位整體可能在 H 後方 7M；但 7M 是否即「H→應考人站位」距離（或站位至場地後緣）圖面無法完全判定，故 examinerDistanceM 維持 null。本模擬之應考人站位（simAssist.examineeRear.position）暫以起降點 H 為參考、後方容許 3m（模擬假設，可調）；若確認 7M 為 H→站位距離，應改為 position.z=7、界線 z=7+3=10m。",
     "field.coneToEdgeMarginM：角錐至邊緣精確距離未讀到，暫留 null。",
     "general.toleranceNote：（二十三）容許偏差值依重量級距設定，逐項分級量化容許值未於正文讀到，暫留 null（科目準則以 1~2m 高度、5 秒懸停、不得偏出標示範圍等質性描述為準）。",
     "扣分規則：官方以 S/U/N 逐項 + 重大違失（任一 U 或違失即不通過）評定，非百分制；逐項扣分點數表未讀到，暫留 null（未取得者畫面顯示「待補官方標準」，不自創及格線）。",

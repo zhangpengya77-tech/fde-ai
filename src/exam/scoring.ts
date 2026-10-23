@@ -53,7 +53,11 @@ export interface ExamReportMajorFailure {
     detected: boolean;
     detail: string;
     auto: boolean;
+    /** true = 模擬假設警示項（官方數值未確認），不計入否決。 */
+    warningOnly?: boolean;
   }>;
+  /** 已觸發的警示（模擬假設，非官方；不影響 simulatedPass）。 */
+  warnings: Array<{ labelKey: string; detail: string }>;
 }
 
 export interface ExamReport {
@@ -168,9 +172,13 @@ export function buildExamReport(params: BuildExamReportParams): ExamReport {
   if (!fOk) reasons.push(subjectF ? `科目F=${subjectF.rating}` : '科目F=未觸發');
   if (!gOk) reasons.push(subjectG ? `科目G=${subjectG.rating}` : '科目G=未測');
   if (majorFailure.hasAny) reasons.push('有重大違失');
+  const warningNote =
+    majorFailure.warnings.length > 0
+      ? `（警示：${majorFailure.warnings.map((w) => w.detail).join('；')}——模擬假設，非官方，不計入否決）`
+      : '';
   const simulatedPassDetail = simulatedPass
-    ? '本模擬評判：科目 A、B、C、D、F、G 均 S 且無重大違失'
-    : `本模擬評判：不通過（${reasons.join('；')}）`;
+    ? `本模擬評判：科目 A、B、C、D、F、G 均 S 且無重大違失${warningNote}`
+    : `本模擬評判：不通過（${reasons.join('；')}）${warningNote}`;
 
   return {
     source: rf.source,
@@ -188,7 +196,9 @@ export function buildExamReport(params: BuildExamReportParams): ExamReport {
         detected: i.detected,
         detail: i.detail,
         auto: i.auto,
+        warningOnly: i.warningOnly,
       })),
+      warnings: majorFailure.warnings.map((w) => ({ labelKey: w.labelKey, detail: w.detail })),
     },
     officialPassStandard: sc.passStandard,
     simulatedPass,

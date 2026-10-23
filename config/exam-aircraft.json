@@ -11,12 +11,12 @@
     { "level": "III", "weightClass": "150公斤以上", "massKg": null, "fieldFigure": "附錄6 圖13（150公斤以上）p234", "retreatDistanceM": 24, "pentaAirspaceM": "160×40", "note": "150公斤以上。" }
   ],
   "defaultLevel": "I",
-  "levelSourceNote": "級別 I/II/III 對應重量級距，依 AC 107-005D 附錄6 場地（圖11/圖12/圖13，p233–234）與科目準則後退距離（p164）、五邊空域（p165）；級別I樣機軸距90–110cm、起飛重量≥4kg 依管理規則附件十二（AC 107-005D（十四）p3 引用）。未達2公斤為另行之級別（附錄6 圖9 p232；（二十五）不限操作模式 p5），本模擬預設以未達25公斤級別I 為準。",
+  "levelSourceNote": "級別 I/II/III 對應重量級距，依 AC 107-005D 附錄6 場地（圖11/圖12/圖13，p233–234）與科目準則後退距離（p164）、五邊空域（p165）；級別I樣機規格依「遙控無人機管理規則」附件十二（術科測驗用遙控無人機規格）：「無人多旋翼機 級別 I：對角馬達之軸心距離介於九十公分至一百一十公分；起飛重量：≧4 公斤」（PDF 第 35 頁／印刷頁 33；備註一：基本級級別 I 為模擬測驗最大起飛重量未達二十五公斤遙控無人機之操作技能，對應高級級別 Ia、Ib）。附件十二全文出處：交通部「遙控無人機管理規則」（109.3.31 施行）附件十二；使用者提供之臺北市法規查詢系統連結 https://www.laws.taipei.gov.tw/lawatt/Law/A040110100008800-20221230-21000-001.pdf 於 2026-10-23 查核時回傳 404，改以全文鏡像 https://iic.asia.edu.tw/uploads/asset/data/614165988199fb32ad000063/169021062.pdf 核對（42 頁 PDF，附件十二在第 35 頁）。AC 107-005D 一、（十四）p3 引用同一附件十二。未達2公斤為另行之級別（附錄6 圖9 p232；（二十五）不限操作模式 p5），本模擬預設以未達25公斤級別I 為準。檔案核驗（2026-10-23）：上述鏡像 PDF SHA-256 7b4e8f616be70d10f02a0f372f811cb33871513393b8eab55db7bc621b589fd3／MD5 6451cef7a459e27c0b5c8dcd0001d1f4／755420 bytes／42 頁；惟其 PDF 中繼資料標題為「民用航空法第9條及第23條修正建議」（Microsoft Word 2019，2019-07-15 產生），與檔名及內容（遙控無人機管理規則總說明）不一致，故僅作附件十二文字之交叉核對來源，尚未取得官方發布版原檔——法規數值一律標註「待官方原檔核驗」。",
   "sampleAircraft": {
     "name": "考試樣機（預設）",
     "level": "I",
-    "massKg": { "value": 4.0, "source": "附件十二 樣機規格（級別I ≥4kg）", "adjustable": true },
-    "diagonalSpanCm": { "value": 100, "rangeCm": [90, 110], "source": "附件十二 樣機規格（級別I 軸距90–110cm）", "adjustable": true },
+    "massKg": { "value": 4.0, "source": "附件十二 級別I 起飛重量 ≧4kg（PDF p35／印刷頁33）", "adjustable": true },
+    "diagonalSpanCm": { "value": 100, "rangeCm": [90, 110], "source": "附件十二 級別I 對角馬達軸心距離 90–110cm（PDF p35／印刷頁33）", "adjustable": true, "note": "官方原文：「對角馬達之軸心距離介於九十公分至一百一十公分」" },
     "maxTiltDeg": { "value": 25, "source": "模擬假設，非官方", "adjustable": true },
     "maxHorizontalSpeedMps": { "value": 8, "source": "模擬假設，非官方", "adjustable": true },
     "accelerationMps2": { "value": 2.5, "source": "模擬假設，非官方", "adjustable": true },

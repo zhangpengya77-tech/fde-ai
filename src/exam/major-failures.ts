@@ -11,7 +11,8 @@
  * 本模組將「機器可客觀偵測」的子事件與官方項對應：
  *   - 撞擊  → 機體在低高度與角錐重疊（hitCone）
  *   - 墜落  → 高度跌破地面（crash，y < 門檻）
- *   - 超越應考人後方 → 飛越應考人後方界線（beyondExamineeRear）
+ *   - 超越應考人後方 → 飛越應考人後方界線（beyondExamineeRear；官方站位距離
+ *     未確認前為「警示」，不計入否決，見 WARNING_ONLY_AUTO_CODES）
  *   - 失控/越區 → 離開操作區邊界（outOfOperationArea，監理空域強約束）
  * ②③④ 三項須由監評人員認定（手動旗標），無法由飛行樣本自動判定。
  *
@@ -47,6 +48,8 @@ export interface MajorFailureDetection {
   /** 量測說明（供人工審閱）。 */
   detail: string;
   page: number | null;
+  /** true = 官方數值未確認前的模擬假設項：只顯示警示，不計入否決（見 simAssist.examineeRear）。 */
+  warningOnly?: boolean;
 }
 
 export interface MajorFailureReport {
@@ -54,8 +57,10 @@ export interface MajorFailureReport {
   rule: string;
   page: number | null;
   items: MajorFailureDetection[];
-  /** 任一重大違失即不通過。 */
+  /** 任一「非警示」重大違失即不通過（警示項不計入）。 */
   hasAny: boolean;
+  /** 已觸發的警示項（模擬假設，非官方；不影響 simulatedPass）。 */
+  warnings: MajorFailureDetection[];
 }
 
 /** 高度跌破此值視為墜地/撞擊地面（m，相對起降面）。 */
@@ -65,6 +70,21 @@ const CONE_HIT_HEIGHT_M = 0.8;
 
 /** 官方重大違失規則與頁碼（config.majorFailures）。 */
 export const MAJOR_FAILURE_RULE = '不得有任何一項重大違失（任一項即不通過）';
+
+/**
+ * 官方站位距離未確認前「僅警示、不否決」的自動偵測項。
+ *
+ * 「超越應考人後方」屬官方重大違失①，但附錄6 圖11（p233）未給出應考人站位
+ * 精確距離（config.field.examinerPosition.examinerDistanceM=null），本模擬的
+ * 站位與後方容許距離是 simAssist.examineeRear 的模擬假設。在官方數值確認前，
+ * 此項只於成績單顯示「警示：疑似超越應考人後方（模擬假設）」，不計入
+ * simulatedPass 否決；其他重大違失（越區／撞錐／墜落／監評手動認定）維持否決。
+ */
+export const WARNING_ONLY_AUTO_CODES: readonly MajorFailureAutoCode[] = ['beyondExamineeRear'];
+
+export function isWarningOnlyMajorFailure(code: MajorFailureCode): boolean {
+  return (WARNING_ONLY_AUTO_CODES as readonly MajorFailureCode[]).includes(code);
+}
 
 /** 機器可自動偵測項（對應官方項①子事件）。labelKey 待 i18n 擴充。 */
 export const AUTO_MAJOR_FAILURES: ReadonlyArray<{
@@ -159,7 +179,15 @@ export function detectAutoMajorFailures(
     detected: boolean,
   ): MajorFailureDetection => {
     const meta = AUTO_MAJOR_FAILURES.find((a) => a.code === code)!;
-    return { code, labelKey: meta.labelKey, auto: true, detected, detail, page: meta.page };
+    return {
+      code,
+      labelKey: meta.labelKey,
+      auto: true,
+      detected,
+      detail,
+      page: meta.page,
+      warningOnly: isWarningOnlyMajorFailure(code),
+    };
   };
 
   return [
@@ -203,6 +231,8 @@ export function detectMajorFailures(
     rule,
     page,
     items,
-    hasAny: items.some((i) => i.detected),
+    // 警示項（模擬假設、官方數值未確認）不計入否決；其餘任一項即不通過。
+    hasAny: items.some((i) => i.detected && !i.warningOnly),
+    warnings: items.filter((i) => i.warningOnly && i.detected),
   };
 }

@@ -13,6 +13,7 @@
 import caaExamJson from '../../config/caa-exam.json';
 import examAircraftJson from '../../config/exam-aircraft.json';
 import type { ExamAircraftParams, ExamFlightMode } from './types';
+import type { ExamCameraView } from './flow';
 
 /** 官方模式定義（AC 107-005D p3）。 */
 export interface OfficialModeDef {
@@ -193,11 +194,54 @@ export interface ExamConfig {
       /** 進場/下降窗口內撞擊角錐的高度門檻（m）。 */
       coneHitHeightM: number;
     };
+    /** 考試相機視角（模擬假設，非官方，可調）。 */
+    camera: {
+      disclaimer: string;
+      defaultView: ExamCameraView;
+      views: {
+        examinee: { eyeHeightM: number; standoffBehindHM: number; note?: string };
+        follow: { distanceM: number; heightM: number; note?: string };
+        overview: { heightM: number; distanceM: number; lookAtZ: number; note?: string };
+      };
+    };
+    /** 重大違失①「超越應考人後方」之模擬假設站位（非官方，可調）。 */
+    examineeRear: {
+      disclaimer: string;
+      position: { x: number; z: number };
+      behindMarginM: number;
+      /** false = 官方站位距離未確認前只在成績單顯示警示，不計入 simulatedPass 否決。 */
+      countsTowardFail: boolean;
+      note?: string;
+    };
     recordRawMeasurements: boolean;
     rawMeasurementFields: string[];
+    /**
+     * 風況選項（教學／監評切換）。
+     *
+     * 語意（2026-10-23 修正）：`gustMps` 是「瞬時風速的峰值上限」，瞬時風速在
+     * `meanMps`（平均風）與 `gustMps`（陣峰）之間波動，**不再**把陣風疊加在平均
+     * 風之上。安全宣告門檻仍為官方值（平均 ≥7.5 或 陣峰 ≥10 m/s，p4）。
+     */
+    windPresets: {
+      disclaimer: string;
+      semantics: string;
+      defaultPreset: string;
+      presets: Array<{
+        key: string;
+        label: string;
+        meanMps: number;
+        gustMps: number;
+        /** true = 官方給出的數值（無風／宣告門檻）；false = 模擬假設（非官方）。 */
+        official: boolean;
+        note?: string;
+      }>;
+    };
   };
   nullsReport: string[];
 }
+
+/** 考試相機視角（V 鍵循環）——定義在 flow.ts，此處 re-export 供設定層引用。 */
+export type { ExamCameraView };
 
 /** 附錄5 報告表項目（七項）—— 依官方順序。 */
 export const REPORT_ITEMS = [

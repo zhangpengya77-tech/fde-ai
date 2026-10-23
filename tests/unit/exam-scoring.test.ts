@@ -133,6 +133,7 @@ function mf(hasAny: boolean): MajorFailureReport {
       { code: 'identityFraud', labelKey: 'x', auto: false, detected: false, detail: '—', page: 160 },
     ],
     hasAny,
+    warnings: [],
   };
 }
 
