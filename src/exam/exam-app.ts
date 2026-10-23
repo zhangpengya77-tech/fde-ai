@@ -119,12 +119,16 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   subjectRow.appendChild(topDisclaimer);
 
   // 風速／安全宣告：小型可收合卡片（不佔橫幅）。
+  // 面板必須是浮層（position:absolute）：若隨 <details> 展開佔用文件流，頂欄會換行，
+  // 科目列與步驟條被往下推，整個舞台跳動——教師實測時只要點一下風況就會看到版面位移。
   const windChip = document.createElement('details');
-  windChip.style.cssText = 'margin-left:auto;font-size:11px;color:#ffd28a;';
+  windChip.style.cssText = 'position:relative;margin-left:auto;font-size:11px;color:#ffd28a;';
   const windSummary = document.createElement('summary');
   windSummary.style.cssText = 'cursor:pointer;padding:2px 8px;border:1px solid #4a6a82;border-radius:8px;white-space:nowrap;';
   windChip.appendChild(windSummary);
-  const windBody = div('max-width:420px;margin-top:4px;padding:6px 8px;background:rgba(0,0,0,0.5);border-radius:6px;color:#ffd28a;');
+  const windBody = div(
+    'position:absolute;right:0;top:calc(100% + 4px);width:min(420px,calc(100vw - 24px));padding:6px 8px;background:rgba(4,12,18,0.96);border:1px solid #4a6a82;border-radius:6px;color:#ffd28a;z-index:20;box-shadow:0 6px 18px rgba(0,0,0,0.55);',
+  );
   windChip.appendChild(windBody);
 
   // 風況切換（教學／監評用）：無風／微風／接近門檻／觸發宣告。
