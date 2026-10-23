@@ -121,7 +121,7 @@ test.describe('P1-4 transmission-line inspection scene', () => {
     // Screenshot A: F450 + two towers + sagging wires panorama.
     await foldCalibrationPanel(page);
     await teleportAndSettle(page, { x: 0, y: 7, z: 0 }, 2500);
-    await page.screenshot({ path: `screenshots/p1-4-panorama-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-4-panorama-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test('CASE2: parked far from every hazard is SAFE', async ({ page }) => {
@@ -175,7 +175,7 @@ test.describe('P1-4 transmission-line inspection scene', () => {
     // Screenshot C: a WARNING/DANGER safety-warning view (3D + coloured HUD).
     await foldCalibrationPanel(page);
     await teleportAndSettle(page, { x: 0, y: 11, z: 4 }, 2500);
-    await page.screenshot({ path: `screenshots/p1-4-warning-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-4-warning-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test('CASE4: entering the inspection zone is recognised', async ({ page }, testInfo) => {
@@ -210,6 +210,6 @@ test.describe('P1-4 transmission-line inspection scene', () => {
     // Screenshot B: F450 inside the inspection zone.
     await foldCalibrationPanel(page);
     await teleportAndSettle(page, { x: target.x + 2, y: target.y, z: target.z }, 2500);
-    await page.screenshot({ path: `screenshots/p1-4-inzone-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-4-inzone-${testInfo.project.name}.png`, fullPage: true });
   });
 });

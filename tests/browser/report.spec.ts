@@ -124,7 +124,7 @@ test.describe('P1-7 trainee mission report', () => {
     // List screenshot is captured inside openReportFromList, BEFORE the first item
     // is clicked, so it genuinely shows the history list (FIND-1 fix). The reports
     // overlay covers the calibration panel, so its fold timing does not affect it.
-    await openReportFromList(page, `screenshots/p1-7-reports-list-${testInfo.project.name}.png`);
+    await openReportFromList(page, `.playwright-output/shots/p1-7-reports-list-${testInfo.project.name}.png`);
     await expect(page.locator('[data-report-detail]')).toContainText('教學評分（六項）');
     await expect(page.locator('[data-report-detail] .report-dim')).toHaveCount(6);
     // A valid capture renders its photo in both the captures list and the
@@ -136,7 +136,7 @@ test.describe('P1-7 trainee mission report', () => {
     await foldCalibrationPanel(page);
     await page.waitForTimeout(1500);
     await page.locator('[data-report-detail]').screenshot({
-      path: `screenshots/p1-7-report-detail-${testInfo.project.name}.png`,
+      path: `.playwright-output/shots/p1-7-report-detail-${testInfo.project.name}.png`,
     });
   });
 
@@ -270,7 +270,7 @@ test.describe('P1-7 trainee mission report', () => {
 
     await foldCalibrationPanel(page);
     await page.waitForTimeout(1200);
-    await page.screenshot({ path: `screenshots/p1-7-failed-report-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-7-failed-report-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test('CASE7: the report is fully viewable on mobile', async ({ page }) => {

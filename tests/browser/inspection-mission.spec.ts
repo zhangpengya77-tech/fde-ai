@@ -220,7 +220,7 @@ test.describe('P1-5 inspection mission loop', () => {
     await expect(page.locator('[data-inspection-zone]')).toHaveText('已進入');
     await foldCalibrationPanel(page);
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `screenshots/p1-5-capture-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-5-capture-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test('CASE3: the mission runs to completion and failure is real', async ({ page }, testInfo) => {
@@ -275,6 +275,6 @@ test.describe('P1-5 inspection mission loop', () => {
     // Screenshot B: the completed mission loop.
     await foldCalibrationPanel(page);
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `screenshots/p1-5-complete-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-5-complete-${testInfo.project.name}.png`, fullPage: true });
   });
 });

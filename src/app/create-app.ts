@@ -1474,6 +1474,14 @@ export function createApp(root: HTMLElement): AppHandle {
   resizeObserver.observe(mount);
   resize();
 
+  // 頁面卸載時主動釋放 WebGL context（非 bfcache 還原）：否則瀏覽器／GPU 程序
+  // 會累積未釋放的 context，全量瀏覽器測試順序執行到後段時可用 context 耗盡，
+  // 後面的頁面會空白（flight／shell 等測試偶發失敗的根因）。
+  const handlePageHide = (event: PageTransitionEvent): void => {
+    if (!event.persisted) renderer.forceContextLoss();
+  };
+  window.addEventListener('pagehide', handlePageHide);
+
   const frameInterval = 1000 / config.targetFrameRate;
   let animationFrame = 0;
   let lastRender = 0;
@@ -1820,6 +1828,7 @@ export function createApp(root: HTMLElement): AppHandle {
       transmissionScene.dispose();
       captureTarget.dispose();
       window.removeEventListener('keydown', handleGimbalKey);
+      window.removeEventListener('pagehide', handlePageHide);
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();

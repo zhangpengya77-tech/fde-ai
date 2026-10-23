@@ -168,11 +168,11 @@ test.describe('P1-6 teaching score panel', () => {
     // Screenshot A: the score overview after a completed mission.
     await foldCalibrationPanel(page);
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `screenshots/p1-6-score-overview-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-6-score-overview-${testInfo.project.name}.png`, fullPage: true });
 
     // Screenshot B: the six-dimension detail (panel close-up).
     await page.locator('[data-score-panel]').screenshot({
-      path: `screenshots/p1-6-score-detail-${testInfo.project.name}.png`,
+      path: `.playwright-output/shots/p1-6-score-detail-${testInfo.project.name}.png`,
     });
   });
 
@@ -208,7 +208,7 @@ test.describe('P1-6 teaching score panel', () => {
     // Screenshot C: the DANGER deduction case.
     await foldCalibrationPanel(page);
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `screenshots/p1-6-score-warning-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-6-score-warning-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test('CASE3: a COLLISION fails the mission and caps the total', async ({ page }, testInfo) => {
@@ -241,7 +241,7 @@ test.describe('P1-6 teaching score panel', () => {
     // Screenshot D: the COLLISION / FAIL case.
     await foldCalibrationPanel(page);
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `screenshots/p1-6-score-collision-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `.playwright-output/shots/p1-6-score-collision-${testInfo.project.name}.png`, fullPage: true });
   });
 
   test('CASE4: a retried photo is scored on the final valid shot, failed attempt kept', async ({ page }) => {

@@ -40,7 +40,7 @@ test('flies the programmatic F450 with the keyboard and lands safely', async ({ 
 
   expect(pageErrors).toEqual([]);
   await page.screenshot({
-    path: `screenshots/p1-2-flight-${testInfo.project.name}.png`,
+    path: `.playwright-output/shots/p1-2-flight-${testInfo.project.name}.png`,
     fullPage: true,
   });
 });
