@@ -7,20 +7,38 @@
  * 本模組為「考試機獨立疊加」：不動既有巡檢任務、搖桿映射、標定檔、飛控航向
  * 修正；僅在此模式下掛載考試機飛控與考場場景。
  *
- * 考試模式（examMode=true，預設）下引導強制關閉（不得提供飛行輔助）。
+ * 版面（2026-10-23 教師實測回報後重做）：
+ *  - 頂部固定列：應考科目（空間不足換行）＋風速／安全宣告（可收合小卡）＋
+ *    步驟條（①選科目②起飛③執行④降落⑤成績單，目前步驟高亮）＋狀態＋提示；
+ *  - 右側窄欄：即時面板（小地圖 216×140、模式／視角、輸入摘要可展開）；
+ *  - 場景中央保留給 3D 畫面，任何面板不得覆蓋；
+ *  - 底部中央：起飛／懸停／降落控制列（依飛行狀態啟用）＋鍵盤提示。
+ *
+ * 相機：預設「考生視角」（應考人站位看向機體），V 鍵循環 考生／追隨／俯視全景；
+ * 距離與高度取自 config.simAssist.camera（模擬假設，非官方，可調）。
  */
 
 import * as THREE from 'three';
 import { zhHant as L } from '../i18n/zh-Hant';
-import { loadExamConfig, loadExamAircraftParams } from './config';
+import { loadExamConfig, loadExamAircraftParams, type ExamCameraView } from './config';
 import { buildExamField } from './field';
 import { createExamScene, type ExamSceneHandle } from './scene';
 import { ExamFlightController } from './flight-controller';
-import { WindField } from './wind';
+import { SAFETY_DECLARATION, WindField } from './wind';
 import { ExamHud, type ExamHudMode } from './panel';
 import { ExamSession, type TrajectoryPoint } from './session';
 import { ExamInput } from './exam-input';
 import { GroundCheckPanel } from './ground-panel';
+import {
+  cycleCameraView,
+  deriveControlAvailability,
+  deriveExamStep,
+  deriveFlightStatus,
+  deriveStatusLabel,
+  nextHintKey,
+  type ExamFlowStep,
+  type ExamStatusLabel,
+} from './flow';
 import type { FlightSample } from './subjects';
 import type { ExamStickCommand, ExamFlightSnapshot } from './types';
 
@@ -57,6 +75,15 @@ export interface CreateExamAppOptions {
   examMode?: boolean;
 }
 
+/** 考試機起飛目標高度（m）。科目 B 官方準則 1.5m；其餘科目同基準。 */
+const TAKEOFF_ALTITUDE_M = 1.5;
+
+function div(style: string): HTMLDivElement {
+  const el = document.createElement('div');
+  el.style.cssText = style;
+  return el;
+}
+
 export function createExamApp(root: HTMLElement, options: CreateExamAppOptions = {}): AppHandle {
   const examMode = options.examMode ?? true;
   const config = loadExamConfig();
@@ -67,49 +94,159 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   const wind = new WindField(config);
   const session = new ExamSession();
 
-  // ---- DOM 佈局 ----
+  // ---- DOM 骨架 ----
   root.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#0b1d2a;';
+  const wrap = div('position:relative;width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;background:#0b1d2a;');
   root.appendChild(wrap);
 
-  const topDisclaimer = document.createElement('div');
+  // 頂部固定列（科目列＋風速卡＋步驟條＋狀態＋提示）。
+  const topBar = div(
+    'flex:0 0 auto;display:flex;flex-direction:column;gap:4px;padding:6px 10px;background:rgba(8,18,28,0.94);border-bottom:1px solid #22415a;z-index:20;font:12px/1.4 sans-serif;color:#cfe;',
+  );
+  topBar.id = 'exam-topbar';
+  wrap.appendChild(topBar);
+
+  const subjectRow = div('display:flex;flex-wrap:wrap;align-items:center;gap:6px;');
+  topBar.appendChild(subjectRow);
+
+  const subjectBar = div('display:flex;flex-wrap:wrap;gap:4px;align-items:center;');
+  subjectRow.appendChild(subjectBar);
+
+  const topDisclaimer = document.createElement('span');
   topDisclaimer.textContent = L.exam.topDisclaimer;
   topDisclaimer.style.cssText =
-    'position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(180,40,40,0.85);color:#fff;padding:4px 12px;border-radius:12px;font:12px sans-serif;z-index:5;';
-  wrap.appendChild(topDisclaimer);
+    'font-size:11px;padding:2px 10px;border-radius:10px;background:rgba(180,40,40,0.85);color:#fff;white-space:nowrap;';
+  subjectRow.appendChild(topDisclaimer);
+
+  // 風速／安全宣告：小型可收合卡片（不佔橫幅）。
+  const windChip = document.createElement('details');
+  windChip.style.cssText = 'margin-left:auto;font-size:11px;color:#ffd28a;';
+  const windSummary = document.createElement('summary');
+  windSummary.style.cssText = 'cursor:pointer;padding:2px 8px;border:1px solid #4a6a82;border-radius:8px;white-space:nowrap;';
+  windChip.appendChild(windSummary);
+  const windBody = div('max-width:420px;margin-top:4px;padding:6px 8px;background:rgba(0,0,0,0.5);border-radius:6px;color:#ffd28a;');
+  windChip.appendChild(windBody);
+
+  // 風況切換（教學／監評用）：無風／微風／接近門檻／觸發宣告。
+  // 微風與接近門檻為模擬假設（非官方），選項文字直接標示。
+  const windPresetRow = div('display:flex;align-items:center;gap:6px;margin-bottom:4px;');
+  const windPresetLabel = document.createElement('span');
+  windPresetLabel.textContent = L.exam.windChip.presetLabel;
+  const windPresetSelect = document.createElement('select');
+  windPresetSelect.dataset.windPreset = 'true';
+  windPresetSelect.style.cssText =
+    'background:#0b1d2a;color:#ffd28a;border:1px solid #4a6a82;border-radius:4px;font-size:11px;padding:1px 4px;';
+  for (const preset of wind.getPresets()) {
+    const option = document.createElement('option');
+    option.value = preset.key;
+    option.textContent = `${preset.label}（平均 ${preset.meanMps}／陣峰 ${preset.gustMps} m/s${preset.official ? '' : '，非官方'}）`;
+    windPresetSelect.appendChild(option);
+  }
+  windPresetSelect.value = wind.getPresetKey();
+  windPresetSelect.addEventListener('change', () => {
+    wind.setPreset(windPresetSelect.value);
+    updateWindChip();
+  });
+  windPresetRow.append(windPresetLabel, windPresetSelect);
+  windBody.appendChild(windPresetRow);
+
+  const windStatus = div('white-space:pre-wrap;');
+  windBody.appendChild(windStatus);
+  subjectRow.appendChild(windChip);
+
+  // 步驟條＋狀態＋提示。
+  const flowRow = div('display:flex;flex-wrap:wrap;align-items:center;gap:8px;');
+  topBar.appendChild(flowRow);
+
+  const stepBar = div('display:flex;flex-wrap:wrap;gap:4px;align-items:center;');
+  stepBar.id = 'exam-steps';
+  flowRow.appendChild(stepBar);
+
+  const statusTag = document.createElement('span');
+  statusTag.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:8px;background:#33475a;color:#dfe;';
+  flowRow.appendChild(statusTag);
+
+  const hintText = document.createElement('span');
+  hintText.id = 'exam-hint';
+  hintText.style.cssText = 'font-size:12px;color:#8fe3b0;';
+  flowRow.appendChild(hintText);
+
+  // 舞台（3D 場景＋浮層）。中央區域不得被面板覆蓋。
+  const stage = div('position:relative;flex:1 1 auto;overflow:hidden;');
+  stage.id = 'exam-stage';
+  wrap.appendChild(stage);
 
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'display:block;width:100%;height:100%;';
-  wrap.appendChild(canvas);
+  stage.appendChild(canvas);
+
+  // 右側窄欄：即時面板。
+  const hudHost = div('position:absolute;top:8px;right:8px;z-index:10;');
+  hudHost.id = 'exam-hud-host';
+  stage.appendChild(hudHost);
+  const hud = new ExamHud(field, hudHost);
+  hud.setExamMode(examMode);
+
+  // 地面檢查面板（科目 A／G；預設隱藏，置於左側、不遮中央）。
+  const groundHost = div(
+    'position:absolute;top:8px;left:8px;z-index:10;display:none;width:min(320px,calc(100% - 264px));max-height:calc(100% - 16px);overflow:auto;',
+  );
+  stage.appendChild(groundHost);
+  const groundPanel = new GroundCheckPanel(groundHost, session);
+
+  // 底部中央：起飛／懸停／降落控制列（狀態驅動）。
+  const controlBar = div(
+    'position:absolute;bottom:34px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10;',
+  );
+  controlBar.id = 'exam-controls';
+  stage.appendChild(controlBar);
+
+  const btnStyle =
+    'padding:7px 18px;border-radius:8px;border:1px solid #4a7;background:#1d3a2b;color:#dff;font:bold 13px sans-serif;cursor:pointer;';
+  const takeoffButton = document.createElement('button');
+  takeoffButton.textContent = `${L.exam.controlBar.takeoff} (T)`;
+  takeoffButton.dataset.action = 'takeoff';
+  takeoffButton.style.cssText = btnStyle;
+  const hoverButton = document.createElement('button');
+  hoverButton.textContent = L.exam.controlBar.hover;
+  hoverButton.dataset.action = 'hover';
+  hoverButton.style.cssText = btnStyle;
+  const landButton = document.createElement('button');
+  landButton.textContent = `${L.exam.controlBar.land} (L)`;
+  landButton.dataset.action = 'land';
+  landButton.style.cssText = btnStyle;
+  controlBar.append(takeoffButton, hoverButton, landButton);
 
   const controls = document.createElement('div');
   controls.textContent = L.exam.controlsHint;
   controls.style.cssText =
-    'position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.5);color:#cfe;padding:3px 10px;border-radius:8px;font:11px sans-serif;white-space:nowrap;z-index:5;';
-  wrap.appendChild(controls);
+    'position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.5);color:#cfe;padding:3px 10px;border-radius:8px;font:11px sans-serif;white-space:nowrap;z-index:10;max-width:96%;overflow:hidden;text-overflow:ellipsis;';
+  controls.id = 'exam-keyhint';
+  stage.appendChild(controls);
 
-  const safety = document.createElement('div');
-  safety.style.cssText =
-    'position:absolute;top:8px;left:8px;background:rgba(220,120,0,0.9);color:#fff;padding:4px 10px;border-radius:8px;font:12px sans-serif;z-index:5;display:none;max-width:60%;';
-  wrap.appendChild(safety);
+  // 緊急返航橫幅（科目 F，監評人員下達時顯示）。
+  const emergencyBanner = document.createElement('div');
+  emergencyBanner.textContent = L.exam.emergencyBanner;
+  emergencyBanner.style.cssText =
+    'position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(200,30,30,0.92);color:#fff;padding:8px 18px;border-radius:10px;font:bold 15px sans-serif;z-index:12;display:none;max-width:80%;text-align:center;';
+  stage.appendChild(emergencyBanner);
+  let emergencyBannerUntil = 0;
 
-  // 面板（HUD）掛載於右上。
-  const hudHost = document.createElement('div');
-  hudHost.style.cssText = 'position:absolute;top:8px;right:8px;z-index:5;';
-  wrap.appendChild(hudHost);
-  const hud = new ExamHud(field, hudHost);
-  hud.setExamMode(examMode);
+  // 成績單（覆蓋舞台；頂部列仍可見以免責聲明）。
+  // 成績單浮層：必須完全不透明——半透明時下方的即時面板（z-index 10）會透出來
+  // 形成鬼影，成績單上的數字會被誤讀。
+  const reportHost = div(
+    'position:absolute;inset:0;background:#08121c;color:#fff;overflow:auto;padding:20px;display:none;z-index:30;font:13px/1.5 sans-serif;',
+  );
+  reportHost.id = 'exam-report';
+  stage.appendChild(reportHost);
+
+  /** 最近一帧飛控快照（供監評觸發按鍵與測試鉤子讀取）。 */
+  let lastSnap: ExamFlightSnapshot | null = null;
+  /** 已渲染帧數（測試鉤子用：確認畫面真的畫過，而非只掛載 DOM）。 */
+  let frameCount = 0;
 
   // ---- 應考科目列 ----
-  // 實際考試每科一次獨立飛行；起飛前標記所屬科目，finalize 時各科判定只看
-  // 自己的樣本切片（避免科目間航段互相污染，如 D 的直飛切進 C 的八字盒）。
-  const subjectBar = document.createElement('div');
-  subjectBar.style.cssText =
-    'position:absolute;top:8px;left:8px;z-index:5;background:rgba(0,0,0,0.55);color:#cfe;padding:6px 10px;border-radius:8px;font:12px sans-serif;max-width:46%;';
-  wrap.appendChild(subjectBar);
-
-  const subjectButtons = new Map<string, HTMLButtonElement>();
   const SUBJECT_KEYS: Array<{ key: 'A' | 'B' | 'C' | 'D' | 'F' | 'G'; label: string }> = [
     { key: 'A', label: `A ${L.exam.subjects.A}` },
     { key: 'B', label: `B ${L.exam.subjects.B}` },
@@ -120,65 +257,40 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   ];
   const renderSubjectBar = (): void => {
     const current = session.getCurrentSubject();
-    const btns = SUBJECT_KEYS.map(
+    subjectBar.innerHTML = SUBJECT_KEYS.map(
       ({ key, label }) =>
-        `<button data-subject="${key}" style="margin:2px 4px 2px 0;padding:3px 10px;border-radius:6px;border:1px solid #4a7;cursor:pointer;font:12px sans-serif;${
+        `<button data-subject="${key}" style="padding:3px 10px;border-radius:6px;border:1px solid #4a7;cursor:pointer;font:12px sans-serif;white-space:nowrap;${
           current === key ? 'background:#2d6;color:#04240f;font-weight:bold;' : 'background:rgba(20,40,55,0.9);color:#cfe;'
         }">${label}</button>`,
     ).join('');
-    subjectBar.innerHTML = `<div style="opacity:.75;margin-bottom:2px">${L.exam.subjectBarTitle}${
-      current ? ` · ${L.exam.subjectCurrent} ${current}` : ''
-    }</div><div>${btns}</div><div style="opacity:.6;margin-top:2px;font-size:11px">${L.exam.subjectBarHint}<br>${L.exam.examinerKey}</div>`;
-    subjectButtons.clear();
     subjectBar.querySelectorAll('button').forEach((el) => {
       const btn = el as HTMLButtonElement;
-      subjectButtons.set(btn.dataset.subject ?? '', btn);
       btn.addEventListener('click', () => {
         const key = btn.dataset.subject as 'A' | 'B' | 'C' | 'D' | 'F' | 'G';
         session.startSubject(key);
         groundPanel.setSubject(key === 'A' || key === 'G' ? key : null);
         renderSubjectBar();
+        renderFlow(true);
       });
     });
   };
   renderSubjectBar();
-
-  // 成績單面板（預設隱藏）。
-  const reportHost = document.createElement('div');
-  reportHost.style.cssText =
-    'position:absolute;inset:0;background:rgba(8,18,28,0.92);color:#fff;overflow:auto;padding:24px;display:none;z-index:10;font:13px/1.5 sans-serif;';
-  wrap.appendChild(reportHost);
-
-  // 緊急返航橫幅（監評人員下達時閃爍，科目 F）。
-  const emergencyBanner = document.createElement('div');
-  emergencyBanner.textContent = L.exam.emergencyBanner;
-  emergencyBanner.style.cssText =
-    'position:absolute;top:44px;left:50%;transform:translateX(-50%);background:rgba(200,30,30,0.92);color:#fff;padding:8px 18px;border-radius:10px;font:bold 15px sans-serif;z-index:6;display:none;max-width:80%;text-align:center;';
-  wrap.appendChild(emergencyBanner);
-  let emergencyBannerUntil = 0;
-  /** 最近一帧飛控快照（供監評觸發按鍵讀取當下機位與高度）。 */
-  let lastSnap: ExamFlightSnapshot | null = null;
-
-  // 地面檢查面板（科目 A／G：繞行航站＋附件3 檢查表；預設隱藏）。
-  // 位置在應考科目列（左上）之下，避免遮擋。
-  const groundHost = document.createElement('div');
-  groundHost.style.cssText = 'position:absolute;top:120px;left:8px;z-index:5;display:none;max-height:calc(100% - 130px);';
-  wrap.appendChild(groundHost);
-  const groundPanel = new GroundCheckPanel(groundHost, session);
 
   // ---- Three.js ----
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 500);
-  camera.position.set(0, 34, 46);
-  camera.lookAt(0, 0, -10);
-
   const sceneHandle: ExamSceneHandle = createExamScene(scene, field);
 
+  const cam = config.simAssist.camera;
+  let cameraView: ExamCameraView = cam.defaultView;
+  const followEye = new THREE.Vector3();
+  let followEyeInit = false;
+
   const resize = (): void => {
-    const w = wrap.clientWidth || 800;
-    const h = wrap.clientHeight || 600;
+    const w = stage.clientWidth || 800;
+    const h = stage.clientHeight || 600;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -186,11 +298,133 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   resize();
   window.addEventListener('resize', resize);
 
+  // 頁面卸載時主動釋放 WebGL context（非 bfcache 還原），避免瀏覽器／GPU 程序
+  // 累積未釋放的 context（全量瀏覽器測試後段頁面空白／機體消失的根因之一）。
+  const handlePageHide = (event: PageTransitionEvent): void => {
+    if (!event.persisted) renderer.forceContextLoss();
+  };
+  window.addEventListener('pagehide', handlePageHide);
+
+  /** 依視角更新相機（機體保持畫面中央：lookAt 機體位置）。 */
+  const updateCamera = (snap: ExamFlightSnapshot | null, dt: number): void => {
+    const dronePos = snap?.position ?? { x: 0, y: 0, z: 0 };
+    const targetY = Math.max(dronePos.y, 0.35);
+    if (cameraView === 'examinee') {
+      // 考生視角：站在應考人位置（起降點 H 後方 standoffBehindHM、眼高 eyeHeightM），
+      // 看向機體——起飛前即可見機體停在起降點上。
+      camera.position.set(
+        field.examineePosition.x,
+        cam.views.examinee.eyeHeightM,
+        field.examineePosition.z + cam.views.examinee.standoffBehindHM,
+      );
+      camera.lookAt(dronePos.x, targetY, dronePos.z);
+      followEyeInit = false;
+      return;
+    }
+    if (cameraView === 'follow') {
+      // 追隨視角：機體後方 distanceM、上方 heightM，平滑跟隨。
+      const rad = (snap?.headingDeg ?? 0) * (Math.PI / 180);
+      const desired = new THREE.Vector3(
+        dronePos.x - Math.sin(rad) * cam.views.follow.distanceM,
+        dronePos.y + cam.views.follow.heightM,
+        dronePos.z + Math.cos(rad) * cam.views.follow.distanceM,
+      );
+      if (!followEyeInit) {
+        followEye.copy(desired);
+        followEyeInit = true;
+      } else {
+        followEye.lerp(desired, 1 - Math.exp(-6 * Math.max(dt, 1 / 120)));
+      }
+      camera.position.copy(followEye);
+      camera.lookAt(dronePos.x, targetY, dronePos.z);
+      return;
+    }
+    // 俯視全景。
+    camera.position.set(0, cam.views.overview.heightM, cam.views.overview.distanceM);
+    camera.lookAt(0, 0, cam.views.overview.lookAtZ);
+    followEyeInit = false;
+  };
+  updateCamera(null, 0);
+  hud.setCameraView(cameraView);
+
   // ---- 輸入：既有輸入管線（搖桿標定 → InputNormalizer → ChannelMapper；鍵盤備援）----
-  // 不另寫映射、不改標定檔：複用 PilotInputPipeline、GamepadInputAdapter、
-  // KeyboardInputAdapter 與 ProfileStore；有搖桿就用搖桿，否則回退鍵盤。
   const examInput = new ExamInput();
   void examInput.start();
+
+  // ---- 流程狀態（步驟條／狀態／提示／按鈕）----
+  let reportOpen = false;
+  let flowCacheKey = '';
+  let hintOverride: { text: string; until: number } | null = null;
+
+  const steps: Array<{ key: ExamFlowStep; label: string }> = [
+    { key: 'select', label: L.exam.steps.select },
+    { key: 'takeoff', label: L.exam.steps.takeoff },
+    { key: 'execute', label: L.exam.steps.execute },
+    { key: 'land', label: L.exam.steps.land },
+    { key: 'report', label: L.exam.steps.report },
+  ];
+
+  const currentFlowState = () => {
+    const flightStatus = deriveFlightStatus(lastSnap?.state ?? 'idle', lastSnap?.position.y ?? 0);
+    return {
+      subjectSelected: session.getCurrentSubject() !== null,
+      flightStatus,
+      reportOpen,
+      takingOff: controller.isTakingOff(),
+      landing: controller.isLanding(),
+    };
+  };
+
+  const renderFlow = (force = false): void => {
+    const s = currentFlowState();
+    const step = deriveExamStep(s);
+    const statusLabel: ExamStatusLabel = deriveStatusLabel(s.flightStatus, s.takingOff, s.landing);
+    const hintKey = nextHintKey(s);
+    const override = hintOverride && performance.now() < hintOverride.until ? hintOverride.text : null;
+    const key = `${step}|${statusLabel}|${hintKey}|${s.subjectSelected}|${override ?? ''}`;
+    if (!force && key === flowCacheKey) return;
+    flowCacheKey = key;
+
+    stepBar.innerHTML = steps
+      .map(
+        (it) =>
+          `<span data-step="${it.key}" data-current="${it.key === step}" style="padding:2px 8px;border-radius:6px;font-size:11px;white-space:nowrap;${
+            it.key === step ? 'background:#2d6;color:#04240f;font-weight:bold;' : 'background:rgba(30,55,72,0.9);color:#9fc;'
+          }">${it.label}</span>`,
+      )
+      .join('');
+
+    statusTag.textContent = L.exam.flightStatus[statusLabel];
+    statusTag.dataset.status = statusLabel;
+    hintText.textContent = override ?? L.exam.hints[hintKey as keyof typeof L.exam.hints];
+
+    const avail = deriveControlAvailability(s.flightStatus, s.takingOff, s.landing);
+    const takeoffEnabled = avail.takeoff && s.subjectSelected;
+    takeoffButton.disabled = !takeoffEnabled;
+    hoverButton.disabled = !avail.hover;
+    landButton.disabled = !avail.land;
+    takeoffButton.title = s.subjectSelected ? L.exam.hints.pressTakeoff : L.exam.hints.selectSubjectFirst;
+    [takeoffButton, hoverButton, landButton].forEach((b) => {
+      b.style.opacity = b.disabled ? '0.45' : '1';
+      b.style.cursor = b.disabled ? 'not-allowed' : 'pointer';
+    });
+  };
+
+  const flashHint = (text: string): void => {
+    hintOverride = { text, until: performance.now() + 2500 };
+    renderFlow(true);
+  };
+
+  /** 起飛（按鈕與 T 鍵共用）：未選科目不得起飛。 */
+  const requestTakeoff = (): void => {
+    if (!session.getCurrentSubject()) {
+      flashHint(L.exam.hints.selectSubjectFirst);
+      return;
+    }
+    controller.arm();
+    controller.takeoff(TAKEOFF_ALTITUDE_M);
+    renderFlow(true);
+  };
 
   const onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
@@ -198,16 +432,28 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     if (code === 'Digit1') controller.setMode('manual');
     else if (code === 'Digit2') controller.setMode('attitude');
     else if (code === 'Digit3') controller.setMode('position');
-    else if (code === 'KeyT') {
-      controller.arm();
-      controller.takeoff(1.5);
-    } else if (code === 'KeyL') controller.land();
+    else if (code === 'KeyT') requestTakeoff();
+    else if (code === 'KeyL') controller.land();
     else if (code === 'KeyG') examInput.togglePreference();
-    else if (code === 'KeyE') triggerEmergency();
+    else if (code === 'KeyV') {
+      cameraView = cycleCameraView(cameraView);
+      hud.setCameraView(cameraView);
+      flashHint(`${L.exam.panel.cameraView}：${L.exam.camera[cameraView]}（${L.exam.camera.switchHint}）`);
+    } else if (code === 'KeyE') triggerEmergency();
     else if (code === 'Enter') finish();
     else if (code === 'Escape') restart();
   };
   window.addEventListener('keydown', onKeyDown);
+
+  takeoffButton.addEventListener('click', () => requestTakeoff());
+  hoverButton.addEventListener('click', () => {
+    controller.hover();
+    renderFlow(true);
+  });
+  landButton.addEventListener('click', () => {
+    controller.land();
+    renderFlow(true);
+  });
 
   /**
    * 監評人員下達「緊急返航」（科目 F 觸發，官方準則第 3 條：在空中任一位置）。
@@ -257,10 +503,12 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     renderSubjectBar();
     sceneHandle.clearTrajectory();
     reportHost.style.display = 'none';
+    reportOpen = false;
     emergencyBanner.style.display = 'none';
     emergencyBannerUntil = 0;
     lastSnap = null;
     simTime = 0;
+    renderFlow(true);
   };
 
   // ---- 成績單 ----
@@ -275,7 +523,9 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       },
     });
     lastTrajectory = result.trajectory;
+    reportOpen = true;
     renderReport(result.report);
+    renderFlow(true);
   };
 
   const renderReport = (report: ReturnType<ExamSession['finalize']>['report']): void => {
@@ -304,12 +554,17 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     const mfRows = report.majorFailure.items
       .map((m) => {
         const label = L.exam.majorFailure[m.labelKey.replace('exam.majorFailure.', '') as keyof typeof L.exam.majorFailure];
+        const warningTag = m.warningOnly ? `（${L.exam.majorFailure.beyondExamineeRearWarning}，不計入否決）` : '';
         return `<tr>
-          <td>${label}</td>
+          <td>${label}${warningTag}</td>
           <td style="text-align:center">${m.detected ? '是' : '否'}</td>
           <td style="opacity:.7">${m.detail}</td>
         </tr>`;
       })
+      .join('');
+
+    const warningLines = report.majorFailure.warnings
+      .map((w) => `<div style="color:#ffb86b;margin:4px 0">${L.exam.majorFailure.beyondExamineeRearWarning}：${w.detail}</div>`)
       .join('');
 
     const overall = report.simulatedPass ? L.exam.report.simulatedPass : L.exam.report.simulatedFail;
@@ -332,7 +587,9 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
           <thead><tr><th style="text-align:left">項目</th><th>是否</th><th>量測</th></tr></thead>
           <tbody>${mfRows}</tbody>
         </table>
+        ${warningLines}
         <div style="margin:12px 0;font-size:15px;font-weight:bold">${overall}</div>
+        <div style="opacity:.85;font-size:12px">${report.simulatedPassDetail}</div>
         <div style="opacity:.8">${L.exam.report.officialStandard}：${report.officialPassStandard}</div>
         <div style="margin-top:16px;display:flex;gap:8px">
           <button id="exam-replay" style="padding:6px 14px">${L.exam.report.replay}</button>
@@ -342,6 +599,8 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     reportHost.style.display = 'block';
     reportHost.querySelector<HTMLButtonElement>('#exam-replay')?.addEventListener('click', () => {
       reportHost.style.display = 'none';
+      reportOpen = false;
+      renderFlow(true);
       startReplay();
     });
     reportHost.querySelector<HTMLButtonElement>('#exam-restart')?.addEventListener('click', () => {
@@ -349,14 +608,67 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     });
   };
 
-  const updateSafety = (): void => {
-    if (wind.needsSafetyDeclaration()) {
-      safety.style.display = 'block';
-      safety.textContent = `${L.exam.panel.safety}：${config.wind.declarationText}`;
-    } else {
-      safety.style.display = 'none';
-    }
+  const updateWindChip = (): void => {
+    const st = wind.getState();
+    const declaring = wind.needsSafetyDeclaration();
+    const preset = wind.getPreset();
+    const officialNote = preset.official ? '' : '（模擬假設，非官方）';
+    // 平均風與陣風峰值（陣峰＝瞬時風速上限），另附當前瞬時風速。
+    windSummary.textContent = `風：${preset.label}｜平均 ${st.meanSpeedMps.toFixed(1)} · 陣峰 ${st.gustSpeedMps.toFixed(1)} m/s（即時 ${st.instantSpeedMps.toFixed(1)}）${declaring ? ' ⚠ 需安全宣告' : ''}`;
+    windSummary.style.color = declaring ? '#ff9d5c' : '#ffd28a';
+    windStatus.textContent = declaring
+      ? `${L.exam.panel.safety}：${config.wind.declarationText}${officialNote}`
+      : `未達安全宣告門檻（平均 ${SAFETY_DECLARATION.meanWindMps} m/s／陣峰 ${SAFETY_DECLARATION.gustMps} m/s），無須宣告。${officialNote}`;
+    if (windPresetSelect.value !== wind.getPresetKey()) windPresetSelect.value = wind.getPresetKey();
+    hud.setWind({
+      meanMps: st.meanSpeedMps,
+      gustPeakMps: st.gustSpeedMps,
+      instantMps: st.instantSpeedMps,
+      declaring,
+    });
   };
+
+  // ---- 測試鉤子（供瀏覽器測試讀取機體投影與流程狀態；不影響功能）----
+  const testHook = {
+    getState: () => ({
+      frames: frameCount,
+      step: deriveExamStep(currentFlowState()),
+      status: statusTag.dataset.status ?? null,
+      cameraView,
+      subject: session.getCurrentSubject(),
+      /** 機體目前位置（m）與定位保持狀態：驗證「起飛後原地不動」與飄移量。 */
+      position: {
+        x: lastSnap?.position.x ?? 0,
+        y: lastSnap?.position.y ?? 0,
+        z: lastSnap?.position.z ?? 0,
+      },
+      mode: lastSnap?.mode ?? 'position',
+      positionHoldCompensating: lastSnap?.positionHoldCompensating ?? false,
+      windSpeedMps: Math.hypot(lastSnap?.windVector.x ?? 0, lastSnap?.windVector.z ?? 0),
+      flightState: lastSnap?.state ?? 'idle',
+      altitude: lastSnap?.position.y ?? 0,
+      heading: lastSnap?.headingDeg ?? 0,
+    }),
+    /** 機體在畫面上的投影（像素）與近似尺寸，用於驗證「看得見」。 */
+    getDroneScreen: () => {
+      const p = lastSnap?.position ?? { x: 0, y: 0, z: 0 };
+      const w = renderer.domElement.clientWidth;
+      const h = renderer.domElement.clientHeight;
+      const center = new THREE.Vector3(p.x, p.y + 0.12, p.z).project(camera);
+      const right = new THREE.Vector3(p.x + 0.55, p.y + 0.12, p.z).project(camera);
+      const px = (center.x * 0.5 + 0.5) * w;
+      const py = (-center.y * 0.5 + 0.5) * h;
+      const px2 = (right.x * 0.5 + 0.5) * w;
+      return {
+        inView: Math.abs(center.x) <= 1 && Math.abs(center.y) <= 1 && center.z < 1,
+        x: px,
+        y: py,
+        sizePx: Math.abs(px2 - px),
+        viewport: { w, h },
+      };
+    },
+  };
+  (window as unknown as Record<string, unknown>).__examTestHook = testHook;
 
   // ---- 主迴圈 ----
   let disposed = false;
@@ -392,14 +704,19 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       hud.setDrone(snap.position.x, snap.position.z, snap.headingDeg);
       hud.setMode(snap.mode as ExamHudMode);
       hud.setInputInfo(examInput.getInfo());
-      updateSafety();
+      updateWindChip();
       if (emergencyBannerUntil > 0 && performance.now() > emergencyBannerUntil) {
         emergencyBanner.style.display = 'none';
         emergencyBannerUntil = 0;
       }
     }
+    updateCamera(lastSnap, dt);
+    renderFlow();
     renderer.render(scene, camera);
+    frameCount += 1;
   };
+  renderFlow(true);
+  updateWindChip();
   rafId = requestAnimationFrame(animate);
 
   return {
@@ -408,6 +725,8 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('pagehide', handlePageHide);
+      delete (window as unknown as Record<string, unknown>).__examTestHook;
       examInput.dispose();
       groundPanel.dispose();
       hud.dispose();

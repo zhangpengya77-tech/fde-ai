@@ -30,6 +30,12 @@ test('exam mode mounts, runs, and produces a report', async ({ page }) => {
   // 操作提示含起飛說明。
   await expect(page.getByText('起飛').first()).toBeVisible();
 
+  // 起飛按鈕存在（考試模式明確的繁體中文操作入口）。
+  await expect(page.getByRole('button', { name: /起飛/ })).toBeVisible();
+
+  // 起飛前須先選科目（未選科目按 T 不起飛，提示「請先選科目」）。
+  await page.getByRole('button', { name: /^B / }).click();
+
   // 讓主迴圈跑一陣（確認無執行期錯誤）。
   await page.waitForTimeout(800);
 
