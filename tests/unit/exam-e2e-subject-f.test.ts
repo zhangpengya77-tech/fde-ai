@@ -29,6 +29,16 @@ import { linePoints } from '../../src/exam/scripted-programs';
 import type { ExamField } from '../../src/exam/field';
 import type { ExamFlightSnapshot } from '../../src/exam/types';
 
+// ---------------------------------------------------------------------------
+// 風況矩陣（教師 2026-10-23 指定：無風與微風）
+// ---------------------------------------------------------------------------
+
+/** 風況：無風（0/0，預設）與微風（平均 2／陣峰 4，模擬假設非官方）。 */
+const WIND_CASES = [
+  { preset: 'calm', label: '無風 0/0' },
+  { preset: 'breeze', label: '微風 2/4' },
+] as const;
+
 const DT = 1 / 60;
 /** 科目F 全程約 40s，留一倍餘量。 */
 const MAX_RUN_S = 90;
@@ -55,7 +65,7 @@ interface Ctx {
 
 interface Outcome {
   name: string;
-  windMps: number;
+  windLabel: string;
   durationS: number;
   sampleCount: number;
   landed: boolean;
@@ -180,12 +190,12 @@ function* subjectFWrongCircle(ctx: Ctx, trigger: { ref: SubjectFTrigger | null }
   yield* controlledDescent(ctx, { x: 0, z: 0 }, 0, 1.0);
 }
 
-function runScript(make: (ctx: Ctx, trigger: { ref: SubjectFTrigger | null }) => Script, meanWindMps: number, name: string): Outcome {
+function runScript(make: (ctx: Ctx, trigger: { ref: SubjectFTrigger | null }) => Script, preset: string, windLabel: string, name: string): Outcome {
   const config = loadExamConfig();
   const field = buildExamField(config);
   const aircraft = loadExamAircraftParams();
   const controller = new ExamFlightController(aircraft);
-  const windField = new WindField(config, { meanWindMps, gustMps: 0 });
+  const windField = new WindField(config, { preset });
   const pilot = new ScriptedPilot({
     maxSpeedMps: aircraft.maxHorizontalSpeedMps,
     positionGain: 3,
@@ -211,7 +221,7 @@ function runScript(make: (ctx: Ctx, trigger: { ref: SubjectFTrigger | null }) =>
 
   return {
     name,
-    windMps: meanWindMps,
+    windLabel,
     durationS: t,
     sampleCount: samples.length,
     landed: controller.snapshot().state === 'landed',
@@ -223,7 +233,7 @@ function runScript(make: (ctx: Ctx, trigger: { ref: SubjectFTrigger | null }) =>
 function logOutcome(o: Outcome): void {
   const f = o.f;
   const lines: string[] = [];
-  lines.push(`── ${o.name}｜風 ${o.windMps} m/s｜模擬 ${o.durationS.toFixed(1)}s／${o.sampleCount} 樣本｜著地 ${o.landed ? '是' : '否'}`);
+  lines.push(`── ${o.name}｜風況 ${o.windLabel}｜模擬 ${o.durationS.toFixed(1)}s／${o.sampleCount} 樣本｜著地 ${o.landed ? '是' : '否'}`);
   lines.push(
     `   科目F 判定 ${f.rating}${f.executed ? '' : '（未執行）'}` +
       `｜觸發 t=${f.raw.triggerT?.toFixed(2) ?? '—'}s @ (${f.raw.triggerX?.toFixed(2) ?? '—'}, ${f.raw.triggerZ?.toFixed(2) ?? '—'})` +
@@ -247,20 +257,20 @@ interface Expectation {
   failKey?: string;
 }
 
-const SCENARIOS: Array<{ name: string; make: (ctx: Ctx, trigger: { ref: SubjectFTrigger | null }) => Script; wind: number[]; expect: Expectation }> = [
-  { name: 'F 理想操作', make: subjectFIdeal, wind: [0, 5], expect: { rating: 'S' } },
-  { name: 'F 不良①未原處懸停', make: subjectFNoHold, wind: [0, 5], expect: { rating: 'U', failKey: 'subjectF.immediateHoldFail' } },
-  { name: 'F 不良②下降過快', make: subjectFFastDescent, wind: [0, 5], expect: { rating: 'U', failKey: 'subjectF.stableApproachFail' } },
-  { name: 'F 不良③未落內圈', make: subjectFWrongCircle, wind: [0, 5], expect: { rating: 'U', failKey: 'subjectF.landingFail' } },
+const SCENARIOS: Array<{ name: string; make: (ctx: Ctx, trigger: { ref: SubjectFTrigger | null }) => Script; wind: typeof WIND_CASES; expect: Expectation }> = [
+  { name: 'F 理想操作', make: subjectFIdeal, wind: WIND_CASES, expect: { rating: 'S' } },
+  { name: 'F 不良①未原處懸停', make: subjectFNoHold, wind: WIND_CASES, expect: { rating: 'U', failKey: 'subjectF.immediateHoldFail' } },
+  { name: 'F 不良②下降過快', make: subjectFFastDescent, wind: WIND_CASES, expect: { rating: 'U', failKey: 'subjectF.stableApproachFail' } },
+  { name: 'F 不良③未落內圈', make: subjectFWrongCircle, wind: WIND_CASES, expect: { rating: 'U', failKey: 'subjectF.landingFail' } },
 ];
 
 describe('端到端：科目 F 緊急處置程序由腳本化操作真的飛完並評 S/U/N', () => {
   for (const sc of SCENARIOS) {
     for (const wind of sc.wind) {
       it(
-        `${sc.name}（風 ${wind} m/s）→ ${sc.expect.rating}`,
+        `${sc.name}（${wind.label}）→ ${sc.expect.rating}`,
         () => {
-          const o = runScript(sc.make, wind, sc.name);
+          const o = runScript(sc.make, wind.preset, wind.label, sc.name);
           logOutcome(o);
           expect(o.landed, '應完成降落').toBe(true);
           expect(o.f.rating).toBe(sc.expect.rating);

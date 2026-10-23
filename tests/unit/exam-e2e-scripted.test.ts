@@ -61,7 +61,7 @@ interface Ctx {
 
 interface Outcome {
   name: string;
-  windMps: number;
+  windLabel: string;
   durationS: number;
   sampleCount: number;
   landed: boolean;
@@ -206,16 +206,26 @@ function* subjectCOffPath(ctx: Ctx): Script {
 }
 
 // ---------------------------------------------------------------------------
+// 風況矩陣（教師 2026-10-23 指定：無風與微風）
+// ---------------------------------------------------------------------------
+
+/** 風況：無風（0/0，預設）與微風（平均 2／陣峰 4，模擬假設非官方）。 */
+const WIND_CASES = [
+  { preset: 'calm', label: '無風 0/0' },
+  { preset: 'breeze', label: '微風 2/4' },
+] as const;
+
+// ---------------------------------------------------------------------------
 // 執行器
 // ---------------------------------------------------------------------------
 
-function runScript(make: (ctx: Ctx) => Script, meanWindMps: number, name: string): Outcome {
+function runScript(make: (ctx: Ctx) => Script, preset: string, windLabel: string, name: string): Outcome {
   const config = loadExamConfig();
   const field = buildExamField(config);
   const aircraft = loadExamAircraftParams();
   const controller = new ExamFlightController(aircraft);
-  // 陣風關閉（gust=0）→ 風場完全確定，量測可重現。
-  const windField = new WindField(config, { meanWindMps, gustMps: 0 });
+  // 風況由 windPresets 定義（陣峰＝瞬時上限）；無風時風場完全確定，量測可重現。
+  const windField = new WindField(config, { preset });
   const pilot = new ScriptedPilot({
     maxSpeedMps: aircraft.maxHorizontalSpeedMps,
     positionGain: 3,
@@ -240,7 +250,7 @@ function runScript(make: (ctx: Ctx) => Script, meanWindMps: number, name: string
 
   return {
     name,
-    windMps: meanWindMps,
+    windLabel,
     durationS: t,
     sampleCount: samples.length,
     landed: controller.snapshot().state === 'landed',
@@ -260,7 +270,7 @@ function logOutcome(o: Outcome): void {
   const b = o.b;
   const c = o.c;
   const lines: string[] = [];
-  lines.push(`── ${o.name}｜風 ${o.windMps} m/s｜模擬 ${o.durationS.toFixed(1)}s／${o.sampleCount} 樣本｜著地 ${o.landed ? '是' : '否'}`);
+  lines.push(`── ${o.name}｜風況 ${o.windLabel}｜模擬 ${o.durationS.toFixed(1)}s／${o.sampleCount} 樣本｜著地 ${o.landed ? '是' : '否'}`);
   lines.push(
     `   科目B 判定 ${b.rating}${b.executed ? '' : '（未執行）'}` +
       `｜懸停平台 ${b.raw.plateaus.length} 面：` +
@@ -298,41 +308,41 @@ interface Expectation {
   failKey?: string;
 }
 
-const SCENARIOS: Array<{ name: string; make: (ctx: Ctx) => Script; wind: number[]; expect: Expectation }> = [
+const SCENARIOS: Array<{ name: string; make: (ctx: Ctx) => Script; wind: typeof WIND_CASES; expect: Expectation }> = [
   {
     name: 'B 理想操作',
     make: subjectBIdeal,
-    wind: [0, 5],
+    wind: WIND_CASES,
     expect: { subject: 'b', rating: 'S' },
   },
   {
     name: 'B 不良①懸停不足',
     make: subjectBHoverTooShort,
-    wind: [0, 5],
+    wind: WIND_CASES,
     expect: { subject: 'b', rating: 'U', failKey: 'subjectB.hoverFail' },
   },
   {
     name: 'B 不良②降落超標',
     make: subjectBLandOutsideMarking,
-    wind: [0, 5],
+    wind: WIND_CASES,
     expect: { subject: 'b', rating: 'U', failKey: 'subjectB.landingExitMarking' },
   },
   {
     name: 'C 理想操作',
     make: subjectCIdeal,
-    wind: [0, 5],
+    wind: WIND_CASES,
     expect: { subject: 'c', rating: 'S' },
   },
   {
     name: 'C 不良①中途停頓',
     make: subjectCPauseMidManeuver,
-    wind: [0, 5],
+    wind: WIND_CASES,
     expect: { subject: 'c', rating: 'U', failKey: 'subjectC.pauseFail' },
   },
   {
     name: 'C 不良②軌跡超標',
     make: subjectCOffPath,
-    wind: [0, 5],
+    wind: WIND_CASES,
     expect: { subject: 'c', rating: 'U', failKey: 'subjectC.pathFail' },
   },
 ];
@@ -341,9 +351,9 @@ describe('端到端：腳本化操作真的飛完科目 B/C 並由同一套判�
   for (const sc of SCENARIOS) {
     for (const wind of sc.wind) {
       it(
-        `${sc.name}（風 ${wind} m/s）→ ${sc.expect.rating}`,
+        `${sc.name}（${wind.label}）→ ${sc.expect.rating}`,
         () => {
-          const o = runScript(sc.make, wind, sc.name);
+          const o = runScript(sc.make, wind.preset, wind.label, sc.name);
           logOutcome(o);
           expect(o.landed, '應完成降落').toBe(true);
           const result = sc.expect.subject === 'b' ? o.b : o.c;

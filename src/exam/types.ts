@@ -62,12 +62,14 @@ export interface ExamAircraftParams {
 export interface WindState {
   /** 平均風向量（m/s）。 */
   mean: Vector3Like;
-  /** 陣風向量（m/s，隨時間擾動）。 */
+  /** 當前陣風增量向量（瞬時 − 平均，m/s）；不是峰值。 */
   gust: Vector3Like;
-  /** 合成風速大小（m/s）。 */
+  /** 當前瞬時風速大小（m/s，恆介於平均風與陣峰之間）。 */
   speedMps: number;
   /** 平均風速大小（m/s）。 */
   meanSpeedMps: number;
-  /** 陣風風速大小（m/s）。 */
+  /** 陣風峰值上限（m/s，瞬時風速的上界）。 */
   gustSpeedMps: number;
+  /** 當前瞬時風速大小（m/s，與 speedMps 同值；語意較明確的別名）。 */
+  instantSpeedMps: number;
 }

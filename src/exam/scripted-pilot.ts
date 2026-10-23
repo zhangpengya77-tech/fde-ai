@@ -79,6 +79,8 @@ export class ScriptedPilot {
 
   private mode: 'hold' | 'path' = 'hold';
   private holdPoint: PilotPoint = { x: 0, z: 0 };
+  /** 定點保持死區是否生效（見 update() 說明）。 */
+  private holdDeadband = false;
   private targetHeadingDeg: number | null = 0;
   private targetAltitudeM = 1.5;
 
@@ -214,8 +216,28 @@ export class ScriptedPilot {
 
     const errX = refX - snapshot.position.x;
     const errZ = refZ - snapshot.position.z;
+
+    // 定點保持死區（模擬「真人頂住風、搖桿幾乎不動」）。
+    //
+    // 有風且不放桿時，PD 為了抵掉風會持續微調，形成對地速度 0~0.35 m/s 的
+    // 極限環（實測科目 D 微風 2/4：懸停平台被切成 0.67~3.28s，判定 U）。
+    // 位置誤差進入死區後直接命令「對地速度 0」＝以空速精確頂住風，對地速度
+    // 才會真的歸零；超出 2.5 倍死區才交還 PD。此死區只影響測試用飛行員，
+    // 不動飛控、不動任何判定閾值。
+    const errMag = Math.hypot(errX, errZ);
+    if (this.mode === 'hold' && this.compensateWind) {
+      if (errMag <= this.settlePosition) this.holdDeadband = true;
+      else if (errMag >= this.settlePosition * 2.5) this.holdDeadband = false;
+    } else {
+      this.holdDeadband = false;
+    }
+
     let desiredGroundVx = vRefX + this.gain * errX - this.damping * (ctrlVx - vRefX);
     let desiredGroundVz = vRefZ + this.gain * errZ - this.damping * (ctrlVz - vRefZ);
+    if (this.holdDeadband) {
+      desiredGroundVx = 0;
+      desiredGroundVz = 0;
+    }
 
     // 放桿判斷：位置誤差夠小，且「對空速度」夠小。
     //
