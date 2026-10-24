@@ -17,6 +17,7 @@
 import type { ExamField } from './field';
 import type { ExamInputInfo } from './exam-input';
 import type { ExamCameraView } from './flow';
+import type { CameraAdjust } from './camera';
 import { zhHant as L } from '../i18n/zh-Hant';
 
 export type ExamHudMode = 'manual' | 'attitude' | 'position';
@@ -84,6 +85,7 @@ export class ExamHud {
 
   private mode: ExamHudMode = 'position';
   private cameraView: ExamCameraView = 'examinee';
+  private cameraAdjust: CameraAdjust = { fovDeg: 55, orbitYawDeg: 0, orbitPitchDeg: 0 };
   private examMode = false;
   private guidanceEnabled = false;
   private inputExpanded = false;
@@ -170,8 +172,9 @@ export class ExamHud {
   }
 
   /** 目前相機視角（考生／追隨／俯視全景）。 */
-  setCameraView(view: ExamCameraView): void {
+  setCameraView(view: ExamCameraView, adjust: CameraAdjust = this.cameraAdjust): void {
     this.cameraView = view;
+    this.cameraAdjust = adjust;
     this.render();
   }
 
@@ -322,7 +325,10 @@ export class ExamHud {
 
     // 文字（模式／視角中文化，不留英文原值）
     this.modeLabel.textContent = `${L.exam.panel.mode}：${L.exam.modeLabels[this.mode]}`;
-    this.cameraLabel.textContent = `${L.exam.panel.cameraView}：${L.exam.camera[this.cameraView]}`;
+    const orbit = this.cameraAdjust.orbitYawDeg === 0 && this.cameraAdjust.orbitPitchDeg === 0
+      ? ''
+      : `（${L.exam.camera.orbit} ${Math.round(this.cameraAdjust.orbitYawDeg)}°／${Math.round(this.cameraAdjust.orbitPitchDeg)}°）`;
+    this.cameraLabel.textContent = `${L.exam.panel.cameraView}：${L.exam.camera[this.cameraView]}（${this.cameraAdjust.fovDeg}°）${orbit}`;
     const forced = isGuidanceForcedOff(this.examMode);
     this.guidanceTag.textContent = forced ? L.exam.panel.guidanceOffTag : `${L.exam.panel.guidance}：${this.guidanceEnabled ? '開' : '關'}`;
     this.guidanceTag.style.cursor = forced ? 'default' : 'pointer';

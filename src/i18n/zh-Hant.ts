@@ -305,6 +305,7 @@ export const zhHant = {
       follow: '追隨視角',
       overview: '俯視全景',
       switchHint: 'V 鍵切換視角',
+      orbit: '環繞',
     },
     steps: {
       title: '測驗流程',

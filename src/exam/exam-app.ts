@@ -30,6 +30,13 @@ import { ExamSession, type TrajectoryPoint } from './session';
 import { ExamInput } from './exam-input';
 import { GroundCheckPanel } from './ground-panel';
 import {
+  addOrbitPitchDeg,
+  addOrbitYawDeg,
+  defaultCameraAdjust,
+  resolveCameraPosition,
+  zoomFovDeg,
+} from './camera';
+import {
   cycleCameraView,
   deriveControlAvailability,
   deriveExamStep,
@@ -219,7 +226,10 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   landButton.textContent = `${L.exam.controlBar.land} (L)`;
   landButton.dataset.action = 'land';
   landButton.style.cssText = btnStyle;
-  controlBar.append(takeoffButton, hoverButton, landButton);
+  const viewButton = document.createElement('button');
+  viewButton.dataset.action = 'camera-view';
+  viewButton.style.cssText = `${btnStyle}background:#173957;border-color:#4b9fd0;`;
+  controlBar.append(takeoffButton, hoverButton, landButton, viewButton);
 
   const controls = document.createElement('div');
   controls.textContent = L.exam.controlsHint;
@@ -289,6 +299,8 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
 
   const cam = config.simAssist.camera;
   let cameraView: ExamCameraView = cam.defaultView;
+  let cameraAdjust = defaultCameraAdjust();
+  let appliedFovDeg = camera.fov;
   const followEye = new THREE.Vector3();
   let followEyeInit = false;
 
@@ -309,19 +321,39 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   };
   window.addEventListener('pagehide', handlePageHide);
 
+  const syncCameraUi = (): void => {
+    hud.setCameraView(cameraView, cameraAdjust);
+    viewButton.textContent = `${L.exam.panel.cameraView}：${L.exam.camera[cameraView]} (V)`;
+  };
+
   /** 依視角更新相機（機體保持畫面中央：lookAt 機體位置）。 */
   const updateCamera = (snap: ExamFlightSnapshot | null, dt: number): void => {
     const dronePos = snap?.position ?? { x: 0, y: 0, z: 0 };
     const targetY = Math.max(dronePos.y, 0.35);
+    const target = new THREE.Vector3(dronePos.x, targetY, dronePos.z);
+    const applyPosition = (base: THREE.Vector3): void => {
+      const position = resolveCameraPosition(
+        target,
+        { x: base.x - target.x, y: base.y - target.y, z: base.z - target.z },
+        cameraAdjust.orbitYawDeg,
+        cameraAdjust.orbitPitchDeg,
+      );
+      camera.position.set(position.x, position.y, position.z);
+      camera.lookAt(target);
+    };
+    if (appliedFovDeg !== cameraAdjust.fovDeg) {
+      camera.fov = cameraAdjust.fovDeg;
+      camera.updateProjectionMatrix();
+      appliedFovDeg = cameraAdjust.fovDeg;
+    }
     if (cameraView === 'examinee') {
       // 考生視角：站在應考人位置（起降點 H 後方 standoffBehindHM、眼高 eyeHeightM），
       // 看向機體——起飛前即可見機體停在起降點上。
-      camera.position.set(
+      applyPosition(new THREE.Vector3(
         field.examineePosition.x,
         cam.views.examinee.eyeHeightM,
         field.examineePosition.z + cam.views.examinee.standoffBehindHM,
-      );
-      camera.lookAt(dronePos.x, targetY, dronePos.z);
+      ));
       followEyeInit = false;
       return;
     }
@@ -339,17 +371,63 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       } else {
         followEye.lerp(desired, 1 - Math.exp(-6 * Math.max(dt, 1 / 120)));
       }
-      camera.position.copy(followEye);
-      camera.lookAt(dronePos.x, targetY, dronePos.z);
+      applyPosition(followEye);
       return;
     }
     // 俯視全景。
-    camera.position.set(0, cam.views.overview.heightM, cam.views.overview.distanceM);
-    camera.lookAt(0, 0, cam.views.overview.lookAtZ);
+    const overviewTarget = new THREE.Vector3(0, 0, cam.views.overview.lookAtZ);
+    const overviewBase = new THREE.Vector3(0, cam.views.overview.heightM, cam.views.overview.distanceM);
+    const overviewPosition = resolveCameraPosition(
+      overviewTarget,
+      { x: overviewBase.x - overviewTarget.x, y: overviewBase.y - overviewTarget.y, z: overviewBase.z - overviewTarget.z },
+      cameraAdjust.orbitYawDeg,
+      cameraAdjust.orbitPitchDeg,
+    );
+    camera.position.set(overviewPosition.x, overviewPosition.y, overviewPosition.z);
+    camera.lookAt(overviewTarget);
     followEyeInit = false;
   };
   updateCamera(null, 0);
-  hud.setCameraView(cameraView);
+  syncCameraUi();
+
+  // 相機操作只改畫面，不送出飛控指令也不改變評分資料。
+  const onCameraWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    cameraAdjust = { ...cameraAdjust, fovDeg: zoomFovDeg(cameraAdjust.fovDeg, event.deltaY < 0 ? 1 : -1) };
+    syncCameraUi();
+  };
+  stage.addEventListener('wheel', onCameraWheel, { passive: false });
+
+  let cameraDrag: { pointerId: number; x: number; y: number } | null = null;
+  const onCameraPointerDown = (event: PointerEvent): void => {
+    // 觸控 PointerEvent 在部分行動 WebView 的 button 值不是 0；只排除滑鼠右鍵／中鍵。
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    cameraDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+  const onCameraPointerMove = (event: PointerEvent): void => {
+    if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - cameraDrag.x;
+    const dy = event.clientY - cameraDrag.y;
+    cameraDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    cameraAdjust = {
+      ...cameraAdjust,
+      orbitYawDeg: addOrbitYawDeg(cameraAdjust.orbitYawDeg, dx * 0.35),
+      orbitPitchDeg: addOrbitPitchDeg(cameraAdjust.orbitPitchDeg, -dy * 0.25),
+    };
+    syncCameraUi();
+  };
+  const stopCameraDrag = (event: PointerEvent): void => {
+    if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    cameraDrag = null;
+  };
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+  canvas.addEventListener('pointerdown', onCameraPointerDown);
+  canvas.addEventListener('pointermove', onCameraPointerMove);
+  canvas.addEventListener('pointerup', stopCameraDrag);
+  canvas.addEventListener('pointercancel', stopCameraDrag);
 
   // ---- 輸入：既有輸入管線（搖桿標定 → InputNormalizer → ChannelMapper；鍵盤備援）----
   const examInput = new ExamInput();
@@ -359,6 +437,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   let reportOpen = false;
   let flowCacheKey = '';
   let hintOverride: { text: string; until: number } | null = null;
+  let hoverActive = false;
 
   const steps: Array<{ key: ExamFlowStep; label: string }> = [
     { key: 'select', label: L.exam.steps.select },
@@ -385,7 +464,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     const statusLabel: ExamStatusLabel = deriveStatusLabel(s.flightStatus, s.takingOff, s.landing);
     const hintKey = nextHintKey(s);
     const override = hintOverride && performance.now() < hintOverride.until ? hintOverride.text : null;
-    const key = `${step}|${statusLabel}|${hintKey}|${s.subjectSelected}|${override ?? ''}`;
+    const key = `${step}|${statusLabel}|${hintKey}|${s.subjectSelected}|${hoverActive}|${override ?? ''}`;
     if (!force && key === flowCacheKey) return;
     flowCacheKey = key;
 
@@ -408,10 +487,29 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     hoverButton.disabled = !avail.hover;
     landButton.disabled = !avail.land;
     takeoffButton.title = s.subjectSelected ? L.exam.hints.pressTakeoff : L.exam.hints.selectSubjectFirst;
-    [takeoffButton, hoverButton, landButton].forEach((b) => {
-      b.style.opacity = b.disabled ? '0.45' : '1';
-      b.style.cursor = b.disabled ? 'not-allowed' : 'pointer';
-    });
+    type ControlAction = 'takeoff' | 'hover' | 'land';
+    type ControlState = 'disabled' | 'ready' | 'active' | 'completed';
+    const controlState = (action: ControlAction, enabled: boolean): ControlState => {
+      if (action === 'takeoff' && s.takingOff) return 'active';
+      if (action === 'land' && s.landing) return 'active';
+      if (action === 'land' && s.flightStatus === 'landed') return 'completed';
+      if (action === 'hover' && hoverActive && s.flightStatus === 'flying' && !s.takingOff && !s.landing) return 'active';
+      return enabled ? 'ready' : 'disabled';
+    };
+    const renderControl = (button: HTMLButtonElement, action: ControlAction, enabled: boolean): void => {
+      const state = controlState(action, enabled);
+      button.dataset.controlState = state;
+      button.setAttribute('aria-pressed', state === 'active' ? 'true' : 'false');
+      button.style.opacity = state === 'disabled' ? '0.48' : '1';
+      button.style.cursor = state === 'disabled' ? 'not-allowed' : 'pointer';
+      button.style.background = state === 'active' ? '#16a34a' : state === 'ready' ? '#237a45' : state === 'completed' ? '#1c6c48' : '#293842';
+      button.style.borderColor = state === 'active' ? '#86efac' : state === 'ready' ? '#62d685' : state === 'completed' ? '#75caa1' : '#51616d';
+      button.style.color = state === 'disabled' ? '#a8b4ba' : '#effff4';
+      button.style.boxShadow = state === 'active' ? '0 0 0 2px rgba(134,239,172,0.38),0 0 18px rgba(34,197,94,0.42)' : 'none';
+    };
+    renderControl(takeoffButton, 'takeoff', takeoffEnabled);
+    renderControl(hoverButton, 'hover', avail.hover);
+    renderControl(landButton, 'land', avail.land);
   };
 
   const flashHint = (text: string): void => {
@@ -427,6 +525,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     }
     controller.arm();
     controller.takeoff(TAKEOFF_ALTITUDE_M);
+    hoverActive = false;
     renderFlow(true);
   };
 
@@ -437,12 +536,27 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     else if (code === 'Digit2') controller.setMode('attitude');
     else if (code === 'Digit3') controller.setMode('position');
     else if (code === 'KeyT') requestTakeoff();
-    else if (code === 'KeyL') controller.land();
+    else if (code === 'KeyL') {
+      hoverActive = false;
+      controller.land();
+      renderFlow(true);
+    }
     else if (code === 'KeyG') examInput.togglePreference();
     else if (code === 'KeyV') {
       cameraView = cycleCameraView(cameraView);
-      hud.setCameraView(cameraView);
+      syncCameraUi();
       flashHint(`${L.exam.panel.cameraView}：${L.exam.camera[cameraView]}（${L.exam.camera.switchHint}）`);
+    } else if (code === 'Equal' || code === 'NumpadAdd' || code === 'ArrowUp') {
+      e.preventDefault();
+      cameraAdjust = { ...cameraAdjust, fovDeg: zoomFovDeg(cameraAdjust.fovDeg, 1) };
+      syncCameraUi();
+    } else if (code === 'Minus' || code === 'NumpadSubtract' || code === 'ArrowDown') {
+      e.preventDefault();
+      cameraAdjust = { ...cameraAdjust, fovDeg: zoomFovDeg(cameraAdjust.fovDeg, -1) };
+      syncCameraUi();
+    } else if (code === 'KeyZ') {
+      cameraAdjust = defaultCameraAdjust();
+      syncCameraUi();
     } else if (code === 'KeyE') triggerEmergency();
     else if (code === 'Enter') finish();
     else if (code === 'Escape') restart();
@@ -451,12 +565,18 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
 
   takeoffButton.addEventListener('click', () => requestTakeoff());
   hoverButton.addEventListener('click', () => {
-    controller.hover();
+    hoverActive = controller.hover();
     renderFlow(true);
   });
   landButton.addEventListener('click', () => {
+    hoverActive = false;
     controller.land();
     renderFlow(true);
+  });
+  viewButton.addEventListener('click', () => {
+    cameraView = cycleCameraView(cameraView);
+    syncCameraUi();
+    flashHint(`${L.exam.panel.cameraView}：${L.exam.camera[cameraView]}（${L.exam.camera.switchHint}）`);
   });
 
   /**
@@ -639,6 +759,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       step: deriveExamStep(currentFlowState()),
       status: statusTag.dataset.status ?? null,
       cameraView,
+      cameraAdjust: { ...cameraAdjust },
       subject: session.getCurrentSubject(),
       /** 機體目前位置（m）與定位保持狀態：驗證「起飛後原地不動」與飄移量。 */
       position: {
@@ -730,6 +851,11 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pagehide', handlePageHide);
+      stage.removeEventListener('wheel', onCameraWheel);
+      canvas.removeEventListener('pointerdown', onCameraPointerDown);
+      canvas.removeEventListener('pointermove', onCameraPointerMove);
+      canvas.removeEventListener('pointerup', stopCameraDrag);
+      canvas.removeEventListener('pointercancel', stopCameraDrag);
       delete (window as unknown as Record<string, unknown>).__examTestHook;
       examInput.dispose();
       groundPanel.dispose();

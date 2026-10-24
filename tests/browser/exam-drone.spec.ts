@@ -17,9 +17,15 @@ interface HookState {
   step: string;
   status: string | null;
   cameraView: string;
+  cameraAdjust: {
+    fovDeg: number;
+    orbitYawDeg: number;
+    orbitPitchDeg: number;
+  };
   subject: string | null;
   flightState: string;
   altitude: number;
+  position: { x: number; y: number; z: number };
 }
 
 /**
@@ -105,6 +111,7 @@ test.describe('考試模式 — 機體與起飛流程', () => {
     await expect(page.locator('[data-step="select"][data-current="true"]')).toBeVisible();
     const takeoffBtn = page.getByRole('button', { name: /起飛/ });
     await expect(takeoffBtn).toBeDisabled();
+    await expect(takeoffBtn).toHaveAttribute('data-control-state', 'disabled');
 
     // 3) 未選科目按 T：不起飛，提示「請先選科目」。
     await page.keyboard.press('KeyT');
@@ -115,9 +122,11 @@ test.describe('考試模式 — 機體與起飛流程', () => {
     await page.getByRole('button', { name: /^B / }).click();
     expect((await state(page)).step).toBe('takeoff');
     await expect(takeoffBtn).toBeEnabled();
+    await expect(takeoffBtn).toHaveAttribute('data-control-state', 'ready');
 
     // 5) 點擊起飛 → 狀態轉入起飛中/飛行中，高度實際上升。
     await takeoffBtn.click();
+    await expect(takeoffBtn).toHaveAttribute('data-control-state', 'active');
     await page.waitForTimeout(300);
     const mid = await state(page);
     expect(['takingOff', 'flying']).toContain(mid.status);
@@ -134,15 +143,19 @@ test.describe('考試模式 — 機體與起飛流程', () => {
     const landBtn = page.getByRole('button', { name: /降落/ });
     await expect(hoverBtn).toBeEnabled();
     await expect(landBtn).toBeEnabled();
+    await expect(hoverBtn).toHaveAttribute('data-control-state', 'ready');
+    await expect(landBtn).toHaveAttribute('data-control-state', 'ready');
 
     // 7) 懸停：高度維持、狀態仍為飛行中。
     await hoverBtn.click();
+    await expect(hoverBtn).toHaveAttribute('data-control-state', 'active');
     await page.waitForTimeout(1000);
     const hovered = await state(page);
     expect(Math.abs(hovered.altitude - flying.altitude)).toBeLessThan(0.15);
 
     // 8) 降落 → 回到地面、狀態已降落、⑤成績單。
     await landBtn.click();
+    await expect(landBtn).toHaveAttribute('data-control-state', 'active');
     await page.waitForTimeout(4000);
     const landed = await state(page);
     expect(landed.flightState).toBe('landed');
@@ -153,6 +166,7 @@ test.describe('考試模式 — 機體與起飛流程', () => {
 
     // 9) 落地後可再起飛（不需 Esc 重置）。
     await expect(takeoffBtn).toBeEnabled();
+    await expect(takeoffBtn).toHaveAttribute('data-control-state', 'ready');
 
     // 10) 成績單：七項＋模擬判定標註。
     await page.keyboard.press('Enter');
@@ -168,7 +182,59 @@ test.describe('考試模式 — 機體與起飛流程', () => {
     expect(errors).toEqual([]);
   });
 
-  test('視角切換（V）：考生 → 追隨 → 俯視全景 → 考生，機體始終在畫面內', async ({ page }) => {
+  test('考生視角可縮放與環繞，且相機操作不改變飛行狀態', async ({ page }, testInfo) => {
+    await page.goto('/?mode=exam');
+    await waitRendered(page);
+
+    const before = await state(page);
+    const beforeScreen = await droneScreen(page);
+    expect(before.cameraView).toBe('examinee');
+    expect(before.cameraAdjust).toEqual({ fovDeg: 55, orbitYawDeg: 0, orbitPitchDeg: 0 });
+    expect(beforeScreen.inView).toBe(true);
+    expect(beforeScreen.sizePx).toBeGreaterThan(20);
+
+    const stage = page.locator('#exam-stage');
+    await stage.hover();
+    await page.mouse.wheel(0, -100);
+    await expect.poll(async () => (await state(page)).cameraAdjust.fovDeg).toBeLessThan(55);
+    const zoomedScreen = await droneScreen(page);
+    expect(zoomedScreen.sizePx).toBeGreaterThan(beforeScreen.sizePx);
+
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(async () => (await state(page)).cameraAdjust.fovDeg).toBeGreaterThan(50);
+
+    const canvas = page.locator('#exam-stage > canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('exam canvas is not visible');
+    const start = { clientX: box.x + box.width * 0.5, clientY: box.y + box.height * 0.5 };
+    const end = { clientX: box.x + box.width * 0.64, clientY: box.y + box.height * 0.4 };
+    if (testInfo.project.name === 'mobile-chrome') {
+      // Playwright 的 page.mouse 不會在行動裝置專案產生可拖曳的 touch PointerEvent；
+      // 直接送入同一個瀏覽器 PointerEvent 管線，驗證手機觸控處理器。
+      await canvas.dispatchEvent('pointerdown', { ...start, pointerId: 7, pointerType: 'touch' });
+      await canvas.dispatchEvent('pointermove', { ...end, pointerId: 7, pointerType: 'touch' });
+      await canvas.dispatchEvent('pointerup', { ...end, pointerId: 7, pointerType: 'touch' });
+    } else {
+      await page.mouse.move(start.clientX, start.clientY);
+      await page.mouse.down();
+      await page.mouse.move(end.clientX, end.clientY);
+      await page.mouse.up();
+    }
+    await expect.poll(async () => {
+      const adjust = (await state(page)).cameraAdjust;
+      return Math.abs(adjust.orbitYawDeg) + Math.abs(adjust.orbitPitchDeg);
+    }).toBeGreaterThan(0);
+
+    const adjusted = await state(page);
+    expect(adjusted.flightState).toBe(before.flightState);
+    expect(adjusted.altitude).toBe(before.altitude);
+    expect(adjusted.position).toEqual(before.position);
+
+    await page.keyboard.press('KeyZ');
+    await expect.poll(async () => (await state(page)).cameraAdjust).toEqual({ fovDeg: 55, orbitYawDeg: 0, orbitPitchDeg: 0 });
+  });
+
+  test('視角切換（V）：考生 → 追隨 → 俯視全景 → 考生，機體始終在畫面內', async ({ page }, testInfo) => {
     await page.goto('/?mode=exam');
     await waitRendered(page);
     expect((await state(page)).cameraView).toBe('examinee');
@@ -179,6 +245,13 @@ test.describe('考試模式 — 機體與起飛流程', () => {
       expect((await state(page)).cameraView).toBe(expected);
       const shot = await droneScreen(page);
       expect(shot.inView).toBe(true);
+      if (testInfo.project.name === 'desktop-chrome' && expected !== 'examinee') {
+        await page.screenshot({ path: `${SHOT_DIR}/1920x1080-${expected}.png` });
+      }
+    }
+
+    if (testInfo.project.name === 'mobile-chrome') {
+      await page.screenshot({ path: `${SHOT_DIR}/390x844-mobile-examinee.png` });
     }
   });
 });
