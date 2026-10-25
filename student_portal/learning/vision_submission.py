@@ -87,7 +87,11 @@ def _post(path, payload, timeout=None, *, teacher_id=""):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise _rejected(exc) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+    # P3-E（2026-10-25）：補上 OSError。Windows 對端無監聽時偶發 WinError 10054
+    # （ConnectionResetError）或 10060，兩者皆為 OSError 子類，原本不在清單內會直接
+    # 逸出，使視圖回 500 而非契約定義的 vision_api_unavailable。HTTPError 仍優先於此
+    # 捕捉（它同時是 URLError / OSError 子類），因此拒絕契約不被放寬。
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_api_unavailable") from exc
 
 
@@ -104,7 +108,7 @@ def _get(path, timeout=None, *, teacher_id=""):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise _rejected(exc) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_api_unavailable") from exc
 
 
@@ -217,7 +221,7 @@ def _delete(path, timeout=None, *, teacher_id=""):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise _rejected(exc) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_api_unavailable") from exc
 
 
@@ -401,7 +405,7 @@ def submit_model_evidence_to_vision(
     try:
         with urlopen(request, timeout=settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS) as response:
             result = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_submission_unavailable") from exc
     if result.get("status") != "SUBMITTED" or not result.get("submission_id"):
         raise RuntimeError("vision_submission_rejected")
