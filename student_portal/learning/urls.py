@@ -13,6 +13,10 @@ urlpatterns = [
     path("api/public/inspection/detect/", public_ai.public_inspection_detect, name="public_inspection_detect"),
     path("api/public/inspection/hover/", public_ai.public_inspection_hover, name="public_inspection_hover"),
     path("api/public/voice/ask/", public_ai.public_voice_ask, name="public_voice_ask"),
+    # Gateway 使用既有 Django Session／CSRF 驗證 Live API 請求。
+    path("api/live/auth/session/", views.live_session_auth, name="live_session_auth"),
+    # 僅供 Gateway 內部鏈路取得短效、已簽章 Assertion。
+    path("api/live/auth/assertion/", views.live_identity_assertion, name="live_identity_assertion"),
     path("register/", views.register, name="register"),
     path("activate/<str:public_user_id>/", views.activate, name="activate"),
     path("activate/<str:public_user_id>/resend/", views.resend_activation, name="resend_activation"),

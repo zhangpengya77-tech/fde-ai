@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import hmac
 import json
 import time
 import os
@@ -12,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.routing import Mount, Route
 from starlette.responses import FileResponse, Response
@@ -26,6 +28,7 @@ from .download_center import (
 from .config import LiveConfig
 from .errors import error_response, json_response
 from .guidance import DeterministicGuidanceProvider
+from .live_assertions import LiveAssertionError, verify_live_assertion
 from .mock_vision import MockVision
 from .orchestrator import CoachOrchestrator
 from .rag import RAGAdapter
@@ -97,12 +100,32 @@ def _default_session_store_path() -> "Path | None":
     return Path(raw)
 
 
-def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None) -> Starlette:
+def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None, live_assertion_key=None, trusted_proxy_key=None, require_live_auth=None) -> Starlette:
     config = LiveConfig.from_environment()
     adapter = vision_adapter or VisionAdapter(config.yolo_base_url, timeout_seconds=config.vision_request_timeout_seconds)
     store_path = session_store_path if session_store_path is not None else _default_session_store_path()
     sessions = session_store or InMemorySessionStore(persistence_path=store_path)
     development = config.dev_mode if dev_mode is None else bool(dev_mode)
+    # 正式模式永遠 Fail Closed；僅明確隔離的開發環境可關閉 Assertion。
+    require_identity = not development if require_live_auth is None else bool(require_live_auth)
+    if not development:
+        require_identity = True
+    assertion_key = str(live_assertion_key if live_assertion_key is not None else os.environ.get("FDE_LIVE_ASSERTION_KEY", "")).strip()
+    proxy_key = str(trusted_proxy_key if trusted_proxy_key is not None else os.environ.get("FDE_LIVE_PROXY_KEY", "")).strip()
+
+    def trusted_role(request):
+        """安全模式只採用 Middleware 驗證後的角色。"""
+        identity = getattr(request.state, "live_identity", None)
+        if require_identity:
+            return str((identity or {}).get("role") or "")
+        return request.headers.get("X-FDE-Role", "student")
+
+    def trusted_teacher_id(request):
+        """安全模式由簽章 subject 提供教師身分。"""
+        identity = getattr(request.state, "live_identity", None)
+        if require_identity:
+            return str((identity or {}).get("sub") or "") if (identity or {}).get("role") == "teacher" else ""
+        return request.headers.get("X-FDE-Teacher-ID", "")
     rag_client = rag_adapter or RAGAdapter(config.rag_base_url, timeout_seconds=config.rag_timeout_seconds)
     rag_coordinator = ContextualGuidanceCoordinator(
         sessions, RAGContextBuilder(), RAGGuidanceProvider(rag_client)
@@ -157,7 +180,19 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         if source == "MOCK_VISION" and not development: return error_response("dev_only", "Mock Vision is disabled.", 404)
         training_track = payload.get("training_track")
         if training_track not in {None, "F450_TWELVE_TASK"}: return error_response("invalid_training_track", "Unknown training track.", 400)
-        created = sessions.create(vision_source=source, training_track=training_track).as_dict()
+        identity = getattr(request.state, "live_identity", None)
+        if require_identity:
+            if not identity or identity.get("role") != "student":
+                return error_response("live_student_required", "Student identity is required.", 403)
+            created = sessions.create(
+                vision_source=source,
+                training_track=training_track,
+                owner_subject=identity["sub"],
+                owner_enrollment_id=identity["enrollment_id"],
+                owner_cohort_id=identity["cohort_ids"][0],
+            ).as_dict()
+        else:
+            created = sessions.create(vision_source=source, training_track=training_track).as_dict()
         created["dev_mode"] = development
         return json_response(created, status_code=201)
 
@@ -243,7 +278,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
     # P1-1：教師收件匣（AI 模型提交）
     async def training_model_submissions(request):
         sid = request.path_params["session_id"]
-        role = request.headers.get("X-FDE-Role", "student")
+        role = trusted_role(request)
         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
         try: return json_response({"model_submissions": sessions.list_model_submissions(sid)})
         except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
@@ -251,9 +286,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
     # P1-1：教師審核（通過進入 Benchmark / 退回）
     async def training_model_submission_review(request):
         sid = request.path_params["session_id"]
-        role = request.headers.get("X-FDE-Role", "student")
+        role = trusted_role(request)
         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "MOCK_TEACHER")
+        teacher_id = trusted_teacher_id(request) or "MOCK_TEACHER"
         try: payload = await request.json()
         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
         try:
@@ -265,9 +300,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
     # P1-2：教師主動觸發 PROP Sandbox Benchmark（僅 APPROVED_FOR_BENCHMARK）
     async def training_model_submission_benchmark(request):
         sid = request.path_params["session_id"]
-        role = request.headers.get("X-FDE-Role", "student")
+        role = trusted_role(request)
         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "MOCK_TEACHER")
+        teacher_id = trusted_teacher_id(request) or "MOCK_TEACHER"
         try: submission = sessions.get_model_submission(sid, request.path_params["evidence_id"])
         except KeyError: return error_response("model_submission_not_found", "Model submission was not found.", 404)
         # 僅 APPROVED_FOR_BENCHMARK 可進入 Benchmark；上傳階段仍禁止執行模型。
@@ -282,7 +317,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
     # P1-2：Benchmark 歷史（同一 submission 可重複驗證）
     async def training_model_submission_benchmarks(request):
         sid = request.path_params["session_id"]
-        role = request.headers.get("X-FDE-Role", "student")
+        role = trusted_role(request)
         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
         evidence_id = request.path_params["evidence_id"]
         try: sessions.get_model_submission(sid, evidence_id)
@@ -305,10 +340,10 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
 
     async def training_teacher_review(request):
         sid = request.path_params["session_id"]
-        role = request.headers.get("X-FDE-Role", "student")
-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "")
+        role = trusted_role(request)
+        teacher_id = trusted_teacher_id(request)
         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
-        if development and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
+        if development and not require_identity and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
         try: payload = await request.json()
         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
         if payload.get("step_id"):
@@ -345,10 +380,10 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
 
     async def training_mp12_teacher_review(request):
         sid, subtask_id = request.path_params["session_id"], request.path_params["subtask_id"]
-        role = request.headers.get("X-FDE-Role", "student")
-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "")
+        role = trusted_role(request)
+        teacher_id = trusted_teacher_id(request)
         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
-        if development and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
+        if development and not require_identity and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
         if not teacher_id: return error_response("teacher_id_required", "Teacher identity is required.", 400)
         try: payload = await request.json()
         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
@@ -678,6 +713,36 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         Mount("/downloads", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "downloads"), html=True), name="downloads"),
     ]
     app = Starlette(routes=routes)
+
+    async def trusted_live_identity(request, call_next):
+        """所有受保護 Live Session 路徑先驗證 Gateway 與短效 Assertion。"""
+        path = request.url.path
+        protected_live = path.startswith("/api/live/") and path != "/api/live/health"
+        if not require_identity or not protected_live:
+            return await call_next(request)
+        if not assertion_key or not proxy_key:
+            return error_response("live_authorization_unavailable", "Live authorization is unavailable.", 503)
+        supplied_proxy_key = request.headers.get("X-FDE-Proxy-Auth", "")
+        if not hmac.compare_digest(supplied_proxy_key, proxy_key):
+            return error_response("live_proxy_required", "Trusted proxy authentication is required.", 403)
+        try:
+            identity = verify_live_assertion(request.headers.get("X-FDE-Live-Assertion", ""), assertion_key)
+        except LiveAssertionError:
+            return error_response("live_identity_required", "A valid live identity is required.", 401)
+        request.state.live_identity = identity
+        segments = [item for item in path.split("/") if item]
+        if len(segments) >= 4 and segments[:3] == ["api", "live", "sessions"]:
+            session = sessions.get(segments[3])
+            if session is not None:
+                if not session.owner_subject or not session.owner_cohort_id:
+                    return error_response("legacy_session_unowned", "Legacy sessions cannot be claimed.", 403)
+                if identity["role"] == "student" and identity["sub"] != session.owner_subject:
+                    return error_response("session_owner_required", "Session ownership is required.", 403)
+                if identity["role"] == "teacher" and session.owner_cohort_id not in identity["cohort_ids"]:
+                    return error_response("session_cohort_forbidden", "Teacher cohort permission is required.", 403)
+        return await call_next(request)
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=trusted_live_identity)
     app.state.vision_adapter = adapter
     app.state.session_store = sessions
     app.state.dev_mode = development

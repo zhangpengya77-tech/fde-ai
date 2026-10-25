@@ -55,6 +55,10 @@ class LiveSession:
     teacher_review_state: str | None = None
     evidence_count: int = 0
     reflection_state: str = "missing"
+    # 僅由已驗證 Assertion 建立，禁止瀏覽器變更 Session 所有者。
+    owner_subject: str | None = None
+    owner_enrollment_id: str | None = None
+    owner_cohort_id: str | None = None
     rag_explanation: dict = field(default_factory=lambda: {
         "status": "idle",
         "explanation": None,
@@ -175,7 +179,7 @@ class InMemorySessionStore:
         except (KeyError, OSError, ValueError):
             return "PENDING"
 
-    def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo", training_track: str | None = None) -> LiveSession:
+    def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo", training_track: str | None = None, owner_subject: str | None = None, owner_enrollment_id: str | None = None, owner_cohort_id: str | None = None) -> LiveSession:
         now = utc_now_iso()
         first = self.task.steps[0]
         session = LiveSession(
@@ -197,6 +201,9 @@ class InMemorySessionStore:
             prerequisite_state="READY" if training_track == "F450_TWELVE_TASK" else None,
             safety_state="ADVISORY" if training_track == "F450_TWELVE_TASK" else None,
             teacher_review_state="NOT_REQUIRED" if training_track == "F450_TWELVE_TASK" else None,
+            owner_subject=owner_subject,
+            owner_enrollment_id=owner_enrollment_id,
+            owner_cohort_id=owner_cohort_id,
         )
         with self._lock:
             self._sessions[session.session_id] = session

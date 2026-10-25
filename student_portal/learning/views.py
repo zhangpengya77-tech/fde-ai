@@ -1,6 +1,8 @@
 import base64
 import csv
 import datetime
+import hmac
+import json
 import logging
 import mimetypes
 import re
@@ -37,6 +39,8 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth.views import redirect_to_login
 from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_protect
 
 from .forms import (
     EvidenceForm,
@@ -70,6 +74,7 @@ from .forms import (
     TeacherReviewForm,
 )
 from .vision_submission import submit_model_evidence_to_vision
+from .live_assertions import LiveAssertionError, issue_assertion
 from . import vision_submission as vision_api
 from .vision_rule_templates import template_choices_for_task, template_for_task
 from . import prop_scan
@@ -415,6 +420,74 @@ def _platform_identity_context(request):
         "register_url": reverse("learning:register"),
         "teacher_login_url": reverse("learning:teacher_login"),
     }
+
+
+# Gateway 驗證既有 Django Session 的最小端點；不回傳帳號或 Session 機密。
+@never_cache
+@require_http_methods(["GET", "POST"])
+@csrf_protect
+def live_session_auth(request):
+    get_token(request)
+    if not request.user.is_authenticated:
+        return JsonResponse({"authenticated": False}, status=401)
+    role = "teacher" if request.user.is_staff else "student"
+    if role == "student":
+        profile = getattr(request.user, "student_profile", None)
+        if profile is None or not profile.active:
+            return JsonResponse({"authenticated": True, "authorized": False, "role": "unverified"}, status=403)
+    payload = {"authenticated": True, "role": role}
+    if request.method == "POST":
+        payload["csrf_valid"] = True
+    return JsonResponse(payload)
+
+
+# 僅受信 Gateway 可取得短效 Assertion；瀏覽器 supplied ID、角色或 Cohort 一律不採用。
+@never_cache
+@require_POST
+@csrf_protect
+def live_identity_assertion(request):
+    expected_gateway_key = str(getattr(settings, "FDE_GATEWAY_INTERNAL_AUTH_KEY", "") or "")
+    signing_key = str(getattr(settings, "FDE_LIVE_ASSERTION_KEY", "") or "")
+    if not expected_gateway_key or not signing_key:
+        return JsonResponse({"error": "live_assertion_unavailable"}, status=503)
+    if not hmac.compare_digest(request.headers.get("X-FDE-Gateway-Auth", ""), expected_gateway_key):
+        return JsonResponse({"error": "live_assertion_forbidden"}, status=403)
+    if not request.user.is_authenticated:
+        return JsonResponse({"authenticated": False}, status=401)
+    try:
+        body = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse({"error": "invalid_assertion_request"}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({"error": "invalid_assertion_request"}, status=400)
+    if request.user.is_staff:
+        cohort_ids = list(TeacherCohortAccess.objects.filter(teacher=request.user, cohort__active=True).order_by("cohort_id").values_list("cohort_id", flat=True))
+        if not cohort_ids:
+            return JsonResponse({"error": "live_teacher_scope_required"}, status=403)
+        claims = {"sub": f"teacher:{request.user.pk}", "role": "teacher", "cohort_ids": cohort_ids}
+    else:
+        profile = getattr(request.user, "student_profile", None)
+        if profile is None or not profile.active:
+            return JsonResponse({"error": "live_student_profile_required"}, status=403)
+        enrollments = Enrollment.objects.filter(student=profile, active=True).select_related("cohort")
+        selected_id = body.get("enrollment_id")
+        if selected_id is None:
+            if enrollments.count() == 0:
+                return JsonResponse({"error": "live_enrollment_required"}, status=403)
+            if enrollments.count() != 1:
+                return JsonResponse({"error": "live_enrollment_selection_required"}, status=409)
+            enrollment = enrollments.first()
+        else:
+            try:
+                enrollment = enrollments.get(pk=selected_id)
+            except (Enrollment.DoesNotExist, ValueError, TypeError):
+                return JsonResponse({"error": "live_enrollment_forbidden"}, status=403)
+        claims = {"sub": f"student:{profile.pk}", "role": "student", "enrollment_id": enrollment.pk, "cohort_ids": [enrollment.cohort_id]}
+    try:
+        assertion = issue_assertion(claims, signing_key, ttl_seconds=getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60))
+    except LiveAssertionError:
+        return JsonResponse({"error": "live_assertion_unavailable"}, status=503)
+    return JsonResponse({"assertion": assertion, "expires_in": getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60)})
 
 
 def _platform_response(file_path, *, html=False, request=None):
