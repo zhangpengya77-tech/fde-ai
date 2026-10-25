@@ -24,23 +24,66 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
+
+# Django 與 Live 的短效身分 Assertion 使用獨立環境金鑰，絕不重用 Django SECRET_KEY。
+FDE_LIVE_ASSERTION_KEY = os.environ.get('FDE_LIVE_ASSERTION_KEY', '').strip()
+FDE_GATEWAY_INTERNAL_AUTH_KEY = os.environ.get('FDE_GATEWAY_INTERNAL_AUTH_KEY', '').strip()
+try:
+    FDE_LIVE_ASSERTION_TTL_SECONDS = int(os.environ.get('FDE_LIVE_ASSERTION_TTL_SECONDS', '60'))
+except ValueError:
+    FDE_LIVE_ASSERTION_TTL_SECONDS = 60
+FDE_LIVE_ASSERTION_TTL_SECONDS = min(max(FDE_LIVE_ASSERTION_TTL_SECONDS, 1), 60)
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or ('local-development-only-not-for-production' if DEBUG else '')
 if not SECRET_KEY:
     raise RuntimeError('DJANGO_SECRET_KEY must be configured when DJANGO_DEBUG is false.')
 
-default_allowed_hosts = '127.0.0.1,localhost,.trycloudflare.com' if DEBUG else '127.0.0.1,localhost'
+# P3-F（2026-10-25）安全收斂：DEBUG **不代表接受任意 Host**。
+#   * 移除原本 DEBUG 下的 `.trycloudflare.com` 前導點預設 —— 那等於信任「任何」
+#     trycloudflare 隧道主機名，任何人開一條隧道就能把請求打進本服務，且該預設
+#     同時是 Django 的子網域萬用字元，與「明確白名單」原則相衝。
+#   * `*` 一律拒絕並讓啟動失敗（fail closed）；不以放寬 ALLOWED_HOSTS 讓測試通過。
+#   * 需要測試／隧道主機時，請以 `DJANGO_ALLOWED_HOSTS` **逐條明確列出**完整主機。
+#   * 未授權 Host 由 Django 既有機制回 400（DisallowedHost），本檔不另做降級。
+default_allowed_hosts = '127.0.0.1,localhost,[::1]'
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.environ.get('DJANGO_ALLOWED_HOSTS', default_allowed_hosts).split(',')
     if host.strip()
 ]
+_wildcard_hosts = [host for host in ALLOWED_HOSTS if '*' in host]
+if _wildcard_hosts:
+    raise RuntimeError(
+        'DJANGO_ALLOWED_HOSTS must list explicit hosts; '
+        f'wildcards are not allowed: {_wildcard_hosts}'
+    )
+del _wildcard_hosts
+# 前導點（`.example.com`）在 Django 中是「整個子網域」的萬用字元。正式模式要求
+# 明確白名單，因此一律拒絕；開發模式保留容忍度，僅為既有本機隧道流程不被中斷。
+if not DEBUG:
+    _suffix_hosts = [host for host in ALLOWED_HOSTS if host.startswith('.')]
+    if _suffix_hosts:
+        raise RuntimeError(
+            'DJANGO_ALLOWED_HOSTS must not use leading-dot subdomain wildcards '
+            f'in production: {_suffix_hosts}'
+        )
+    del _suffix_hosts
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
+    origin.strip().rstrip('/')
     for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
     if origin.strip()
 ]
-if DEBUG and not CSRF_TRUSTED_ORIGINS:
-    CSRF_TRUSTED_ORIGINS = ['https://*.trycloudflare.com']
+# P3-E（2026-10-25）安全收斂：CSRF 信任來源只接受「明確列出的完整來源」。
+#   * 出現萬用字元（`*`）即啟動失敗 —— Django 會把 `https://*.example.com` 當成
+#     整個子網域信任，等於把 CSRF 第二道防線放寬到不可控範圍。
+#   * 移除原本 DEBUG 下的 `https://*.trycloudflare.com` 萬用字元預設。需要隧道
+#     驗收時，請把當時的隧道主機名逐條寫進 DJANGO_CSRF_TRUSTED_ORIGINS。
+_wildcard_origins = [origin for origin in CSRF_TRUSTED_ORIGINS if '*' in origin]
+if _wildcard_origins:
+    raise RuntimeError(
+        'DJANGO_CSRF_TRUSTED_ORIGINS must list explicit origins; '
+        f'wildcards are not allowed: {_wildcard_origins}'
+    )
+del _wildcard_origins
 if not DEBUG:
     if not ALLOWED_HOSTS:
         raise RuntimeError('DJANGO_ALLOWED_HOSTS must be configured when DJANGO_DEBUG is false.')
@@ -301,7 +344,19 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = max(
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if not DEBUG else None
+# P3-F（2026-10-25）：`X-Forwarded-Proto` 只作為「已明確設定且可信的反向代理」的依據。
+#   * 舊行為：非 DEBUG 一律信任 —— 任何能直連本服務的客戶端只要自帶
+#     `X-Forwarded-Proto: https`，就能讓一條純 HTTP 連線被當成 HTTPS。
+#   * 新行為：必須由運維明確設定 `DJANGO_TRUST_PROXY_SSL_HEADER=true` 才啟用；
+#     未設定時 Django 完全忽略該標頭（不新增任何可由外部操控的信任路徑）。
+#   * 純 HTTP 部署因此不會被誤標為 HTTPS；正式 HTTPS 部署的 Secure Cookie／
+#     CSRF 保護維持不變（該開關只影響「如何判定是否為 HTTPS」，不放寬任何檢查）。
+TRUST_PROXY_SSL_HEADER = os.environ.get(
+    'DJANGO_TRUST_PROXY_SSL_HEADER', ''
+).strip().lower() in ('1', 'true', 'yes', 'on')
+SECURE_PROXY_SSL_HEADER = (
+    ('HTTP_X_FORWARDED_PROTO', 'https') if (not DEBUG and TRUST_PROXY_SSL_HEADER) else None
+)
 SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '3600' if not DEBUG else '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'false').lower() == 'true'
 SECURE_HSTS_PRELOAD = os.environ.get('DJANGO_SECURE_HSTS_PRELOAD', 'false').lower() == 'true'

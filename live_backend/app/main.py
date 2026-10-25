@@ -560,11 +560,30 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         upstream_url = f"{django_origin}{request.url.path}"
         if request.url.query:
             upstream_url = f"{upstream_url}?{request.url.query}"
-        excluded_headers = {"host", "connection", "content-length", "accept-encoding"}
+        # P3-F（2026-10-25）：轉發標頭一律由本層重建，**不採信客戶端自帶值**。
+        # 舊版只排除 host/connection/content-length/accept-encoding，客戶端自帶的
+        # `X-Forwarded-For`／`Forwarded`／`X-Real-IP` 會原樣傳給 Django，等於讓
+        # 外部決定上游看到的來源位址與協定。此處全部丟棄後再自行設定。
+        excluded_headers = {
+            "host",
+            "connection",
+            "content-length",
+            "accept-encoding",
+            "x-forwarded-proto",
+            "x-forwarded-host",
+            "x-forwarded-for",
+            "x-forwarded-port",
+            "x-real-ip",
+            "forwarded",
+        }
         headers = {key: value for key, value in request.headers.items() if key.lower() not in excluded_headers}
         headers["host"] = "127.0.0.1:8022"
         headers["x-forwarded-host"] = request.headers.get("host", "")
+        # `request.url.scheme` 由 ASGI 伺服器決定（uvicorn 預設只信任來自
+        # 127.0.0.1 的 `X-Forwarded-Proto`，即本機的公開入口），不會被遠端客戶端
+        # 直接操控。純 HTTP 入口送來的就是 `http`，不會被預設標記成 `https`。
         headers["x-forwarded-proto"] = request.url.scheme
+        headers["x-forwarded-for"] = request.client.host if request.client else ""
         try:
             async with httpx.AsyncClient(follow_redirects=False, timeout=15.0) as client:
                 upstream = await client.request(request.method, upstream_url, headers=headers, content=await request.body())

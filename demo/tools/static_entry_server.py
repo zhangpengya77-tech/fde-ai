@@ -11,7 +11,16 @@
 安全設計：
   * 同源（單一主機：連接埠）提供頁面與 API，Session Cookie / CSRF / CORS
     機制完全沿用 Django 既有設定，不開啟萬用 CORS、不關閉任何安全驗證。
+  * **Origin / Referer 原樣轉發，不改寫**（P3-E 2026-10-25）。入口對外位址必須以
+    `DJANGO_CSRF_TRUSTED_ORIGINS` 明確列入 Django 白名單；本代理另以
+    `FDE_ENTRY_TRUSTED_ORIGINS` 做最外層前置攔截（可留空，留空時由 Django 決定）。
   * 只綁 192.168.1.114（與 DEMO 其他服務一致，不綁 0.0.0.0）。
+  * **Host 明確白名單**（P3-F 2026-10-25）：本代理會把 `Host` 改寫成上游位址，
+    上游 `ALLOWED_HOSTS` 因此看不到瀏覽器送來的 Host。合法性在本層判定，
+    未授權 Host 一律回 400；白名單以 `FDE_ENTRY_ALLOWED_HOSTS` 明確列出。
+  * **轉發標頭不採信客戶端**（P3-F 2026-10-25）：客戶端自帶的 `X-Forwarded-*`／
+    `Forwarded` 一律丟棄，`X-Forwarded-Proto` 由本層依 `FDE_ENTRY_PUBLIC_SCHEME`
+    決定（預設 `http`，因本代理無 TLS）；純 HTTP 部署不再被誤標為 HTTPS。
   * 靜態檔僅允許讀取 public-site 目錄，禁止目錄穿越。
   * 本檔為「新增的部署基礎設施」，不修改任何既有程式碼、資料或審核規則。
 
@@ -45,6 +54,111 @@ SITE_DIR = Path(
 UPSTREAM_HOST = os.environ.get("FDE_ENTRY_UPSTREAM_HOST", "192.168.1.114")
 UPSTREAM_PORT = int(os.environ.get("FDE_ENTRY_UPSTREAM_PORT", "8111"))
 UPSTREAM_TIMEOUT = float(os.environ.get("FDE_ENTRY_UPSTREAM_TIMEOUT", "120"))
+
+
+# ---------------------------------------------------------------- 來源信任白名單
+# P3-E（2026-10-25）安全收斂：本代理**不再改寫** Origin / Referer。
+#
+# 2026-10-23 曾以「把 Origin 改寫成內部 Django 位址」的方式繞過 CSRF 403，但這會讓
+# Django 的 Origin 比對恆成立 —— 等於把第二道防線整條中和，任何跨站來源都能通過
+# Origin 檢查（只剩 CSRF token 一道）。本版改為：
+#   1. Origin / Referer 原樣轉發，瀏覽器送什麼就是什麼；
+#   2. Django 端以 `DJANGO_CSRF_TRUSTED_ORIGINS` **明確列出**入口的對外位址；
+#   3. 本代理在最外層做一次「來源是否在白名單內」的前置攔截（縱深防禦）。
+#
+# `FDE_ENTRY_TRUSTED_ORIGINS`：逗號分隔的完整來源（scheme://host[:port]）。
+#   * 不允許萬用字元（含 `*`）—— 出現即啟動失敗（fail closed），不做靜默降級。
+#   * 未設定時本層不攔截，完全交由 Django 的 CSRF 檢查決定（Django 仍是權威）。
+#   * 例：FDE_ENTRY_TRUSTED_ORIGINS=https://demo.example.edu.tw,http://127.0.0.1:8112
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _parse_trusted_origins(raw: str) -> frozenset:
+    """解析並嚴格驗證來源白名單；任何不合規格即拋 SystemExit（啟動失敗）。"""
+    parsed = set()
+    for item in (raw or "").split(","):
+        origin = item.strip().rstrip("/")
+        if not origin:
+            continue
+        if "*" in origin:
+            raise SystemExit(
+                "[entry] FDE_ENTRY_TRUSTED_ORIGINS 不允許萬用字元；請逐一列出完整來源（fail closed）。"
+            )
+        parts = urlsplit(origin)
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            raise SystemExit(f"[entry] FDE_ENTRY_TRUSTED_ORIGINS 項目無法解析：{origin!r}")
+        if parts.path or parts.query or parts.fragment:
+            raise SystemExit(f"[entry] FDE_ENTRY_TRUSTED_ORIGINS 項目不可帶路徑／查詢：{origin!r}")
+        parsed.add(f"{parts.scheme}://{parts.netloc}".lower())
+    return frozenset(parsed)
+
+
+TRUSTED_ORIGINS = _parse_trusted_origins(os.environ.get("FDE_ENTRY_TRUSTED_ORIGINS", ""))
+
+
+# ---------------------------------------------------------------- Host 白名單
+# P3-F（2026-10-25）安全收斂：本代理在轉發前會把 `Host` 改寫成上游位址，因此
+# 瀏覽器送來的 Host **永遠不會**到達上游的 `ALLOWED_HOSTS` 檢查。若不在這一層
+# 判定，偽造 Host 等於無人把關。故本層自帶明確白名單：
+#   * `FDE_ENTRY_ALLOWED_HOSTS`：逗號分隔的 `host` 或 `host:port`（可含 IPv6 方括號）。
+#     設定後**完全取代**預設值；不允許萬用字元，出現即啟動失敗（fail closed）。
+#   * 未設定時採預設值：loopback（含 IPv6）與本代理實際綁定位址，各自帶/不帶本埠。
+#   * 未帶埠的 Host 與帶埠的 Host 視為不同項目，需分別列出（HTTP/1.1 預設埠除外）。
+def _parse_allowed_hosts(raw: str) -> frozenset:
+    parsed = set()
+    for item in (raw or "").split(","):
+        host = item.strip().lower().rstrip(".")
+        if not host:
+            continue
+        if "*" in host:
+            raise SystemExit(
+                "[entry] FDE_ENTRY_ALLOWED_HOSTS 不允許萬用字元；請逐一列出完整主機（fail closed）。"
+            )
+        parsed.add(host)
+    return frozenset(parsed)
+
+
+def _default_allowed_hosts() -> frozenset:
+    base = {"127.0.0.1", "localhost", "[::1]", BIND_ADDR.strip().lower()}
+    hosts = set(base)
+    for host in base:
+        hosts.add(f"{host}:{PORT}")
+    return frozenset(hosts)
+
+
+ALLOWED_HOSTS = _parse_allowed_hosts(os.environ.get("FDE_ENTRY_ALLOWED_HOSTS", "")) or _default_allowed_hosts()
+
+
+# ---------------------------------------------------------------- 轉發標頭策略
+# P3-F（2026-10-25）：`X-Forwarded-*` 一律由本代理自行決定，**不採信客戶端送來的值**。
+# 舊行為是 `X-Forwarded-Proto = 客戶端自帶值 or "https"`，等同：
+#   1. 任何客戶端自帶 `X-Forwarded-Proto: https` 就能把純 HTTP 連線偽造成 HTTPS；
+#   2. 沒帶時預設成 `https`，使非 DEBUG 的純 HTTP 部署被誤標為 HTTPS，
+#      `SECURE_SSL_REDIRECT` 因此不再生效。
+# 新行為：客戶端提供的轉發標頭全部丟棄，改由本層設定；HTTPS 只在運維明確聲明
+# 「本入口位於可信 TLS 終結器之後」時才標記。
+CLIENT_FORWARDED_HEADERS = frozenset(
+    {
+        "x-forwarded-proto",
+        "x-forwarded-host",
+        "x-forwarded-for",
+        "x-forwarded-port",
+        "x-forwarded-server",
+        "x-real-ip",
+        "forwarded",
+    }
+)
+
+
+def _parse_public_scheme(raw: str) -> str:
+    scheme = (raw or "").strip().lower()
+    if scheme not in ("http", "https"):
+        raise SystemExit(f"[entry] FDE_ENTRY_PUBLIC_SCHEME 只接受 http 或 https：{raw!r}")
+    return scheme
+
+
+# 本代理是純 HTTP 監聽（ThreadingHTTPServer，無 TLS），因此預設對外 scheme 為 http。
+PUBLIC_SCHEME = _parse_public_scheme(os.environ.get("FDE_ENTRY_PUBLIC_SCHEME", "http"))
 
 # 上游健康檢查目標（本機探測，僅供狀態燈顯示；不對外暴露內部錯誤細節）。
 # 注意：/api/live/health 實測延遲約 2~3 秒，探測逾時預設 6 秒。
@@ -125,16 +239,38 @@ class EntryHandler(BaseHTTPRequestHandler):
     server_version = "FDE-Entry/1.0"
 
     # ---------------------------------------------------------------- helpers
-    def _send_bytes(self, status: int, body: bytes, content_type: str, extra_headers=None) -> None:
+    def handle(self) -> None:
+        """客戶端在 keep-alive 期間直接斷線屬正常情形，不留下堆疊噪音。
+
+        `BaseHTTPRequestHandler.handle()` 不捕捉 `ConnectionError`，瀏覽器切頁或
+        取消請求時會在日誌留下整段 traceback，遮蔽真正的錯誤。
+        """
+        try:
+            super().handle()
+        except ConnectionError:
+            self.close_connection = True
+
+    def _send_bytes(self, status: int, body: bytes, content_type: str, extra_headers=None, *, close: bool = False) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if close:
+            # 拒絕類回應**不讀取請求體**（避免為攻擊者白讀大量位元組）。HTTP/1.1
+            # keep-alive 下若不關閉連線，殘留的請求體會被當成下一個請求的開頭，
+            # 造成連線內請求錯位（實測：同一條連線上的下一個 POST 被誤判為 501）。
+            self.close_connection = True
+            self.send_header("Connection", "close")
         for key, value in (extra_headers or []):
             self.send_header(key, value)
         self.end_headers()
         if self.command != "HEAD":
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except ConnectionError:
+                # 客戶端提前斷線（瀏覽器取消、健康探測讀完即關）屬正常情形，
+                # 不應在日誌留下整段堆疊噪音。
+                pass
 
     def _read_body(self) -> bytes:
         if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
@@ -184,6 +320,90 @@ class EntryHandler(BaseHTTPRequestHandler):
         body = json.dumps(report, ensure_ascii=False).encode("utf-8")
         self._send_bytes(200, body, "application/json; charset=utf-8")
 
+    # ---------------------------------------------------------------- host gate
+    def _host_gate(self) -> bool:
+        """Host 白名單前置檢查（所有方法、所有路徑，含靜態檔）。
+
+        理由：本代理會把 `Host` 改寫成上游位址，上游的 `ALLOWED_HOSTS` 看不到
+        瀏覽器送來的 Host。若不在此攔截，偽造 Host 不會被任何一層拒絕。
+        """
+        raw = (self.headers.get("Host") or "").strip().lower().rstrip(".")
+        if raw and raw in ALLOWED_HOSTS:
+            return True
+        return self._reject_host(raw)
+
+    def _reject_host(self, candidate: str) -> bool:
+        """Host 不合格：回 400 且不轉發。回應不得包含白名單內容或內部位址。"""
+        sys.stderr.write(f"[entry] host rejected: {candidate!r} {self.command}\n")
+        sys.stderr.flush()
+        body = json.dumps(
+            {
+                "error": {
+                    "code": "host_not_allowed",
+                    "message": "Request host is not in the configured allowlist.",
+                }
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        self._send_bytes(400, body, "application/json; charset=utf-8", close=True)
+        return False
+
+    # ---------------------------------------------------------------- origin gate
+    @staticmethod
+    def _normalize_origin(value: str) -> str:
+        """把 Origin/Referer 正規化為 scheme://host[:port]（去路徑、轉小寫）。"""
+        parts = urlsplit(value.strip())
+        if not parts.scheme or not parts.netloc:
+            return ""
+        return f"{parts.scheme}://{parts.netloc}".lower()
+
+    def _origin_gate(self) -> bool:
+        """不安全方法的前置來源檢查。回傳 True 表示放行。
+
+        語意刻意與 Django 一致，但**不取代** Django：
+          * 只比對「瀏覽器自己送來的」Origin／Referer，不改寫、不合成。
+          * 白名單未設定 → 放行（由 Django 的 CSRF_TRUSTED_ORIGINS 決定）。
+          * 兩者皆缺 → 放行（Django 仍會要求 CSRF token，缺 token 必被拒）。
+          * 有值但不在白名單 → 立即 403，不轉發給上游。
+          * 有值但無法解析（如 `Origin: null`，來自沙箱 iframe / file://）
+            → 一律拒絕，不當成「沒有來源」放行。
+        """
+        if not TRUSTED_ORIGINS or self.command not in UNSAFE_METHODS:
+            return True
+        origin = (self.headers.get("Origin") or "").strip()
+        referer = (self.headers.get("Referer") or "").strip()
+        if origin:
+            candidate = self._normalize_origin(origin)
+            if not candidate:
+                # Origin 存在但不可解析（null / 畸形）：fail closed。
+                return self._reject_origin(origin)
+        elif referer:
+            candidate = self._normalize_origin(referer)
+            if not candidate:
+                return self._reject_origin(referer)
+        else:
+            # 完全沒有來源資訊：不以此放行，交由 Django 的 token 檢查把關。
+            return True
+        if candidate in TRUSTED_ORIGINS:
+            return True
+        return self._reject_origin(candidate)
+
+    def _reject_origin(self, candidate: str) -> bool:
+        """來源不合格：回 403 且不轉發。回應不得包含任何內部位址或埠。"""
+        sys.stderr.write(f"[entry] origin rejected: {candidate!r} {self.command} {self.path}\n")
+        sys.stderr.flush()
+        body = json.dumps(
+            {
+                "error": {
+                    "code": "origin_not_allowed",
+                    "message": "Request origin is not in the configured allowlist.",
+                }
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        self._send_bytes(403, body, "application/json; charset=utf-8", close=True)
+        return False
+
     # ---------------------------------------------------------------- proxy
     def _proxy(self) -> None:
         split = urlsplit(self.path)
@@ -194,12 +414,17 @@ class EntryHandler(BaseHTTPRequestHandler):
 
         headers = {}
         for key, value in self.headers.items():
-            if key.lower() in HOP_BY_HOP_REQUEST:
+            lower = key.lower()
+            if lower in HOP_BY_HOP_REQUEST or lower in CLIENT_FORWARDED_HEADERS:
                 continue
             headers[key] = value
         headers["Host"] = f"{UPSTREAM_HOST}:{UPSTREAM_PORT}"
+        # P3-E：Origin / Referer **原樣轉發**（刻意不改寫）。
+        # 若在此改寫成內部位址，Django 的 Origin 比對會恆成立，跨站來源即可通過
+        # 第二道防線。入口對外位址請列入 Django 的 DJANGO_CSRF_TRUSTED_ORIGINS。
         headers["Content-Length"] = str(len(body))
-        headers["X-Forwarded-Proto"] = self.headers.get("X-Forwarded-Proto", "https")
+        # P3-F：轉發標頭由本層決定，不採信客戶端（見 CLIENT_FORWARDED_HEADERS 註解）。
+        headers["X-Forwarded-Proto"] = PUBLIC_SCHEME
         headers["X-Forwarded-Host"] = self.headers.get("Host", "")
         headers["X-Forwarded-For"] = self.client_address[0]
         headers["Connection"] = "close"
@@ -231,10 +456,19 @@ class EntryHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         if self.command != "HEAD":
-            self.wfile.write(data)
+            try:
+                self.wfile.write(data)
+            except ConnectionError:
+                pass
 
     # ---------------------------------------------------------------- routes
     def _route(self) -> None:
+        # Host 檢查最先：它與方法無關，且靜態檔分支也必須受同一白名單約束。
+        if not self._host_gate():
+            return
+        # 來源檢查必須先於任何回應分支（含靜態檔），否則 POST 到 "/" 會繞過。
+        if not self._origin_gate():
+            return
         path = urlsplit(self.path).path
         if path == "/favicon.ico":
             self._send_bytes(204, b"", "image/x-icon")
@@ -300,6 +534,10 @@ def main() -> int:
     print(f"[entry] static site : {SITE_DIR}", flush=True)
     print(f"[entry] listening   : http://{BIND_ADDR}:{PORT}", flush=True)
     print(f"[entry] upstream    : http://{UPSTREAM_HOST}:{UPSTREAM_PORT} (Live Backend)", flush=True)
+    if TRUSTED_ORIGINS:
+        print(f"[entry] trusted origin: {', '.join(sorted(TRUSTED_ORIGINS))}", flush=True)
+    else:
+        print("[entry] trusted origin: (未設定；由 Django CSRF_TRUSTED_ORIGINS 決定)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
