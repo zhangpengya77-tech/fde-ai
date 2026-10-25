@@ -14,8 +14,17 @@ class OfflineVisionAdapter:
 class LiveSessionTests(unittest.TestCase):
     def setUp(self):
         self.store = InMemorySessionStore()
+        # P3-E（2026-10-25）：P3-D 之後「正式模式永遠 Fail Closed」，未提供身分金鑰的
+        # app 會在任何受保護路徑先回 503。本組測試驗的是「session 內容與欄位拒絕」，
+        # 與身分鏈無關，因此明確以隔離開發模式建立 app；身分鏈本身由
+        # test_p3e_gateway_security / test_p3d_live_identity_boundary 覆蓋。
         self.client = TestClient(
-            create_app(vision_adapter=OfflineVisionAdapter(), session_store=self.store)
+            create_app(
+                vision_adapter=OfflineVisionAdapter(),
+                session_store=self.store,
+                dev_mode=True,
+                require_live_auth=False,
+            )
         )
 
     def test_creates_an_in_memory_demo_session_without_student_identity(self):

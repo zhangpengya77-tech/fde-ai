@@ -1,7 +1,11 @@
 import unittest
 from starlette.testclient import TestClient
+from app.live_assertions import issue_live_assertion
 from app.main import create_app
 from app.sessions import InMemorySessionStore
+
+ASSERTION_KEY = "phase2-test-assertion-key"
+PROXY_KEY = "phase2-test-proxy-key"
 
 class OfflineVision:
     async def health(self): return False
@@ -9,7 +13,27 @@ class OfflineVision:
 
 class Phase2ApiTests(unittest.TestCase):
     def make_client(self, dev_mode=True):
-        return TestClient(create_app(vision_adapter=OfflineVision(), session_store=InMemorySessionStore(), dev_mode=dev_mode))
+        # P3-E（2026-10-25）：dev_mode=False 等同正式模式，P3-D 之後一律 Fail Closed，
+        # 因此必須提供金鑰；需要走受保護路徑的測試另附簽章標頭（見 _signed_headers）。
+        return TestClient(create_app(
+            vision_adapter=OfflineVision(),
+            session_store=InMemorySessionStore(),
+            dev_mode=dev_mode,
+            live_assertion_key=ASSERTION_KEY,
+            trusted_proxy_key=PROXY_KEY,
+        ))
+
+    def _signed_headers(self, subject="student:9001", enrollment_id=9001):
+        claims = {
+            "sub": subject,
+            "role": "student",
+            "cohort_ids": ["cohort-phase2"],
+            "enrollment_id": enrollment_id,
+        }
+        return {
+            "X-FDE-Proxy-Auth": PROXY_KEY,
+            "X-FDE-Live-Assertion": issue_live_assertion(claims, ASSERTION_KEY),
+        }
 
     def test_mock_full_workflow_and_authoritative_routes(self):
         client = self.make_client()
@@ -29,8 +53,9 @@ class Phase2ApiTests(unittest.TestCase):
 
     def test_mock_is_rejected_when_dev_mode_is_off(self):
         client = self.make_client(False)
-        created = client.post("/api/live/sessions", json={}).json()
-        response = client.post(f"/api/live/sessions/{created['session_id']}/simulate", json={"scenario":"motor"})
+        headers = self._signed_headers()
+        created = client.post("/api/live/sessions", json={}, headers=headers).json()
+        response = client.post(f"/api/live/sessions/{created['session_id']}/simulate", json={"scenario":"motor"}, headers=headers)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"]["code"], "dev_only")
 

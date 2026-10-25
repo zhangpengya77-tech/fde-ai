@@ -37,6 +37,11 @@ class SnapshotApiTests(unittest.TestCase):
                 vision_adapter=adapter or FakeVisionAdapter(),
                 session_store=store,
                 max_image_bytes=max_image_bytes,
+                # P3-E（2026-10-25）：P3-D 之後正式模式一律 Fail Closed，未帶金鑰的 app
+                # 會在任何受保護路徑先回 503。本組測試驗的是快照端點的輸入驗證與
+                # YOLO 離線契約，與身分鏈無關，因此明確使用隔離開發模式。
+                dev_mode=True,
+                require_live_auth=False,
             )
         )
         session_id = client.post("/api/live/sessions", json={}).json()["session_id"]

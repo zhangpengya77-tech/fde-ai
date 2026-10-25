@@ -27,7 +27,16 @@ class TimedVision:
 
 class Phase1A1ApiTimingTests(unittest.TestCase):
     def test_snapshot_response_exposes_split_vision_timings(self):
-        client = TestClient(create_app(vision_adapter=TimedVision(), session_store=InMemorySessionStore()))
+        # P3-E（2026-10-25）：P3-D 之後正式模式一律 Fail Closed，未帶金鑰會先回 503；
+        # 本測試只驗計時欄位拆分，因此使用隔離開發模式。
+        client = TestClient(
+            create_app(
+                vision_adapter=TimedVision(),
+                session_store=InMemorySessionStore(),
+                dev_mode=True,
+                require_live_auth=False,
+            )
+        )
         session_id = client.post("/api/live/sessions", json={}).json()["session_id"]
         response = client.post(
             f"/api/live/sessions/{session_id}/snapshot",
