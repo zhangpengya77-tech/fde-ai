@@ -1,0 +1,168 @@
+{
+  "tool": "penta-param-check",
+  "readOnly": true,
+  "generatedAt": "2026-10-25T07:12:28.130Z",
+  "summary": {
+    "total": 31,
+    "pass": 29,
+    "warn": 2,
+    "fail": 0
+  },
+  "findings": [
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json diagonalSpanCm 值在附件十二區間內",
+      "detail": "value=100cm，range=90–110cm"
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json diagonalSpanCm 來源標註附件十二",
+      "detail": "source=\"附件十二 級別I 對角馬達軸心距離 90–110cm（PDF p35／印刷頁33）\""
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json massKg 來源為附件十二",
+      "detail": "source=\"附件十二 級別I 起飛重量 ≧4kg（PDF p35／印刷頁33）\""
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json maxTiltDeg 標記為模擬假設（非官方）",
+      "detail": "source=\"模擬假設，非官方\""
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json maxHorizontalSpeedMps 標記為模擬假設（非官方）",
+      "detail": "source=\"模擬假設，非官方\""
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json accelerationMps2 標記為模擬假設（非官方）",
+      "detail": "source=\"模擬假設，非官方\""
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json dragCoefficient 標記為模擬假設（非官方）",
+      "detail": "source=\"模擬假設，非官方\""
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json inertia 標記為模擬假設（非官方）",
+      "detail": "source=\"模擬假設，非官方\""
+    },
+    {
+      "level": "PASS",
+      "check": "caa-exam.json ↔ exam-aircraft.json 軸距一致",
+      "detail": "caa=100cm vs aircraft=100cm"
+    },
+    {
+      "level": "PASS",
+      "check": "caa-exam.json ↔ exam-aircraft.json 軸距區間一致",
+      "detail": "caa=[90,110] vs aircraft=[90,110]"
+    },
+    {
+      "level": "PASS",
+      "check": "caa-exam.json 軸距標記為模擬預設（非官方公告值）",
+      "detail": "note=\"質量 ≥4kg、對角軸距 100cm（90–110 區間）為模擬預設；maxTilt/maxSpeed/acceleration/drag 由機型原廠規格填入（此處留 null，待原廠規格）。\""
+    },
+    {
+      "level": "PASS",
+      "check": "caa-exam.json aircraft 官方來源為附件十二",
+      "detail": "source=\"管理規則 附件十二「術科測驗用遙控無人機規格」＋原廠型別規格\""
+    },
+    {
+      "level": "PASS",
+      "check": "scene.ts ExamDrone 實測對角 ↔ config diagonalSpanCm",
+      "detail": "實測 1.00m（馬達半徑 0.5 × 2）vs config 1.00m"
+    },
+    {
+      "level": "PASS",
+      "check": "penta-scene.ts PentaDrone 實測對角 ↔ config diagonalSpanCm",
+      "detail": "實測 1.00m（馬達半徑 0.5 × 2）vs config 1.00m"
+    },
+    {
+      "level": "PASS",
+      "check": "scene.ts ↔ penta-scene.ts 馬達半徑一致（兩視覺模型同機型）",
+      "detail": "scene=1 vs penta=1（m）"
+    },
+    {
+      "level": "WARN",
+      "check": "scene.ts:148 註解聲稱對角 1.1m",
+      "detail": "文檔不一致：註解「對角約 1.1m」聲稱 1.1m，但原始碼常數實測 1.00m。僅註解文字過時，數值以常數為準（本工具未修改任何檔案）"
+    },
+    {
+      "level": "PASS",
+      "check": "scene.ts:185 註解聲稱對角 1.00m",
+      "detail": "與實測 1.00m 一致"
+    },
+    {
+      "level": "WARN",
+      "check": "scene.ts:372 註解聲稱對角 1.1m",
+      "detail": "文檔不一致：註解「對角約 1.1m」聲稱 1.1m，但原始碼常數實測 1.00m。僅註解文字過時，數值以常數為準（本工具未修改任何檔案）"
+    },
+    {
+      "level": "PASS",
+      "check": "penta-scene.ts:186 註解聲稱對角 1.00m",
+      "detail": "與實測 1.00m 一致"
+    },
+    {
+      "level": "PASS",
+      "check": "flight-controller.ts 不含軸距常數",
+      "detail": "飛控動力學（質量／時間常數／速率限制）不依賴視覺模型尺寸；調整視覺模型不影響飛控行為"
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json 官方值（附件十二）存在且可識別",
+      "detail": "massKg=4（附件十二 級別I 起飛重量 ≧4kg（PDF p35／印刷頁33））；diagonalSpanCm=100（附件十二 級別I 對角馬達軸心距離 90–110cm（PDF p35／印刷頁33））"
+    },
+    {
+      "level": "PASS",
+      "check": "exam-aircraft.json 模擬假設值皆標「模擬假設，非官方」",
+      "detail": "maxTiltDeg=25（模擬假設，非官方）；maxHorizontalSpeedMps=8（模擬假設，非官方）；accelerationMps2=2.5（模擬假設，非官方）；dragCoefficient=0.6（模擬假設，非官方）；inertia={\"note\":\"重機型慣性：起停有延遲，非現有輕型瞬時響應。以一階時間常數 + 速率限制模型呈現（模擬假設）。\",\"source\":\"模擬假設，非官方\",\"horizontalVelocityTimeConstantS\":{\"value\":0.7,\"adjustable\":true,\"note\":\"水平速度趨向指令值的時間常數；越大越遲鈍、起停延遲越明顯\"},\"attitudeTimeConstantS\":{\"value\":0.45,\"adjustable\":true,\"note\":\"傾角趨向指令傾角的時間常數\"},\"attitudeRateLimitDegPerS\":{\"value\":45,\"adjustable\":true,\"note\":\"傾角變化速率上限（度/秒）\"}}（模擬假設，非官方）"
+    },
+    {
+      "level": "PASS",
+      "check": "caa-exam.json 原廠規格欄位留 null（讀不到不造假）",
+      "detail": "留 null 待原廠規格：maxTiltDeg、maxHorizontalSpeedMps、accelerationMps2、dragCoefficient"
+    },
+    {
+      "level": "PASS",
+      "check": "科目 E 教學容差標記 assumption=true（非官方）",
+      "detail": "容差：航線 2m／高度 1m／航點半徑 2m／每段最短 1s／起飛完成 0.5m"
+    },
+    {
+      "level": "PASS",
+      "check": "科目 E 教學容差 note 載明「模擬假設，非官方」",
+      "detail": "科目 E（高度保持五邊飛行 p165）教學練習門檻。來源「模擬假設，非官方」，可調。官方僅給質性條件（機頭朝飛行方向並穩定航高／航向改變時滾轉俯仰不得劇烈變化／第一邊及第五邊須穩定準確通過 P3 至 P7 之延伸線上方），五邊各邊量化容差未於 AC 107-005D 讀到。以上門檻僅供教學練習提示與進度追蹤，不產生官方通過／失敗結論。"
+    },
+    {
+      "level": "PASS",
+      "check": "級距 I 最低空域 exam-aircraft.json ↔ caa-exam.json",
+      "detail": "aircraft=\"80×20\" vs caa=80×20"
+    },
+    {
+      "level": "PASS",
+      "check": "級距 II 最低空域 exam-aircraft.json ↔ caa-exam.json",
+      "detail": "aircraft=\"120×30\" vs caa=120×30"
+    },
+    {
+      "level": "PASS",
+      "check": "級距 III 最低空域 exam-aircraft.json ↔ caa-exam.json",
+      "detail": "aircraft=\"160×40\" vs caa=160×40"
+    },
+    {
+      "level": "PASS",
+      "check": "操作區 ≥ 科目 E 級距 I 最低空域（考場大於官方最低要求）",
+      "detail": "操作區 80×30m（p233）vs 最低空域 80×20m（p165）"
+    },
+    {
+      "level": "PASS",
+      "check": "penta-app.ts 起飛目標高度取自官方 config（無硬編碼 20）",
+      "detail": "官方 operationAltitudeM=20m；penta-app 以 subjectE.params.operationAltitudeM 驅航線與起飛"
+    },
+    {
+      "level": "PASS",
+      "check": "penta-app.ts 空域矩形取自官方 config（無硬編碼尺寸）",
+      "detail": "pentaAirspaceForLevel(config, config.level) → subjects.E.params.minOperationAirspaceByLevelM"
+    }
+  ]
+}
