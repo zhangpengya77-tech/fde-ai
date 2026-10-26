@@ -16,6 +16,14 @@ if (params.get('mode') === 'exam') {
       import.meta.hot.dispose(() => app.dispose());
     }
   });
+} else if (params.get('mode') === 'penta') {
+  // 科目 E（高度保持五邊飛行）教學預覽（獨立疊加，不接評分）。
+  void import('./exam/penta-app').then((m) => {
+    const app = m.createPentaApp(root);
+    if (import.meta.hot) {
+      import.meta.hot.dispose(() => app.dispose());
+    }
+  });
 } else {
   void import('./app/create-app').then((m) => {
     const app = m.createApp(root);
