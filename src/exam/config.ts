@@ -30,6 +30,22 @@ export interface SubjectChecklist {
   page: number;
 }
 
+/** 科目 E：高度保持五邊飛行（p165）。官方質性條件＋級距空域＋操作高度。 */
+export interface SubjectEDef {
+  name: string;
+  /** 官方條文（p165 三條件原文）。 */
+  criteria: string[];
+  /** 是否第二階段測驗項目（與科目 F 同批）。 */
+  phase2: boolean;
+  params: {
+    /** 各級距最小操作空域（長×寬，公尺；長沿 Z、寬沿 X）。 */
+    minOperationAirspaceByLevelM: Record<string, { length: number; width: number }>;
+    /** 操作高度（公尺）。 */
+    operationAltitudeM: number;
+  };
+  page: number | null;
+}
+
 export interface ExamConfig {
   meta: {
     disclaimer: string;
@@ -126,6 +142,11 @@ export interface ExamConfig {
     /** 科目 A／G：飛行前／後檢查（p161／p167）。 */
     A: SubjectChecklist;
     G: SubjectChecklist;
+    /**
+     * 科目 E：高度保持五邊飛行（p165，phase2）。
+     * 第一階段僅數據層＋可視化：不接評分（見 docs/handoff/SUBJECT-E-RULE-VERIFICATION-2026-10-25.md）。
+     */
+    E: SubjectEDef;
   };
   /** 目前級距（exam-aircraft.json defaultLevel，例 'I'）。 */
   level: string;
@@ -193,6 +214,27 @@ export interface ExamConfig {
       innerCircleToleranceM: number;
       /** 進場/下降窗口內撞擊角錐的高度門檻（m）。 */
       coneHitHeightM: number;
+    };
+    /**
+     * 科目 E（高度保持五邊飛行）教學練習門檻（第四輪）。
+     * 恆為模擬假設、非官方、可調；官方五邊量化容差未於 AC 107-005D 讀到。
+     * 僅供教學練習提示與進度追蹤，不產生官方通過／失敗結論。
+     */
+    subjectE: {
+      disclaimer: string;
+      /** 恆 true：模擬假設，非官方。 */
+      assumption: true;
+      /** 偏離教學航線的提示門檻（m）。 */
+      routeDeviationToleranceM: number;
+      /** 高度偏差提示門檻（m）。 */
+      altitudeToleranceM: number;
+      /** 航路點到達判定半徑（m）。 */
+      waypointReachRadiusM: number;
+      /** 每段最短練習時間（s；防止抄捷徑跳段）。 */
+      minSegmentTimeS: number;
+      /** 起飛完成判定容差（m）。 */
+      takeoffCompleteToleranceM: number;
+      note: string;
     };
     /** 考試相機視角（模擬假設，非官方，可調）。 */
     camera: {
@@ -302,6 +344,7 @@ export function loadExamConfig(): ExamConfig {
       F_emergency: ExamConfig['subjects']['F'];
       A_preflight: ExamConfig['subjects']['A'];
       G_postflight: ExamConfig['subjects']['G'];
+      E_altitude_hold_five_sided: ExamConfig['subjects']['E'];
     };
     majorFailures: ExamConfig['majorFailures'];
     reportForm: ExamConfig['reportForm'];
@@ -328,6 +371,7 @@ export function loadExamConfig(): ExamConfig {
       F: raw.subjects.F_emergency,
       A: raw.subjects.A_preflight,
       G: raw.subjects.G_postflight,
+      E: raw.subjects.E_altitude_hold_five_sided,
     },
     level: loadExamLevelInfo().level,
     majorFailures: raw.majorFailures,
@@ -392,4 +436,49 @@ export function loadExamLevelInfo(): ExamLevelInfo {
     retreatDistanceM: found?.retreatDistanceM ?? null,
     fieldFigure: found?.fieldFigure ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 科目 E 配置合法性驗證（第一階段數據層）
+// ---------------------------------------------------------------------------
+
+export interface SubjectEConfigCheck {
+  ok: boolean;
+  /** 人類可讀的問題清單（空陣列 = 合法）。 */
+  errors: string[];
+}
+
+function isPositiveNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0;
+}
+
+/**
+ * 科目 E 配置合法性驗證（型別完整性＋數值合理性，非官方性審查）。
+ *
+ * 檢查官方條文存在、級距空域齊備且為正數、操作高度為正數。
+ * page 可為 null（「讀不到留 null」的既有慣例），不視為錯誤。
+ */
+export function validateSubjectEConfig(e: SubjectEDef): SubjectEConfigCheck {
+  const errors: string[] = [];
+  if (typeof e?.name !== 'string' || e.name.length === 0) {
+    errors.push('name：科目 E 名稱為空或非字串');
+  }
+  if (!Array.isArray(e?.criteria) || e.criteria.length === 0) {
+    errors.push('criteria：官方條文為空或非陣列');
+  } else if (e.criteria.some((c) => typeof c !== 'string' || c.trim().length === 0)) {
+    errors.push('criteria：含空字串或非字串條文');
+  }
+  const airspace = e?.params?.minOperationAirspaceByLevelM;
+  if (!airspace || typeof airspace !== 'object') {
+    errors.push('minOperationAirspaceByLevelM：缺失或非物件');
+  } else if (!isPositiveNumber(airspace.I?.length) || !isPositiveNumber(airspace.I?.width)) {
+    errors.push('minOperationAirspaceByLevelM：缺少級距 I 或其 length/width 非正數');
+  }
+  if (!isPositiveNumber(e?.params?.operationAltitudeM)) {
+    errors.push('operationAltitudeM：操作高度缺失或非正數');
+  }
+  if (e?.page !== null && e?.page !== undefined && !isPositiveNumber(e.page)) {
+    errors.push('page：頁碼須為正整數或 null');
+  }
+  return { ok: errors.length === 0, errors };
 }
