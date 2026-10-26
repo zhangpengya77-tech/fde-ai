@@ -68,6 +68,27 @@ async function pushAxis(page: Page, axis: number, value: number): Promise<void> 
   );
 }
 
+/**
+ * 等即時通道反映 restore 後的靜止值（lastRaw 已更新）再按「開始這步」。
+ *
+ * 2026-10-25 全量回歸 flake 修復：guidedStart 的 off-center 守衛以 lastRaw
+ * 為準；restoreAllAxes 的 Node→瀏覽器 evaluate 與 click 之間若採樣尚未更新
+ * （全量套件負載下的 roundtrip 競爭），arm 會被拒絕、detection 永遠為空。
+ * 這裡以畫面原始值（data-channel-raw，不經校準）為錨點等採樣收斂到靜止值，
+ * 不改動任何產品閾值（GUIDED_MIN_PEAK 仍為 0.7）。
+ */
+async function waitSticksAtRest(page: Page): Promise<void> {
+  const expected: Array<[number, string]> = [
+    [0, '0.015'],
+    [1, '0.000'],
+    [2, '-1.000'],
+    [3, '-0.006'],
+  ];
+  for (const [axis, text] of expected) {
+    await expect(page.locator(`[data-channel-raw="${axis}"]`)).toHaveText(text, { timeout: 10_000 });
+  }
+}
+
 /** 直接把一把「舊標定」寫進 IndexedDB（模擬教師瀏覽器裡的殘留檔）。 */
 async function seedStaleProfile(page: Page, savedAtMs: number, label: string): Promise<void> {
   await page.evaluate(
@@ -273,6 +294,7 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
 
     // 先停在正確的靜止值再開始。
     await restoreAllAxes(page);
+    await waitSticksAtRest(page);
 
     // --- 第 1 步：右搖桿最上 → pitch ← axis1（不反向） ---------------------
     await page.locator('[data-guided-action="start"]').click();
@@ -286,6 +308,7 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
     // --- 第 2 步：故意再推 axis1 → 同軸錯誤，不許確認 ---------------------
     // 先把搖桿回中：基線被污染時偵測會失效（面板會拒絕開始並提示回中）。
     await restoreAllAxes(page);
+    await waitSticksAtRest(page);
     await expect(page.locator('[data-guided-step]')).toHaveText('第 2 / 4 步');
     await page.locator('[data-guided-action="start"]').click();
     await pushAxis(page, 1, -0.9);
@@ -295,6 +318,7 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
 
     // 重做，改推右搖桿最右 → roll ← axis0（不反向）
     await restoreAllAxes(page);
+    await waitSticksAtRest(page);
     await page.locator('[data-guided-action="retry"]').click();
     await page.locator('[data-guided-action="start"]').click();
     await pushAxis(page, 0, 0.984);
@@ -305,6 +329,7 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
     // --- 第 3 步：左搖桿最右 → yaw ← axis3 ---------------------------------
     await expect(page.locator('[data-guided-step]')).toHaveText('第 3 / 4 步');
     await restoreAllAxes(page);
+    await waitSticksAtRest(page);
     await page.locator('[data-guided-action="start"]').click();
     await pushAxis(page, 3, 0.98);
     await expect(page.locator('[data-guided-detection]')).toContainText('偏航 Yaw ← axis3', { timeout: 5_000 });
@@ -313,6 +338,7 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
     // --- 第 4 步：左搖桿最上 → throttle ← axis2（單向）---------------------
     await expect(page.locator('[data-guided-step]')).toHaveText('第 4 / 4 步');
     await restoreAllAxes(page);
+    await waitSticksAtRest(page);
     await page.locator('[data-guided-action="start"]').click();
     await pushAxis(page, 2, 1);
     await expect(page.locator('[data-guided-detection]')).toContainText('油門 Throttle ← axis2', { timeout: 5_000 });
@@ -454,15 +480,11 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
   });
 
   test('recording suggestion applies only the channel that differs (verified roll stays untouched)', async ({ page }) => {
-    // 加速錄製視窗，並把本機 pitch 綁成「綁錯的 axis0 / reverse=false」，
-    // roll 維持已實測驗證的 axis0 / false。
+    // 錄製視窗經正式測試接縫由 10 秒縮短為 8 秒。
+    // （2026-10-25 前是用 setTimeout 覆寫把 >=9000ms 計時器壓到 1800ms，
+    //   見下方「同步機制」說明——那個視窗對 Node 端推送排程沒有餘量。）
     await page.addInitScript(() => {
-      const original = window.setTimeout.bind(window);
-      (window as unknown as { setTimeout: unknown }).setTimeout = (
-        fn: TimerHandler,
-        ms?: number,
-        ...rest: unknown[]
-      ) => original(fn, typeof ms === 'number' && ms >= 9000 ? 1800 : ms, ...(rest as []));
+      (window as unknown as { __fdeRecordingDurationMs: number }).__fdeRecordingDurationMs = 8000;
     });
     await page.goto('/');
     await expect(page.locator('[data-active-origin]')).toContainText('靜態回退', { timeout: 15_000 });
@@ -508,19 +530,70 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
     await expect(page.locator('[data-source="roll"]')).toHaveValue('0');
 
     // 畫圈：上(axis1 負) → 右(axis0 正) → 下(axis1 正) → 左(axis0 負)
+    //
+    // 同步機制（2026-10-25 修 mobile-chrome 偶發 flake）：
+    // 整段推送排程改在瀏覽器端一次執行，不再用 Node 端 evaluate +
+    // waitForTimeout 逐段推送。歷史故障：全量套件負載下 Node→瀏覽器
+    // roundtrip 延遲把首段推桿擠慢，導致「上」段落（樣本前 25%）只取到
+    // 靜止值、均值低於段落門檻，且推桿總時長超過被壓縮的錄製視窗，
+    // 尾部推送從未被採樣 → 「未偵測到峰值 ≥ 0.70 的軸」。
+    // 排程以「錄製狀態文字出現（RECORDING_PROMPT 含『畫圈』）」為錨點
+    // （startRecording 同步寫入），前面留 400ms 靜止引導段確保峰值基線
+    // 落在靜止值；四段各 1500ms，合計 6400ms < 8000ms 錄製視窗。
     await page.locator('[data-record-action="start"]').click();
-    await pushAxis(page, 1, -0.98);
-    await page.waitForTimeout(400);
-    await pushAxis(page, 0, 0.98);
-    await page.waitForTimeout(400);
-    await pushAxis(page, 1, 0.98);
-    await page.waitForTimeout(400);
-    await pushAxis(page, 0, -0.98);
-    await page.waitForTimeout(400);
-    await restoreAllAxes(page);
+    await page.evaluate(async () => {
+      const pads = (window as unknown as { __fakeGamepads: Array<{ axes: number[] }> }).__fakeGamepads;
+      const pad = pads[0];
+      const rest = [0.015, 0, -1, -0.006, 0, 0, 0, 0];
+      const schedule: Array<[number, number]> = [
+        [1, -0.98], // 上：axis1 負
+        [0, 0.98], // 右：axis0 正
+        [1, 0.98], // 下：axis1 正
+        [0, -0.98], // 左：axis0 負
+      ];
+      const setRest = (): void => {
+        for (let i = 0; i < pad.axes.length; i += 1) pad.axes[i] = rest[i];
+      };
+      const sleep = (ms: number): Promise<void> =>
+        new Promise((resolve) => {
+          setTimeout(resolve, ms);
+        });
+
+      // 錨點：等錄製真正開始再排程（狀態文字在 click 處理函式中同步寫入，
+      // 正常情況下 evaluate 執行時已就緒；MutationObserver 只是保險）。
+      const status = document.querySelector('[data-record-status]');
+      await new Promise<void>((resolve) => {
+        const started = (): boolean => (status?.textContent ?? '').includes('畫圈');
+        if (started()) {
+          resolve();
+          return;
+        }
+        const observer = new MutationObserver(() => {
+          if (started()) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        if (status) observer.observe(status, { childList: true, characterData: true, subtree: true });
+        setTimeout(() => {
+          observer.disconnect();
+          resolve();
+        }, 3000);
+      });
+
+      setRest();
+      await sleep(400); // 靜止引導段：讓錄製基線取到靜止值
+      for (const [axis, value] of schedule) {
+        setRest();
+        pad.axes[axis] = value;
+        await sleep(1500);
+      }
+      setRest();
+    });
 
     const suggestion = page.locator('[data-record-suggestion]');
-    await expect(suggestion).toContainText('右桿上下 = axis1', { timeout: 8_000 });
+    // 錄製視窗 8 秒：排程約 6.4 秒結束，停止後才產生建議；逾時放寬到 15 秒。
+    await expect(suggestion).toContainText('右桿上下 = axis1', { timeout: 15_000 });
     await expect(suggestion).toContainText('建議 pitch ← axis1（reverse=true）');
     await expect(suggestion).toContainText('右桿左右 = axis0');
     await expect(suggestion).toContainText('建議 roll ← axis0（reverse=false）');
