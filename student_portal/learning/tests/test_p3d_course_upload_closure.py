@@ -11,6 +11,10 @@ from django.urls import reverse
 from learning.models import Cohort, Evidence, TaskDefinition, TeacherCohortAccess
 from learning.tests.helpers import create_student_account, enroll_student
 
+# P3-H 第十三階段：Evidence.upload 對 .pdf 增加 %PDF- 檔頭檢查後，
+# 本測試的夾具需改用帶真實檔頭的內容；測試目的（上傳閉環與授權）不變。
+VALID_PDF = b"%PDF-1.7\n% P3-D fixture\n%%EOF\n"
+
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
 class P3DCourseUploadClosureTests(TestCase):
@@ -37,7 +41,7 @@ class P3DCourseUploadClosureTests(TestCase):
             client = self._student_client(self.student)
             response = client.post(
                 reverse("learning:evidence_add", args=[self.enrollment.pk, self.task.task_id]),
-                {"evidence_type": Evidence.Type.FILE, "upload": SimpleUploadedFile("proof.pdf", b"p3d-pdf", content_type="application/pdf")},
+                {"evidence_type": Evidence.Type.FILE, "upload": SimpleUploadedFile("proof.pdf", VALID_PDF, content_type="application/pdf")},
                 HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
                 HTTP_ORIGIN="http://testserver",
             )
@@ -47,15 +51,51 @@ class P3DCourseUploadClosureTests(TestCase):
             teacher = Client(); teacher.force_login(self.teacher)
             download = teacher.get(reverse("learning:evidence_download", args=[str(evidence.pk)]))
             self.assertEqual(download.status_code, 200)
-            self.assertEqual(b"".join(download.streaming_content), b"p3d-pdf")
+            self.assertEqual(b"".join(download.streaming_content), VALID_PDF)
 
     def test_cross_student_write_and_cross_cohort_teacher_read_are_rejected(self):
         with tempfile.TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=Path(media_dir)):
             owner = self._student_client(self.student)
-            owner.post(reverse("learning:evidence_add", args=[self.enrollment.pk, self.task.task_id]), {"evidence_type": Evidence.Type.FILE, "upload": SimpleUploadedFile("proof.pdf", b"p3d-pdf")}, HTTP_X_CSRFTOKEN=owner.cookies["csrftoken"].value, HTTP_ORIGIN="http://testserver")
+            owner.post(reverse("learning:evidence_add", args=[self.enrollment.pk, self.task.task_id]), {"evidence_type": Evidence.Type.FILE, "upload": SimpleUploadedFile("proof.pdf", VALID_PDF)}, HTTP_X_CSRFTOKEN=owner.cookies["csrftoken"].value, HTTP_ORIGIN="http://testserver")
             evidence = Evidence.objects.get(progress__enrollment=self.enrollment)
             attacker = self._student_client(self.other_student)
             forged = attacker.post(reverse("learning:evidence_add", args=[self.enrollment.pk, self.task.task_id]), {"evidence_type": Evidence.Type.FILE, "upload": SimpleUploadedFile("forged.pdf", b"x")}, HTTP_X_CSRFTOKEN=attacker.cookies["csrftoken"].value, HTTP_ORIGIN="http://testserver")
             self.assertEqual(forged.status_code, 404)
             teacher = Client(); teacher.force_login(self.other_teacher)
             self.assertEqual(teacher.get(reverse("learning:evidence_download", args=[str(evidence.pk)])).status_code, 404)
+
+
+class EvidencePdfHeaderValidatorTests(TestCase):
+    """P3-H 第十三階段：Evidence.upload 的 %PDF- 檔頭檢查與檔案指標還原。"""
+
+    def _file(self, name, content):
+        return SimpleUploadedFile(name, content, content_type="application/pdf")
+
+    def test_valid_pdf_passes_and_file_pointer_is_restored(self):
+        from learning.models import validate_pdf_header
+
+        upload = self._file("report.pdf", VALID_PDF)
+        upload.seek(0)
+        validate_pdf_header(upload)
+        self.assertEqual(upload.tell(), 0)
+        self.assertEqual(upload.read(), VALID_PDF)
+
+        upload.seek(2)
+        validate_pdf_header(upload)
+        self.assertEqual(upload.tell(), 2)
+
+    def test_renamed_binary_is_rejected(self):
+        from django.core.exceptions import ValidationError
+
+        from learning.models import validate_pdf_header
+
+        for payload in (b"MZ\x90\x00windows-binary", b"PK\x03\x04zip", b"<html></html>", b"\x89PNG\r\n\x1a\n"):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValidationError):
+                    validate_pdf_header(self._file("payload.pdf", payload))
+
+    def test_non_pdf_extension_is_not_inspected(self):
+        from learning.models import validate_pdf_header
+
+        validate_pdf_header(self._file("archive.zip", b"PK\x03\x04"))
+        validate_pdf_header(self._file("notes.txt", b"plain text"))

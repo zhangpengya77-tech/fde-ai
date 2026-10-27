@@ -146,6 +146,7 @@ from .models import (
     TeacherCohortAccess,
     TeacherReviewEvent,
     VisionModelRecord,
+    validate_evidence_upload,
 )
 from .growth_media import process_growth_image
 from .growth_video import VideoProcessingError, process_growth_video
@@ -1106,6 +1107,17 @@ def growth_record_detail(request, enrollment_id, slot_id):
                             round((time.perf_counter() - video_started_at) * 1000),
                         )
 
+            # 成長記錄附件是直建 Evidence，不經 ModelForm 也就不會跑
+            # full_clean()；落盤前先用同一組 validator 驗一次，失敗時掛回
+            # 表單欄位，讓錯誤呈現與 evidence_add 的表單路徑一致。
+            if not form.errors:
+                for upload in new_documents:
+                    try:
+                        validate_evidence_upload(File(upload, name=Path(str(upload.name)).name))
+                    except ValidationError as exc:
+                        form.add_error("documents", exc.messages[0])
+                        break
+
             if form.is_valid() and not form.errors:
                 submission.student_note = form.cleaned_data["student_note"].strip()
                 submission.learning_summary = form.cleaned_data["learning_summary"].strip()
@@ -1120,6 +1132,8 @@ def growth_record_detail(request, enrollment_id, slot_id):
                     with transaction.atomic():
                         submission.save()
                         for filename, image_bytes, metadata in processed_images:
+                            content = ContentFile(image_bytes, name=filename)
+                            validate_evidence_upload(content)
                             evidence = Evidence(
                                 growth_submission=submission,
                                 evidence_type=Evidence.Type.IMAGE,
@@ -1127,7 +1141,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
                                 original_metadata=metadata["original"],
                                 processed_metadata=metadata["processed"],
                             )
-                            evidence.upload.save(filename, ContentFile(image_bytes), save=True)
+                            evidence.upload.save(filename, content, save=True)
                             created_evidence.append(evidence)
                         if processed_video is not None:
                             if video_request_id:
@@ -1154,12 +1168,11 @@ def growth_record_detail(request, enrollment_id, slot_id):
                                 original_metadata=processed_video.original_metadata,
                                 processed_metadata=processed_video.processed_metadata,
                             )
+                            video_name = f"growth-video-{video_evidence.evidence_id}.mp4"
                             with processed_video.path.open("rb") as video_file:
-                                video_evidence.upload.save(
-                                    f"growth-video-{video_evidence.evidence_id}.mp4",
-                                    File(video_file),
-                                    save=True,
-                                )
+                                video_upload = File(video_file, name=video_name)
+                                validate_evidence_upload(video_upload)
+                                video_evidence.upload.save(video_name, video_upload, save=True)
                             if video_request_id:
                                 logger.info("EVIDENCE_SAVE_PASS request_id=%s", video_request_id)
                             created_evidence.append(video_evidence)
@@ -1289,6 +1302,12 @@ def growth_model_upload(request, enrollment_id):
     upload = form.cleaned_data["model_file"]
     original_name = Path(str(upload.name)).name
     content = upload.read()
+    model_content = ContentFile(content, name=original_name)
+    try:
+        validate_evidence_upload(model_content)
+    except ValidationError as exc:
+        messages.error(request, f"模型提交失敗：{exc.messages[0]}")
+        return redirect(redirect_url)
     evidence = None
     stored_name = ""
     storage = None
@@ -1307,7 +1326,7 @@ def growth_model_upload(request, enrollment_id):
                     "evidence_type": "YOLO_MODEL",
                 },
             )
-            evidence.upload.save(original_name, ContentFile(content), save=True)
+            evidence.upload.save(original_name, model_content, save=True)
             stored_name = evidence.upload.name
             storage = evidence.upload.storage
             vision_submission = submit_model_evidence_to_vision(

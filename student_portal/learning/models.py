@@ -3,6 +3,7 @@ import uuid
 import secrets
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
@@ -22,11 +23,95 @@ def evidence_upload_path(instance, filename):
     return f"evidence/{instance.evidence_id}/{uuid.uuid4().hex}.{suffix}"
 
 
+EVIDENCE_MAX_BYTES = 100 * 1024 * 1024
+
+# Evidence.upload 的副檔名白名單。欄位驗證器與直建路徑的驗證入口共用同一份
+# 清單，避免出現「表單會擋、直建不擋」的第二套規則。
+EVIDENCE_ALLOWED_EXTENSIONS = [
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "mp4",
+    "mov",
+    "pdf",
+    "ppt",
+    "pptx",
+    "doc",
+    "docx",
+    "xls",
+    "xlsx",
+    "csv",
+    "zip",
+    "pt",
+    "onnx",
+    "tif",
+    "tiff",
+    "obj",
+    "stl",
+    "glb",
+    "txt",
+    "odt",
+    "odp",
+    "ods",
+]
+
+
 def validate_evidence_size(file_obj):
-    if file_obj.size > 100 * 1024 * 1024:
+    if file_obj.size > EVIDENCE_MAX_BYTES:
         from django.core.exceptions import ValidationError
 
         raise ValidationError("單一證據檔案不得超過 100 MB。")
+
+
+PDF_MAGIC_HEADER = b"%PDF-"
+
+
+def validate_pdf_header(file_obj):
+    """副檔名為 .pdf 時，要求檔頭為 %PDF-（不採信 Content-Type）。
+
+    只讀取前 5 個位元組，讀完把檔案指標還原到原位置，避免影響後續儲存。
+    其他副檔名一律放行，由 FileExtensionValidator 與下游流程負責。
+    """
+    name = getattr(file_obj, "name", "") or ""
+    if not str(name).lower().endswith(".pdf"):
+        return
+
+    from django.core.exceptions import ValidationError
+
+    try:
+        position = file_obj.tell()
+    except (AttributeError, OSError):
+        position = None
+    try:
+        file_obj.seek(0)
+        header = file_obj.read(len(PDF_MAGIC_HEADER))
+    except (AttributeError, OSError):
+        return
+    finally:
+        if position is not None:
+            file_obj.seek(position)
+        else:
+            file_obj.seek(0)
+
+    if header != PDF_MAGIC_HEADER:
+        raise ValidationError("副檔名為 .pdf 的檔案缺少 PDF 檔頭（%PDF-），請確認檔案未損壞或未經改名。")
+
+
+def validate_evidence_upload(file_obj):
+    """落盤前對 Evidence.upload 套用與 ModelForm 完全相同的驗證。
+
+    有些路徑（成長記錄附件、R05 模型成果）直接建構 Evidence 後呼叫
+    ``evidence.upload.save(...)``，不經過 ``ModelForm`` 也就不會觸發
+    ``full_clean()``；本函式把同一組 validator 顯式套用一次，讓所有寫入
+    路徑的判定標準一致，而不是各自維護一套規則。
+
+    呼叫端必須提供已命名的檔案物件（``File(file, name=...)`` 或
+    ``ContentFile(bytes, name=...)``），驗證器才能依副檔名判斷。
+    """
+    FileExtensionValidator(allowed_extensions=EVIDENCE_ALLOWED_EXTENSIONS)(file_obj)
+    validate_evidence_size(file_obj)
+    validate_pdf_header(file_obj)
 
 
 class Cohort(models.Model):
@@ -551,9 +636,7 @@ class Evidence(models.Model):
         upload_to=evidence_upload_path,
         blank=True,
         validators=[
-            FileExtensionValidator(
-                allowed_extensions=["jpg", "jpeg", "png", "webp", "mp4", "mov", "pdf", "ppt", "pptx", "doc", "docx", "xls", "xlsx", "csv", "zip", "pt", "onnx", "tif", "tiff", "obj", "stl", "glb", "txt", "odt", "odp", "ods"],
-            ),
+            FileExtensionValidator(allowed_extensions=EVIDENCE_ALLOWED_EXTENSIONS),
             validate_evidence_size,
         ],
     )
@@ -575,14 +658,17 @@ class Evidence(models.Model):
         ]
 
     def clean(self):
-        from django.core.exceptions import ValidationError
-
         if self.progress_id and self.growth_submission_id:
             raise ValidationError("證據必須且只能屬於一項任務或一筆成長記錄。")
         if not self._state.adding and not self.progress_id and not self.growth_submission_id:
             raise ValidationError("證據必須且只能屬於一項任務或一筆成長記錄。")
         if bool(self.external_url) == bool(self.upload):
             raise ValidationError("證據必須且只能提供一個檔案或一個外部連結。")
+        if self.upload:
+            try:
+                validate_pdf_header(self.upload)
+            except ValidationError as exc:
+                raise ValidationError({"upload": exc.messages}) from exc
 
     @property
     def student(self):
