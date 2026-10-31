@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07131f">
+  <title>學員 AI 視覺中心｜FDE-AI-UAS</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07131f;
+      --panel: #0b2133;
+      --line: #1d3d55;
+      --cyan: #3fd0ff;
+      --text: #e6f2fb;
+      --muted: #9db4c6;
+      --warn: #ffc861;
+      --ok: #4ade80;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: radial-gradient(circle at 20% 0%, #10314c, #07131f 60%);
+      color: var(--text);
+      font-family: "Noto Sans TC", system-ui, -apple-system, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+    .shell { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 72px; }
+    .back { color: var(--cyan); text-decoration: none; font-weight: 700; font-size: .92rem; }
+    .eyebrow { color: var(--cyan); font-size: .78rem; font-weight: 900; letter-spacing: .12em; margin: 26px 0 8px; }
+    h1 { margin: 0 0 10px; font-size: clamp(1.7rem, 4.6vw, 2.6rem); }
+    .lede { color: var(--muted); line-height: 1.75; max-width: 720px; }
+    .banner {
+      margin: 22px 0 26px; padding: 14px 16px; border-radius: 12px;
+      border: 1px solid #5a4a1e; background: rgba(255, 200, 97, .09); color: var(--warn);
+      line-height: 1.6; font-size: .94rem;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .card {
+      display: flex; flex-direction: column; padding: 22px; border-radius: 18px;
+      border: 1px solid var(--line); background: rgba(11, 33, 51, .92);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, .28);
+    }
+    .tag { align-self: flex-start; padding: 4px 10px; border-radius: 999px;
+           border: 1px solid #2b5a78; color: #9fe0ff; font-size: .76rem; }
+    .card h2 { margin: 14px 0 8px; font-size: 1.22rem; }
+    .card p { color: var(--muted); line-height: 1.7; margin: 0 0 14px; flex: 1; }
+    .steps { margin: 0 0 18px; padding-left: 1.1rem; color: #cfe2ef; line-height: 1.85; font-size: .9rem; }
+    .btn {
+      display: inline-flex; justify-content: center; align-items: center;
+      min-height: 46px; padding: 0 16px; border-radius: 10px;
+      border: 1px dashed #3a5a72; background: #12293a; color: #9db4c6;
+      font-weight: 800; text-decoration: none; cursor: not-allowed;
+    }
+    .flow { margin-top: 34px; }
+    .flow h2 { font-size: 1.15rem; margin-bottom: 14px; }
+    .flow ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+               list-style: none; padding: 0; margin: 0; }
+    .flow li { padding: 14px; border-radius: 12px; border: 1px solid var(--line);
+               background: rgba(9, 26, 40, .8); font-size: .9rem; line-height: 1.6; }
+    .flow li strong { display: block; color: var(--cyan); margin-bottom: 6px; font-size: .82rem; letter-spacing: .06em; }
+    .foot { margin-top: 30px; color: #7f97a9; font-size: .86rem; line-height: 1.8; }
+    .foot code { background: #0d2236; padding: .1rem .4rem; border-radius: 4px; color: #9fe0ff; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="../">← 返回 FDE-AI-UAS 首頁</a>
+    <p class="eyebrow">STUDENT · AI VISION</p>
+    <h1>學員 AI 視覺中心</h1>
+    <p class="lede">
+      此區只保留兩項 AI 視覺能力：螺旋槳 CW／CCW 方向辨識，以及 AI 電力巡檢 MP4 分析。
+      原本的「四面懸停」入口已由 AI 電力巡檢取代，舊有任務紀錄與歷史資料仍完整保留、不被刪除。
+    </p>
+
+    <div class="banner" role="status">
+      <strong>真實 AI 模型尚未就緒。</strong>
+      電力巡檢所需的 R5 訓練尚未交付 <code>best.pt</code> 與 <code>data.yaml</code>，
+      因此本預覽不會產生任何假的異常時間軸或信心度；後端在模型未就緒時亦如實顯示等待狀態。
+    </div>
+
+    <section class="grid" aria-label="AI 視覺能力">
+      <article class="card">
+        <span class="tag">螺旋槳 · 影像辨識</span>
+        <h2>螺旋槳 CW／CCW 方向辨識</h2>
+        <p>上傳槳葉照片，辨識順時針（CW）與逆時針（CCW）槳葉，作為組裝與安全檢查的前置確認。</p>
+        <ol class="steps">
+          <li>選擇槳葉照片</li>
+          <li>送出辨識</li>
+          <li>查看方向判定與信心度</li>
+        </ol>
+        <span class="btn" aria-disabled="true">需要 Django 後端</span>
+      </article>
+
+      <article class="card">
+        <span class="tag">電力巡檢 · MP4 分析</span>
+        <h2>AI 電力巡檢</h2>
+        <p>上傳巡檢影片，由班級已核准的模型排入隔離分析，輸出異常時間軸、截圖與信心度，並自動寫入成長日誌。</p>
+        <ol class="steps">
+          <li>登入並選擇所屬班級</li>
+          <li>上傳巡檢 MP4</li>
+          <li>等待隔離 worker 分析</li>
+          <li>查看異常時間軸／截圖／信心度</li>
+        </ol>
+        <span class="btn" aria-disabled="true">需要 Django 後端</span>
+      </article>
+    </section>
+
+    <section class="flow" aria-label="學員操作流程">
+      <h2>學員操作流程</h2>
+      <ol>
+        <li><strong>STEP 1</strong>登入學員入口</li>
+        <li><strong>STEP 2</strong>選擇 AI 電力巡檢</li>
+        <li><strong>STEP 3</strong>上傳 MP4 影片</li>
+        <li><strong>STEP 4</strong>等待分析完成</li>
+        <li><strong>STEP 5</strong>檢視結果並寫入成長日誌</li>
+      </ol>
+    </section>
+
+    <p class="foot">
+      本頁為<strong>唯讀靜態預覽</strong>，不執行登入、上傳或 AI 推論，也不偽造任何結果。
+      真實流程位於 Django 學員入口（<code>/student/courses/&lt;id&gt;/power-inspection/</code>）與
+      Live Backend 的隔離 worker。教師模型管理與覆核見 <code>/teacher/power-inspection/</code>。
+    </p>
+  </main>
+</body>
+</html>

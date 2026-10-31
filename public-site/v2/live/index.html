@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07131f">
+  <title>F450 AI 实训助教</title>
+  <link rel="stylesheet" href="live.css?v=live-coach-mvp1">
+</head>
+<body>
+  <main class="student-app">
+    <header class="student-hero">
+      <a class="download-center-entry" href="./downloads/">下載中心 Download Center</a>
+      <p class="eyebrow">FDE-AI-UAS</p>
+      <h1>F450 AI 实训助教</h1>
+      <p>AI 陪你一步一步完成 F450 实训，关键安全步骤由教师复核。</p>
+      <div class="student-summary">
+        <div><span>整体进度</span><strong id="trainingProgress">0 / 12</strong></div>
+        <div><span>当前任务</span><strong id="trainingTaskNumber">Task 01 / 12</strong></div>
+      </div>
+    </header>
+
+    <aside id="browserCapabilityWarning" class="browser-warning" hidden>
+      <strong id="browserCapabilityTitle">建议使用 Safari</strong>
+      <p id="browserCapabilityMessage">为了使用摄像头和语音助教，建议使用 Safari 打开本页面。</p>
+      <button id="copyCurrentLink" type="button" class="secondary-action">复制链接</button>
+    </aside>
+
+    <section class="status-panel compact-status" aria-label="服务状态">
+      <div><span>教学服务</span><strong id="backendStatus" data-state="checking">连接中</strong></div>
+      <div><span>AI 视觉</span><strong id="visionStatus">连接中</strong></div>
+      <div><span>摄像头</span><strong id="cameraStatus" data-state="checking">尚未开启</strong></div>
+    </section>
+
+    <section id="taskMapScreen" class="task-map-home">
+      <div class="task-map-intro"><div><p class="section-kicker">F450 12 Task Map</p><h2>选择今天要学习的任务</h2></div><strong id="mapProgress">0 / 12</strong></div>
+      <p>从零件、组装、调参到真机测试，AI 协助学习，关键安全环节由教师复核。</p>
+      <div class="task-status-legend" aria-label="任务状态图例"><span class="legend-gray">■ 灰色 未开始</span><span class="legend-blue">■ 蓝色 进行中</span><span class="legend-orange">■ 橙色 待教师确认</span><span class="legend-red">■ 红色 需重新检查</span><span class="legend-green">■ 绿色 已完成</span></div>
+      <ol id="trainingTaskList" class="task-map-grid"><li>正在载入 12 项任务…</li></ol>
+    </section>
+
+    <article id="taskDetailScreen" class="training-task student-task" hidden>
+      <div class="training-heading">
+        <span id="trainingStepNumber">正在准备当前步骤…</span>
+        <strong id="trainingStatus">未开始</strong>
+      </div>
+      <h2 id="trainingTitle">零件识别与检查</h2>
+      <p id="trainingObjective" class="task-objective">认识 F450 主要组件并完成基础检查。</p>
+
+      <!-- MP-12 Frontend Integration：TASK_07 的擴充區塊。
+           只在 Backend payload 提供 mission_planner 且目前任務為 TASK_07 時顯示。 -->
+      <section id="missionPlannerPanel" class="mp12-panel" hidden>
+        <div id="mp12MapView" class="mp12-map-view">
+          <div class="mp12-heading">
+            <div><p class="section-kicker">Task 07 深度训练</p><h3>Mission Planner MP-12</h3></div>
+            <strong id="mp12Progress">0 / 12</strong>
+          </div>
+          <p>子任务可以跳着学习；危险操作仍必须通过安全关卡。</p>
+          <div class="task-status-legend" aria-label="Mission Planner 子任务状态图例"><span class="legend-gray">■ 灰色 未开始</span><span class="legend-blue">■ 蓝色 进行中</span><span class="legend-orange">■ 橙色 待教师确认</span><span class="legend-red">■ 红色 需重新检查</span><span class="legend-green">■ 绿色 已完成</span></div>
+          <ol id="mp12TaskList" class="mp12-grid"><li>正在载入 12 项调参任务…</li></ol>
+        </div>
+
+        <div id="mp12DetailView" class="mp12-detail-view" hidden>
+          <button id="backToMp12Map" class="back-to-map secondary-action" type="button">← 返回 MP-12 地图</button>
+          <div class="mp12-current">
+            <div class="mp12-current-heading">
+              <div><p class="section-kicker">当前子任务</p><h3 id="mp12Title">等待选择</h3></div>
+              <button id="mp12CompleteSubtask" type="button">完成此子任务</button>
+            </div>
+            <p id="mp12Objective">请选择一项 Mission Planner 子任务。</p>
+            <div class="mp12-guide">
+              <div><h4>操作步骤</h4><ol id="mp12Procedure"></ol></div>
+              <div><h4>完成检查</h4><ul id="mp12Checks"></ul></div>
+            </div>
+            <div id="mp12Safety" class="mp12-safety"></div>
+            <p>建议证据：<strong id="mp12Evidence">按任务需要保存</strong></p>
+            <div class="mp12-evidence-actions">
+              <input id="mp12EvidenceFile" type="file" accept="image/*,video/*,.pdf">
+              <button id="mp12SaveEvidence" type="button" class="secondary-action">保存当前子任务证据</button>
+            </div>
+          </div>
+
+          <!-- 教師現場確認：沿用 Main v2.0 Teacher Authority（X-FDE-Role / X-FDE-Teacher-ID）。
+               不重新加入 MP-12 原 repo 的 PIN Gate；DEV 模式才顯示，學生不可自行放行。 -->
+          <section id="mp12TeacherReview" class="mp12-teacher-review" hidden>
+            <h3>教师现场确认</h3>
+            <p>仅 MP06、MP08、MP11、MP12 需要教师现场复核；学生端不可自行通过。</p>
+            <label>复核结果
+              <select id="mp12TeacherDecision">
+                <option value="APPROVE">通过</option>
+                <option value="REJECT_REWORK">需修改</option>
+                <option value="HOLD">暂不通过</option>
+              </select>
+            </label>
+            <label>原因
+              <select id="mp12TeacherReason">
+                <option>接线问题</option>
+                <option>参数问题</option>
+                <option>操作不完整</option>
+                <option>安全条件不足</option>
+                <option>需要重新测试</option>
+                <option>其他</option>
+              </select>
+            </label>
+            <label>教师备注（可选）<textarea id="mp12TeacherNote" rows="3"></textarea></label>
+            <button id="mp12SubmitTeacherReview" type="button">提交现场复核</button>
+          </section>
+        </div>
+
+        <div id="mp12CompletedBanner" class="mp12-completed" hidden>
+          <strong>MP-12 12 / 12 已完成</strong>
+          <p>可以返回 F450 主任务继续学习。TASK_07 本身仍需由你完成既有流程。</p>
+          <button id="mp12BackToTask07" type="button" class="secondary-action">← 返回 TASK_07</button>
+        </div>
+      </section>
+
+      <div id="cameraTool" class="camera-tool student-tool">
+        <section class="camera-panel student-camera">
+          <div class="section-heading">
+            <div><p class="section-kicker">📷 工作区实时画面</p><h3>实训摄像头</h3></div>
+            <span>摄像头：<strong id="cameraWaiting">未开启</strong><br>镜头：<strong id="currentCameraFacing">尚未开启</strong></span>
+          </div>
+          <div class="preview" aria-label="摄像机预览与 AI 检查标记">
+            <video id="cameraPreview" playsinline muted></video>
+            <img id="uploadPreview" alt="上传图片预览" hidden>
+            <canvas id="detectionOverlay" aria-hidden="true"></canvas>
+            <canvas id="captureCanvas" hidden></canvas>
+            <p id="cameraHint">摄像头尚未开启</p>
+          </div>
+          <button id="startCamera" type="button" class="primary-action">开启实训摄像头</button>
+          <p id="liveMessage" role="status">正在连接 AI 助教…</p>
+          <p class="preview-note">画面只在本机实时预览；只有你提出视觉问题时，AI 才读取一张当前画面。</p>
+        </section>
+      </div>
+      <section id="aiTools" class="live-coach-card">
+        <div class="live-coach-heading">
+          <div><p class="section-kicker">AI 实训助教</p><h3 id="liveCoachStatus">AI 已待命</h3></div>
+        </div>
+        <p id="coachGuidance">有问题直接说，我会根据当前步骤和画面帮助你。</p>
+        <p id="ragExplanation" class="coach-explanation" hidden>AI 会结合当前任务与安全状态回答。</p>
+        <p id="voiceStatus" class="voice-status" role="status">语音助教尚未开启。</p>
+
+        <section id="liveCoachConversation" class="live-coach-conversation" aria-live="polite">
+          <p id="userTranscriptLabel" class="conversation-label">你剛剛說</p>
+          <p id="lastUserTranscript">尚未提问。</p>
+          <p class="conversation-label">AI</p>
+          <p id="latestAiAnswer">尚无 AI 回答。</p>
+          <small id="answerSourceLabel" hidden></small>
+        </section>
+      </section>
+      <button id="enableVoiceCoach" type="button" class="primary-action">開始詢問 AI</button>
+      <button id="pauseVoiceCoach" type="button" class="secondary-action" hidden>暫停語音</button>
+
+      <details id="moreWays" class="classroom-more">
+        <summary>更多方式</summary>
+        <div class="classroom-more-content">
+        <button id="backToTaskMap" class="back-to-map secondary-action" type="button">← 返回任务地图</button>
+        <div class="group-progress-heading"><strong id="studentGroupCount">第 1 阶段 · 准备</strong><span>一次只做一件事</span></div>
+      <ol id="studentGroupProgress" class="student-group-progress"><li data-state="CURRENT"><span>1</span><strong>准备</strong></li></ol>
+        <section id="currentStepCard" class="instruction-card primary-card current-step-card">
+        <p class="current-step-label">现在只做这一件事</p>
+        <h3 id="currentStepTitle">准备工作区域</h3>
+        <p class="section-kicker">现在要做什么</p>
+        <p id="trainingAction">先阅读任务说明，再按步骤准备零件。</p>
+      </section>
+      <section id="completionCard" class="completion-card">
+        <h3>当前操作</h3>
+        <ul id="trainingCompletionConditions"><li>等待系统载入完成条件。</li></ul>
+        <label id="task08CheckStatusField" hidden>检查结果
+          <select id="task08CheckStatus">
+            <option value="PASS">PASS／符合预期</option>
+            <option value="RETRY">RETRY／重新检查</option>
+            <option value="NEEDS_CONFIRMATION">NEEDS_CONFIRMATION／需要教师确认</option>
+            <option value="NOT_AVAILABLE_INDOOR">NOT_AVAILABLE_INDOOR／室内不可用</option>
+            <option value="VISION_MODEL_NOT_READY">VISION_MODEL_NOT_READY／模型尚未就绪</option>
+          </select>
+        </label>
+        <label id="safetyAcknowledgment" class="safety-acknowledgment" hidden><input id="acknowledgeTrainingSafety" type="checkbox"> 我已阅读安全提醒</label>
+        <button id="primaryTrainingAction" type="button">开始任务</button>
+      </section>
+      <section id="stepCompleteFeedback" class="completion-feedback" hidden><h3>✅ 这一步完成</h3><p>你已经完成当前步骤。</p><button id="continueTrainingStep" type="button">进入下一步</button></section>
+      <section id="taskCompleteFeedback" class="completion-feedback task-complete" hidden><h3>Task 已完成</h3><p>本任务的操作、证据与复核已记录。</p></section>
+        <details id="fallbackMethods" class="fallback-methods">
+          <summary>无法使用语音？</summary>
+          <div class="fallback-actions">
+            <button id="pushToTalk" type="button" class="secondary-action push-to-talk" aria-pressed="false">🎙 按住说话</button>
+            <button id="textAskAi" type="button" class="secondary-action">⌨️ 文字问 AI</button>
+            <button id="assistantVisualAction" type="button" class="secondary-action">🤖 AI 看当前画面</button>
+            <button id="switchCamera" class="secondary-action" type="button" disabled>切换镜头</button>
+            <button id="stopCamera" class="secondary-action" type="button" disabled>关闭摄像头</button>
+            <button id="uploadImage" class="secondary-action" type="button">上传照片请 AI 看</button>
+            <button id="captureFrame" class="secondary-action" type="button" disabled hidden>🤖 AI 看当前画面</button>
+            <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          </div>
+          <div id="askAiPanel" class="ask-ai-panel" hidden>
+            <label for="askAiInput">想问 AI 什么？</label>
+            <textarea id="askAiInput" rows="3" placeholder="例如：下一步要做什么？"></textarea>
+            <button id="submitAskAi" type="button">发送问题</button>
+            <button id="cancelAiInteraction" type="button" class="secondary-action" hidden>取消</button>
+            <p id="askAiResponse" role="status"></p>
+          </div>
+        </details>
+
+      <section class="instruction-card action-guide-card">
+        <p class="section-kicker">怎么做</p>
+        <ol id="currentStepHow"><li>正在准备操作说明…</li></ol>
+      </section>
+      <section class="instruction-card done-guide-card">
+        <p class="section-kicker">怎么知道做对了</p>
+        <p>你应该看到：</p>
+        <ul id="currentStepDoneWhen"><li>正在准备检查标准…</li></ul>
+      </section>
+      <section class="instruction-card">
+        <p class="section-kicker">为什么要这样做</p>
+        <p id="trainingWhy">先正确识别零件，后续组装与接线才有可靠基础。</p>
+      </section>
+      <section id="safetyCard" class="safety-card student-tool" hidden>
+        <h3>安全提醒</h3>
+        <div id="trainingSafety">本步骤暂无额外安全提醒。</div>
+      </section>
+
+      <section id="evidenceCard" class="evidence-card student-tool" hidden>
+        <h3>留下学习证据</h3>
+        <p>依照当前任务拍照或选择文件。已保存：<strong id="trainingEvidence">0</strong></p>
+        <label class="file-action">拍照 / 上传照片
+          <input id="trainingEvidenceFile" type="file" accept="image/*,video/*,.pdf" capture="environment">
+        </label>
+      </section>
+
+      <section id="reflectionCard" class="reflection-card student-tool" hidden>
+        <h3>我的学习总结</h3>
+        <p>用自己的话写下：做了什么、遇到什么问题、如何解决、学到了什么。</p>
+        <p id="trainingReflectionState">尚未填写</p>
+        <label>今天我：
+          <textarea id="reflectionOriginal" rows="5" placeholder="请先写下自己的真实经历…"></textarea>
+        </label>
+        <button type="button" class="secondary-action">语音说总结</button>
+        <label class="assisted-summary">AI 帮我整理（不会取代原文）
+          <textarea id="reflectionAssisted" rows="4" readonly placeholder="填写原始内容后可由 AI 协助整理"></textarea>
+        </label>
+      </section>
+
+      <section id="teacherCard" class="teacher-card student-tool" hidden>
+        <h3>教师复核状态</h3>
+        <p id="trainingTeacher">当前步骤无需教师确认</p>
+        <p>关键安全步骤必须由教师确认，AI 不会代替教师放行。</p>
+        <div id="devTeacherControls" hidden>
+          <label for="teacherReviewNote">教师备注（可选）</label>
+          <input id="teacherReviewNote" type="text" placeholder="可留空">
+          <button id="mockTeacherApprove" type="button">MOCK_TEACHER Approve</button>
+          <button id="mockTeacherReject" type="button">MOCK_TEACHER Reject</button>
+        </div>
+      </section>
+
+      <details class="step-map">
+        <summary>查看整个任务流程</summary>
+        <ol id="trainingSteps"><li>等待 Backend 提供任务步骤。</li></ol>
+        <ol id="trainingStepList"></ol>
+      </details>
+        </div>
+      </details>
+
+      <footer class="task-footer">
+        <span><strong id="trainingPrerequisite">可以开始学习</strong></span>
+        <span>成长记录：<strong id="trainingGrowth">0 / 12 · 待同步</strong></span>
+      </footer>
+    </article>
+
+    <section id="visionAssessCenter" class="vision-center" aria-labelledby="visionAssessTitle" hidden>
+      <div class="vision-center-heading"><div><p class="section-kicker">測 · AI 視覺評測</p><h2 id="visionAssessTitle">槳葉檢測與四面懸停</h2></div><span>系統自動使用各類型 ACTIVE 模型</span></div>
+      <div class="vision-student-grid">
+        <section class="vision-workflow" id="propAssessment">
+          <h3>F450 槳葉檢測</h3><p>機頭朝畫面上方，照片由 ACTIVE 模型辨識，再由固定規則判定 M1～M4。</p>
+          <label>選擇槳葉照片<input id="propAssessmentFile" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <button id="runPropAssessment" type="button">執行槳葉檢測</button>
+          <output id="propAssessmentResult">尚未檢測</output>
+        </section>
+        <section class="vision-workflow" id="hoverAssessment">
+          <h3>四面懸停</h3><p>依真實時間分析 FRONT / RIGHT / BACK / LEFT；未校準不顯示米數。</p>
+          <label>選擇考核影片<input id="hoverAssessmentFile" type="file" accept="video/*"></label>
+          <label>Camera Profile ID（未填則只判方向）<input id="hoverCameraProfileId" type="text"></label>
+          <button id="runHoverAssessment" type="button">分析四面懸停</button>
+          <output id="hoverAssessmentResult">尚未分析</output>
+        </section>
+      </div>
+    </section>
+
+    <details id="teacherVisionCenter" class="vision-center teacher-vision-center" hidden>
+      <summary><strong>視覺模型與數據</strong><span>教師專用</span></summary>
+      <div class="vision-admin-grid">
+        <section><h3>模型管理</h3><p>上傳 best.pt、Validation、設為 ACTIVE、Archive。</p><label>類型<select id="visionModelType"><option>PROP_DIRECTION</option><option>FOUR_SIDE_HOVER</option></select></label><label>模型版本<input id="visionModelVersion" value="v1"></label><label>Rule Version<input id="visionRuleVersion" value="r1"></label><label>Dataset ID<input id="visionModelDatasetId"></label><label>Dataset Version<input id="visionModelDatasetVersion" value="v1"></label><input id="visionModelFile" type="file" accept=".pt"><button id="uploadVisionModel" type="button">上傳並驗證</button><label>Model ID<input id="visionActionModelId"></label><button id="activateVisionModel" type="button">設為 ACTIVE</button><button id="archiveVisionModel" type="button" class="secondary-action">Archive</button><button id="refreshVisionModels" type="button" class="secondary-action">刷新模型</button><pre id="visionModelList">尚未載入</pre></section>
+        <section><h3>模型比較</h3><p>比較 Dataset Version、Precision、Recall、mAP、Per Class 與錯誤數。</p><label>Model ID<input id="visionEvaluationModelId"></label><label>Golden Metrics JSON<textarea id="visionEvaluationMetrics" rows="5">{"precision":0,"recall":0,"map50":0,"map50_95":0,"per_class_metrics":{},"confusion_matrix":[],"error_count":0,"low_confidence_count":0}</textarea></label><button id="saveGoldenEvaluation" type="button">保存統一評估</button><pre id="visionModelCompare">尚無評估資料</pre></section>
+        <section><h3>困難樣本 / 待確認</h3><p>確認原標籤、修改標籤、排除無效資料或加入下一版 Dataset。</p><label>Sample ID<input id="hardExampleId"></label><label>教師標籤<input id="hardExampleLabel"></label><button id="confirmHardExample" type="button">確認原標籤</button><button id="correctHardExample" type="button">修改標籤</button><button id="rejectHardExample" type="button" class="secondary-action">排除無效資料</button><button id="refreshHardExamples" type="button" class="secondary-action">刷新待確認</button><pre id="hardExampleList">尚未載入</pre></section>
+        <section><h3>Dataset Versions</h3><p>保留 Parent Dataset 核心資料，加入教師確認樣本並 Export Training Package。</p><label>Parent Dataset ID<input id="parentDatasetId"></label><label>Hard Example IDs<textarea id="nextDatasetSamples" rows="3" placeholder="sample-1,sample-2"></textarea></label><button id="buildNextDataset" type="button">建立下一版 Dataset</button><label>Export Dataset ID<input id="exportDatasetId"></label><button id="exportTrainingPackage" type="button">Export Training Package</button><button id="refreshVisionDatasets" type="button" class="secondary-action">刷新 Dataset</button><pre id="visionDatasetList">尚未載入</pre></section>
+        <section><h3>考核區域校準</h3><p>依序記錄左前、右前、右後、左後，建立 2m × 2m Camera Profile。</p><label>四角像素座標<textarea id="cameraCalibrationPoints" rows="4">[[0,0],[640,0],[640,480],[0,480]]</textarea></label><button id="saveCameraCalibration" type="button">保存四點校準</button><output id="cameraCalibrationResult">尚未校準</output></section>
+        <section><h3>學生模型提交</h3><p>檢視學生作業（組別 / 任務 / 學生 / 提交時間 / 檔案 / 備註），審核後【導入模型倉庫】。</p><button id="refreshStudentSubmissions" type="button" class="secondary-action">刷新學生提交</button><pre id="studentSubmissionList">尚未載入</pre><label>Submission ID<input id="importSubmissionId"></label><label>模型名稱<input id="importModelName"></label><label>版本<input id="importModelVersion" value="v1"></label><label>Dataset ID<input id="importDatasetId"></label><label>Dataset Version<input id="importDatasetVersion" value="v1"></label><label>Rule Version<input id="importRuleVersion" value="r1"></label><button id="importSubmission" type="button">導入模型倉庫</button></section>
+        <section><h3>Golden Test Set</h3><p>每類型固定測試集；模型詳情可反向查找所用 Golden Set。</p><label>類型<select id="goldenSetType"><option>PROP_DIRECTION</option><option>FOUR_SIDE_HOVER</option></select></label><label>名稱<input id="goldenSetName"></label><label>案例數<input id="goldenSetCases" value="0"></label><button id="createGoldenSet" type="button">建立 Golden Set</button><button id="refreshGoldenSets" type="button" class="secondary-action">刷新 Golden Set</button><pre id="goldenSetList">尚未載入</pre></section>
+      </div>
+    </details>
+
+    <details id="devModePanel" class="dev-mode-panel" hidden>
+      <summary>DEV MODE · 开发诊断</summary>
+      <div class="dev-mode-content">
+        <section class="task-panel">
+          <h2>Classroom Validation</h2>
+          <label><input id="classroomValidationToggle" type="checkbox"> 开启课堂验证记录</label>
+          <button id="refreshClassroomValidation" type="button">刷新课堂报告</button>
+          <pre id="classroomValidationReport">尚未开启</pre>
+        </section>
+        <p>Device diagnostics</p>
+        <dl class="capability-diagnostics"><div><dt>Camera</dt><dd id="capabilityCamera">Checking</dd></div><div><dt>Camera Frame Timestamp</dt><dd id="diagnosticCameraFrameTimestamp">—</dd></div><div><dt>Speech Input</dt><dd id="capabilitySpeechInput">Checking</dd></div><div><dt>Speech Output</dt><dd id="capabilitySpeechOutput">Checking</dd></div><div><dt>Browser</dt><dd id="capabilityBrowser">Checking</dd></div><div><dt>Voice State</dt><dd id="diagnosticVoiceState">IDLE</dd></div><div><dt>Voice Timeline</dt><dd id="diagnosticVoiceTimeline">—</dd></div><div><dt>Transcript</dt><dd id="diagnosticTranscript">—</dd></div><div><dt>Submitted Question</dt><dd id="diagnosticSubmittedQuestion">—</dd></div><div><dt>Ask Request</dt><dd id="diagnosticAskRequest">—</dd></div><div><dt>Ask HTTP</dt><dd id="diagnosticAskHttpStatus">—</dd></div><div><dt>Ask Latency</dt><dd id="diagnosticAskLatency">—</dd></div><div><dt>Last AI Answer</dt><dd id="diagnosticLastAiAnswer">—</dd></div><div><dt>Frame</dt><dd id="diagnosticFrame">—</dd></div><div><dt>Vision</dt><dd id="diagnosticVision">idle</dd></div><div><dt>RAG</dt><dd id="diagnosticRag">—</dd></div><div><dt>TTS</dt><dd id="diagnosticTts">idle</dd></div><div><dt>Last Error</dt><dd id="diagnosticLastError">—</dd></div></dl>
+        <div class="camera-config"><label>Camera Device<select id="cameraDevice"><option value="">正在检查…</option></select></label><div><span>Resolution</span><strong id="cameraResolution">—</strong></div></div>
+        <p id="cameraDiagnostics" class="camera-diagnostics" hidden></p>
+        <section class="task-panel" aria-label="内部教学状态">
+          <div><span>Course</span><strong id="courseTitle">F450 基础组装</strong></div>
+          <div><span>Task</span><strong id="taskTitle">零件辨识与准备</strong></div>
+          <div><span>Progress</span><strong id="taskProgress">— / 3</strong></div>
+          <div><span>Current Step</span><strong id="currentStep">等待启动</strong></div>
+          <p id="taskInstruction">等待 Session。</p>
+          <dl class="coach-results">
+            <div><dt>Vision raw output</dt><dd id="visionResult">—</dd></div>
+            <div><dt>SOP state</dt><dd id="sopResult">READY</dd></div>
+            <div><dt>Knowledge Source</dt><dd id="ragSource">—</dd></div>
+            <div><dt>RAG 状态</dt><dd id="ragStatus">IDLE</dd></div>
+            <div><dt>RAG 延迟</dt><dd id="ragLatency">—</dd></div>
+          </dl>
+        </section>
+        <section class="results-panel"><h2>Detection Facts</h2><ul id="detectionResults"><li>尚未执行辨识。</li></ul><p id="timingMetrics">Encode、Inference、Round Trip 与 JPEG bytes 会显示在这里。</p></section>
+        <section class="mode-panel"><label><input id="manualMode" type="radio" name="coachMode" checked> Manual</label><label><input id="autoMode" type="radio" name="coachMode"> Auto Observation</label><button id="startCoach" type="button">开始 AI 陪做</button><button id="stopCoach" type="button" disabled>停止 AI 陪做</button><output id="autoMetrics">1 FPS · Requests 0 · Skipped 0 · Max in-flight 0 · Queue 0</output></section>
+        <section id="devSimulator" class="dev-panel" hidden><h2>Developer Simulation · DEV ONLY</h2><div class="controls"><button data-scenario="motor">Simulate motor</button><button data-scenario="frame_arm">Simulate frame_arm</button><button data-scenario="flight_controller">Simulate flight_controller</button><button data-scenario="wrong_class">Simulate wrong class</button><button data-scenario="no_detection">Simulate no detection</button><button data-scenario="low_confidence">Simulate low confidence</button></div></section>
+        <aside><strong>MODEL_ACCURACY_PENDING</strong><p>REAL_VISION 仅产生 PASS_CANDIDATE；正式步骤由 Backend Confirm 推进。</p></aside>
+      </div>
+    </details>
+  </main>
+  <script src="auto-observation.js?v=phase2-auto1"></script>
+  <script src="live.js?v=live-coach-mvp1"></script>
+</body>
+</html>
