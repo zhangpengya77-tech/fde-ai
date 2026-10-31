@@ -3018,3 +3018,45 @@ body.fde-column-view main {
   }
 }
 
+/* 證模組：證照 SOP / 學員成長日誌 / 成果紀錄 三入口 */
+.certify-entries {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.certify-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid rgba(0, 194, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(0, 194, 255, 0.06);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.certify-entry:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 22px rgba(0, 194, 255, 0.18);
+  transform: translateY(-2px);
+}
+.certify-entry strong {
+  color: #ffffff;
+  font-size: 17px;
+}
+.certify-entry small {
+  color: #b9d6e8;
+}
+.certify-entry.portal-link-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .certify-entries {
+    grid-template-columns: 1fr;
+  }
+}
+

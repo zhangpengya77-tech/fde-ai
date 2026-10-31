@@ -24,7 +24,7 @@
 
     <header class="mobile-header">
       <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習平台</small></a>
-      <a class="mobile-login-link" href="./student/">學員前端</a>
+      <a class="mobile-login-link" href="./student/">學員登入</a>
       <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileMenu">選單</button>
     </header>
 
@@ -34,17 +34,16 @@
         <button class="mobile-menu-close" id="mobileMenuClose" type="button" aria-label="關閉選單">✕</button>
       </div>
 
-      <!-- 桌面右上角的 Portal / 工具入口：手機改為可收合群組，預設收起。 -->
-      <details class="mobile-portal-group" id="mobilePortalGroup">
-        <summary>入口選單 · Portal<span class="mobile-portal-hint">註冊 / 登入 / 教師 / 下載</span></summary>
+      <!-- 桌面右上角的 Portal / 工具入口：手機改為可收合群組，預設展開以方便 iPhone 操作。 -->
+      <details class="mobile-portal-group" id="mobilePortalGroup" open>
+        <summary>入口選單 · Portal<span class="mobile-portal-hint">登入 / 教師 / 下載 / 仿真</span></summary>
         <div class="mobile-portal-links">
-          <a href="./student/">學員前端</a>
-          <a href="./register/">學員註冊</a>
-          <a href="./teacher/login/">教師後台</a>
+          <a href="./student/">學員登入</a>
+          <a href="./teacher/login/">教師登入</a>
           <a href="./downloads/">下載中心</a>
+          <a href="./sim/">仿真訓練</a>
+          <a href="./student/growth/">學員成長日誌</a>
           <a href="./flight-health/">飛行健康 AI</a>
-          <a href="./sim/">無人機仿真訓練</a>
-          <a href="./student/growth/">我的成長日誌</a>
         </div>
       </details>
 
@@ -60,11 +59,10 @@
 
     <main>
       <nav class="portal-entry-links" aria-label="Portal and tools">
-        <a href="./student/">學員前端</a>
-        <a href="./register/">學員註冊</a>
-        <a href="./teacher/login/">教師後台</a>
+        <a href="./student/">學員登入</a>
+        <a href="./teacher/login/">教師登入</a>
         <a href="./downloads/">下載中心 <small>Download Center</small></a>
-        <a href="./sim/">無人機仿真訓練 <small>Inspection Simulator</small></a>
+        <a href="./sim/">仿真訓練 <small>Simulation</small></a>
       </nav>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
@@ -332,6 +330,11 @@
                本頁（./github）不再是五階段主導航的目標，保留為公開展示頁（直接輸入網址仍可開啟）；
                原先由 renderStageGuides 注入的 stage-guide 改為靜態輸出，頁面外觀與內容不變。 -->
           <div class="stage-guide"><span>證</span><strong>GitHub 成果存證</strong><p>把學習紀錄、檢測截圖、影片與作品整理成 GitHub 倉庫，形成能力證據。</p></div>
+        </div>
+        <div class="certify-entries">
+          <a class="certify-entry" href="./student/growth/"><strong>學員成長日誌</strong><small>R01–R08 成長紀錄</small></a>
+          <a class="certify-entry" href="./courses/"><strong>證照 SOP</strong><small>考照流程與標準</small></a>
+          <a class="certify-entry" href="./github/"><strong>成果紀錄</strong><small>GitHub 能力檔案</small></a>
         </div>
         <div class="cert-grid" id="certificationChecklist"></div>
       </section>

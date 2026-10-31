@@ -130,12 +130,14 @@ function wirePortalLinks() {
 }
 
 function renderNavigation() {
+  // 教師確認的 FDE-AI 2.0 首頁左側主導航：學/練/作/測/證/飛行健康，順序固定。
   const primaryNav = [
-    { key: 'missions', label: '任', title: '12 任務地圖' },
-    ...moduleSections,
-    { label: '健', title: '飛行健康 AI / Flight Health', href: './flight-health/' },
-    { key: 'cohorts', label: '展', title: '歷屆學員成果' },
-    { href: 'portal:teacher-login', label: '師', title: '教師復核中心' }
+    { key: 'learn', label: '學', title: '公開課程' },
+    { key: 'practice', label: '練', title: '仿真訓練' },
+    { key: 'build', label: '作', title: '實作任務' },
+    { key: 'inspection', label: '測', title: 'AI 視覺檢測' },
+    { key: 'certify', label: '證', title: '證照 SOP、學員成長日誌與成果紀錄' },
+    { label: '飛', title: '飛行健康分析｜Flight Health AI', href: './flight-health/' }
   ];
   $('#moduleNav').innerHTML = primaryNav
     .map((section) => {
