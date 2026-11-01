@@ -2,6 +2,7 @@ import base64
 import csv
 import datetime
 import hmac
+import hashlib
 import json
 import logging
 import mimetypes
@@ -38,6 +39,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth.views import redirect_to_login
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
@@ -140,6 +142,11 @@ from .models import (
     GrowthRecordReview,
     GrowthRecordSubmission,
     PhaseProgress,
+    PowerInspectionCohortDeployment,
+    PowerInspectionCohortDeploymentEvent,
+    PowerInspectionJob,
+    PowerInspectionModel,
+    PowerInspectionReview,
     StudentProfile,
     StudentSurvey,
     StudentTaskProgress,
@@ -856,6 +863,90 @@ def teacher_cohorts(user):
     return cohorts.filter(teacher_accesses__teacher=user)
 
 
+# POWER_INSPECTION_V1：只管理隔離資產與操作流程。真實 YOLO 仍須由
+# 隔離 Live worker 在模型、類別契約與影片解碼都核驗後才可執行。
+POWER_INSPECTION_MAX_VIDEO_BYTES = 512 * 1024 * 1024
+POWER_INSPECTION_MAX_MODEL_BYTES = 1024 * 1024 * 1024
+POWER_INSPECTION_MAX_DATA_YAML_BYTES = 1024 * 1024
+
+
+def _power_teacher_cohort_or_404(request, cohort_id):
+    return get_object_or_404(teacher_cohorts(request.user), cohort_id=cohort_id)
+
+
+def _power_mp4_content(upload):
+    if upload is None or Path(str(upload.name)).suffix.lower() != ".mp4":
+        raise ValidationError("僅接受 MP4 影片。")
+    if upload.size <= 0 or upload.size > POWER_INSPECTION_MAX_VIDEO_BYTES:
+        raise ValidationError("MP4 影片大小不符合限制。")
+    content = upload.read()
+    if len(content) < 12 or content[4:8] != b"ftyp":
+        raise ValidationError("MP4 容器格式無效。")
+    return content
+
+
+def _power_contract(raw):
+    labels = [item.strip() for item in str(raw or "").split(",") if item.strip()]
+    if not labels:
+        raise ValidationError("請提供模型類別契約，以逗號分隔。")
+    return labels
+
+
+def _power_delivery_manifest(raw):
+    """解析外部交付 metadata；真正模型核驗仍交給隔離 worker。"""
+    if not str(raw or "").strip():
+        return {}
+    try:
+        manifest = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("模型交付 metadata 必須是 JSON 物件。") from exc
+    if not isinstance(manifest, dict):
+        raise ValidationError("模型交付 metadata 必須是 JSON 物件。")
+    return manifest
+
+
+def _power_rule_config(raw):
+    """解析已校準規則；空設定只能留在待核驗模型，不能部署給班級。"""
+    if not str(raw or "").strip():
+        return {}
+    try:
+        config = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("巡檢規則設定必須是 JSON 物件。") from exc
+    if not isinstance(config, dict):
+        raise ValidationError("巡檢規則設定必須是 JSON 物件。")
+    return config
+
+
+def _power_rule_is_deployable(model):
+    config = model.rule_config if isinstance(model.rule_config, dict) else {}
+    threshold = config.get("confidence_threshold")
+    max_gap = config.get("max_gap_ms")
+    return (
+        bool(str(model.rule_version).strip())
+        and isinstance(threshold, (int, float)) and 0 <= float(threshold) <= 1
+        and isinstance(max_gap, int) and max_gap > 0
+    )
+
+
+def _power_delivery_is_complete(manifest, *, has_data_yaml: bool) -> bool:
+    """只判斷交付欄位是否齊全；有效性仍由隔離 worker 實際核驗。"""
+    if not has_data_yaml or not isinstance(manifest, dict):
+        return False
+    training = manifest.get("training")
+    metrics = manifest.get("metrics")
+    independent_test = manifest.get("independent_test")
+    inference = manifest.get("inference")
+    source_license = manifest.get("source_license")
+    return (
+        isinstance(training, dict) and bool(training.get("version")) and bool(training.get("date"))
+        and isinstance(metrics, dict) and all(name in metrics for name in ("precision", "recall", "map50"))
+        and isinstance(independent_test, dict) and bool(independent_test.get("report_id")) and independent_test.get("passed") is True
+        and isinstance(inference, dict) and all(name in inference for name in ("confidence", "frame_stride"))
+        and isinstance(source_license, dict) and bool(source_license.get("source")) and bool(source_license.get("license"))
+    )
+
+
 # ---------------------------------------------------------------------------
 # 班級隔離（2026-10-28 上線收尾第四階段 C）
 #
@@ -956,19 +1047,30 @@ def _vision_lookup_model_student(model_id, *, teacher_id, preferred_task):
     return False, None
 
 
+def _guard_resource_id(request, kwargs, key):
+    """取出守衛要比對的 id，並統一成字串。
+
+    Django 的 <uuid:...> 路徑轉換器會把路徑參數轉成 UUID 物件，直接呼叫
+    .strip() 會丟出 AttributeError（2026-11-01 接入電力巡檢時發現；
+    既有的 teacher/vision-repository/<uuid:model_id>/ 路由同樣受影響）。
+    """
+    raw = (
+        request.POST.get(key)
+        or request.GET.get(key)
+        or kwargs.get(key)
+        or ""
+    )
+    return str(raw).strip()
+
+
 def _vision_resource_guard_impl(request, kwargs):
-    submission_id = (
-        request.POST.get("submission_id")
-        or request.GET.get("submission_id")
-        or kwargs.get("submission_id")
-        or ""
-    ).strip()
-    model_id = (
-        request.POST.get("model_id")
-        or request.GET.get("model_id")
-        or kwargs.get("model_id")
-        or ""
-    ).strip()
+    # POWER_INSPECTION_V1 使用獨立的 Django 模型倉庫（非 Live Vision Registry），
+    # 其教師視圖已自行以 teacher_cohorts(request.user) 做班級隔離，比對基準
+    # 也不同（PowerInspectionModel 而非 Live 端 model_id），因此不套用本守衛。
+    if request.path.startswith("/teacher/power-inspection/"):
+        return None
+    submission_id = _guard_resource_id(request, kwargs, "submission_id")
+    model_id = _guard_resource_id(request, kwargs, "model_id")
     if not submission_id and not model_id:
         return None
 
@@ -1001,6 +1103,493 @@ def _vision_resource_guard_impl(request, kwargs):
     if not vision_can_see_student(request.user, source_student):
         return vision_cohort_denied(request)
     return None
+
+
+@student_required
+@require_http_methods(["GET"])
+def student_power_inspection_entry(request):
+    """從公開「測」模組進入電力巡檢任務：解析唯一的有效課程再導向任務頁。
+
+    沒有課程時導回學員首頁；多門課程時同樣導回首頁讓學員自行選擇，
+    不猜測使用者意圖。
+    """
+    enrollment = _power_active_enrollment(request)
+    if enrollment is not None:
+        return redirect("learning:power_inspection_task", enrollment_id=enrollment.pk)
+    return redirect("learning:student_dashboard")
+
+
+@student_required
+@require_http_methods(["GET"])
+def student_power_inspection_task(request, enrollment_id):
+    """學員查看 POWER_INSPECTION_V1 任務與自己的隔離巡檢紀錄。"""
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related("cohort", "student"),
+        pk=enrollment_id,
+        student=request.student_profile,
+        active=True,
+    )
+    jobs = PowerInspectionJob.objects.filter(enrollment=enrollment).select_related("model").prefetch_related("reviews")
+    return render(request, "learning/student_power_inspection.html", {
+        "enrollment": enrollment,
+        "jobs": jobs,
+        "deployment": PowerInspectionCohortDeployment.objects.filter(
+            cohort=enrollment.cohort,
+            task_type="POWER_INSPECTION_V1",
+            enabled=True,
+            model__status=PowerInspectionModel.Status.TEACHING_TRIAL,
+            model__inference_mode=PowerInspectionModel.InferenceMode.REAL,
+        ).select_related("model").first(),
+    })
+
+
+@student_required
+@require_http_methods(["GET"])
+def student_power_inspection_job(request, job_id):
+    """供學員前端輪詢自己的工作狀態，不能讀取其他學員的影片結果。"""
+    job = get_object_or_404(
+        PowerInspectionJob.objects.prefetch_related("reviews", "anomaly_frames"),
+        job_id=job_id,
+        enrollment__student=request.student_profile,
+        enrollment__active=True,
+    )
+    return JsonResponse({
+        "job_id": str(job.job_id), "status": job.status, "inference_mode": job.inference_mode,
+        "video_metadata": job.video_metadata, "timeline": job.anomaly_timeline,
+        "result": job.result_json, "last_error": job.last_error,
+        "reviews": [{"decision": item.decision, "score": item.score, "note": item.note} for item in job.reviews.all()],
+        "anomaly_frames": [
+            {"timestamp_ms": item.timestamp_ms, "class": item.class_name, "confidence": item.confidence,
+             "screenshot_available": bool(item.screenshot), "inference_mode": item.inference_mode}
+            for item in job.anomaly_frames.all()
+        ],
+    })
+
+
+def _power_active_enrollment(request):
+    """解析目前學員唯一的有效課程；無法唯一決定時回傳 None。
+
+    「測」模組的公開頁沒有 enrollment 參數，課程只能由登入身分在後端解析，
+    絕不接受前端指定的課程代號（避免跨班存取）。
+    """
+    enrollments = list(
+        Enrollment.objects.filter(
+            student=request.student_profile,
+            active=True,
+        ).order_by("pk")[:2]
+    )
+    return enrollments[0] if len(enrollments) == 1 else None
+
+
+def _power_create_job(enrollment, upload, content):
+    """建立巡檢工作；沒有 REAL 試用模型時明確維持 BLOCKED。
+
+    回傳 (job, None)；若 MP4 不合法則回傳 (None, detail)。
+    """
+    # 學員不得提交 model/cohort 參數；僅從已驗證 Enrollment 的班級解析預設模型。
+    deployment = PowerInspectionCohortDeployment.objects.filter(
+        cohort=enrollment.cohort,
+        task_type="POWER_INSPECTION_V1",
+        enabled=True,
+        model__status=PowerInspectionModel.Status.TEACHING_TRIAL,
+        model__inference_mode=PowerInspectionModel.InferenceMode.REAL,
+    ).select_related("model").first()
+    model = deployment.model if deployment else None
+    job = PowerInspectionJob(
+        enrollment=enrollment,
+        model=model,
+        original_filename=Path(str(upload.name)).name,
+        video_sha256=hashlib.sha256(content).hexdigest(),
+        rule_version=model.rule_version if model else "POWER_INSPECTION_RULE_V1",
+        rule_config=dict(model.rule_config) if model and isinstance(model.rule_config, dict) else {},
+    )
+    if model is None:
+        job.status = PowerInspectionJob.Status.WAITING_FOR_REAL_MODEL
+        job.inference_mode = PowerInspectionJob.InferenceMode.BLOCKED
+        job.worker_detail = "尚未為此班級載入可用的真實 POWER_INSPECTION_V1 模型。"
+    else:
+        job.status = PowerInspectionJob.Status.QUEUED
+        job.inference_mode = PowerInspectionJob.InferenceMode.REAL
+        job.worker_detail = "已排入隔離 YOLO worker。"
+    job.video.save(job.original_filename, ContentFile(content), save=True)
+    return job
+
+
+@student_required
+@csrf_protect
+@require_POST
+def student_power_inspection_upload(request, enrollment_id):
+    """儲存學員 MP4；沒有 REAL 試用模型時明確維持 BLOCKED。"""
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related("cohort", "student"),
+        pk=enrollment_id,
+        student=request.student_profile,
+        active=True,
+    )
+    try:
+        upload = request.FILES.get("video")
+        content = _power_mp4_content(upload)
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "code": "invalid_video", "detail": str(exc)}, status=422)
+
+    job = _power_create_job(enrollment, upload, content)
+    return JsonResponse({
+        "ok": True,
+        "job_id": str(job.job_id),
+        "status": job.status,
+        "inference_mode": job.inference_mode,
+        "detail": job.worker_detail,
+    }, status=201)
+
+
+@require_http_methods(["GET", "POST"])
+@csrf_protect
+def student_power_inspection_api_upload(request):
+    """公開「測」模組的電力巡檢上傳端點（JSON）。
+
+    課程由登入學員身分在後端唯一解析；未登入回 401 JSON（不跳轉），
+    讓 SPA 能顯示「請先登入」的明確提示而不是拿到登入頁 HTML。
+    """
+    if request.method == "GET":
+        # 讓 SPA 可先取得 CSRF token（get_token 會一併寫入 csrftoken cookie）。
+        return JsonResponse({"ok": True, "method": "POST", "csrf_token": get_token(request)})
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            "ok": False,
+            "code": "login_required",
+            "detail": "請先以學員身分登入，再上傳電力巡檢影片。",
+            "login_url": reverse("learning:student_login"),
+        }, status=401)
+    profile = getattr(request.user, "student_profile", None)
+    if profile is None or not profile.active:
+        return JsonResponse({
+            "ok": False,
+            "code": "login_required",
+            "detail": "此帳號尚未啟用學員權限。",
+            "login_url": reverse("learning:student_login"),
+        }, status=403)
+    request.student_profile = profile
+    enrollment = _power_active_enrollment(request)
+    if enrollment is None:
+        return JsonResponse({
+            "ok": False,
+            "code": "enrollment_required",
+            "detail": "找不到唯一有效的課程，請先加入課程或改由課程頁進入巡檢。",
+            "task_url": reverse("learning:student_dashboard"),
+        }, status=409)
+    try:
+        upload = request.FILES.get("video")
+        content = _power_mp4_content(upload)
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "code": "invalid_video", "detail": str(exc)}, status=422)
+
+    job = _power_create_job(enrollment, upload, content)
+    return JsonResponse({
+        "ok": True,
+        "job_id": str(job.job_id),
+        "status": job.status,
+        "inference_mode": job.inference_mode,
+        "detail": job.worker_detail,
+        "job_url": reverse("learning:power_inspection_student_job", args=[job.job_id]),
+    }, status=201)
+
+
+@teacher_required
+@require_http_methods(["GET"])
+def teacher_power_inspection(request):
+    """教師的 POWER_INSPECTION_V1 模型、工作、覆核總覽。"""
+    cohorts = teacher_cohorts(request.user)
+    return render(request, "learning/teacher_power_inspection.html", {
+        "cohorts": cohorts,
+        "models": PowerInspectionModel.objects.filter(imported_by=request.user).prefetch_related("trial_cohorts", "cohort_deployments__cohort"),
+        "deployments": PowerInspectionCohortDeployment.objects.filter(
+            cohort__in=cohorts,
+            task_type="POWER_INSPECTION_V1",
+        ).select_related("cohort", "model", "deployed_by"),
+        "deployment_events": PowerInspectionCohortDeploymentEvent.objects.filter(
+            cohort__in=cohorts,
+        ).select_related("cohort", "model", "previous_model", "actor", "deployment")[:100],
+        "jobs": PowerInspectionJob.objects.filter(enrollment__cohort__in=cohorts).select_related("enrollment__cohort", "model").prefetch_related("reviews")[:100],
+        "reviews": PowerInspectionReview.objects.filter(job__enrollment__cohort__in=cohorts).select_related("job", "reviewer")[:100],
+        "real_model_available": PowerInspectionCohortDeployment.objects.filter(
+            cohort__in=cohorts,
+            task_type="POWER_INSPECTION_V1",
+            enabled=True,
+            model__status=PowerInspectionModel.Status.TEACHING_TRIAL,
+            model__inference_mode=PowerInspectionModel.InferenceMode.REAL,
+        ).exists(),
+    })
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_model_import(request):
+    """保存待核驗模型；不在 Django 程序載入 checkpoint。"""
+    upload = request.FILES.get("model_file")
+    if upload is None or Path(str(upload.name)).suffix.lower() not in {".pt", ".onnx"}:
+        return JsonResponse({"ok": False, "code": "invalid_model", "detail": "僅接受 .pt 或 .onnx 模型檔。"}, status=422)
+    if upload.size <= 0 or upload.size > POWER_INSPECTION_MAX_MODEL_BYTES:
+        return JsonResponse({"ok": False, "code": "invalid_model_size", "detail": "模型檔案大小不符合限制。"}, status=422)
+    content = upload.read()
+    try:
+        contract = _power_contract(request.POST.get("class_contract"))
+        delivery_manifest = _power_delivery_manifest(request.POST.get("delivery_manifest"))
+        rule_config = _power_rule_config(request.POST.get("rule_config"))
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "code": "invalid_model_delivery", "detail": str(exc)}, status=422)
+    data_yaml_upload = request.FILES.get("data_yaml_file")
+    data_yaml_content = b""
+    if data_yaml_upload is not None:
+        if Path(str(data_yaml_upload.name)).suffix.lower() not in {".yaml", ".yml"}:
+            return JsonResponse({"ok": False, "code": "invalid_data_yaml", "detail": "data.yaml 必須使用 .yaml 或 .yml 副檔名。"}, status=422)
+        if data_yaml_upload.size <= 0 or data_yaml_upload.size > POWER_INSPECTION_MAX_DATA_YAML_BYTES:
+            return JsonResponse({"ok": False, "code": "invalid_data_yaml_size", "detail": "data.yaml 大小不符合限制。"}, status=422)
+        data_yaml_content = data_yaml_upload.read()
+    version = str(request.POST.get("version") or "").strip()
+    if not version:
+        return JsonResponse({"ok": False, "code": "version_required", "detail": "請提供模型版本。"}, status=422)
+    digest = hashlib.sha256(content).hexdigest()
+    # 交付方可提供雜湊，但只接受與伺服器實際讀取結果一致的值。
+    supplied_model_hash = str(delivery_manifest.get("artifact_sha256") or "").lower()
+    if supplied_model_hash and supplied_model_hash != digest:
+        return JsonResponse({"ok": False, "code": "delivery_artifact_sha256_mismatch"}, status=422)
+    data_yaml_hash = hashlib.sha256(data_yaml_content).hexdigest() if data_yaml_content else ""
+    supplied_yaml_hash = str(delivery_manifest.get("data_yaml_sha256") or "").lower()
+    if supplied_yaml_hash and supplied_yaml_hash != data_yaml_hash:
+        return JsonResponse({"ok": False, "code": "delivery_data_yaml_sha256_mismatch"}, status=422)
+    delivery_manifest = {
+        **delivery_manifest,
+        "task_type": "POWER_INSPECTION_V1",
+        "artifact_sha256": digest,
+        "class_names": contract,
+        **({"data_yaml_sha256": data_yaml_hash} if data_yaml_hash else {}),
+    }
+    initial_status = (
+        PowerInspectionModel.Status.IMPORTED
+        if _power_delivery_is_complete(delivery_manifest, has_data_yaml=bool(data_yaml_hash))
+        else PowerInspectionModel.Status.PENDING_REAL_MODEL_VALIDATION
+    )
+    model, created = PowerInspectionModel.objects.get_or_create(
+        version=version,
+        sha256=digest,
+        defaults={
+            "model_name": "POWER_INSPECTION_V1",
+            "class_contract": contract,
+            "delivery_manifest": delivery_manifest,
+            "rule_version": str(request.POST.get("rule_version") or "POWER_INSPECTION_RULE_V1").strip()[:64],
+            "rule_config": rule_config,
+            "imported_by": request.user,
+            "status": initial_status,
+            "inference_mode": PowerInspectionModel.InferenceMode.BLOCKED,
+        },
+    )
+    if created:
+        model.artifact.save(Path(str(upload.name)).name, ContentFile(content), save=True)
+        if data_yaml_upload is not None:
+            model.data_yaml.save(Path(str(data_yaml_upload.name)).name, ContentFile(data_yaml_content), save=True)
+    return JsonResponse({
+        "ok": True,
+        "created": created,
+        "model_id": str(model.model_id),
+        "status": model.status,
+        "inference_mode": model.inference_mode,
+        "detail": "模型已保存，等待 SHA-256、類別契約與隔離 worker 的真實核驗。",
+    }, status=201 if created else 200)
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_review(request, job_id):
+    """教師人工覆核異常時間軸結果，僅限已授權班級。"""
+    job = get_object_or_404(
+        PowerInspectionJob.objects.select_related("enrollment__cohort"),
+        job_id=job_id,
+        enrollment__cohort__in=teacher_cohorts(request.user),
+    )
+    decision = str(request.POST.get("decision") or "").upper()
+    if decision not in PowerInspectionReview.Decision.values:
+        return JsonResponse({"ok": False, "code": "invalid_review_decision"}, status=422)
+    raw_score = str(request.POST.get("score") or "").strip()
+    try:
+        score = int(raw_score) if raw_score else None
+    except ValueError:
+        return JsonResponse({"ok": False, "code": "invalid_score"}, status=422)
+    if score is not None and not 0 <= score <= 100:
+        return JsonResponse({"ok": False, "code": "invalid_score"}, status=422)
+    review = PowerInspectionReview.objects.create(
+        job=job, reviewer=request.user, decision=decision, score=score,
+        note=str(request.POST.get("note") or "").strip()[:500],
+    )
+    return JsonResponse({"ok": True, "review_id": str(review.review_id), "decision": review.decision, "score": review.score})
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_retry(request, job_id):
+    """教師只能重試授權班級的 FAILED 工作，最多三次。"""
+    job = get_object_or_404(
+        PowerInspectionJob.objects.select_related("enrollment__cohort"),
+        job_id=job_id,
+        enrollment__cohort__in=teacher_cohorts(request.user),
+    )
+    from .power_inspection_jobs import retry_job
+
+    if not retry_job(job.job_id):
+        return JsonResponse({"ok": False, "code": "retry_not_available"}, status=409)
+    job.refresh_from_db()
+    return JsonResponse({"ok": True, "status": job.status, "retry_count": job.retry_count})
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_trial(request, model_id):
+    """只允許已 REAL 核驗模型進入指定 cohort 的 TEACHING_TRIAL。"""
+    model = get_object_or_404(PowerInspectionModel, model_id=model_id, imported_by=request.user)
+    cohort = _power_teacher_cohort_or_404(request, request.POST.get("cohort_id"))
+    if model.status != PowerInspectionModel.Status.VALIDATED or model.inference_mode != PowerInspectionModel.InferenceMode.REAL:
+        return JsonResponse({"ok": False, "code": "real_model_validation_required", "detail": "模型尚未通過真實隔離核驗，不能啟用教學試用。"}, status=409)
+    model.status = PowerInspectionModel.Status.TEACHING_TRIAL
+    model.save(update_fields=["status", "updated_at"])
+    model.trial_cohorts.add(cohort)
+    return JsonResponse({"ok": True, "model_id": str(model.model_id), "cohort_id": cohort.cohort_id, "status": model.status})
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_deploy(request, model_id):
+    """設定班級唯一預設成品模型；僅接受已真實核驗的隔離模型。"""
+    model = get_object_or_404(PowerInspectionModel, model_id=model_id, imported_by=request.user)
+    cohort = _power_teacher_cohort_or_404(request, request.POST.get("cohort_id"))
+    if model.status not in {PowerInspectionModel.Status.VALIDATED, PowerInspectionModel.Status.TEACHING_TRIAL} or model.inference_mode != PowerInspectionModel.InferenceMode.REAL:
+        return JsonResponse({"ok": False, "code": "real_model_validation_required"}, status=409)
+    if not _power_rule_is_deployable(model):
+        return JsonResponse({"ok": False, "code": "calibrated_rule_required"}, status=409)
+    deployment = PowerInspectionCohortDeployment.objects.filter(
+        cohort=cohort, task_type="POWER_INSPECTION_V1",
+    ).first()
+    previous_model = deployment.model if deployment else None
+    if deployment is None:
+        deployment = PowerInspectionCohortDeployment.objects.create(
+            cohort=cohort, task_type="POWER_INSPECTION_V1", model=model,
+            deployed_by=request.user, enabled=True,
+        )
+        action = PowerInspectionCohortDeploymentEvent.Action.DEPLOYED
+    else:
+        deployment.model = model
+        deployment.deployed_by = request.user
+        deployment.enabled = True
+        deployment.save(update_fields=["model", "deployed_by", "enabled", "updated_at"])
+        action = PowerInspectionCohortDeploymentEvent.Action.UPDATED
+    if model.status == PowerInspectionModel.Status.VALIDATED:
+        model.status = PowerInspectionModel.Status.TEACHING_TRIAL
+        model.save(update_fields=["status", "updated_at"])
+    PowerInspectionCohortDeploymentEvent.objects.create(
+        deployment=deployment, cohort=cohort, model=model, previous_model=previous_model,
+        model_version=model.version,
+        previous_model_version=previous_model.version if previous_model else "",
+        actor=request.user, action=action, rule_version=model.rule_version,
+    )
+    return JsonResponse({
+        "ok": True,
+        "cohort_id": deployment.cohort_id,
+        "model_id": str(deployment.model_id),
+        "status": model.status,
+        "detail": "已設定為班級預設教學試用模型。",
+    })
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_deployment_disable(request, deployment_id):
+    """停用授權班級的預設模型，保留模型與歷史巡檢資料供覆核。"""
+    deployment = get_object_or_404(
+        PowerInspectionCohortDeployment,
+        pk=deployment_id,
+        cohort__in=teacher_cohorts(request.user),
+        task_type="POWER_INSPECTION_V1",
+    )
+    deployment.enabled = False
+    deployment.save(update_fields=["enabled", "updated_at"])
+    PowerInspectionCohortDeploymentEvent.objects.create(
+        deployment=deployment, cohort=deployment.cohort, model=deployment.model,
+        previous_model=deployment.model, actor=request.user,
+        model_version=deployment.model.version,
+        previous_model_version=deployment.model.version,
+        action=PowerInspectionCohortDeploymentEvent.Action.DISABLED,
+        rule_version=deployment.model.rule_version,
+    )
+    return JsonResponse({"ok": True, "deployment_id": deployment.pk, "enabled": deployment.enabled})
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_deployment_rollback(request, deployment_id, event_id):
+    """僅回退同班歷程的已核驗模型，不接受瀏覽器自行指定模型或班級。"""
+    deployment = get_object_or_404(
+        PowerInspectionCohortDeployment,
+        pk=deployment_id,
+        cohort__in=teacher_cohorts(request.user),
+        task_type="POWER_INSPECTION_V1",
+    )
+    event = get_object_or_404(
+        PowerInspectionCohortDeploymentEvent,
+        pk=event_id, deployment=deployment, cohort=deployment.cohort,
+    )
+    model = event.model
+    if (
+        model.status not in {PowerInspectionModel.Status.VALIDATED, PowerInspectionModel.Status.TEACHING_TRIAL}
+        or model.inference_mode != PowerInspectionModel.InferenceMode.REAL
+        or not _power_rule_is_deployable(model)
+    ):
+        return JsonResponse({"ok": False, "code": "rollback_model_not_deployable"}, status=409)
+    previous_model = deployment.model
+    deployment.model = model
+    deployment.deployed_by = request.user
+    deployment.enabled = True
+    deployment.save(update_fields=["model", "deployed_by", "enabled", "updated_at"])
+    PowerInspectionCohortDeploymentEvent.objects.create(
+        deployment=deployment, cohort=deployment.cohort, model=model,
+        previous_model=previous_model, actor=request.user,
+        model_version=model.version,
+        previous_model_version=previous_model.version if previous_model else "",
+        action=PowerInspectionCohortDeploymentEvent.Action.ROLLED_BACK,
+        rule_version=model.rule_version,
+    )
+    return JsonResponse({"ok": True, "deployment_id": deployment.pk, "model_id": str(model.model_id), "enabled": True})
+
+
+@teacher_required
+@require_http_methods(["GET"])
+def teacher_power_inspection_job(request, job_id):
+    """教師只可讀取自己授權班級的巡檢工作。"""
+    job = get_object_or_404(
+        PowerInspectionJob.objects.select_related("enrollment__cohort", "model").prefetch_related("reviews__reviewer", "anomaly_frames"),
+        job_id=job_id,
+        enrollment__cohort__in=teacher_cohorts(request.user),
+    )
+    return JsonResponse({
+        "job_id": str(job.job_id), "cohort_id": job.enrollment.cohort_id,
+        "status": job.status, "inference_mode": job.inference_mode,
+        "video_metadata": job.video_metadata, "result": job.result_json,
+        "last_error": job.last_error, "retry_count": job.retry_count,
+        "timeline": job.anomaly_timeline,
+        "anomaly_frames": [
+            {"timestamp_ms": item.timestamp_ms, "class": item.class_name, "confidence": item.confidence,
+             "screenshot_available": bool(item.screenshot), "inference_mode": item.inference_mode}
+            for item in job.anomaly_frames.all()
+        ],
+        "reviews": [
+            {"decision": item.decision, "score": item.score, "note": item.note, "at": item.created_at.isoformat()}
+            for item in job.reviews.all()
+        ],
+    })
 
 
 def ordered_phase_progress(enrollment):
@@ -1168,6 +1757,10 @@ def student_growth_dashboard(request, enrollment_id):
             "reviewed_count": sum(item.status in GROWTH_REVIEWED_STATUSES for item in submissions),
             "record_count": len(submissions),
             "direction_label": direction_label(enrollment.project_direction),
+            # 巡檢工作為額外學習歷程，不佔用或改寫 R01–R08 提交欄位。
+            "power_inspection_jobs": PowerInspectionJob.objects.filter(
+                enrollment=enrollment,
+            ).select_related("model").prefetch_related("reviews"),
         },
     )
 
@@ -1414,6 +2007,17 @@ def growth_record_detail(request, enrollment_id, slot_id):
         form.fields.pop("video", None)
     if not document_allowed:
         form.fields.pop("documents", None)
+
+    # 數據飛輪 B-5：學員上傳頁顯示「上期基礎模型」（當前推薦種子），
+    # 供下載 .pt 當作下一期訓練起點。僅 R07 AI 視覺方向提供。
+    recommended_seed_model = None
+    if submission.definition.slot_id == "R07" and enrollment.project_direction == "ai_flight_assessment":
+        try:
+            rec = vision_api.recommended_seed(model_type="PROP_DIRECTION")
+            recommended_seed_model = rec.get("recommended_seed")
+        except RuntimeError:
+            recommended_seed_model = None
+
     return render(
         request,
         "learning/growth_record_detail.html",
@@ -1431,6 +2035,15 @@ def growth_record_detail(request, enrollment_id, slot_id):
                 submission.definition.slot_id == "R07"
                 and enrollment.project_direction == "ai_flight_assessment"
             ),
+            # --- M5（2026-10-21）：教師歸檔／刪除模型後，學員可重傳 ---
+            # 模型證據被標記「已被取代」時，即使成長記錄本身已送審／已通過，
+            # 仍重新開放 best.pt 上傳入口（只放寬重傳，不放寬任何健康度檢查）。
+            "has_removed_model": _model_evidence_removed(model_evidence),
+            "model_upload_open": (
+                submission.definition.slot_id == "R07"
+                and enrollment.project_direction == "ai_flight_assessment"
+                and (editable or _model_evidence_superseded(model_evidence))
+            ),
             "image_count": images.count(),
             "video_allowed": video_allowed,
             "document_allowed": document_allowed,
@@ -1442,6 +2055,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "direction_label": direction_label(enrollment.project_direction),
             "direction_overview": direction_overview(),
             "content_override": submission.definition.slot_id in {"R06", "R07", "R08"},
+            "recommended_seed_model": recommended_seed_model,
             "status_label": student_status_label(submission.status),
             "survey_exists": StudentSurvey.objects.filter(enrollment=enrollment).exists()
             if submission.definition.slot_id == "R08"
@@ -1511,8 +2125,15 @@ def growth_model_upload(request, enrollment_id):
         GrowthRecordSubmission.Status.IN_PROGRESS,
         GrowthRecordSubmission.Status.NEEDS_REVISION,
     }:
-        messages.error(request, "此成長記錄已提交或完成複核，目前唯讀。")
-        return redirect(redirect_url)
+        # M5（2026-10-21）：教師歸檔／刪除模型後，模型證據被標記「已被取代」，
+        # 此時即使成長記錄已送審或已通過，也重新開放 best.pt 上傳（只放寬重傳，
+        # 不改變記錄本身的評分狀態，也不放寬任何模型健康度檢查）。
+        existing_models = submission.evidence.filter(
+            evidence_type=Evidence.Type.MODEL
+        ).order_by("-created_at")
+        if not _model_evidence_superseded(existing_models):
+            messages.error(request, "此成長記錄已提交或完成複核，目前唯讀。")
+            return redirect(redirect_url)
 
     form = GrowthModelForm(request.POST, request.FILES)
     if not form.is_valid():
@@ -1543,6 +2164,16 @@ def growth_model_upload(request, enrollment_id):
         )
         return redirect(redirect_url)
 
+    # 數據飛輪 B-6：學員可選填「基於的種子模型」，預設為當前推薦基礎模型。
+    # 匯入時由 Live 複製到模型紀錄，形成第 N 期 → 第 N+1 期的版本鏈。
+    chosen_parent = (request.POST.get("parent_model_id") or "").strip()
+    if not chosen_parent:
+        try:
+            rec = vision_api.recommended_seed(model_type="PROP_DIRECTION")
+            chosen_parent = (rec.get("recommended_seed") or {}).get("model_id") or ""
+        except RuntimeError:
+            chosen_parent = ""
+
     evidence = None
     stored_name = ""
     storage = None
@@ -1559,6 +2190,7 @@ def growth_model_upload(request, enrollment_id):
                     "size_bytes": upload.size,
                     "task_type": "PROP_DIRECTION",
                     "evidence_type": "YOLO_MODEL",
+                    "parent_model_id": chosen_parent,
                 },
             )
             evidence.upload.save(original_name, ContentFile(content), save=True)
@@ -1578,6 +2210,7 @@ def growth_model_upload(request, enrollment_id):
                 # P7-B6：身分取自資料庫關係（enrollment → cohort），不是瀏覽器輸入。
                 enrollment_id=enrollment.pk,
                 cohort_ids=[enrollment.cohort_id] if enrollment.cohort_id else [],
+                parent_model_id=chosen_parent,
             )
             evidence.processed_metadata = {
                 **evidence.original_metadata,
@@ -1595,8 +2228,52 @@ def growth_model_upload(request, enrollment_id):
         messages.error(request, "模型提交失敗，請確認 Vision 服務後重試。")
         return redirect(redirect_url)
 
-    messages.success(request, "best.pt 已提交，狀態：等待教師審核。")
+    # M5（2026-10-21）：重複檔案只提示、不拒絕。若與已歸檔模型相同，
+    # 明確告知學員「此文件與已歸檔模型相同」，仍照常送交教師審核。
+    if (vision_submission or {}).get("duplicate_hint") == "same_as_archived_model":
+        messages.warning(
+            request,
+            "此文件與已歸檔模型相同：已收到並送交教師重新審核（不會自動啟用）。",
+        )
+    else:
+        messages.success(request, "best.pt 已提交，狀態：等待教師審核。")
     return redirect(redirect_url)
+
+
+@student_required
+def student_seed_download(request, enrollment_id):
+    """學員下載種子 .pt 作為下一期訓練起點（數據飛輪 B-5）。
+
+    僅已登入學員可存取；下載紀錄由 Live 端寫入審計（誰／何時／哪一顆）。
+    model_id 指定則下載該種子，否則下載該任務「當前推薦基礎模型」。
+    """
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related("student"),
+        pk=enrollment_id, student=request.student_profile, active=True,
+    )
+    model_id = (request.GET.get("model_id") or "").strip() or None
+    model_type = (request.GET.get("model_type") or "PROP_DIRECTION").strip()
+    redirect_url = reverse("learning:growth_record_detail", args=[enrollment.pk, "R07"])
+    try:
+        data = vision_api.download_seed(
+            model_id=model_id, model_type=model_type,
+            student_id=enrollment.student.public_user_id,
+        )
+    except RuntimeError as exc:
+        messages.error(
+            request,
+            f"下載種子失敗：{_vision_error_text(exc, '目前尚無可下載的推薦基礎模型。')}",
+        )
+        return redirect(redirect_url)
+    content = base64.b64decode(data.get("file_base64", "") or "")
+    if not content:
+        messages.error(request, "下載種子失敗：檔案內容為空。")
+        return redirect(redirect_url)
+    response = HttpResponse(content, content_type="application/octet-stream")
+    response["Content-Disposition"] = (
+        f"attachment; filename={data.get('file_name') or 'seed.pt'}"
+    )
+    return response
 
 
 # ---- 學員手機端靜態圖片辨識（PROP_DIRECTION_V1） ----
@@ -3359,7 +4036,57 @@ def _vision_image_evidence_state(latest):
     return {"MATCH": "PASS", "MISMATCH": "NG"}.get(latest.get("verdict"), "CHECK")
 
 
-def _vision_model_row(model, *, validation_records=None):
+def _vision_eligibility(model, status, evidence_state) -> str:
+    """場景③單一狀態徽章（可啟用／需驗證／不可用／種子）判定。
+
+    2026-10-23 教師指令：恢復「驗證通過才可啟用」硬規則——按鈕出不出來直接
+    讀取 Live 端 `activation_eligible`（health OK＋驗證通過且最高信心≥0.6＋
+    類別恰四類＋非 DEMO_IMPORTED／隔離／.pt 可讀），保證「前端不渲染」與
+    「後端拒絕」永遠同一套標準，不留教師覆寫後門。
+
+    seed             已是種子模型（數據飛輪基礎模型，優先於一般狀態）
+    ready            通過 Live 啟用資格硬規則 → 出現「設為正式模型」按鈕
+    needs_validation 從未通過圖片驗證（無 MATCH 紀錄）→ 提示先到②驗證
+    unavailable      已隔離，或已驗證但不符啟用硬規則（信心不足／健康度不足／類別不符）
+
+    注意：這只決定「按鈕要不要渲染」。真正的啟用閘門在 Live 端
+    `activate_model`（override 路徑已撤銷，一律 teacher_override_disabled）。
+    """
+    if model.get("is_seed"):
+        return "seed"
+    if model.get("quarantined"):
+        return "unavailable"
+    if model.get("activation_eligible"):
+        return "ready"
+    if evidence_state in (None, "", "NONE"):
+        return "needs_validation"
+    return "unavailable"
+
+
+_VISION_ELIGIBILITY_LABELS = {
+    "ready": "可啟用",
+    "needs_validation": "需驗證",
+    "unavailable": "不可用",
+    "seed": "種子",
+}
+
+_VISION_ELIGIBILITY_CSS = {
+    "ready": "active",
+    "needs_validation": "candidate",
+    "unavailable": "rejected",
+    "seed": "seed",
+}
+
+# 2026-10-22：教師覆寫啟動閘門時，告知被繞過的自動判定（對應 Live 端錯誤碼）。
+_VISION_OVERRIDE_GATE_LABELS = {
+    "model_health_blocked": "未訓練或類別數不符",
+    "model_low_quality_not_eligible": "mAP50 低於門檻（品質不足）",
+    "model_quality_gate": "尚無評估證據（需覆核）",
+    "validated_model_required": "未通過結構驗證或為 DEMO 放寬匯入",
+}
+
+
+def _vision_model_row(model, *, validation_records=None, recommended_seed_id=None):
     status = model.get("status")
     model_id = model.get("model_id")
     structure_ok = model.get("validation_status") == "VALIDATED"
@@ -3390,7 +4117,88 @@ def _vision_model_row(model, *, validation_records=None):
         "file_size": model.get("file_size"),
         "can_activate": model.get("validation_status") == "VALIDATED"
         and status != "REJECTED",
+        # --- 場景③ 精簡（2026-10-23 教師指令：恢復硬規則） ---
+        # 「可啟用」直接讀取 Live 端啟用資格判定（activation_eligible），
+        # 與後端 activate_model 同一套標準（health OK＋驗證通過且信心≥0.6＋類別四類＋
+        # 非 DEMO_IMPORTED／隔離／.pt 可讀），前端不渲染＝後端拒絕，從不靜音放行。
+        "can_set_active": bool(model.get("activation_eligible")),
+        # 單一狀態徽章（可啟用／需驗證／不可用／種子）；健康度與 mAP50 細節改由 title 提示，
+        # 不再並列多枚徽章。
+        "eligibility": _vision_eligibility(model, status, evidence_state),
+        "eligibility_label": _VISION_ELIGIBILITY_LABELS[
+            _vision_eligibility(model, status, evidence_state)
+        ],
+        "eligibility_css": _VISION_ELIGIBILITY_CSS[
+            _vision_eligibility(model, status, evidence_state)
+        ],
+        # 徽章 hover 提示：健康度、mAP50／門檻、訓練痕跡與真實圖片驗證依據（一句話）。
+        "eligibility_title": "；".join(
+            part
+            for part in (
+                (
+                    "健康度 %s"
+                    % (model.get("health_label") or model.get("health") or "無法判定")
+                )
+                if model.get("health")
+                else "健康度無法判定",
+                (
+                    "mAP50 %s／門檻 %s"
+                    % (model.get("map50"), model.get("map50_threshold"))
+                )
+                if model.get("map50") is not None
+                else "無 mAP50 紀錄",
+                "訓練痕跡：%s"
+                % (
+                    "有"
+                    if (
+                        model.get("has_train_args") is True
+                        or model.get("has_epoch") is True
+                        or model.get("has_metrics") is True
+                    )
+                    else "無"
+                ),
+                "圖片驗證：%s" % IMAGE_EVIDENCE_LABELS[evidence_state],
+            )
+            if part
+        ),
         "class_names": model.get("class_names") or [],
+        # --- D3/D5（2026-10-20）：模型健康度徽章與 mAP50；PASS 判定補強 ---
+        # 資料來自 Live Backend list_models 已附帶的健康度摘要（model_health.py）。
+        "health": model.get("health"),
+        "health_label": model.get("health_label"),
+        "health_css": model.get("health_css") or "archived",
+        "health_note": model.get("health_note") or "",
+        "health_reasons": list(model.get("health_reasons") or []),
+        "health_map50": model.get("map50"),
+        "health_map50_threshold": model.get("map50_threshold"),
+        "health_nc": model.get("nc"),
+        "health_names_count": model.get("names_count"),
+        "health_has_train_args": model.get("has_train_args") is True,
+        "health_has_epoch": model.get("has_epoch") is True,
+        "health_has_metrics": model.get("has_metrics") is True,
+        "pass_eligible": model.get("pass_eligible") is True,
+        # 清單層面「PASS 條件不符，需覆核」：結構已 VALIDATED 但健康度不足（未訓練／類別數不符／低品質）。
+        "pass_needs_recheck": (
+            model.get("validation_status") == "VALIDATED"
+            and model.get("status") not in ("REJECTED",)
+            and model.get("pass_eligible") is not True
+        ),
+        # --- 啟用資格（2026-10-23 硬規則）欄位：直接來自 Live 端統一判定 ---
+        "activation_eligible": bool(model.get("activation_eligible")),
+        "activation_block_reason": model.get("activation_block_reason") or "",
+        "activation_block_detail": model.get("activation_block_detail") or "",
+        "activation_min_confidence": model.get("activation_min_confidence"),
+        "validation_pass_confidence": model.get("validation_pass_confidence"),
+        # --- 數據飛輪（B，2026-10-23）：種子模型欄位 ---
+        "is_seed": bool(model.get("is_seed")),
+        "seed_generation": model.get("seed_generation") if model.get("is_seed") else None,
+        "seed_parent_model_id": model.get("seed_parent_model_id") if model.get("is_seed") else None,
+        "seed_validation_confidence": model.get("seed_validation_confidence") if model.get("is_seed") else None,
+        "seed_map50": model.get("seed_map50") if model.get("is_seed") else None,
+        "seed_note": model.get("seed_note") or "",
+        "seeded_at_display": _vision_format_time(model.get("seeded_at")) if model.get("is_seed") else "",
+        "seeded_by": model.get("seeded_by") or "",
+        "is_recommended_seed": bool(recommended_seed_id) and model.get("model_id") == recommended_seed_id,
         # --- 受控放寬（2026-10-19）：映射版／臨時模型必須在畫面上可辨識 ---
         "temporary_mapping": model.get("temporary_mapping") is True,
         "temporary_mapping_label": model.get("temporary_mapping_label") or "映射版·臨時",
@@ -3412,6 +4220,32 @@ def _vision_model_row(model, *, validation_records=None):
         "image_evidence_css": IMAGE_EVIDENCE_CSS[evidence_state],
         "image_evidence_note": IMAGE_EVIDENCE_NOTES[evidence_state],
         "recognition_quality_proven": evidence_state == "PASS",
+        # --- 模型管理（M1–M4，2026-10-21）：歸檔／還原／永久刪除的可操作性 ---
+        # 後端（Live）已硬攔 ACTIVE 與驗證中模型；此處只決定按鈕是否顯示，
+        # 真正的守衛在 Live archive/delete，不依賴前端。
+        "archived_via": model.get("archived_via") or "",
+        "archived_reason": model.get("archived_reason") or "",
+        "archived_by": model.get("archived_by") or "",
+        "status_before_archive": model.get("status_before_archive") or "",
+        "is_teacher_archived": (
+            model.get("archived_via") == "teacher" and status == "ARCHIVED"
+        ),
+        "restored_at_display": _vision_format_time(model.get("restored_at")),
+        "can_archive": (
+            status not in ("ACTIVE", "ARCHIVED")
+            and model.get("validation_status") != "VALIDATING"
+        ),
+        "can_delete": (
+            status not in ("ACTIVE",)
+            and model.get("validation_status") != "VALIDATING"
+        ),
+        "manage_blocked_reason": (
+            "ACTIVE 模型不可歸檔或刪除（保護推論鏈）"
+            if status == "ACTIVE"
+            else "驗證進行中的模型不可操作"
+            if model.get("validation_status") == "VALIDATING"
+            else ""
+        ),
     }
 
 
@@ -3438,6 +4272,25 @@ def teacher_vision_center(request):
     inference_source = {}
     model_review_map = {}
 
+    # 數據飛輪（B，2026-10-23）：當前推薦基礎模型（學員下一期訓練起點）。
+    recommended_seed_id = ""
+    recommended_seed_model = None
+    try:
+        rec = vision_api.recommended_seed(model_type=task_id, teacher_id=request.user.pk)
+        recommended_seed_model = rec.get("recommended_seed")
+        recommended_seed_id = (recommended_seed_model or {}).get("model_id") or ""
+    except RuntimeError:
+        recommended_seed_model = None
+        recommended_seed_id = ""
+
+    # 種子版本鏈（教師頁④顯示「是否越來越準」）。
+    seed_chain = []
+    try:
+        chain = vision_api.seed_version_chain(model_type=task_id, teacher_id=request.user.pk)
+        seed_chain = chain.get("version_chain") or []
+    except RuntimeError:
+        seed_chain = []
+
     if api_online:
         for meta in VISION_CENTER_TASKS:
             try:
@@ -3462,7 +4315,11 @@ def teacher_vision_center(request):
             if meta["id"] == task_id:
                 # 階段四 C：只保留本教師被授權班級的模型（superuser 不受限）。
                 history_models = [
-                    _vision_model_row(item, validation_records=history_records)
+                    _vision_model_row(
+                        item,
+                        validation_records=history_records,
+                        recommended_seed_id=recommended_seed_id,
+                    )
                     for item in (history.get("history") or [])
                     if vision_can_see_student(request.user, item.get("source_student_id"))
                     or not item.get("source_student_id")
@@ -3638,6 +4495,32 @@ def teacher_vision_center(request):
         for item in activatable_models
         if item["status"] not in ("ACTIVE", "REJECTED", "ARCHIVED")
     ]
+    # --- 場景③「設為正式模型」清單（2026-10-22 教師指令改版）---
+    # 條件只有一個：**做過至少一次真實圖片驗證**（不論判定通過與否）。
+    # 模型是否符合自動品質判定（健康度／mAP50／DEMO 放寬匯入…）不再由系統擋下，
+    # 改由教師看過驗證結果後自行決定；被覆寫的閘門由 Live 端逐條記進審計。
+    # 唯一例外：quarantined（已隔離）→ Live 端硬攔，連教師覆寫都不放行，因此不出現。
+    settable_active_models = [
+        item for item in candidate_models if item["can_set_active"]
+    ]
+    # 場景③主列表：所有「非 ACTIVE、非已歸檔」模型，各可申請歸檔（ACTIVE 一律不出現，
+    # 由 Live 端 archive/delete 硬攔；此處只決定按鈕是否渲染）。
+    scene3_models = [
+        item
+        for item in history_models
+        if item["status"] not in ("ACTIVE", "ARCHIVED")
+    ]
+    # --- 模型管理（M1/M2/M3，2026-10-21）---
+    # 「已歸檔」折疊區：只列教師手動歸檔的模型（archived_via=teacher），
+    # 可一鍵還原；系統自動歸檔（版本頂替／回滾）不在此區，避免誤還原。
+    archived_models = [
+        item for item in history_models if item.get("is_teacher_archived")
+    ]
+    # 「進階管理（永久刪除）」折疊區：非 ACTIVE 模型皆可申請刪除；
+    # 驗證中模型後端會拒絕（manage_blocked_reason 已標示原因）。
+    deletable_models = [
+        item for item in history_models if item["status"] != "ACTIVE"
+    ]
     approved_models = [
         item for item in history_models if item.get("recognition_quality_proven")
     ]
@@ -3690,6 +4573,8 @@ def teacher_vision_center(request):
             "selected_model": selected_model,
             "scene": scene,
             "candidate_models": candidate_models,
+            "settable_active_models": settable_active_models,
+            "scene3_models": scene3_models,
             "approved_models": approved_models,
             "pending_submissions": pending_submissions,
             "processed_submissions": processed_submissions,
@@ -3698,8 +4583,13 @@ def teacher_vision_center(request):
             "can_rollback": any(
                 item["status"] == "ARCHIVED"
                 and item["validation_status"] == "VALIDATED"
+                # 教師手動歸檔的不算回滾目標（與 Live previous_active_model 同口徑）
+                and not item.get("is_teacher_archived")
                 for item in history_models
             ),
+            # --- 模型管理（M1–M3）---
+            "archived_models": archived_models,
+            "deletable_models": deletable_models,
             "validation_result": validation_result,
             "submission_validation_result": submission_validation_result,
             "active_sub": active_sub,
@@ -3710,6 +4600,11 @@ def teacher_vision_center(request):
             # --- P1：風險揭露用 ---
             "structure_validated_note": STRUCTURE_VALIDATED_NOTE,
             "models_without_proven_quality": models_without_proven_quality,
+            # --- 數據飛輪（B，2026-10-23）---
+            "recommended_seed_model": recommended_seed_model,
+            "seed_chain": seed_chain,
+            "activation_min_confidence": (recommended_seed_model or {}).get("activation_min_confidence")
+            if recommended_seed_model else None,
         },
     )
 
@@ -3766,6 +4661,12 @@ def teacher_vision_center_validate(request):
     decision = verdict.get("decision") or "INSUFFICIENT_DATA"
     model = result.get("model") or {}
     detections = result.get("detections") or []
+    # D4（2026-10-20）：驗證結果頁顯示「最高信心值」與「使用門檻」，並區分三態。
+    # NO_DETECTION（① 無框）時沒有任何候選框，最高信心值事實為 0（不是「未知」），
+    # 與模板①文案「最高信心值為 0」一致；其餘情境無偵測框才顯示「—」。
+    _max_conf = verdict.get("max_confidence")
+    if _max_conf is None and (verdict.get("reason_code") or "") == "NO_DETECTION":
+        _max_conf = 0.0
     payload = {
         "task_id": task_id,
         "model_id": model.get("model_id") or model_id,
@@ -3780,6 +4681,18 @@ def teacher_vision_center_validate(request):
             if verdict.get("predicted_confidence") is not None
             else None
         ),
+        "max_confidence": (
+            round(float(_max_conf), 4)
+            if _max_conf is not None
+            else None
+        ),
+        "highest_confidence": (
+            round(float(_max_conf), 4)
+            if _max_conf is not None
+            else None
+        ),
+        "confidence_threshold_used": verdict.get("confidence_threshold"),
+        "verdict_reason_code": verdict.get("reason_code") or "",
         "expected_class": verdict.get("expected_class"),
         "reason": verdict.get("reason") or "",
         "reason_code": verdict.get("reason_code") or "",
@@ -3789,6 +4702,44 @@ def teacher_vision_center_validate(request):
         "verdict": decision,
         "verdict_label": VISION_CENTER_VERDICT_LABELS.get(decision, decision),
         "verdict_css": VISION_CENTER_VERDICT_CSS.get(decision, "incomplete"),
+        # 2026-10-23 教師指令：恢復「驗證通過才可啟用」硬規則。
+        # 「前往③啟用正式模型」捷徑**只在**本次驗證判定相符（MATCH）且最高信心 ≥
+        # 啟用門檻（0.6，與 Live activation_min_confidence 一致）時出現；
+        # 否則明確提示「信心 X 低於 0.6，不可啟用」。這只是導覽連結，不執行啟用，
+        # 能否啟用仍由場景③的硬規則與 Live 端判定最終把關。
+        "activation_min_confidence": (
+            float(model.get("activation_min_confidence"))
+            if model.get("activation_min_confidence") is not None
+            else 0.6
+        ),
+        "verdict_passed": decision == "MATCH"
+        and _max_conf is not None
+        and float(_max_conf) >= (
+            float(model.get("activation_min_confidence"))
+            if model.get("activation_min_confidence") is not None
+            else 0.6
+        ),
+        "below_activation_threshold": _max_conf is not None and (
+            decision != "MATCH"
+            or float(_max_conf) < (
+                float(model.get("activation_min_confidence"))
+                if model.get("activation_min_confidence") is not None
+                else 0.6
+            )
+        ),
+        "verdict_cta_label": (
+            "驗證通過，前往啟用正式模型"
+            if (
+                decision == "MATCH"
+                and _max_conf is not None
+                and float(_max_conf) >= (
+                    float(model.get("activation_min_confidence"))
+                    if model.get("activation_min_confidence") is not None
+                    else 0.6
+                )
+            )
+            else VISION_CENTER_VERDICT_LABELS.get(decision, decision)
+        ),
         # P1：本頁驗證一律走真實推論（Live Backend 載入 .pt），無 DEMO 模擬分支。
         # 標記來源，確保只有真實推論可作為「辨識品質依據」。
         "evidence_source": "REAL_INFERENCE",
@@ -3867,6 +4818,12 @@ def teacher_vision_center_validate_submission(request):
     decision = verdict.get("decision") or "INSUFFICIENT_DATA"
     model = result.get("model") or {}
     detections = result.get("detections") or []
+    # D4（2026-10-20）：驗證結果頁顯示「最高信心值」與「使用門檻」，並區分三態。
+    # NO_DETECTION（① 無框）時沒有任何候選框，最高信心值事實為 0（不是「未知」），
+    # 與模板①文案「最高信心值為 0」一致；其餘情境無偵測框才顯示「—」。
+    _max_conf = verdict.get("max_confidence")
+    if _max_conf is None and (verdict.get("reason_code") or "") == "NO_DETECTION":
+        _max_conf = 0.0
     payload = {
         "task_id": task_id,
         "submission_id": submission_id,
@@ -3882,6 +4839,18 @@ def teacher_vision_center_validate_submission(request):
             if verdict.get("predicted_confidence") is not None
             else None
         ),
+        "max_confidence": (
+            round(float(_max_conf), 4)
+            if _max_conf is not None
+            else None
+        ),
+        "highest_confidence": (
+            round(float(_max_conf), 4)
+            if _max_conf is not None
+            else None
+        ),
+        "confidence_threshold_used": verdict.get("confidence_threshold"),
+        "verdict_reason_code": verdict.get("reason_code") or "",
         "expected_class": verdict.get("expected_class"),
         "reason": verdict.get("reason") or "",
         "reason_code": verdict.get("reason_code") or "",
@@ -4230,13 +5199,19 @@ def teacher_vision_center_activate(request):
         messages.error(request, "缺少模型編號，無法啟用。")
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=3")
     try:
-        result = vision_api.activate_model(model_id=model_id, teacher_id=request.user.pk)
+        # 2026-10-23 教師指令：恢復「驗證通過才可啟用」硬規則——撤銷教師覆寫路徑。
+        # 啟用資格（health OK＋驗證通過且最高信心≥0.6＋類別恰四類＋非 DEMO_IMPORTED／
+        # 隔離／.pt 可讀）全部由 Live activate_model 硬判定，不符合一律拒絕並回原因碼。
+        # 前端「設為正式模型」按鈕也只在 activation_eligible 時渲染，雙重確保。
+        result = vision_api.activate_model(
+            model_id=model_id, teacher_id=request.user.pk, override=False
+        )
     except RuntimeError as exc:
-        # D4（2026-10-19）：Live 端拒絕啟用隔離模型（model_quarantined），此處顯示
-        # 明確中文說明；其餘失敗沿用既有提示，不洩漏原始例外字串。
+        # D4（2026-10-19）：Live 端拒絕啟用（硬規則未達標），此處顯示
+        # 明確中文說明；不洩漏原始例外字串。
         messages.error(
             request,
-            f"啟用失敗，原本的正式模型未變更：{_vision_error_text(exc, '請稍後再試。')}",
+            f"啟用失敗，原本的正式模型未變更：{_vision_error_text(exc, '請完成圖片驗證並達到啟用門檻 0.6。')}",
         )
         return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=3")
 
@@ -4265,6 +5240,56 @@ def teacher_vision_center_activate(request):
     else:
         messages.success(request, "已設為正式模型，推論服務已確認使用此模型。")
     return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=3")
+
+
+@teacher_required
+@require_POST
+def teacher_vision_center_seed(request):
+    """歸檔與回流區（場景④）：把合格模型入庫為種子（數據飛輪基礎模型）。
+
+    入庫條件由 Live 端統一硬判定：health=OK 且有真實圖片驗證通過紀錄（最高信心≥0.6）。
+    成功後該模型成為該任務「當前推薦基礎模型」，學員下一期可下載其 .pt 當訓練起點。
+    """
+    task_id = _vision_task_id(request)
+    model_id = (request.POST.get("model_id") or "").strip()
+    note = (request.POST.get("seed_note") or "").strip()
+    if not model_id:
+        messages.error(request, "缺少模型編號，無法入庫為種子。")
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=4")
+    try:
+        result = vision_api.seed_model(
+            model_id=model_id, teacher_id=request.user.pk, note=note, recommended=True
+        )
+    except RuntimeError as exc:
+        messages.error(
+            request,
+            f"入庫種子失敗：{_vision_error_text(exc, '請確認模型健康度 OK、已通過圖片驗證且最高信心≥0.6。')}",
+        )
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=4")
+    if result.get("already_seeded"):
+        messages.info(request, "該模型已為種子；已更新備註與推薦位。")
+    else:
+        messages.success(request, "已入庫為種子模型（當前推薦基礎模型）。")
+    return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=4")
+
+
+@teacher_required
+@require_POST
+def teacher_vision_center_unseed(request):
+    """歸檔與回流區（場景④）：取消種子標記（取消後該模型才可被永久刪除）。"""
+    task_id = _vision_task_id(request)
+    model_id = (request.POST.get("model_id") or "").strip()
+    reason = (request.POST.get("reason") or "").strip()
+    if not model_id:
+        messages.error(request, "缺少模型編號，無法取消種子。")
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=4")
+    try:
+        vision_api.unseed_model(model_id=model_id, teacher_id=request.user.pk, reason=reason)
+    except RuntimeError as exc:
+        messages.error(request, f"取消種子失敗：{_vision_error_text(exc)}")
+        return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=4")
+    messages.success(request, "已取消種子標記；取消後該模型可被永久刪除（歸檔／還原不受影響）。")
+    return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=4")
 
 
 @teacher_required
@@ -4324,7 +5349,315 @@ def teacher_vision_center_delete_submission(request):
             request,
             f"已刪除提交記錄 {submission_id}，但實體 .pt 檔不存在（可能已被移除）；刪除前仍已自動備份。",
         )
+    _vision_mark_submission_removed(submission_id)
     return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=1")
+
+
+def _model_evidence_state(model_evidence) -> str:
+    """M5（2026-10-21）：取最新一筆模型證據的狀態（model_evidence 已按 -created_at 排序）。
+
+    只看最新一筆：學員重傳後新證據會變成最新，入口隨之恢復正常；
+    舊的「已被取代」記錄保留供審計，不會讓入口一直開著。
+    """
+    latest = next(iter(model_evidence), None)
+    if latest is None:
+        return ""
+    return str((latest.processed_metadata or {}).get("submission_status") or "")
+
+
+def _model_evidence_superseded(model_evidence) -> bool:
+    """教師歸檔／刪除模型後，該模型證據是否已被標記「已被取代」。"""
+    return _model_evidence_state(model_evidence) == "SUPERSEDED"
+
+
+def _model_evidence_removed(model_evidence) -> bool:
+    """學員頁提示用：教師已移除（REMOVED_BY_TEACHER）或已取代（SUPERSEDED）該模型。"""
+    return _model_evidence_state(model_evidence) in {"REMOVED_BY_TEACHER", "SUPERSEDED"}
+
+
+def _vision_mark_submission_removed(submission_id: str) -> None:
+    """教師刪除學員提交後，讓學員端能感知並重新上傳（2026-10-20 教師指令）。
+
+    只做兩件最小的事：
+    1. 關聯 Evidence 的 processed_metadata.submission_status 標記為
+       REMOVED_BY_TEACHER（學員頁面據此顯示「已移除，請重新上傳」）。
+    2. 對應成長記錄狀態收回 NEEDS_REVISION（未達終態 APPROVED/REJECTED 時），
+       使 growth_model_upload 的既有狀態閘門重新放行學員上傳。
+    不改動 Live、不改動其他審核流程；查無關聯紀錄時靜默跳過。
+    """
+    from django.utils import timezone as _tz
+
+    evidence_qs = Evidence.objects.none()
+    try:
+        evidence_qs = Evidence.objects.filter(
+            processed_metadata__vision_submission_id=submission_id
+        )
+    except Exception:
+        try:
+            evidence_qs = [
+                item
+                for item in Evidence.objects.all()
+                if (item.processed_metadata or {}).get("vision_submission_id") == submission_id
+            ]
+        except Exception:
+            return
+    for evidence in evidence_qs:
+        metadata = dict(evidence.processed_metadata or {})
+        metadata["submission_status"] = "REMOVED_BY_TEACHER"
+        metadata["removed_at"] = _tz.now().isoformat()
+        evidence.processed_metadata = metadata
+        evidence.save(update_fields=["processed_metadata"])
+        growth = getattr(evidence, "growth_submission", None)
+        if growth is not None and growth.status not in {
+            GrowthRecordSubmission.Status.APPROVED,
+            GrowthRecordSubmission.Status.REJECTED,
+        }:
+            growth.status = GrowthRecordSubmission.Status.NEEDS_REVISION
+            growth.save(update_fields=["status", "updated_at"])
+
+
+def _vision_mark_submission_superseded(submission_id: str, *, reason: str = "", op: str = "") -> int:
+    """M5（2026-10-21）：教師歸檔／刪除模型後，把來源提交標記「已被取代」。
+
+    與 _vision_mark_submission_removed 同一模式，只做兩件最小的事：
+    1. 關聯 Evidence 的 processed_metadata.submission_status 標記為 SUPERSEDED，
+       並記錄取代時間／原因／操作種類（學員頁面據此顯示「請重新上傳」）。
+    2. 對應成長記錄若未達終態（APPROVED/REJECTED）則收回 NEEDS_REVISION，
+       使 growth_model_upload 的既有狀態閘門重新放行。
+       已通過／已駁回的記錄不改狀態（保留評分結果），改由學員頁面的
+       model_upload_open（只看模型證據是否被取代）重新開放 best.pt 上傳入口。
+    回傳實際標記的 Evidence 筆數。
+    """
+    from django.utils import timezone as _tz
+
+    if not submission_id:
+        return 0
+    try:
+        evidence_qs = list(
+            Evidence.objects.filter(processed_metadata__vision_submission_id=submission_id)
+        )
+    except Exception:
+        try:
+            evidence_qs = [
+                item
+                for item in Evidence.objects.all()
+                if (item.processed_metadata or {}).get("vision_submission_id") == submission_id
+            ]
+        except Exception:
+            return 0
+    marked = 0
+    for evidence in evidence_qs:
+        metadata = dict(evidence.processed_metadata or {})
+        # 記住標記前的狀態，供 M2 還原時精確回退（不猜測）。
+        metadata.setdefault("submission_status_before_supersede", metadata.get("submission_status") or "")
+        metadata["submission_status"] = "SUPERSEDED"
+        metadata["superseded_at"] = _tz.now().isoformat()
+        metadata["superseded_reason"] = str(reason or "")
+        metadata["superseded_op"] = str(op or "")
+        evidence.processed_metadata = metadata
+        evidence.save(update_fields=["processed_metadata"])
+        marked += 1
+        growth = getattr(evidence, "growth_submission", None)
+        if growth is not None and growth.status not in {
+            GrowthRecordSubmission.Status.APPROVED,
+            GrowthRecordSubmission.Status.REJECTED,
+        }:
+            growth.status = GrowthRecordSubmission.Status.NEEDS_REVISION
+            growth.save(update_fields=["status", "updated_at"])
+    return marked
+
+
+def _vision_clear_submission_superseded(submission_id: str) -> int:
+    """M2（2026-10-21）：模型還原後，反向解除 Django 端 Evidence 的 SUPERSEDED 標記。
+
+    與 Live 端 restore_model 的「反向解除 superseded」保持雙向一致：
+    否則模型已還原、Live 提交已恢復有效，學員頁卻仍顯示「已被取代」。
+    只回退由模型管理造成的標記（submission_status == SUPERSEDED），
+    其他狀態（REMOVED_BY_TEACHER 等）不動。回傳實際回退的筆數。
+    """
+    if not submission_id:
+        return 0
+    try:
+        evidence_qs = list(
+            Evidence.objects.filter(processed_metadata__vision_submission_id=submission_id)
+        )
+    except Exception:
+        try:
+            evidence_qs = [
+                item
+                for item in Evidence.objects.all()
+                if (item.processed_metadata or {}).get("vision_submission_id") == submission_id
+            ]
+        except Exception:
+            return 0
+    cleared = 0
+    for evidence in evidence_qs:
+        metadata = dict(evidence.processed_metadata or {})
+        if metadata.get("submission_status") != "SUPERSEDED":
+            continue
+        metadata["submission_status"] = (
+            metadata.get("submission_status_before_supersede") or "SUBMITTED"
+        )
+        for key in (
+            "submission_status_before_supersede",
+            "superseded_at",
+            "superseded_reason",
+            "superseded_op",
+        ):
+            metadata.pop(key, None)
+        evidence.processed_metadata = metadata
+        evidence.save(update_fields=["processed_metadata"])
+        cleared += 1
+    return cleared
+
+
+_VISION_MANAGE_ERROR_TEXTS = {
+    "model_active_cannot_manage": (
+        "此模型目前是 ACTIVE（正在用於推論），不可歸檔或刪除。"
+        "請先在「正式模型」切換到其他模型，再回來管理。"
+    ),
+    "model_validation_in_progress": "此模型仍在驗證中，請等驗證結束後再操作。",
+    "restore_not_teacher_archived": "只有教師手動歸檔的模型可以一鍵還原。",
+    "model_not_found": "找不到此模型，可能已被刪除，請重新整理頁面。",
+}
+
+
+def _vision_manage_error_text(exc, fallback: str) -> str:
+    """M4：把後端硬攔的錯誤碼轉成教師可讀的繁體中文（不洩漏原始字串）。"""
+    raw = str(exc or "")
+    for key, text in _VISION_MANAGE_ERROR_TEXTS.items():
+        if key in raw:
+            return text
+    return _vision_error_text(exc, fallback)
+
+
+def _vision_manage_redirect(task_id: str, scene: int = 3) -> str:
+    return f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene={scene}"
+
+
+@teacher_required
+@require_POST
+def teacher_vision_center_archive_model(request):
+    """M1：歸檔一個非 ACTIVE 的「不理想」模型（教師，可填原因）。
+
+    只改模型狀態（.pt 不動）；後端（Live）硬攔 ACTIVE 與驗證中模型，
+    並在歸檔後把來源提交標記「已被取代」，讓學員可重新上傳新模型。
+    """
+    task_id = _vision_task_id(request)
+    model_id = (request.POST.get("model_id") or "").strip()
+    reason = (request.POST.get("reason") or "").strip()
+    redirect_url = _vision_manage_redirect(task_id)
+    if not model_id:
+        messages.error(request, "缺少模型編號，無法歸檔。")
+        return redirect(redirect_url)
+    try:
+        result = vision_api.archive_model(
+            model_id=model_id, teacher_id=request.user.pk, reason=reason
+        )
+    except RuntimeError as exc:
+        messages.error(
+            request, f"歸檔失敗，模型狀態未變更：{_vision_manage_error_text(exc, '請稍後再試。')}"
+        )
+        return redirect(redirect_url)
+
+    if result.get("already_archived"):
+        messages.info(request, "此模型已在歸檔清單中，未重複操作。")
+        return redirect(redirect_url)
+    superseded = result.get("superseded_submission_id")
+    if superseded:
+        _vision_mark_submission_superseded(
+            superseded, reason=reason or "教師歸檔模型", op="archive"
+        )
+    messages.success(
+        request,
+        "已歸檔此模型（.pt 檔案保留，可隨時還原）。"
+        + ("對應學員提交已標記「已被取代」，學員可重新上傳新模型。" if superseded else ""),
+    )
+    return redirect(redirect_url)
+
+
+@teacher_required
+@require_POST
+def teacher_vision_center_restore_model(request):
+    """M2：一鍵還原「已歸檔」的模型（僅教師手動歸檔件）。"""
+    task_id = _vision_task_id(request)
+    model_id = (request.POST.get("model_id") or "").strip()
+    reason = (request.POST.get("reason") or "").strip()
+    redirect_url = _vision_manage_redirect(task_id)
+    if not model_id:
+        messages.error(request, "缺少模型編號，無法還原。")
+        return redirect(redirect_url)
+    try:
+        result = vision_api.restore_model(
+            model_id=model_id, teacher_id=request.user.pk, reason=reason
+        )
+    except RuntimeError as exc:
+        messages.error(
+            request, f"還原失敗，模型狀態未變更：{_vision_manage_error_text(exc, '請稍後再試。')}"
+        )
+        return redirect(redirect_url)
+
+    messages.success(
+        request,
+        f"已還原模型（回到歸檔前狀態：{result.get('status') or '—'}）。",
+    )
+    # M2：Live 已反向解除來源提交的 superseded，Django 端 Evidence 同步回退，
+    # 避免「模型已還原、學員頁仍顯示已被取代」的不一致。
+    if result.get("unsuperseded_submission_id"):
+        _vision_clear_submission_superseded(result["unsuperseded_submission_id"])
+    return redirect(redirect_url)
+
+
+@teacher_required
+@require_POST
+def teacher_vision_center_delete_model(request):
+    """M3：永久刪除一個非 ACTIVE 模型（進階管理，二次確認）。
+
+    後端保證：ACTIVE／驗證中拒絕；操作前自動備份 store 與模型目錄；
+    僅當該 .pt（sha256）沒有被其他記錄引用時才物理刪除檔案，
+    否則只刪記錄並回報共用方。
+    """
+    task_id = _vision_task_id(request)
+    model_id = (request.POST.get("model_id") or "").strip()
+    reason = (request.POST.get("reason") or "").strip()
+    confirmed = (request.POST.get("confirm_delete") or "") == "yes"
+    redirect_url = _vision_manage_redirect(task_id)
+    if not model_id:
+        messages.error(request, "缺少模型編號，無法刪除。")
+        return redirect(redirect_url)
+    if not confirmed:
+        messages.error(request, "永久刪除需要二次確認，未執行任何操作。")
+        return redirect(redirect_url)
+    try:
+        result = vision_api.delete_model(
+            model_id=model_id, teacher_id=request.user.pk, reason=reason
+        )
+    except RuntimeError as exc:
+        messages.error(
+            request, f"刪除失敗，模型與 .pt 均未變更：{_vision_manage_error_text(exc, '請稍後再試。')}"
+        )
+        return redirect(redirect_url)
+
+    superseded = result.get("superseded_submission_id")
+    if superseded:
+        _vision_mark_submission_superseded(
+            superseded, reason=reason or "教師刪除模型", op="delete"
+        )
+    if result.get("file_removed"):
+        detail = "記錄與 .pt 檔均已永久移除"
+    else:
+        shared = "、".join(result.get("shared_with") or [])
+        detail = (
+            f"記錄已移除，但 .pt 檔仍被其他記錄共用（{shared}），故保留檔案"
+            if shared
+            else "記錄已移除，.pt 檔不存在"
+        )
+    messages.success(
+        request,
+        f"已永久刪除模型 {model_id}：{detail}；刪除前已自動備份。"
+        + ("對應學員提交已標記「已被取代」，學員可重新上傳。" if superseded else ""),
+    )
+    return redirect(redirect_url)
 
 
 @teacher_required

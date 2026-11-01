@@ -188,3 +188,31 @@ aside strong { color: #ffcb64; }
 /* 連往本機白名單下載中心的最小入口。 */
 .download-center-entry { display: inline-flex; float: right; color: #aee6ff; font-size: .85rem; font-weight: 700; text-decoration: none; }
 .download-center-entry:hover { text-decoration: underline; }
+
+/* 視覺模型品質顯示（2026-10-21 質量證據閘口）：卡片 + 狀態徽章，深色主題、綠色僅用於真正通過 */
+.vision-model-list,.vision-model-compare{display:grid;gap:10px;margin-top:10px;max-height:420px;overflow:auto}
+.vision-model-compare{max-height:320px}
+.vm-summary{color:#9fc3d4;font-size:.82rem;margin:0}
+.vm-empty{color:#9fc3d4;font-size:.85rem;margin:0}
+.vm-card{padding:10px 12px;border:1px solid #344c5b;border-radius:10px;background:#0f1d27}
+.vm-card header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.vm-card header strong{color:#eef8ff}
+.vm-card header code{color:#7fa8bd;font-size:.72rem}
+.vm-card-pass{border-color:rgba(64,200,140,.55)}
+.vm-card-warn{border-color:rgba(255,203,100,.55)}
+.vm-card-bad{border-color:rgba(255,107,107,.55)}
+.vm-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:.82rem}
+.vm-table th,.vm-table td{padding:4px 6px;border-bottom:1px solid rgba(91,217,255,.12);text-align:left;vertical-align:top;color:#d7ecf7}
+.vm-table th{color:#9fc3d4;font-weight:600;white-space:nowrap;width:88px}
+.vm-table thead th{width:auto;color:#eef8ff}
+.vm-table-prop th,.vm-table-prop td{white-space:normal}
+.vm-badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.72rem;font-weight:700;margin-left:6px;white-space:nowrap}
+.vm-badge-pass{background:rgba(64,200,140,.16);color:#5fe3a1;border:1px solid rgba(64,200,140,.5)}
+.vm-badge-warn{background:rgba(255,203,100,.14);color:#ffd98a;border:1px solid rgba(255,203,100,.5)}
+.vm-badge-bad{background:rgba(255,107,107,.14);color:#ff9d9d;border:1px solid rgba(255,107,107,.5)}
+.vm-badge-neutral{background:rgba(159,195,212,.12);color:#b9d4e0;border:1px solid rgba(159,195,212,.4)}
+.vm-reason{margin:8px 0 0;padding:6px 10px;border-radius:8px;font-size:.8rem}
+.vm-reason-pass{background:rgba(64,200,140,.1);color:#8ff0c2}
+.vm-reason-warn{background:rgba(255,203,100,.1);color:#ffd98a}
+.vm-reason-bad{background:rgba(255,107,107,.1);color:#ff9d9d}
+.vm-note{margin:8px 0 0;color:#9fc3d4;font-size:.76rem}

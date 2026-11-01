@@ -20,6 +20,71 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
+# ---------------------------------------------------------------------------
+# 2026-10-28（上線收尾第四階段 C）：資源級班級隔離的測試替身
+#
+# teacher_required 現在會在請求帶 submission_id / model_id 時，向 Live 查該資源
+# 的來源學員，並比對「教師被授權班級」。本模組測的是頁面渲染與流程契約，不該
+# 依賴真實跨進程查詢，因此把兩個查詢函式換成可控 stub：
+#   * 預設 stub 回報「資源存在且屬於可見學員」，讓既有流程測試維持原意。
+#   * 「異班必須 403、無班級必須 403、Live 不可用必須 fail-closed」等安全行為，
+#     由隔離環境的 HTTP 實測證明（ops/launch-20261028/tools/phase4_security_tests.py
+#     的 P-01~P-16），以及本檔 VisionCohortGuardTests 的定向單元測試。
+# ---------------------------------------------------------------------------
+_GUARD_PATCHERS = []
+
+
+def setUpModule():
+    global _GUARD_PATCHERS
+    _GUARD_PATCHERS = [
+        patch(
+            "learning.views._vision_lookup_submission_student",
+            side_effect=lambda submission_id, *, teacher_id: (True, "DEMO-STU-0001"),
+        ),
+        patch(
+            "learning.views._vision_lookup_model_student",
+            side_effect=lambda model_id, *, teacher_id, preferred_task: (True, "DEMO-STU-0001"),
+        ),
+        patch(
+            "learning.views.vision_visible_student_ids",
+            side_effect=lambda user: {"DEMO-STU-0001"},
+        ),
+        # 下列四項是「Live 不可用」時的預設行為（本機沒有可用的 Live 服務，
+        # 未 mock 時每次呼叫都要等真實連線失敗，單一測試可慢到 10 秒以上）。
+        # 以等價的假值取代，行為完全相同、速度大幅提升；需要線上分支的測試
+        # 會自行以 @patch 覆寫。
+        patch(
+            "learning.views.vision_api.vision_api_health",
+            return_value=(False, "vision_api_unavailable"),
+        ),
+        patch(
+            "learning.views.vision_api.recommended_seed",
+            side_effect=RuntimeError("vision_api_unavailable"),
+        ),
+        patch(
+            "learning.views.vision_api.seed_version_chain",
+            side_effect=RuntimeError("vision_api_unavailable"),
+        ),
+        patch(
+            "learning.views.vision_api.list_hard_examples",
+            side_effect=RuntimeError("vision_api_unavailable"),
+        ),
+        patch(
+            "learning.views.vision_api.task_model_history",
+            return_value={"history": [], "active": None, "inference_source": {}},
+        ),
+    ]
+    for patcher in _GUARD_PATCHERS:
+        patcher.start()
+
+
+def tearDownModule():
+    global _GUARD_PATCHERS
+    for patcher in _GUARD_PATCHERS:
+        patcher.stop()
+    _GUARD_PATCHERS = []
+
+
 class VisionCenterAccessTests(TestCase):
     """權限：只有教師可以進入。"""
 
@@ -131,7 +196,7 @@ class VisionCenterOnlineTests(TestCase):
         """四個場景必須存在於同一頁，且一次只顯示一個（由 scene 參數控制）。
 
         教師 2026-10-16 裁決：四場景名稱為
-        ① 學員模型 ② 圖片驗證 ③ 正式模型 ④ 下一輪資料飛輪。
+        ① 學員模型 ② 圖片驗證 ③ 正式模型 ④ 歸檔與回流。
         """
         models = [self._model("PROP_1", status="ACTIVE")]
         with self._patch_common(models):
@@ -142,7 +207,7 @@ class VisionCenterOnlineTests(TestCase):
             self.assertContains(response, "學員模型")
             self.assertContains(response, "圖片驗證")
             self.assertContains(response, "正式模型")
-            self.assertContains(response, "下一輪資料飛輪")
+            self.assertContains(response, "歸檔與回流")
             # 舊的「區域一~四」主入口與橫向分頁必須移除。
             self.assertNotContains(response, "區域一")
             self.assertNotContains(response, "區域二")
@@ -183,6 +248,7 @@ class VisionCenterOnlineTests(TestCase):
             "detection_count": 1,
             "verdict": {
                 "decision": "MATCH", "predicted_class": "CW_F", "predicted_confidence": 0.9,
+                "max_confidence": 0.9,
                 "expected_class": "CW_F", "reason": "相符", "reason_code": "OK", "rule_version": "v1",
                 "confidence_threshold": 0.5,
             },
@@ -208,6 +274,44 @@ class VisionCenterOnlineTests(TestCase):
         self.assertEqual(data["result"]["verdict"], "MATCH")
         self.assertEqual(len(data["result"]["boxes"]), 1)
         self.assertEqual(data["result"]["boxes"][0]["bbox"], [10, 10, 30, 30])
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_validate_no_detection_reports_highest_confidence_zero(self, _subs, _health):
+        """D4（2026-10-20）：① 無框（NO_DETECTION）時最高信心值必須為 0，
+        與模板①文案「最高信心值為 0」一致（不是「—」）。"""
+        result = {
+            "model": {"model_id": "PROP_1", "model_type": self.TASK, "version": "v1", "class_names": []},
+            "detections": [],
+            "detection_count": 0,
+            "verdict": {
+                "decision": "INSUFFICIENT_DATA", "predicted_class": None, "predicted_confidence": None,
+                "expected_class": None, "reason": "模型未偵測到任何目標（無框）。", "reason_code": "NO_DETECTION", "rule_version": "v1",
+                "confidence_threshold": 0.5,
+            },
+            "validated_at": "2026-10-10T04:00:00Z",
+        }
+        with self._patch_common([self._model("PROP_1")]), patch(
+            "learning.views.vision_api.validate_image_with_model", return_value=result
+        ):
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_validate"),
+                {
+                    "task_id": self.TASK,
+                    "model_id": "PROP_1",
+                    "expected_class": "",
+                    "test_image": SimpleUploadedFile("t.jpg", b"jpegbytes", content_type="image/jpeg"),
+                },
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+        self.assertEqual(response.status_code, 200)
+        import json
+        data = json.loads(response.content)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["result"]["verdict_reason_code"], "NO_DETECTION")
+        self.assertEqual(data["result"]["highest_confidence"], 0.0)
+        self.assertEqual(data["result"]["max_confidence"], 0.0)
+        self.assertEqual(data["result"]["confidence_threshold_used"], 0.5)
 
     @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
     @patch("learning.views.vision_api.list_submissions", return_value=[])
@@ -249,7 +353,11 @@ class VisionCenterOnlineTests(TestCase):
         models = response.context["activatable_models"]
         self.assertTrue(models)
         self.assertFalse(models[0]["can_activate"])
-        self.assertContains(response, "此版本尚未通過驗證，無法啟用")
+        # 場景③ 精簡：不符合資格的模型不出現「設為正式模型」按鈕，
+        # 只以一顆合併狀態徽章標示（細節放 hover）。
+        self.assertFalse(models[0]["can_set_active"])
+        self.assertEqual(models[0]["eligibility"], "needs_validation")
+        self.assertContains(response, "暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻 0.6")
 
     # ---- 區域二：圖片驗證 ----
 
@@ -487,10 +595,13 @@ class VisionCenterOnlineTests(TestCase):
         record_failure.assert_called_once()
         self.assertEqual(record_failure.call_args.kwargs["code"], "model_class_names_mismatch")
 
+    @patch("learning.views.vision_api.record_import_failure")
     @patch("learning.views.vision_api.create_dataset")
     @patch("learning.views.vision_api.import_submission")
     @patch("learning.views.vision_api.preflight_import")
-    def test_import_preflight_missing_class_names_tells_teacher_to_supply(self, preflight, import_sub, create_ds):
+    def test_import_preflight_missing_class_names_tells_teacher_to_supply(
+        self, preflight, import_sub, create_ds, record_failure,
+    ):
         """教師指令③：names 為空 → UI 提示「模型缺少類別名稱，請補充」，不駁回。"""
         preflight.return_value = {
             "outcome": "class_names_missing", "class_names_actual": [], "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
@@ -504,11 +615,18 @@ class VisionCenterOnlineTests(TestCase):
         self.assertContains(response, "未被駁回")
         create_ds.assert_not_called()
         import_sub.assert_not_called()
+        # F-A（2026-10-20）：隔離 Live 呼叫，測試期間不得發出真實 HTTP。
+        record_failure.assert_called_once()
+        self.assertEqual(record_failure.call_args.kwargs["code"], "model_class_names_missing")
+        self.assertEqual(record_failure.call_args.kwargs["submission_id"], "sub-empty")
 
+    @patch("learning.views.vision_api.record_import_failure")
     @patch("learning.views.vision_api.create_dataset")
     @patch("learning.views.vision_api.import_submission")
     @patch("learning.views.vision_api.preflight_import")
-    def test_import_preflight_count_mismatch_reports_both_counts(self, preflight, import_sub, create_ds):
+    def test_import_preflight_count_mismatch_reports_both_counts(
+        self, preflight, import_sub, create_ds, record_failure,
+    ):
         """類別數量不符 → 明確實際/預期數量，不駁回、不對照。"""
         preflight.return_value = {
             "outcome": "mismatch", "class_names_actual": ["A", "B"], "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
@@ -521,6 +639,10 @@ class VisionCenterOnlineTests(TestCase):
         self.assertContains(response, "導入失敗")
         self.assertContains(response, "實際 2 類、預期 4 類")
         import_sub.assert_not_called()
+        # F-A（2026-10-20）：隔離 Live 呼叫，測試期間不得發出真實 HTTP。
+        record_failure.assert_called_once()
+        self.assertEqual(record_failure.call_args.kwargs["code"], "model_class_names_mismatch")
+        self.assertEqual(record_failure.call_args.kwargs["submission_id"], "sub-count")
 
     @patch("learning.views.vision_api.create_dataset")
     @patch("learning.views.vision_api.import_submission")
@@ -937,3 +1059,995 @@ class VisionCenterDeleteSubmissionTests(VisionCenterOnlineTests):
             follow=True,
         )
         self.assertContains(response, "缺少提交編號")
+
+
+class VisionCenterModelManagementTests(VisionCenterOnlineTests):
+    """模型管理（教師指令 2026-10-21）：歸檔／還原／永久刪除的 Django 端契約。
+
+    本類只驗證 Django 的行為：按鈕是否依狀態出現、是否轉發正確參數、
+    失敗原因是否如實顯示、二次確認是否真的擋住未確認的刪除。
+    真正的狀態機、共用 .pt 保護、備份與審計由 Live 端
+    test_vision_model_management.py 把關。
+    """
+
+    def _archived_model(self, model_id="PROP_archived", version="v0"):
+        model = self._model(model_id, status="ARCHIVED", version=version)
+        model.update(
+            archived_via="teacher",
+            archived_reason="未訓練",
+            status_before_archive="VALIDATED",
+            archived_at="2026-10-21T01:00:00Z",
+        )
+        return model
+
+    # ---- 頁面渲染 ----
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_candidate_list_offers_archive_for_non_active_model(self, _subs, _health):
+        models = [self._model("PROP_1", status="VALIDATED")]
+        with self._patch_common(models):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "3"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, reverse("learning:teacher_vision_center_archive_model")
+        )
+        self.assertContains(response, ">歸檔</button>")
+        # 歸檔原因不再是常駐輸入框，改由確認對話框內填寫（POST 參數名 reason 不變）
+        self.assertContains(response, "vcArchive(")
+        self.assertContains(response, "歸檔原因（選填，會寫入審計紀錄，最長 120 字）")
+        self.assertContains(response, 'name="reason"')
+        self.assertNotContains(response, 'type="text" name="reason"')
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_active_model_has_no_archive_or_delete_action(self, _subs, _health):
+        models = [self._model("PROP_active", status="ACTIVE")]
+        with self._patch_common(models):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "3"}
+            )
+        self.assertEqual(response.status_code, 200)
+        context = response.context
+        self.assertEqual(context["archived_models"], [])
+        self.assertEqual(context["deletable_models"], [])
+        self.assertNotContains(response, "歸檔此模型")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_archived_section_lists_teacher_archived_with_restore(self, _subs, _health):
+        models = [self._archived_model()]
+        with self._patch_common(models):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "3"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["model_id"] for item in response.context["archived_models"]],
+            ["PROP_archived"],
+        )
+        self.assertContains(response, "已歸檔")
+        self.assertContains(
+            response, reverse("learning:teacher_vision_center_restore_model")
+        )
+        self.assertContains(response, "一鍵還原")
+        self.assertContains(response, "未訓練")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_restored_model_is_not_listed_as_archived(self, _subs, _health):
+        """還原後 archived_via 可能仍殘留，但 status 已非 ARCHIVED → 不得列入已歸檔區。"""
+        model = self._model("PROP_back", status="VALIDATED", version="v2")
+        model.update(archived_via="teacher", archived_reason="曾歸檔", archived_at=None)
+        with self._patch_common([model]):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "3"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["archived_models"], [])
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_delete_only_inside_archived_section(self, _subs, _health):
+        """永久刪除只出現在「已歸檔」折疊區，且維持二次確認與共用 .pt 保護提示。"""
+        models = [self._archived_model()]
+        with self._patch_common(models):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "3"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, reverse("learning:teacher_vision_center_delete_model")
+        )
+        self.assertContains(response, "我已確認要永久刪除這筆模型記錄")
+        # 共用 .pt 保護：只刪記錄不刪檔案的提示仍隨確認對話框輸出
+        self.assertContains(response, ".pt 仍被其他記錄共用，只刪記錄不刪檔案")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_non_archived_model_has_no_delete_action(self, _subs, _health):
+        """未歸檔的模型不得出現永久刪除（刪除只留在已歸檔區）。"""
+        models = [self._model("PROP_1", status="VALIDATED")]
+        with self._patch_common(models):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": "3"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response, reverse("learning:teacher_vision_center_delete_model")
+        )
+
+    # ---- 歸檔 ----
+    @patch("learning.views.vision_api.archive_model")
+    def test_archive_forwards_reason_and_reports_success(self, archive):
+        archive.return_value = {
+            "model_id": "PROP_1",
+            "status": "ARCHIVED",
+            "already_archived": False,
+            "superseded_submission_id": "sub-1",
+            "backup_path": "backups/x-archive-PROP_1",
+        }
+        with patch("learning.views._vision_mark_submission_superseded") as mark:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_archive_model"),
+                {"task_id": self.TASK, "model_id": "PROP_1", "reason": "辨識品質不足"},
+                follow=True,
+            )
+        self.assertContains(response, "已歸檔此模型")
+        self.assertContains(response, "學員可重新上傳新模型")
+        archive.assert_called_once_with(
+            model_id="PROP_1", teacher_id=self.teacher.pk, reason="辨識品質不足"
+        )
+        mark.assert_called_once()
+        self.assertEqual(mark.call_args.args[0], "sub-1")
+        self.assertEqual(mark.call_args.kwargs["op"], "archive")
+
+    @patch("learning.views.vision_api.archive_model")
+    def test_archive_active_guard_error_is_explained(self, archive):
+        archive.side_effect = RuntimeError(
+            "vision_api_rejected:422:model_active_cannot_manage"
+        )
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_archive_model"),
+            {"task_id": self.TASK, "model_id": "PROP_active"},
+            follow=True,
+        )
+        self.assertContains(response, "歸檔失敗")
+        self.assertContains(response, "狀態未變更")
+        self.assertContains(response, "ACTIVE")
+        self.assertContains(response, "不可歸檔或刪除")
+
+    def test_archive_without_model_id_is_refused(self):
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_archive_model"),
+            {"task_id": self.TASK},
+            follow=True,
+        )
+        self.assertContains(response, "缺少模型編號")
+
+    # ---- 還原 ----
+    @patch("learning.views.vision_api.restore_model")
+    def test_restore_reports_restored_status(self, restore):
+        restore.return_value = {"model_id": "PROP_archived", "status": "VALIDATED"}
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_restore_model"),
+            {"task_id": self.TASK, "model_id": "PROP_archived"},
+            follow=True,
+        )
+        self.assertContains(response, "已還原模型")
+        self.assertContains(response, "VALIDATED")
+        restore.assert_called_once_with(
+            model_id="PROP_archived", teacher_id=self.teacher.pk, reason=""
+        )
+
+    @patch("learning.views.vision_api.restore_model")
+    def test_restore_clears_django_superseded_marker(self, restore):
+        """M2：還原後 Django 端 Evidence 的 SUPERSEDED 標記必須同步回退。"""
+        restore.return_value = {
+            "model_id": "PROP_archived",
+            "status": "VALIDATED",
+            "unsuperseded_submission_id": "sub-1",
+        }
+        with patch("learning.views._vision_clear_submission_superseded") as clear:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_restore_model"),
+                {"task_id": self.TASK, "model_id": "PROP_archived"},
+                follow=True,
+            )
+        self.assertContains(response, "已還原模型")
+        clear.assert_called_once_with("sub-1")
+
+    # ---- 永久刪除 ----
+    @patch("learning.views.vision_api.delete_model")
+    def test_delete_without_confirmation_never_calls_backend(self, delete):
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_delete_model"),
+            {"task_id": self.TASK, "model_id": "PROP_1", "reason": "重複"},
+            follow=True,
+        )
+        self.assertContains(response, "需要二次確認")
+        delete.assert_not_called()
+
+    @patch("learning.views.vision_api.delete_model")
+    def test_delete_reports_shared_file_kept(self, delete):
+        delete.return_value = {
+            "model_id": "PROP_1",
+            "record_removed": True,
+            "file_removed": False,
+            "shared_with": ["PROP_2", "sub-9"],
+            "superseded_submission_id": None,
+            "backup_path": "backups/x-delete-PROP_1",
+        }
+        with patch("learning.views._vision_mark_submission_superseded") as mark:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_delete_model"),
+                {"task_id": self.TASK, "model_id": "PROP_1", "confirm_delete": "yes"},
+                follow=True,
+            )
+        self.assertContains(response, "已永久刪除模型 PROP_1")
+        self.assertContains(response, "仍被其他記錄共用")
+        self.assertContains(response, "PROP_2")
+        mark.assert_not_called()
+
+    @patch("learning.views.vision_api.delete_model")
+    def test_delete_success_marks_submission_superseded(self, delete):
+        delete.return_value = {
+            "model_id": "PROP_1",
+            "record_removed": True,
+            "file_removed": True,
+            "shared_with": [],
+            "superseded_submission_id": "sub-1",
+            "backup_path": "backups/x-delete-PROP_1",
+        }
+        with patch("learning.views._vision_mark_submission_superseded") as mark:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_delete_model"),
+                {"task_id": self.TASK, "model_id": "PROP_1", "confirm_delete": "yes"},
+                follow=True,
+            )
+        self.assertContains(response, "記錄與 .pt 檔均已永久移除")
+        mark.assert_called_once()
+        self.assertEqual(mark.call_args.kwargs["op"], "delete")
+
+    # ---- 權限 ----
+    def test_student_cannot_call_management_endpoints(self):
+        student = get_user_model().objects.create_user(
+            username="vc-mgmt-student@example.test", password="Student-pass-901!"
+        )
+        self.client.force_login(student)
+        for name in (
+            "learning:teacher_vision_center_archive_model",
+            "learning:teacher_vision_center_restore_model",
+            "learning:teacher_vision_center_delete_model",
+        ):
+            response = self.client.post(reverse(name), {"model_id": "PROP_1"})
+            self.assertIn(response.status_code, (302, 403), name)
+
+
+class VisionCenterScene3SlimTests(VisionCenterOnlineTests):
+    """場景③「正式模型」（教師指令 2026-10-22）。
+
+    頁面只保留三個動作：啟用／歸檔／刪除。其餘長篇說明、多枚徽章、
+    多餘入口一律移除。
+
+    2026-10-22 教師裁定改版：模型「不符合自動品質判定」不再一律不可用，
+    改由教師看過「② 圖片驗證」結果後自行決定是否啟用。唯一硬攔是
+    quarantined（Live 端 `activate_model(..., override=True)` 仍拒）。
+    其餘閘門被覆寫時，由 Live 端逐條記進審計，不靜音放行。
+    """
+
+    def _pass_record(self, model_id, verdict="MATCH"):
+        return {
+            "model_id": model_id,
+            "task_id": self.TASK,
+            "verdict": verdict,
+            "evidence_source": "REAL_INFERENCE",
+            "predicted_class": "CW_F" if verdict == "MATCH" else "CCW_B",
+            "predicted_confidence": 0.91 if verdict == "MATCH" else 0.0027,
+            "confidence_threshold": 0.5,
+            "expected_class": "CW_F",
+            "validated_at": "2026-10-22T10:00:00Z",
+        }
+
+    def _archived_model(self, model_id="PROP_archived", version="v0"):
+        model = self._model(model_id, status="ARCHIVED", version=version)
+        model.update(
+            archived_via="teacher",
+            archived_reason="未訓練",
+            status_before_archive="VALIDATED",
+            archived_at="2026-10-22T01:00:00Z",
+        )
+        return model
+
+    def _ready_model(self, model_id="PROP_ready", version="v1"):
+        model = self._model(model_id, status="VALIDATED", version=version)
+        model.update(
+            health="OK",
+            health_label="正常",
+            health_css="active",
+            health_note="模型訓練痕跡完整且 mAP50 達門檻。",
+            map50=0.83,
+            map50_threshold=0.5,
+            nc=4,
+            names_count=4,
+            has_train_args=True,
+            has_epoch=True,
+            has_metrics=True,
+            pass_eligible=True,
+        )
+        return model
+
+    def _get_scene3(self, models, session_records=None):
+        with self._patch_common(models):
+            session = self.client.session
+            session["vision_validation_records"] = session_records or []
+            session.save()
+            return self.client.get(
+                reverse("learning:teacher_vision_center"),
+                {"task": self.TASK, "scene": "3"},
+            )
+
+    # ---- 啟用 ----
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_activate_button_when_image_validation_done(self, _subs, _health):
+        """2026-10-23 教師指令：恢復硬規則——模型通過 Live 啟用資格
+        （activation_eligible：健康度 OK＋驗證通過且信心≥0.6＋類別四類）才出現
+        「設為正式模型」按鈕。"""
+        ready = self._ready_model()
+        ready.update(activation_eligible=True, activation_min_confidence=0.6,
+                     validation_pass_confidence=0.91)
+        response = self._get_scene3([ready], [self._pass_record("PROP_ready")])
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, ">設為正式模型</button>")
+        self.assertContains(
+            response, reverse("learning:teacher_vision_center_activate")
+        )
+        self.assertTrue(response.context["settable_active_models"])
+        self.assertNotContains(response, "暫無可啟用的模型")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_activate_button_appears_only_when_eligible(self, _subs, _health):
+        """2026-10-23 恢復硬規則：只有通過啟用資格（MATCH＋activation_eligible）
+        才出現按鈕；MISMATCH／CHECK 一律不出現，也不得被教師覆寫。"""
+        ok = self._ready_model("PROP_MATCH")
+        ok.update(activation_eligible=True, activation_min_confidence=0.6,
+                  validation_pass_confidence=0.91)
+        response = self._get_scene3([ok], [self._pass_record("PROP_MATCH", "MATCH")])
+        self.assertContains(response, ">設為正式模型</button>")
+        row = next(m for m in response.context["scene3_models"]
+                   if m["model_id"] == "PROP_MATCH")
+        self.assertEqual(row["eligibility"], "ready")
+        for verdict in ("MISMATCH", "CHECK"):
+            model = self._ready_model("PROP_%s" % verdict)
+            model.update(activation_eligible=False)
+            response = self._get_scene3(
+                [model], [self._pass_record("PROP_%s" % verdict, verdict)]
+            )
+            self.assertNotContains(response, ">設為正式模型</button>")
+            self.assertEqual(response.context["settable_active_models"], [])
+            row = next(
+                m for m in response.context["scene3_models"]
+                if m["model_id"] == "PROP_%s" % verdict
+            )
+            self.assertNotEqual(row["eligibility"], "ready")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_no_activatable_model_shows_single_hint_and_no_button(self, _subs, _health):
+        """從未做過圖片驗證：只出現一行提示，不出現任何按鈕。"""
+        plain = self._model("PROP_plain", status="VALIDATED")
+        response = self._get_scene3([plain])
+        self.assertContains(response, "暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻 0.6")
+        self.assertEqual(response.context["settable_active_models"], [])
+        self.assertNotContains(
+            response, reverse("learning:teacher_vision_center_activate")
+        )
+        self.assertNotContains(response, ">設為正式模型</button>")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_demo_imported_model_cannot_be_activated_by_teacher(self, _subs, _health):
+        """2026-10-23 恢復硬規則：DEMO 放寬匯入模型不得啟用（activation_eligible=False），
+        即使做過圖片驗證也不出現按鈕，杜絕覆寫後門。"""
+        demo = self._ready_model("PROP_demo")
+        demo.update(
+            status="DEMO_IMPORTED",
+            validation_status="DEMO_IMPORTED",
+            demo_class_relaxed=True,
+            activation_eligible=False,
+        )
+        response = self._get_scene3([demo], [self._pass_record("PROP_demo")])
+        self.assertEqual(response.context["settable_active_models"], [])
+        self.assertNotContains(response, ">設為正式模型</button>")
+        row = next(m for m in response.context["scene3_models"]
+                   if m["model_id"] == "PROP_demo")
+        self.assertEqual(row["eligibility"], "unavailable")
+        self.assertEqual(row["eligibility_label"], "不可用")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_low_quality_model_cannot_be_activated_by_teacher(self, _subs, _health):
+        """2026-10-23 恢復硬規則：低品質（mAP50 低於門檻）模型不得啟用
+        （activation_eligible=False），按鈕不出現；事實寫在 hover 提示。"""
+        low = self._ready_model("PROP_low")
+        low.update(health="LOW_QUALITY", health_label="低品質", health_css="candidate",
+                   map50=0.117, pass_eligible=False, activation_eligible=False)
+        response = self._get_scene3([low], [self._pass_record("PROP_low")])
+        self.assertEqual(response.context["settable_active_models"], [])
+        self.assertNotContains(response, ">設為正式模型</button>")
+        row = next(m for m in response.context["scene3_models"]
+                   if m["model_id"] == "PROP_low")
+        self.assertEqual(row["eligibility"], "unavailable")
+        # 事實不得被藏起來：hover 提示仍載明健康度與 mAP50
+        self.assertIn("健康度 低品質", row["eligibility_title"])
+        self.assertIn("mAP50 0.117／門檻 0.5", row["eligibility_title"])
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_quarantined_model_never_gets_activate_button(self, _subs, _health):
+        """唯一硬攔：已隔離（quarantined）模型連教師覆寫都不得啟用。"""
+        quarantined = self._ready_model("PROP_quar")
+        quarantined.update(quarantined=True)
+        response = self._get_scene3(
+            [quarantined], [self._pass_record("PROP_quar")]
+        )
+        self.assertEqual(response.context["settable_active_models"], [])
+        self.assertNotContains(
+            response, reverse("learning:teacher_vision_center_activate")
+        )
+        self.assertNotContains(response, ">設為正式模型</button>")
+        row = next(m for m in response.context["scene3_models"]
+                   if m["model_id"] == "PROP_quar")
+        self.assertEqual(row["eligibility"], "unavailable")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_health_ok_but_unverified_model_gets_no_activate_button(self, _subs, _health):
+        """健康度 OK 但沒做過真實圖片驗證 → 仍不出現啟用按鈕（先看過再決定）。"""
+        ready = self._ready_model()
+        response = self._get_scene3([ready])
+        self.assertEqual(response.context["settable_active_models"], [])
+        self.assertNotContains(
+            response, reverse("learning:teacher_vision_center_activate")
+        )
+        self.assertNotContains(response, ">設為正式模型</button>")
+        row = next(m for m in response.context["scene3_models"]
+                   if m["model_id"] == "PROP_ready")
+        self.assertEqual(row["eligibility"], "needs_validation")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_activate_confirm_dialog_lists_model_facts(self, _subs, _health):
+        """確認框（vcActivate）只對通過啟用資格的模型出現，並說明硬規則、無法覆寫。"""
+        ready = self._ready_model("PROP_ready")
+        ready.update(activation_eligible=True, activation_min_confidence=0.6,
+                     validation_pass_confidence=0.91)
+        response = self._get_scene3([ready], [self._pass_record("PROP_ready")])
+        self.assertContains(response, "vcActivate(")
+        self.assertContains(response, "此模型已通過啟用資格檢核：")
+        self.assertContains(response, "無法覆寫")
+
+    # ---- 歸檔 ----
+    @patch("learning.views.vision_api.archive_model")
+    def test_archive_forwards_reason_and_reports_success(self, archive):
+        archive.return_value = {
+            "model_id": "PROP_1",
+            "status": "ARCHIVED",
+            "already_archived": False,
+            "superseded_submission_id": "sub-1",
+            "backup_path": "backups/x-archive-PROP_1",
+        }
+        with patch("learning.views._vision_mark_submission_superseded") as mark:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_archive_model"),
+                {"task_id": self.TASK, "model_id": "PROP_1", "reason": "辨識品質不足"},
+                follow=True,
+            )
+        self.assertContains(response, "已歸檔此模型")
+        self.assertContains(response, "學員可重新上傳新模型")
+        archive.assert_called_once_with(
+            model_id="PROP_1", teacher_id=self.teacher.pk, reason="辨識品質不足"
+        )
+        mark.assert_called_once()
+        self.assertEqual(mark.call_args.args[0], "sub-1")
+        self.assertEqual(mark.call_args.kwargs["op"], "archive")
+
+    @patch("learning.views.vision_api.archive_model")
+    def test_archive_active_guard_error_is_explained(self, archive):
+        archive.side_effect = RuntimeError(
+            "vision_api_rejected:422:model_active_cannot_manage"
+        )
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_archive_model"),
+            {"task_id": self.TASK, "model_id": "PROP_active"},
+            follow=True,
+        )
+        self.assertContains(response, "歸檔失敗")
+        self.assertContains(response, "狀態未變更")
+        self.assertContains(response, "ACTIVE")
+        self.assertContains(response, "不可歸檔或刪除")
+
+    def test_archive_without_model_id_is_refused(self):
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_archive_model"),
+            {"task_id": self.TASK},
+            follow=True,
+        )
+        self.assertContains(response, "缺少模型編號")
+
+    # ---- 還原 ----
+    @patch("learning.views.vision_api.restore_model")
+    def test_restore_reports_restored_status(self, restore):
+        restore.return_value = {"model_id": "PROP_archived", "status": "VALIDATED"}
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_restore_model"),
+            {"task_id": self.TASK, "model_id": "PROP_archived"},
+            follow=True,
+        )
+        self.assertContains(response, "已還原模型")
+        self.assertContains(response, "VALIDATED")
+        restore.assert_called_once_with(
+            model_id="PROP_archived", teacher_id=self.teacher.pk, reason=""
+        )
+
+    @patch("learning.views.vision_api.restore_model")
+    def test_restore_clears_django_superseded_marker(self, restore):
+        """M2：還原後 Django 端 Evidence 的 SUPERSEDED 標記必須同步回退。"""
+        restore.return_value = {
+            "model_id": "PROP_archived",
+            "status": "VALIDATED",
+            "unsuperseded_submission_id": "sub-1",
+        }
+        with patch("learning.views._vision_clear_submission_superseded") as clear:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_restore_model"),
+                {"task_id": self.TASK, "model_id": "PROP_archived"},
+                follow=True,
+            )
+        self.assertContains(response, "已還原模型")
+        clear.assert_called_once_with("sub-1")
+
+    # ---- 永久刪除 ----
+    @patch("learning.views.vision_api.delete_model")
+    def test_delete_without_confirmation_never_calls_backend(self, delete):
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_delete_model"),
+            {"task_id": self.TASK, "model_id": "PROP_1", "reason": "重複"},
+            follow=True,
+        )
+        self.assertContains(response, "需要二次確認")
+        delete.assert_not_called()
+
+    @patch("learning.views.vision_api.delete_model")
+    def test_delete_reports_shared_file_kept(self, delete):
+        delete.return_value = {
+            "model_id": "PROP_1",
+            "record_removed": True,
+            "file_removed": False,
+            "shared_with": ["PROP_2", "sub-9"],
+            "superseded_submission_id": None,
+            "backup_path": "backups/x-delete-PROP_1",
+        }
+        with patch("learning.views._vision_mark_submission_superseded") as mark:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_delete_model"),
+                {"task_id": self.TASK, "model_id": "PROP_1", "confirm_delete": "yes"},
+                follow=True,
+            )
+        self.assertContains(response, "已永久刪除模型 PROP_1")
+        self.assertContains(response, "仍被其他記錄共用")
+        self.assertContains(response, "PROP_2")
+        mark.assert_not_called()
+
+    @patch("learning.views.vision_api.delete_model")
+    def test_delete_success_marks_submission_superseded(self, delete):
+        delete.return_value = {
+            "model_id": "PROP_1",
+            "record_removed": True,
+            "file_removed": True,
+            "shared_with": [],
+            "superseded_submission_id": "sub-1",
+            "backup_path": "backups/x-delete-PROP_1",
+        }
+        with patch("learning.views._vision_mark_submission_superseded") as mark:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_delete_model"),
+                {"task_id": self.TASK, "model_id": "PROP_1", "confirm_delete": "yes"},
+                follow=True,
+            )
+        self.assertContains(response, "記錄與 .pt 檔均已永久移除")
+        mark.assert_called_once()
+        self.assertEqual(mark.call_args.kwargs["op"], "delete")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_archive_button_only_for_non_active_models(self, _subs, _health):
+        """每個非 ACTIVE 模型都有歸檔按鈕；ACTIVE 不出現在主列表。"""
+        active = self._model("PROP_active", status="ACTIVE")
+        valid = self._model("PROP_valid", status="VALIDATED")
+        rejected = self._model("PROP_rej", status="REJECTED", validation="REJECTED")
+        response = self._get_scene3([active, valid, rejected])
+        ids = [m["model_id"] for m in response.context["scene3_models"]]
+        self.assertNotIn("PROP_active", ids)
+        self.assertIn("PROP_valid", ids)
+        self.assertIn("PROP_rej", ids)
+        self.assertContains(response, ">歸檔</button>")
+        self.assertNotContains(response, ">歸檔此模型<")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_archived_models_are_not_listed_in_main_archive_area(self, _subs, _health):
+        archived = self._archived_model()
+        response = self._get_scene3([archived])
+        self.assertEqual(
+            [m["model_id"] for m in response.context["scene3_models"]], []
+        )
+        self.assertEqual(
+            [m["model_id"] for m in response.context["archived_models"]],
+            ["PROP_archived"],
+        )
+
+    # ---- 已移除的元素（隱藏不等於放行：直接從模板移除，不是 CSS 隱藏）----
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_removed_entries_and_long_notes_are_gone(self, _subs, _health):
+        ready = self._ready_model()
+        archived = self._archived_model()
+        response = self._get_scene3([ready, archived], [self._pass_record("PROP_ready")])
+        for gone in (
+            "版本管理",
+            "進階管理：永久刪除模型",
+            "進入完整模型管理頁",
+            "先驗證圖片",
+            "DEMO 類別放寬",
+            "尚未完成品質驗證",
+            "本頁不保證",
+            "PASS 條件不符，需覆核",
+            "回復舊版本",
+            'type="text" name="reason"',
+        ):
+            self.assertNotContains(response, gone)
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_single_merged_status_badge_per_model(self, _subs, _health):
+        """每個模型只渲染一枚狀態徽章（可啟用／需驗證／不可用），不再並列多枚。"""
+        ready = self._ready_model()
+        ready.update(activation_eligible=True, activation_min_confidence=0.6,
+                     validation_pass_confidence=0.91)
+        plain = self._model("PROP_plain", status="VALIDATED")
+        demo = self._ready_model("PROP_demo")
+        demo.update(
+            status="DEMO_IMPORTED", validation_status="DEMO_IMPORTED",
+            activation_eligible=False,
+        )
+        quarantined = self._ready_model("PROP_quar")
+        quarantined.update(quarantined=True)
+        response = self._get_scene3(
+            [ready, plain, demo, quarantined],
+            [self._pass_record("PROP_ready"), self._pass_record("PROP_demo"),
+             self._pass_record("PROP_quar")],
+        )
+        for row in response.context["scene3_models"]:
+            self.assertIn(
+                row["eligibility_label"],
+                ("可啟用", "需驗證", "不可用"),
+                row["model_id"],
+            )
+        self.assertContains(response, '>可啟用</span>')
+        self.assertContains(response, '>需驗證</span>')
+        self.assertContains(response, '>不可用</span>')
+        # 絕不渲染 dict repr（regression：eligibility_label／eligibility_css 曾誤存成 dict）。
+        # Django 自動跳脫會把單引號轉成 &#x27;，兩種形式都要擋。
+        for leaked in ("{'ready'", '{"ready"', "&#x27;ready&#x27;",
+                      "&#x27;active&#x27;", "&#x27;candidate&#x27;", "&#x27;rejected&#x27;"):
+            self.assertNotContains(response, leaked)
+        # 場景③內不再有獨立的「健康度：…」徽章；細節只出現在 hover 提示裡
+        content = response.content.decode("utf-8")
+        # 用 `data-scene="3">`（section 標籤）而不是 `data-scene="3"`，
+        # 後者會先命中頂部導覽卡的 <a data-scene="3" href=...>。
+        scene3 = content[
+            content.index('data-scene="3">'):content.index('data-scene="4">')
+        ]
+        self.assertNotIn("健康度：", scene3)
+        self.assertNotIn("類別不一致（DEMO 放行）", scene3)
+        self.assertIn("mAP50 0.83／門檻 0.5", scene3)
+        # 2026-10-23 恢復硬規則：ready 通過資格→「可啟用」；DEMO_IMPORTED 不得啟用→「不可用」
+        self.assertIn('>可啟用</span>', scene3)
+        self.assertIn('>不可用</span>', scene3)
+
+    # ---- 權限 ----
+    def test_student_cannot_call_management_endpoints(self):
+        student = get_user_model().objects.create_user(
+            username="vc-mgmt-student@example.test", password="Student-pass-901!"
+        )
+        self.client.force_login(student)
+        for name in (
+            "learning:teacher_vision_center_archive_model",
+            "learning:teacher_vision_center_restore_model",
+            "learning:teacher_vision_center_delete_model",
+        ):
+            response = self.client.post(reverse(name), {"model_id": "PROP_1"})
+            self.assertIn(response.status_code, (302, 403), name)
+
+
+class VisionCenterScene2PassCtaTests(VisionCenterOnlineTests):
+    """場景②「測試通過 → 前往啟用正式模型」捷徑（教師指令 2026-10-22）。
+
+    教師在②做完真實圖片驗證且判定通過（MATCH）後，要求結果下方直接出現
+    通往③啟用正式模型的按鈕。
+
+    鐵律：這個按鈕只是**場景導覽連結**（`<a href="?scene=3">`），
+    不 POST、不切換 ACTIVE；能否啟用仍由場景③的完整判定把關
+    （health=OK + VALIDATED + 真實圖片驗證 PASS + 非 DEMO_IMPORTED…）。
+    """
+
+    def _result(self, decision="MATCH", reason_code="OK"):
+        label = {"MATCH": "通過", "MISMATCH": "不通過"}.get(decision, "需檢查")
+        return {
+            "task_id": self.TASK,
+            "model_id": "PROP_1",
+            "model_name": "模型 v1",
+            "model_version": "v1",
+            "predicted_class": "CW_F",
+            "predicted_confidence": 0.91,
+            "highest_confidence": 0.91,
+            "confidence_threshold_used": 0.5,
+            "verdict": decision,
+            "verdict_label": label,
+            "verdict_css": {"MATCH": "pass", "MISMATCH": "fail"}.get(decision, "check"),
+            "verdict_reason_code": reason_code,
+            "verdict_passed": decision == "MATCH",
+            "verdict_cta_label": "測試通過" if decision == "MATCH" else label,
+            "reason": "模型預測與教師標註相符。",
+            "evidence_source": "REAL_INFERENCE",
+        }
+
+    def _get_scene2(self, models, session_result=None):
+        with self._patch_common(models):
+            session = self.client.session
+            if session_result is None:
+                session.pop("vision_center_result", None)
+            else:
+                session["vision_center_result"] = session_result
+            session.save()
+            return self.client.get(
+                reverse("learning:teacher_vision_center"),
+                {"task": self.TASK, "scene": "2"},
+            )
+
+    def _scene2(self, response):
+        """切出場景② 的 <section> 本體。
+
+        頁尾 <script> 裡的 JS 原始碼也含按鈕文字（由 JS 依 verdict 動態產生），
+        因此「未通過時不得出現」必須在場景② 切片內斷言，否則會誤判。
+        """
+        content = response.content.decode("utf-8")
+        return content[content.index('data-scene="2">'):content.index('data-scene="3">')]
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_pass_cta_shown_after_successful_image_validation(self, _subs, _health):
+        """驗證通過（MATCH）時，場景②結果下方出現「測試通過 → 前往啟用正式模型」。"""
+        response = self._get_scene2([self._model("PROP_1")], self._result("MATCH"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "測試通過 → 前往啟用正式模型")
+        self.assertContains(response, 'href="?task=PROP_DIRECTION&amp;scene=3"')
+        # 結果卡與底部動作列各一處（AJAX 容器由 JS 依 verdict 顯示）
+        self.assertGreaterEqual(
+            response.content.decode("utf-8").count("測試通過 → 前往啟用正式模型"), 2
+        )
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_cta_shown_for_any_verdict_with_honest_prefix(self, _subs, _health):
+        """2026-10-22 教師指令：判定不符合要求也不再擋下，任何判定都出現捷徑，
+        但按鈕前綴如實標示判定（需檢查／不通過），不假裝通過。"""
+        for decision, prefix in (("CHECK", "需檢查"), ("MISMATCH", "不通過")):
+            response = self._get_scene2(
+                [self._model("PROP_1")], self._result(decision)
+            )
+            scene2 = self._scene2(response)
+            self.assertIn("%s → 前往啟用正式模型" % prefix, scene2)
+            self.assertNotIn("測試通過 →", scene2)
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_cta_absent_without_any_validation_result(self, _subs, _health):
+        """從未做過驗證時只保留原本的「查看正式模型」，不出現任何啟用捷徑。"""
+        response = self._get_scene2([self._model("PROP_1")], None)
+        scene2 = self._scene2(response)
+        self.assertNotIn("前往啟用正式模型", scene2)
+        self.assertIn("查看正式模型 →", scene2)
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_pass_cta_hidden_without_any_validation_result(self, _subs, _health):
+        """從未做過圖片驗證時不出現捷徑。"""
+        response = self._get_scene2([self._model("PROP_1")], None)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("測試通過 → 前往啟用正式模型", self._scene2(response))
+        self.assertIn("查看正式模型 →", self._scene2(response))
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_pass_cta_is_navigation_only_never_activates(self, _subs, _health):
+        """捷徑只能是 <a> 導覽：不得夾帶 activate 表單或任何 POST 動作。"""
+        response = self._get_scene2([self._model("PROP_1")], self._result("MATCH"))
+        scene2 = self._scene2(response)
+        self.assertIn("測試通過 → 前往啟用正式模型", scene2)
+        idx = scene2.index("測試通過 → 前往啟用正式模型")
+        # 只看捷徑前 200 字元（場景②裡本來就有圖片上傳的 <form>，不能全段比對）
+        head = scene2[max(0, idx - 200):idx]
+        self.assertIn("<a ", head)
+        self.assertNotIn("teacher_vision_center_activate", head)
+        self.assertNotIn("<form", head)
+        self.assertNotIn("<button", head)
+        # AJAX 容器在未通過前不得含有任何按鈕（容器只有 data-href）
+        self.assertIn('id="vc-r-pass-cta"', scene2)
+        self.assertIn("data-href=", scene2)
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_no_template_comment_leaks_into_page(self, _subs, _health):
+        """Django 的 {# #} 註解**不支援多行**（lexer 未開 DOTALL）。
+
+        多行註解會被當成正文輸出到頁面，教師會看到一排程式註解。
+        此測試守住整頁不出現任何 `{#`。
+        """
+        response = self._get_scene2([self._model("PROP_1")], self._result("MATCH"))
+        content = response.content.decode("utf-8")
+        self.assertNotIn("{#", content)
+        self.assertNotIn("#}", content)
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_ajax_validate_payload_carries_verdict_passed(self, _subs, _health):
+        """AJAX 驗證回應必須帶 verdict_passed，供前端即時顯示／隱藏捷徑。"""
+        result = {
+            "model": {"model_id": "PROP_1", "model_type": self.TASK, "version": "v1", "class_names": []},
+            "detections": [{"class": "CW_F", "confidence": 0.9, "bbox": [10, 10, 30, 30]}],
+            "detection_count": 1,
+            "verdict": {
+                "decision": "MATCH", "predicted_class": "CW_F", "predicted_confidence": 0.9,
+                "max_confidence": 0.9,
+                "expected_class": "CW_F", "reason": "相符", "reason_code": "OK", "rule_version": "v1",
+                "confidence_threshold": 0.5,
+            },
+            "validated_at": "2026-10-22T10:00:00Z",
+        }
+        with self._patch_common([self._model("PROP_1")]), patch(
+            "learning.views.vision_api.validate_image_with_model", return_value=result
+        ):
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_validate"),
+                {
+                    "task_id": self.TASK,
+                    "model_id": "PROP_1",
+                    "expected_class": "CW_F",
+                    "test_image": SimpleUploadedFile("t.jpg", b"jpegbytes", content_type="image/jpeg"),
+                },
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["result"]["verdict_passed"])
+
+
+class VisionCohortGuardTests(TestCase):
+    """階段四 C：資源級班級隔離（單元層定向測試）。
+
+    這裡刻意**覆寫**模組層的寬鬆 stub，逐一驗證 teacher_required 內的
+    vision_resource_guard 在各種情況下都 fail-closed。
+    """
+
+    TASK = "PROP_DIRECTION"
+
+    def setUp(self):
+        self.teacher = get_user_model().objects.create_user(
+            username="vc-cohort@example.test", password="Teacher-pass-901!", is_staff=True
+        )
+        self.client.login(username="vc-cohort@example.test", password="Teacher-pass-901!")
+
+    def _post(self, name, payload):
+        return self.client.post(reverse(name), payload)
+
+    def test_foreign_student_submission_is_denied(self):
+        with patch(
+            "learning.views._vision_lookup_submission_student",
+            side_effect=lambda submission_id, *, teacher_id: (True, "OTHER-STU-9999"),
+        ):
+            response = self._post(
+                "learning:teacher_vision_center_validate_submission",
+                {"task_id": self.TASK, "submission_id": "sub-x", "expected_class": "CW_F"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_same_cohort_submission_passes_guard(self):
+        with patch(
+            "learning.views._vision_lookup_submission_student",
+            side_effect=lambda submission_id, *, teacher_id: (True, "DEMO-STU-0001"),
+        ), patch("learning.views.vision_api.validate_image_with_submission") as validate:
+            validate.side_effect = RuntimeError("vision_api_unavailable")
+            response = self._post(
+                "learning:teacher_vision_center_validate_submission",
+                {"task_id": self.TASK, "submission_id": "sub-x", "expected_class": "CW_F"},
+            )
+        # 通過隔離檢查後才由視圖處理；此處 Live 不可用 → 走視圖自身的錯誤路徑（非 403 隔離）
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_unknown_submission_is_denied(self):
+        with patch(
+            "learning.views._vision_lookup_submission_student",
+            side_effect=lambda submission_id, *, teacher_id: (False, None),
+        ):
+            response = self._post(
+                "learning:teacher_vision_center_import",
+                {"task_id": self.TASK, "submission_id": "sub-does-not-exist"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_foreign_model_is_denied(self):
+        with patch(
+            "learning.views._vision_lookup_model_student",
+            side_effect=lambda model_id, *, teacher_id, preferred_task: (True, "OTHER-STU-9999"),
+        ):
+            response = self._post(
+                "learning:teacher_vision_center_activate",
+                {"task_id": self.TASK, "model_id": "PROP_OTHER"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_teacher_uploaded_model_without_student_is_allowed(self):
+        with patch(
+            "learning.views._vision_lookup_model_student",
+            side_effect=lambda model_id, *, teacher_id, preferred_task: (True, None),
+        ), patch("learning.views.vision_api.activate_model") as activate:
+            activate.side_effect = RuntimeError("activation_not_eligible")
+            response = self._post(
+                "learning:teacher_vision_center_activate",
+                {"task_id": self.TASK, "model_id": "PROP_TEACHER_UPLOAD"},
+            )
+        self.assertNotEqual(response.status_code, 403)
+
+    def test_live_unavailable_fails_closed(self):
+        with patch(
+            "learning.views._vision_lookup_submission_student",
+            side_effect=RuntimeError("vision_api_unavailable"),
+        ):
+            response = self._post(
+                "learning:teacher_vision_center_import",
+                {"task_id": self.TASK, "submission_id": "sub-x"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_no_cohort_access_is_denied(self):
+        with patch("learning.views.vision_visible_student_ids", side_effect=lambda user: set()):
+            response = self._post(
+                "learning:teacher_vision_center_import",
+                {"task_id": self.TASK, "submission_id": "sub-x"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_superuser_is_not_restricted(self):
+        get_user_model().objects.create_superuser(
+            username="vc-root@example.test", password="Root-pass-901!", email="root@example.test"
+        )
+        self.client.logout()
+        self.client.login(username="vc-root@example.test", password="Root-pass-901!")
+        with patch("learning.views.vision_visible_student_ids", side_effect=lambda user: None), patch(
+            "learning.views._vision_lookup_submission_student",
+            side_effect=lambda submission_id, *, teacher_id: (False, None),
+        ), patch("learning.views.vision_api.import_submission") as importer:
+            importer.side_effect = RuntimeError("vision_api_unavailable")
+            response = self._post(
+                "learning:teacher_vision_center_import",
+                {"task_id": self.TASK, "submission_id": "sub-x"},
+            )
+        self.assertNotEqual(response.status_code, 403)

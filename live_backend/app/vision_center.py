@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -12,11 +13,27 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from .model_health import (
+    ALL_HEALTH_STATES,
+    HEALTH_LOW_QUALITY,
+    HEALTH_NC_MISMATCH,
+    HEALTH_OK,
+    HEALTH_UNKNOWN,
+    HEALTH_UNTRAINED,
+    ModelHealthInspectionError,
+    blocking_error_code,
+    describe_for_teacher,
+    inspect_model_health,
+    is_blocking,
+    map50_threshold,
+    summarize,
+)
+
 
 PROP_CLASSES = ("CW_F", "CCW_F", "CW_B", "CCW_B")
 HOVER_CLASSES = ("FRONT", "RIGHT", "BACK", "LEFT")
 MODEL_TYPES = ("PROP_DIRECTION", "FOUR_SIDE_HOVER")
-MODEL_STATUSES = ("DRAFT", "VALIDATING", "VALIDATED", "CANDIDATE", "ACTIVE", "ARCHIVED", "REJECTED", "FAILED")
+MODEL_STATUSES = ("DRAFT", "VALIDATING", "VALIDATED", "CANDIDATE", "REVIEW_REQUIRED", "ACTIVE", "ARCHIVED", "REJECTED", "FAILED")
 HARD_EXAMPLE_STATUSES = ("PENDING", "CONFIRMED", "CORRECTED", "REJECTED", "ADDED_TO_DATASET")
 SUBMISSION_STATUSES = ("SUBMITTED", "IMPORTED", "REJECTED")
 GOLDEN_SET_STATUSES = ("ACTIVE",)
@@ -36,6 +53,34 @@ DEFAULT_DEDUP_IOU_THRESHOLD = 0.5
 # 判定」，與教師最終驗收門檻 confidence_threshold（預設 0.5）完全獨立：
 # 有候選框但低於教師門檻時，仍依既有契約如實回報 LOW_CONFIDENCE，不會被標為通過。
 CANDIDATE_BOX_MIN_CONF = 0.001
+
+# 啟用與種子入庫的最低驗證信心（2026-10-23 教師指令）：
+# 「驗證通過才可啟用」——除健康度 OK、類別名恰為四類、非 DEMO_IMPORTED 外，
+# 還必須有真實圖片驗證通過紀錄（decision=MATCH）且最高信心 ≥ 此門檻。
+# 與驗證時的 confidence_threshold（教師可調 0.05–0.95）完全獨立：教師把驗證
+# 門檻調低不影響此常量。可用環境變數 FDE_ACTIVATION_MIN_CONFIDENCE 覆寫。
+DEFAULT_ACTIVATION_MIN_CONFIDENCE = 0.6
+_ACTIVATION_MIN_CONFIDENCE_ENV = "FDE_ACTIVATION_MIN_CONFIDENCE"
+
+
+def activation_min_confidence(explicit: float | None = None) -> float:
+    """啟用／種子入庫的最低驗證信心：呼叫端指定 > 環境變數 > 預設 0.6。"""
+    if explicit is not None:
+        return float(explicit)
+    raw = os.environ.get(_ACTIVATION_MIN_CONFIDENCE_ENV, "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+    return DEFAULT_ACTIVATION_MIN_CONFIDENCE
+
+# 臨時類別名稱修正（2026-10-20）：部分舊模型訓練時標籤錯字（CCE-F→CCW-F、CCF-b→CCW-B）。
+# 此映射在推論與取類別清單時自動套用，不影響模型權重本身。
+_CLASS_NAME_CORRECTIONS = {
+    "CCE-F": "CCW-F",
+    "CCF-b": "CCW-B",
+}
 
 PROP_RULE_VERSION = "PROP_RULE_v1"
 HOVER_RULE_VERSION = "HOVER_RULE_v1"
@@ -337,6 +382,8 @@ class UltralyticsModelRunner:
                 raise ValueError("invalid_image")
             prediction = model.predict(source=image, conf=CANDIDATE_BOX_MIN_CONF, verbose=False)[0]
             names = prediction.names
+            if isinstance(names, dict):
+                names = {k: _CLASS_NAME_CORRECTIONS.get(v, v) for k, v in names.items()}
             output = []
             for box in prediction.boxes:
                 x1, y1, x2, y2 = [float(value) for value in box.xyxy[0].tolist()]
@@ -365,9 +412,19 @@ class UltralyticsModelRunner:
                 self._models[key] = model
             names = getattr(model, "names", None)
             if isinstance(names, dict):
-                return [names[k] for k in sorted(names)]
+                names = {k: _CLASS_NAME_CORRECTIONS.get(v, v) for k, v in names.items()}
+                seen = []
+                for k in sorted(names):
+                    if names[k] not in seen:
+                        seen.append(names[k])
+                return seen
             if names is not None:
-                return list(names)
+                seen = []
+                for v in names:
+                    nv = _CLASS_NAME_CORRECTIONS.get(v, v)
+                    if nv not in seen:
+                        seen.append(nv)
+                return seen
             return []
         except Exception:
             return []
@@ -382,7 +439,7 @@ class JsonStore:
 
     @staticmethod
     def empty() -> dict:
-        return {"schema_version": 1, "models": [], "datasets": [], "evaluations": [], "hard_examples": [], "camera_profiles": [], "submissions": [], "golden_sets": [], "demo_active_submissions": {}}
+        return {"schema_version": 1, "models": [], "datasets": [], "evaluations": [], "hard_examples": [], "camera_profiles": [], "submissions": [], "golden_sets": [], "demo_active_submissions": {}, "validations": [], "recommended_seeds": {}}
 
     def _load(self) -> dict:
         if not self.path.exists():
@@ -399,19 +456,95 @@ class JsonStore:
 
 
 class VisionCenter:
-    def __init__(self, root: Path | str, *, model_validator: ModelValidator | None = None, model_runner: ModelRunner | None = None, max_model_bytes: int = 100 * 1024 * 1024, demo_simulation_enabled: bool = False):
+    def __init__(self, root: Path | str, *, model_validator: ModelValidator | None = None, model_runner: ModelRunner | None = None, max_model_bytes: int = 100 * 1024 * 1024, demo_simulation_enabled: bool = False, model_health_inspector=None, quality_gate: dict | None = None):
         self.root = Path(root)
         self.store = JsonStore(self.root)
         self.model_validator = model_validator or UltralyticsModelValidator()
         self.model_runner = model_runner or UltralyticsModelRunner()
         self.max_model_bytes = max_model_bytes
         self.demo_simulation_enabled = bool(demo_simulation_enabled)
+        # 健康度檢查器（D1/D2/D3/D5/D6）：預設為真實 checkpoint 檢查；測試可注入假檢查器。
+        self.model_health_inspector = model_health_inspector or inspect_model_health
+        # 質量證據閘口（2026-10-21）：VALIDATED/ACTIVE 需具備評估證據（golden eval
+        # map50≥門檻，或 sandbox benchmark PASS）。門檻取自設定檔，預設 0.5；
+        # DEMO 環境可單獨覆寫（demo_quality_gate 區段）。quality_gate 傳入時直接覆寫
+        # （供測試與部署注入），否則讀設定檔。
+        self.quality_gate = self._normalize_quality_gate(quality_gate) if quality_gate is not None else self._load_quality_gate_config()
         self.model_dir = self.root / "model_registry"
         self.dataset_dir = self.root / "datasets"
         self.submission_dir = self.root / "submissions"
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.dataset_dir.mkdir(parents=True, exist_ok=True)
         self.submission_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---- 質量證據閘口（2026-10-21） ----
+    def _load_quality_gate_config(self) -> dict:
+        """從設定檔讀取質量閘口：預設 require_evaluation=True、map50_threshold=0.5。
+        DEMO 環境（demo_simulation_enabled）改用 demo_quality_gate 區段，可單獨覆寫門檻。"""
+        cfg_path = os.environ.get("FDE_VISION_CONFIG_PATH") or str(Path(__file__).resolve().parent / "vision_center_config.json")
+        data: dict = {}
+        try:
+            data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        base = data.get("quality_gate") or {}
+        section = data.get("demo_quality_gate") if self.demo_simulation_enabled else data.get("quality_gate")
+        if not isinstance(section, dict):
+            section = base
+        merged = {**base, **(section or {})}
+        return {
+            "require_evaluation": bool(merged.get("require_evaluation", True)),
+            "map50_threshold": float(merged.get("map50_threshold", map50_threshold())),
+        }
+
+    @staticmethod
+    def _normalize_quality_gate(cfg: dict) -> dict:
+        """把外部注入的 quality_gate 正規化（缺安全預設：require_evaluation=True、門檻取模型健康度預設）。"""
+        cfg = cfg or {}
+        return {
+            "require_evaluation": bool(cfg.get("require_evaluation", True)),
+            "map50_threshold": float(cfg.get("map50_threshold", map50_threshold())),
+        }
+
+    def _quality_gate_passes(self, model: dict) -> tuple[bool, str | None]:
+        """判斷模型是否具備 VALIDATED/ACTIVE 所需的質量證據。
+
+        通過條件（擇一）：
+          (a) sandbox benchmark 狀態為 PASS；或
+          (b) golden eval 已完成（evaluation_status==EVALUATED）且 map50 ≥ 門檻。
+        返回 (是否通過, 未通過原因)。未通過原因供清單/降級記錄顯示。
+        """
+        cfg = self.quality_gate
+        if not cfg["require_evaluation"]:
+            return True, None
+        # (a) Benchmark PASS
+        if model.get("benchmark_status") == "PASS":
+            return True, None
+        # (b) Golden eval 具備 mAP50 證據
+        if model.get("evaluation_status") == "EVALUATED":
+            metrics = model.get("metrics") or {}
+            map50 = float(metrics.get("map50", 0) or 0)
+            if map50 >= cfg["map50_threshold"]:
+                return True, None
+            return False, f"mAP50={map50} 低於門檻 {cfg['map50_threshold']}"
+        # 未評估：需明確提示要先有 golden set 評估（或 sandbox benchmark PASS），不是無聲失敗。
+        return False, "無評估證據，僅類別名稱吻合（需 golden set 評估或 sandbox benchmark PASS）"
+
+    def _apply_quality_gate(self, record: dict) -> None:
+        """依質量證據閘口決定 record 的 validation_status/status/review_reason。
+
+        類別契約已通過（呼叫前已確認 actual 與 expected 對應）才會進入此函式；
+        此處只決定「是否足以標記為 VALIDATED」——不足者標 REVIEW_REQUIRED，
+        不得 VALIDATED、不得 ACTIVE。
+        """
+        passed, reason = self._quality_gate_passes(record)
+        if passed:
+            record.update(validation_status="VALIDATED", status="VALIDATED", review_reason="")
+        else:
+            record.update(
+                validation_status="REVIEW_REQUIRED", status="REVIEW_REQUIRED",
+                review_reason=reason or "無評估證據，僅類別名稱吻合（需 golden set 評估或 sandbox benchmark PASS）",
+            )
 
     def infer_active(self, model_type: str, image_bytes: bytes) -> tuple[dict, list[dict]]:
         model = self.active_model(model_type)
@@ -447,7 +580,7 @@ class VisionCenter:
         self, model_id: str, image_bytes: bytes,
         *, expected_class: str | None = None, confidence_threshold: float = 0.5,
         rule_version: str | None = None, image_width: float | None = None,
-        image_height: float | None = None,
+        image_height: float | None = None, validated_by: str = "",
     ) -> dict:
         """Run REAL inference with the named model on one uploaded image.
 
@@ -476,22 +609,25 @@ class VisionCenter:
         # 映射版模型：套用紀錄中的類別對照並去重，否則畫面會顯示原始筆誤名稱。
         detections, mapping_info = self._apply_recorded_mapping(model, detections)
         best = max(detections, key=lambda item: item.get("confidence", 0), default=None)
+        max_confidence = max((float(d.get("confidence", 0)) for d in detections), default=None)
         verdict = {
             "rule_version": rule_version or (PROP_RULE_VERSION if model_type == "PROP_DIRECTION" else HOVER_RULE_VERSION),
             "predicted_class": best.get("class") if best else None,
             "predicted_confidence": round(float(best.get("confidence", 0)), 6) if best else None,
+            "max_confidence": round(max_confidence, 6) if max_confidence is not None else None,
             "expected_class": expected_class,
             "confidence_threshold": float(confidence_threshold),
             "decision": "INSUFFICIENT_DATA",
-            "reason": "模型未偵測到任何目標。",
+            "reason": "模型未偵測到任何目標（無框）。",
             "reason_code": "NO_DETECTION",
         }
         if best is None:
             pass
         elif float(best.get("confidence", 0)) < float(confidence_threshold):
+            mc = round(float(best.get("confidence", 0)), 6)
             verdict.update(
                 decision="INSUFFICIENT_DATA",
-                reason="信心值低於門檻，不足以判定。",
+                reason=f"信心過低：最高信心 {mc} < 門檻 {confidence_threshold}，不足以判定。",
                 reason_code="LOW_CONFIDENCE",
             )
         elif expected_class:
@@ -505,7 +641,7 @@ class VisionCenter:
                 )
         else:
             verdict.update(decision="DETECTED", reason="已取得預測類別，教師未提供標註可比對。", reason_code="NO_ANNOTATION")
-        return {
+        result = {
             "model": {
                 "model_id": model["model_id"], "model_type": model_type,
                 "model_name": model.get("model_name", ""), "version": model.get("version", ""),
@@ -516,12 +652,26 @@ class VisionCenter:
             },
             "detections": detections,
             "detection_count": len(detections),
+            "max_confidence": round(max_confidence, 6) if max_confidence is not None else None,
             "mapping": mapping_info,
             "verdict": verdict,
             "image_width": image_width,
             "image_height": image_height,
             "validated_at": utc_now(),
         }
+        # 2026-10-23 教師指令：真實圖片驗證紀錄持久化到 store（啟用與種子入庫的
+        # 依據）。只有 decision=MATCH 且最高信心達標才算「驗證通過」；此寫入
+        # 不改變模型狀態、不切換 ACTIVE，純粹是證據留存（append-only，上限 200 筆）。
+        self._remember_validation(
+            model_id=model["model_id"], model_type=model_type,
+            decision=verdict.get("decision") or "",
+            max_confidence=result["max_confidence"],
+            expected_class=expected_class,
+            confidence_threshold=float(confidence_threshold),
+            validated_by=str(validated_by or ""),
+            reason_code=verdict.get("reason_code") or "",
+        )
+        return result
 
     # ---- Teacher single-image validation against one SUBMITTED submission (pre-import) ----
     def validate_image_with_submission(
@@ -574,22 +724,25 @@ class VisionCenter:
         else:
             mapping_info = {"mapping_applied": False}
         best = max(detections, key=lambda item: item.get("confidence", 0), default=None)
+        max_confidence = max((float(d.get("confidence", 0)) for d in detections), default=None)
         verdict = {
             "rule_version": rule_version or (PROP_RULE_VERSION if model_type == "PROP_DIRECTION" else HOVER_RULE_VERSION),
             "predicted_class": best.get("class") if best else None,
             "predicted_confidence": round(float(best.get("confidence", 0)), 6) if best else None,
+            "max_confidence": round(max_confidence, 6) if max_confidence is not None else None,
             "expected_class": expected_class,
             "confidence_threshold": float(confidence_threshold),
             "decision": "INSUFFICIENT_DATA",
-            "reason": "模型未偵測到任何目標。",
+            "reason": "模型未偵測到任何目標（無框）。",
             "reason_code": "NO_DETECTION",
         }
         if best is None:
             pass
         elif float(best.get("confidence", 0)) < float(confidence_threshold):
+            mc = round(float(best.get("confidence", 0)), 6)
             verdict.update(
                 decision="INSUFFICIENT_DATA",
-                reason="信心值低於門檻，不足以判定。",
+                reason=f"信心過低：最高信心 {mc} < 門檻 {confidence_threshold}，不足以判定。",
                 reason_code="LOW_CONFIDENCE",
             )
         elif expected_class:
@@ -620,6 +773,7 @@ class VisionCenter:
             },
             "detections": detections,
             "detection_count": len(detections),
+            "max_confidence": round(max_confidence, 6) if max_confidence is not None else None,
             "mapping": mapping_info,
             "verdict": verdict,
             "image_width": image_width,
@@ -634,7 +788,11 @@ class VisionCenter:
         History is derived from the existing models array (ACTIVE + ARCHIVED records are
         never deleted), so no schema change and no new storage is required.
         """
-        items = [dict(item) for item in self.store.data["models"] if item["model_type"] == model_type]
+        items = [
+            self._attach_health(dict(item))
+            for item in self.store.data["models"]
+            if item["model_type"] == model_type
+        ]
         items.sort(key=lambda item: str(item.get("activated_at") or item.get("uploaded_at") or ""), reverse=True)
         return items
 
@@ -646,6 +804,10 @@ class VisionCenter:
             and item["status"] == "ARCHIVED"
             and item["model_id"] != exclude_model_id
             and item.get("validation_status") == "VALIDATED"
+            # 模型管理（M1，2026-10-21）：教師手動歸檔的模型不得成為回滾目標，
+            # 避免「不理想模型」被一鍵回滾意外復活。系統自動歸檔（啟用新版本時
+            # 被頂替的舊 ACTIVE）沒有 archived_via 標記，仍可作為回滾目標。
+            and item.get("archived_via") != "teacher"
         ]
         if not candidates:
             return None
@@ -705,14 +867,75 @@ class VisionCenter:
     def list_models(self, model_type: str | None = None) -> list[dict]:
         # 隔離（quarantine）記錄不進列表，但記錄與檔案都保留、可用 get_model 直接取回，
         # 並可用 demo/tools/restore_quarantine.py 還原（2026-10-19 孤兒清理）。
+        # D3/D5（2026-10-20）：每筆回傳附帶健康度徽章與 mAP50、pass_eligible，
+        # 讓教師清單與驗證下拉直接顯示「未訓練／低品質／正常」與 PASS 條件。
         return [
-            dict(item) for item in self.store.data["models"]
+            self._attach_health(item)
+            for item in self.store.data["models"]
             if (model_type is None or item["model_type"] == model_type)
             and not item.get("quarantined")
         ]
 
     def get_model(self, model_id: str) -> dict:
-        return dict(self._find("models", "model_id", model_id))
+        return self._attach_health(self._find("models", "model_id", model_id))
+
+    # ---- 模型健康度（D1/D3/D5/D6，2026-10-20） ----
+    def _inspect_health(self, path) -> dict:
+        """呼叫健康度檢查器；檔案不可讀時視為 UNKNOWN（不阻擋，僅標示無法判定）。"""
+        try:
+            return dict(self.model_health_inspector(path))
+        except ModelHealthInspectionError:
+            return {"health": HEALTH_UNKNOWN, "reasons": ["model_file_unreadable"]}
+
+    def _attach_health(self, record: dict) -> dict:
+        """給一份模型紀錄附帶健康度摘要（優先用匯入時已存的事實，否則當場計算）。"""
+        record = dict(record)
+        if record.get("health") in ALL_HEALTH_STATES:
+            facts = {
+                "health": record.get("health"),
+                "reasons": list(record.get("health_reasons") or []),
+                "map50": record.get("health_map50"),
+                "nc": record.get("health_nc"),
+                "names_count": record.get("health_names_count"),
+                "map50_threshold": record.get("health_threshold") or map50_threshold(),
+                # 訓練痕跡事實（S3 顯示「有無訓練痕跡」用）：取匯入時已存檔的標記。
+                "has_train_args": bool(record.get("health_has_train_args")),
+                "has_epoch": bool(record.get("health_has_epoch")),
+                "has_metrics": bool(record.get("health_has_metrics")),
+                # 關鍵：class_names 是匯入時正規化的業務欄位，絕不可被健康度摘要覆寫為 []。
+                "class_names": list(record.get("class_names") or []),
+            }
+        else:
+            facts = self._inspect_health(record.get("file_path"))
+        record.update(summarize(facts))
+        record["pass_eligible"] = self._pass_eligible(record)
+        # 2026-10-23 教師指令：啟用資格（health OK＋驗證通過且最高信心≥0.6＋
+        # 類別名恰為四類＋非 DEMO_IMPORTED）由 Live 端統一判定，UI 只讀結果，
+        # 保證「按鈕不出來」與「後端拒絕」永遠同一套標準。
+        try:
+            eligible, block_reason, block_detail = self._activation_eligibility(record)
+        except (OSError, ValueError):
+            eligible, block_reason, block_detail = False, "model_file_unreadable", "模型檔案不存在或不可讀。"
+        record["activation_eligible"] = eligible
+        record["activation_block_reason"] = block_reason
+        record["activation_block_detail"] = block_detail
+        record["activation_min_confidence"] = activation_min_confidence()
+        record["validation_pass_confidence"] = self.validation_pass_confidence(
+            record.get("model_id") or ""
+        )
+        # S3（2026-10-21）：模型清單健康度顯示「有無訓練痕跡」派生欄位，
+        # 讓教師清單直接標示該模型是否帶有 train_args／epoch／metrics 訓練痕跡。
+        record["has_training_trace"] = bool(
+            record.get("has_train_args") or record.get("has_epoch") or record.get("has_metrics")
+        )
+        record["training_trace_label"] = "有訓練痕跡" if record["has_training_trace"] else "無訓練痕跡"
+        return record
+
+    def _pass_eligible(self, record: dict) -> bool:
+        """D5（2026-10-20）：PASS 判定補強——清單層面以 health==OK 為「可通過」必要條件。
+        低品質（如 80fd81）與未訓練模型清單顯示「PASS 條件不符，需覆核」。
+        實際驗證信心≥門檻的判定在驗證結果頁與啟用閘門強制。"""
+        return record.get("health") == HEALTH_OK
 
     def active_model(self, model_type: str) -> dict | None:
         found = next((item for item in self.store.data["models"] if item["model_type"] == model_type and item["status"] == "ACTIVE"), None)
@@ -749,6 +972,40 @@ class VisionCenter:
         self.store.data["models"].append(record)
         self._write_manifest(model_dir_for_model, record)
         self.store.save()
+        # D1/D2（2026-10-20）：模型健康度檢查並作為匯入閘門。讀 checkpoint 內部事實判定四態；
+        # 未訓練（UNTRAINED）或類別數不符（NC_MISMATCH）在正式環境直接拒絕，
+        # DEMO 環境放行但標記 DEMO_IMPORTED，不得進入 ACTIVE。
+        facts = self._inspect_health(path)
+        record.update(
+            health=facts["health"], health_reasons=facts.get("reasons") or [],
+            health_map50=facts.get("map50"), health_nc=facts.get("nc"),
+            health_names_count=facts.get("names_count"),
+            health_threshold=facts.get("map50_threshold"),
+            # 訓練痕跡事實（S3 顯示「有無訓練痕跡」用）：匯入時即存檔，避免被健康度摘要覆寫。
+            health_has_train_args=bool(facts.get("has_train_args")),
+            health_has_epoch=bool(facts.get("has_epoch")),
+            health_has_metrics=bool(facts.get("has_metrics")),
+        )
+        if is_blocking(facts):
+            code = blocking_error_code(facts)
+            if demo_relaxed:
+                record.update(
+                    validation_status="DEMO_IMPORTED", status="DEMO_IMPORTED",
+                    demo_class_relaxed=True, demo_health_blocked=True,
+                    notes=(notes + "\n[DEMO 健康度放行] 模型健康度為 " + facts["health"] + "，僅供 DEMO 展示，不得啟用。").strip(),
+                )
+                self._write_manifest(model_dir_for_model, record)
+                self.store.save()
+                return self._attach_health(record)
+            # 正式環境：明確拒絕並將紀錄標為 REJECTED（與類別數不符路徑一致），
+            # 避免留下 VALIDATING 殘檔。
+            record.update(
+                validation_status="REJECTED", status="REJECTED",
+                notes=(notes + f"\n[健康度拒絕] {code}：{describe_for_teacher(facts)}").strip(),
+            )
+            self._write_manifest(model_dir_for_model, record)
+            self.store.save()
+            raise ModelValidationError(code)
         try:
             details = self.model_validator.validate(path, model_type)
             expected = list(PROP_CLASSES if model_type == "PROP_DIRECTION" else HOVER_CLASSES)
@@ -760,8 +1017,38 @@ class VisionCenter:
             if not actual:
                 # 教師指令③：names 為空不直接駁回——拋出可識別的缺少類別名錯誤。
                 raise ModelClassNamesMissingError(model_type)
+            # S2（2026-10-21）：匯入時顯式拒絕分類頭 nc 與 class_names 長度不符的模型。
+            # 即便健康度檢查器未將其歸類為 NC_MISMATCH（例如 inspector 回傳 OK，
+            # 但 nc 與實際類別名數量不一致），VisionCenter 仍須在此攔截，
+            # 避免類別契約不可信的模型被納入倉庫。DEMO 環境則放行為 DEMO_IMPORTED，
+            # 與未訓練模型的處理一致（不標記 VALIDATED、不得啟用）。
+            health_nc = facts.get("nc")
+            if health_nc is not None and health_nc != len(actual):
+                base_note = notes + f"\n[分類頭不符] 模型偵測頭 nc={health_nc} 與類別名數量 {len(actual)} 不一致，類別契約不可信。"
+                if demo_relaxed:
+                    record.update(
+                        validation_status="DEMO_IMPORTED", status="DEMO_IMPORTED",
+                        health=HEALTH_NC_MISMATCH, health_reasons=["nc_mismatch"],
+                        demo_class_relaxed=True, demo_health_blocked=True,
+                        notes=base_note.strip() + " 僅供 DEMO 展示，不得啟用。",
+                    )
+                    self._write_manifest(model_dir_for_model, record)
+                    self.store.save()
+                    return self._attach_health(record)
+                record.update(
+                    validation_status="REJECTED", status="REJECTED",
+                    health=HEALTH_NC_MISMATCH, health_reasons=["nc_mismatch"],
+                    notes=base_note.strip(),
+                )
+                self._write_manifest(model_dir_for_model, record)
+                self.store.save()
+                raise ModelValidationError("model_nc_mismatch")
             if actual == expected:
-                record.update(class_names=expected, class_count=len(expected), validation_status="VALIDATED", status="VALIDATED")
+                record.update(class_names=expected, class_count=len(expected))
+                # 質量證據閘口（2026-10-21）：類別名吻合只是必要條件，VALIDATED 還須
+                # 具備評估證據（golden eval map50≥門檻 或 sandbox benchmark PASS）；
+                # 否則標 REVIEW_REQUIRED，不得 VALIDATED、不得 ACTIVE。
+                self._apply_quality_gate(record)
             elif demo_relaxed and class_name_mapping:
                 # DEMO 放寬匯入：套用筆誤別名對應，但「不」標記 VALIDATED、
                 # 「不」納入 ACTIVE 閘門——DEMO 結果不得被視為已驗證或已啟用。
@@ -795,7 +1082,6 @@ class VisionCenter:
                 record.update(
                     class_names=effective, class_count=len(effective),
                     class_count_raw=len(actual),
-                    validation_status="VALIDATED", status="VALIDATED",
                     class_name_mapping=registered["mapping"],
                     class_name_mapping_source="registered_typo_mapping",
                     class_name_mapping_note=str(entry.get("reason") or ""),
@@ -803,6 +1089,8 @@ class VisionCenter:
                     temporary_mapping_label="映射版·臨時",
                     temporary_mapping_registered_at=entry.get("registered_at"),
                 )
+                # 質量證據閘口（2026-10-21）：受控映射也須通過評估證據才 VALIDATED。
+                self._apply_quality_gate(record)
             elif len(actual) != len(expected):
                 raise ModelValidationError("model_class_names_mismatch")
             elif not class_name_mapping:
@@ -810,13 +1098,15 @@ class VisionCenter:
                 raise ModelClassNamesMappingRequiredError(model_type, actual, expected)
             else:
                 normalized = apply_class_name_mapping(actual, expected, class_name_mapping)
-                record.update(class_names=normalized, class_count=len(normalized), validation_status="VALIDATED", status="VALIDATED",
+                record.update(class_names=normalized, class_count=len(normalized),
                               class_name_mapping=normalize_class_name_mapping(class_name_mapping))
+                # 質量證據閘口（2026-10-21）：教師對照表正規化後同樣須通過評估證據才 VALIDATED。
+                self._apply_quality_gate(record)
             if details.get("smoke_inference") is not True:
                 raise ModelValidationError("smoke_inference_failed")
             self._write_manifest(model_dir_for_model, record)
             self.store.save()
-            return dict(record)
+            return self._attach_health(record)
         except Exception as exc:
             record.update(validation_status="REJECTED", status="REJECTED", notes=f"{notes}\n{exc}".strip())
             self._write_manifest(model_dir_for_model, record)
@@ -842,7 +1132,10 @@ class VisionCenter:
             raise ValueError("incomplete_golden_evaluation")
         evaluation = {"evaluation_id": f"evaluation-{uuid4()}", "model_id": model_id, "model_type": model["model_type"], "golden_set": f"{MODEL_ID_PREFIX.get(model['model_type'], model['model_type'])}_GOLDEN_v1", "metrics": dict(metrics), "evaluated_by": evaluated_by, "evaluated_at": utc_now()}
         self.store.data["evaluations"].append(evaluation)
-        model.update(evaluation_status="EVALUATED", metrics=dict(metrics), status="CANDIDATE")
+        model.update(evaluation_status="EVALUATED", metrics=dict(metrics))
+        # 質量證據閘口（2026-10-21）：golden eval 完成後重新判定——map50≥門檻→VALIDATED
+        # （可啟用），低於門檻→REVIEW_REQUIRED（附帶具體差距，不得啟用）。
+        self._apply_quality_gate(model)
         model_dir = Path(model["file_path"]).parent
         (model_dir / "evaluation.json").write_text(json.dumps(evaluation, ensure_ascii=False, indent=2), encoding="utf-8")
         (model_dir / "metrics.json").write_text(json.dumps(dict(metrics), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -853,32 +1146,164 @@ class VisionCenter:
     def list_evaluations(self, model_id: str | None = None) -> list[dict]:
         return [dict(item) for item in self.store.data["evaluations"] if model_id is None or item["model_id"] == model_id]
 
-    def activate_model(self, model_id: str, activated_by: str) -> dict:
+    # ---- 真實圖片驗證紀錄與啟用資格（2026-10-23 教師指令） ----
+    def _remember_validation(self, *, model_id: str, model_type: str, decision: str,
+                             max_confidence, expected_class, confidence_threshold: float,
+                             validated_by: str, reason_code: str = "") -> None:
+        """把一次真實圖片驗證結果追加到 store（append-only，上限 200 筆）。
+
+        只記錄事實（模型、判定、最高信心、門檻、操作者、時間），不改變模型狀態。
+        """
+        record = {
+            "validation_id": f"val-{uuid4().hex[:12]}",
+            "model_id": model_id,
+            "model_type": model_type,
+            "decision": decision,
+            "reason_code": reason_code,
+            "max_confidence": max_confidence,
+            "expected_class": expected_class,
+            "confidence_threshold": confidence_threshold,
+            "validated_by": str(validated_by or ""),
+            "validated_at": utc_now(),
+            "evidence_source": "REAL_INFERENCE",
+        }
+        records = self.store.data.setdefault("validations", [])
+        records.insert(0, record)
+        del records[200:]
+        self.store.save()
+
+    def validation_records_for(self, model_id: str) -> list[dict]:
+        """該模型的真實圖片驗證紀錄（最新在前）。"""
+        return [
+            dict(item) for item in self.store.data.get("validations", [])
+            if item.get("model_id") == model_id
+            and item.get("evidence_source", "REAL_INFERENCE") == "REAL_INFERENCE"
+        ]
+
+    def best_passing_validation(self, model_id: str) -> dict | None:
+        """最高信心的「驗證通過」（decision=MATCH）紀錄；沒有則回傳 None。"""
+        passing = [
+            item for item in self.validation_records_for(model_id)
+            if item.get("decision") == "MATCH"
+        ]
+        if not passing:
+            return None
+        return max(
+            passing,
+            key=lambda item: float(item.get("max_confidence") or 0),
+        )
+
+    def validation_pass_confidence(self, model_id: str) -> float | None:
+        """驗證通過紀錄的最高信心；沒有通過紀錄回傳 None。"""
+        best = self.best_passing_validation(model_id)
+        if best is None or best.get("max_confidence") is None:
+            return None
+        return float(best["max_confidence"])
+
+    @staticmethod
+    def _expected_class_names(model_type: str) -> list[str]:
+        """任務的規範類別名（恰好四個，順序固定）。"""
+        return list(PROP_CLASSES if model_type == "PROP_DIRECTION" else HOVER_CLASSES)
+
+    def _activation_eligibility(self, model: dict) -> tuple[bool, str, str]:
+        """啟用資格（2026-10-23 教師指令）：全部滿足才可啟用，任一不滿足給原因碼。
+
+        a. health = OK（nc 與類別名一致、有訓練痕跡、mAP50 ≥ 門檻，門檻不降）
+        b. 有真實圖片驗證通過紀錄，且最高信心 ≥ activation_min_confidence()（0.6）
+        c. 類別名恰好為 CW_F / CCW_F / CW_B / CCW_B（FOUR_SIDE_HOVER 為其規範四類）
+        d. 非 DEMO_IMPORTED、非 quarantined、.pt 可讀；REJECTED 一律不得啟用；
+           質量證據閘口（2026-10-21）的 REVIEW_REQUIRED 亦不得啟用
+
+        回傳 (是否合格, 原因碼, 人類可讀細節)。原因碼供 API 與 UI 一致呈現。
+        """
+        # d-① 隔離（硬攔）
+        if model.get("quarantined"):
+            return False, "model_quarantined", "模型已被隔離，不得啟用。"
+        # d-② .pt 必須存在且可讀（硬攔）
+        path = Path(model.get("file_path") or "")
+        if not path.exists() or not os.access(str(path), os.R_OK):
+            return False, "model_file_unreadable", "模型檔案不存在或不可讀。"
+        # d-③ 被駁回的紀錄一律不得啟用
+        if model.get("status") == "REJECTED" or model.get("validation_status") == "REJECTED":
+            return False, "model_rejected", "模型已被駁回，不得啟用。"
+        # d-④ DEMO 放寬匯入不得啟用（與正式匯入不同路）
+        if model.get("validation_status") == "DEMO_IMPORTED" or model.get("status") == "DEMO_IMPORTED":
+            return False, "model_demo_imported_not_allowed", "DEMO 放寬匯入的模型不得啟用，請用正確四類資料重新訓練後匯入。"
+        # d-⑤ 質量證據閘口（2026-10-21 教師指令）：無評估證據／map50 低於門檻的
+        # REVIEW_REQUIRED 一律不得啟用（_apply_quality_gate 亦註明「不得 ACTIVE」）。
+        # A 硬規則（2026-10-23）在其之上疊加圖片驗證要求，兩者皆為硬門檻。
+        if model.get("validation_status") == "REVIEW_REQUIRED" or model.get("status") == "REVIEW_REQUIRED":
+            return False, "model_review_required", "模型尚無足夠質量證據（REVIEW_REQUIRED：需 golden set 評估達標或 sandbox benchmark PASS），不得啟用。"
+        # a. health = OK（優先用匯入時已存事實，缺失時當場檢查）
+        health = model.get("health")
+        if health not in ALL_HEALTH_STATES:
+            facts = self._inspect_health(model.get("file_path"))
+            health = facts.get("health")
+            model = dict(model)
+            model.update(summarize(facts))
+        if health != HEALTH_OK:
+            return False, "model_health_not_ok", "模型健康度不是 OK（%s），不滿足啟用條件。" % (health or "無法判定")
+        # c. 類別名恰好為規範四類
+        expected = self._expected_class_names(model.get("model_type") or "")
+        actual = [str(name) for name in (model.get("class_names") or [])]
+        if sorted(actual) != sorted(expected):
+            return False, "model_class_names_invalid", "模型類別名必須恰好為 %s，實際為 %s。" % ("/".join(expected), "/".join(actual) or "（無）")
+        # b. 真實圖片驗證通過且最高信心 ≥ 門檻
+        threshold = activation_min_confidence()
+        confidence = self.validation_pass_confidence(model.get("model_id") or "")
+        if confidence is None:
+            return False, "model_validation_required", "尚未通過圖片驗證（需有預測相符的真實推論紀錄）。"
+        if confidence < threshold:
+            return False, "model_validation_confidence_too_low", "驗證通過紀錄的最高信心 %.4f 低於啟用門檻 %.2f。" % (confidence, threshold)
+        return True, "", ""
+
+    def activate_model(self, model_id: str, activated_by: str, override: bool = False) -> dict:
         """Promote a validated model to ACTIVE for its task.
 
         The returned object stays the model record itself (existing API contract), with
         switch facts attached under `activation`. Order of operations is deliberate: the
         new model is proven present on disk BEFORE the previous ACTIVE is archived, so a
         failed switch leaves the task on its original model rather than with no model.
+
+        啟用資格（2026-10-23 教師指令，「驗證通過才可啟用」硬規則）——全部滿足：
+          a. health = OK（nc 與類別名一致、有訓練痕跡、mAP50 ≥ 門檻，門檻不降）
+          b. 有真實圖片驗證通過紀錄，且最高信心 ≥ 0.6（ACTIVATION_MIN_CONFIDENCE）
+          c. 類別名恰好為 CW_F / CCW_F / CW_B / CCW_B（HOVER 任務為其規範四類）
+          d. 非 DEMO_IMPORTED、非 quarantined、.pt 可讀；REJECTED 不得啟用
+        任一不滿足 → 拋出可追溯錯誤碼（model_health_not_ok /
+        model_validation_required / model_validation_confidence_too_low /
+        model_class_names_invalid / model_demo_imported_not_allowed /
+        model_quarantined / model_file_unreadable / model_rejected）。
+
+        教師覆寫路徑已撤銷（2026-10-23）：`override=True` 一律拒絕
+        （teacher_override_disabled）——「不符合要求」不再能靠覆寫放行。
         """
+        if override:
+            # 覆寫路徑已撤銷：即使呼叫端明確帶 override=true 也一律拒絕，
+            # 不留靜音放行的後門。
+            raise ValueError("teacher_override_disabled")
         model = self._find("models", "model_id", model_id)
-        # D4（2026-10-19）：隔離模型一律不得啟用。隔離代表該記錄已被判定為不可用
-        # （例如孤兒記錄、檔案遺失）；即使檔案日後被放回，也不得繞過隔離直接啟用。
-        # 此檢查置於最前，優先於既有的 VALIDATED / REJECTED 判斷，且不改動其餘流程。
+        path = Path(model.get("file_path") or "")
+        # ---- 硬攔①：隔離模型一律不得啟用 ----
         if model.get("quarantined"):
             raise ValueError("model_quarantined")
-        if model["validation_status"] != "VALIDATED" or model["status"] == "REJECTED":
-            raise ValueError("validated_model_required")
-        path = Path(model["file_path"])
+        # ---- 硬攔②：.pt 必須存在且可讀 ----
         if not path.exists() or not os.access(str(path), os.R_OK):
             raise ValueError("model_file_unreadable")
+
         if model["status"] == "ACTIVE":
+            # 冪等：已啟用就直接回報（資格檢查仍適用於「新的」啟用動作）。
             model["activation"] = {
                 "previous_active_model_id": None,
                 "already_active": True,
                 "inference_source": self.verify_active_model_inference(model["model_type"]),
+                "overridden_gates": [],
             }
-            return dict(model)
+            return self._attach_health(model)
+
+        eligible, reason_code, detail = self._activation_eligibility(model)
+        if not eligible:
+            raise ValueError(reason_code)
         previous = self.active_model(model["model_type"])
         for item in self.store.data["models"]:
             if item["model_type"] == model["model_type"] and item["status"] == "ACTIVE":
@@ -891,15 +1316,556 @@ class VisionCenter:
             "previous_active_model_id": previous["model_id"] if previous else None,
             "already_active": False,
             "inference_source": self.verify_active_model_inference(model["model_type"]),
+            "overridden_gates": [],
+            "validation_confidence": self.validation_pass_confidence(model["model_id"]),
+            "activation_min_confidence": activation_min_confidence(),
         }
-        return result
+        return self._attach_health(result)
 
-    def archive_model(self, model_id: str, archived_by: str) -> dict:
+    # ---- 模型管理（歸檔／還原／永久刪除，教師指令 2026-10-21） ----
+    def _guard_model_manageable(self, model: dict) -> None:
+        """M4 後端硬攔：不理想模型才可歸檔／刪除，以下兩種一律拒絕。
+
+        - ACTIVE：正在服務推論的模型，保護推論鏈不中斷（003fe6 等不得操作）；
+        - VALIDATING（status 或 validation_status）：驗證仍在進行中，
+          此時歸檔／刪除會讓驗證結果失去落點。
+
+        錯誤碼可追溯，不依賴前端隱藏按鈕。
+        """
+        if model.get("status") == "ACTIVE":
+            raise ModelValidationError("model_active_cannot_manage")
+        if model.get("status") == "VALIDATING" or model.get("validation_status") == "VALIDATING":
+            raise ModelValidationError("model_validation_in_progress")
+
+    def _backup_store(self, op: str, model_id: str) -> dict:
+        """M7：操作前自動備份 store（JSON），回傳備份路徑與 SHA256。"""
+        stamp = utc_now().replace(":", "").replace(".", "-")
+        backup_dir = self.root / "backups" / f"{stamp}-{op}-{model_id}"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.store.path, backup_dir / "vision_center.json")
+        digest = hashlib.sha256((backup_dir / "vision_center.json").read_bytes()).hexdigest()
+        return {"backup_path": str(backup_dir), "store_sha256": digest}
+
+    def _audit(self, event: str, *, model_id: str, operator: str, reason: str = "", extra: dict | None = None) -> None:
+        """M6：審計日誌（append-only JSONL，store 之外）。
+
+        <root>/audit/model_management_audit.jsonl，每行一筆事件：
+        event/at/model_id/operator/reason/backup/store_sha256。寫入失敗不阻擋
+        主流程（管理功能可用性優先），僅在回傳值附帶 audit_written=False。
+        """
+        record = {
+            "event": event,
+            "at": utc_now(),
+            "model_id": model_id,
+            "operator": str(operator),
+            "reason": str(reason or ""),
+        }
+        if extra:
+            record.update(extra)
+        try:
+            audit_dir = self.root / "audit"
+            audit_dir.mkdir(parents=True, exist_ok=True)
+            with (audit_dir / "model_management_audit.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+
+    def _supersede_source_submission(self, model: dict, *, operator: str, reason: str, op: str) -> str | None:
+        """M5：歸檔／刪除模型後，把來源提交標記「已被取代」。
+
+        被取代的提交不再佔用該小組／任務的上傳名額（學員可再傳新模型），
+        但記錄本身保留（成長紀錄與審計鏈完整）。回傳被標記的 submission_id；
+        無來源提交或已被標記時回傳 None。
+        """
+        submission_id = model.get("source_submission_id")
+        if not submission_id:
+            return None
+        try:
+            submission = self._find("submissions", "submission_id", submission_id)
+        except KeyError:
+            return None
+        if submission.get("superseded"):
+            return None
+        submission.update(
+            superseded=True,
+            superseded_at=utc_now(),
+            superseded_by=str(operator),
+            superseded_reason=str(reason or ""),
+            superseded_op=str(op),
+            superseded_model_id=model["model_id"],
+        )
+        return submission_id
+
+    def _unset_source_submission_superseded(self, model_id: str) -> str | None:
+        """M2：還原時反向解除「已被取代」標記（僅解除由本模型造成的那一筆）。"""
+        for submission in self.store.data["submissions"]:
+            if submission.get("superseded") and submission.get("superseded_model_id") == model_id:
+                submission.update(
+                    superseded=False,
+                    superseded_at=None,
+                    superseded_by=None,
+                    superseded_reason=None,
+                    superseded_op=None,
+                    superseded_model_id=None,
+                )
+                return submission["submission_id"]
+        return None
+
+    def archive_model(self, model_id: str, archived_by: str, reason: str = "") -> dict:
+        """M1：歸檔一個「不理想」的非 ACTIVE 模型（教師）。
+
+        - M4 守衛：ACTIVE／驗證中模型一律拒絕（model_active_cannot_manage /
+          model_validation_in_progress）；
+        - 重複歸檔冪等：已歸檔直接回傳（already_archived=True），不重複觸發
+          來源提交的 superseded 標記；
+        - .pt 檔案不動，只改狀態；歸檔後從列表與驗證下拉隱藏（既有行為）；
+        - M7 先備份 store；M6 寫審計日誌；
+        - M5 來源提交標記 superseded（學員可重傳）。
+        """
         model = self._find("models", "model_id", model_id)
-        model.update(status="ARCHIVED", archived_by=archived_by, archived_at=utc_now())
+        self._guard_model_manageable(model)
+        reason = str(reason or "")
+        if model.get("status") == "ARCHIVED" and model.get("archived_via") == "teacher":
+            result = dict(model)
+            result["already_archived"] = True
+            return result
+        backup = self._backup_store("archive", model_id)
+        superseded_submission_id = self._supersede_source_submission(
+            model, operator=archived_by, reason=reason, op="archive"
+        )
+        model.update(
+            status="ARCHIVED", archived_by=str(archived_by), archived_at=utc_now(),
+            archived_via="teacher", archived_reason=reason,
+            status_before_archive=model.get("status"),
+        )
         self._write_manifest(Path(model["file_path"]).parent, model)
         self.store.save()
-        return dict(model)
+        self._audit(
+            "model_archived", model_id=model_id, operator=str(archived_by), reason=reason,
+            extra={"status_before_archive": model.get("status_before_archive"), **backup,
+                   "superseded_submission_id": superseded_submission_id},
+        )
+        result = dict(model)
+        result["already_archived"] = False
+        result["backup_path"] = backup["backup_path"]
+        result["store_sha256"] = backup["store_sha256"]
+        result["superseded_submission_id"] = superseded_submission_id
+        return result
+
+    def restore_model(self, model_id: str, restored_by: str, reason: str = "") -> dict:
+        """M2：一鍵還原「已歸檔」（僅教師手動歸檔件，archived_via=teacher）。
+
+        還原到歸檔前狀態（status_before_archive），.pt 從未動過因此無需恢復；
+        同時反向解除來源提交的 superseded 標記（若該提交尚未被再次取代）。
+        """
+        model = self._find("models", "model_id", model_id)
+        if model.get("status") != "ARCHIVED" or model.get("archived_via") != "teacher":
+            raise ModelValidationError("restore_not_teacher_archived")
+        reason = str(reason or "")
+        backup = self._backup_store("restore", model_id)
+        restored_status = model.get("status_before_archive") or "CANDIDATE"
+        # 還原即撤銷「教師歸檔」這個狀態本身：清掉 archived_via／archived_by／
+        # archived_at，否則已還原的模型仍會被判定為「教師歸檔件」（Django 的
+        # 「已歸檔」折疊區會誤列、回滾排除邏輯也會誤判）。歸檔時間保留在
+        # last_archived_at，歸檔原因保留，完整歷史另有審計日誌。
+        model.update(
+            status=restored_status,
+            restored_by=str(restored_by), restored_at=utc_now(),
+            restored_reason=reason,
+            last_archived_at=model.get("archived_at"),
+            archived_via=None,
+            archived_by=None,
+            archived_at=None,
+        )
+        unsuperseded_submission_id = self._unset_source_submission_superseded(model_id)
+        self._write_manifest(Path(model["file_path"]).parent, model)
+        self.store.save()
+        self._audit(
+            "model_restored", model_id=model_id, operator=str(restored_by), reason=reason,
+            extra={"restored_status": restored_status, **backup,
+                   "unsuperseded_submission_id": unsuperseded_submission_id},
+        )
+        result = dict(model)
+        result["backup_path"] = backup["backup_path"]
+        result["store_sha256"] = backup["store_sha256"]
+        result["unsuperseded_submission_id"] = unsuperseded_submission_id
+        return result
+
+    def delete_model(self, model_id: str, deleted_by: str, reason: str = "") -> dict:
+        """M3：進階管理——永久刪除一個「不理想」的非 ACTIVE 模型（教師，二次確認）。
+
+        安全規則：
+        - M4 守衛：ACTIVE／驗證中拒絕（同上）；
+        - M7 先備份 store＋模型目錄；M6 寫審計日誌；
+        - 僅當該 .pt（依 sha256）沒有被其他記錄引用時才物理刪除模型檔案；
+          有其他模型或提交共用同一檔案時只刪本記錄，檔案保留並在回傳值
+          列出共用方（shared_with），提示教師原因；
+        - 刪除該模型的驗證評估紀錄（evaluations），並保留提交記錄
+          （提交的 imported_model_id 變懸空，UI 顯示 —，審計可溯）；
+        - M5 來源提交標記 superseded（學員可重傳）。
+        """
+        model = self._find("models", "model_id", model_id)
+        self._guard_model_manageable(model)
+        # 2026-10-23 教師指令：種子模型的 .pt 不得被永久刪除——要刪必須先取消
+        # 種子標記（unseed），並在錯誤碼中帶出受影響的下一代（版本鏈影響）。
+        if model.get("is_seed"):
+            children = sorted(
+                str(item.get("model_id")) for item in self.store.data["models"]
+                if item.get("seed_parent_model_id") == model_id
+            )
+            code = "model_is_seed_cannot_delete"
+            if children:
+                code += ":children=" + ",".join(children)
+            raise ModelValidationError(code)
+        reason = str(reason or "")
+        file_hash = model.get("file_hash") or ""
+        model_folder = Path(model["file_path"]).parent
+        # 共用方：其他模型（未刪）或任何提交紀錄引用同一 sha256。
+        # 教師指令（2026-10-21）：「僅當該 .pt 沒有被其他記錄引用時才物理刪除
+        # 檔案；有引用則只刪該記錄並提示原因」——來源提交保留（審計鏈），
+        # 其持有同一份位元組，因此同樣視為引用，模型 .pt 保留、只刪記錄。
+        shared_with = sorted(
+            {str(item.get("model_id")) for item in self.store.data["models"]
+             if item.get("model_id") != model_id and file_hash and item.get("file_hash") == file_hash}
+            | {str(item.get("submission_id")) for item in self.store.data["submissions"]
+               if file_hash and item.get("file_hash") == file_hash}
+        )
+        backup = self._backup_store("delete", model_id)
+        backup_dir = Path(backup["backup_path"])
+        file_backed_up = False
+        if model_folder.exists():
+            shutil.copytree(model_folder, backup_dir / "model_file", dirs_exist_ok=True)
+            file_backed_up = True
+        superseded_submission_id = self._supersede_source_submission(
+            model, operator=deleted_by, reason=reason, op="delete"
+        )
+        removed_evaluations = [
+            item["evaluation_id"] for item in self.store.data["evaluations"]
+            if item.get("model_id") == model_id
+        ]
+        self.store.data["evaluations"] = [
+            item for item in self.store.data["evaluations"] if item.get("model_id") != model_id
+        ]
+        self.store.data["models"] = [
+            item for item in self.store.data["models"] if item.get("model_id") != model_id
+        ]
+        self.store.save()
+        file_removed = False
+        if not shared_with and model_folder.exists():
+            shutil.rmtree(model_folder)
+            file_removed = True
+        self._audit(
+            "model_deleted", model_id=model_id, operator=str(deleted_by), reason=reason,
+            extra={"file_hash": file_hash, "file_removed": file_removed, "shared_with": shared_with,
+                   "removed_evaluations": removed_evaluations,
+                   "superseded_submission_id": superseded_submission_id, **backup},
+        )
+        return {
+            "model_id": model_id,
+            "task_id": model.get("task_id"),
+            "deleted_by": str(deleted_by),
+            "deleted_at": utc_now(),
+            "record_removed": True,
+            "file_removed": file_removed,
+            "file_backed_up": file_backed_up,
+            "shared_with": shared_with,
+            "removed_evaluations": removed_evaluations,
+            "superseded_submission_id": superseded_submission_id,
+            "backup_path": str(backup_dir),
+            "store_sha256": backup["store_sha256"],
+        }
+
+    # ---- 種子模型（數據飛輪，2026-10-23 教師指令） ----
+    # 教師認可的優質模型保留為「種子模型」：下一期學員可下載該 .pt 作為訓練起點，
+    # 在其基礎上補充新圖片標註、繼續訓練，模型逐期變準。一個任務可以有多個歷史
+    # 種子，但只有一個「當前推薦基礎模型」（store.recommended_seeds[model_type]）。
+    def _next_seed_generation(self, model_type: str) -> int:
+        generations = [
+            int(item.get("seed_generation") or 0)
+            for item in self.store.data["models"]
+            if item.get("model_type") == model_type and item.get("is_seed")
+        ]
+        return (max(generations) + 1) if generations else 1
+
+    def recommended_seed_model_id(self, model_type: str) -> str | None:
+        pointer = (self.store.data.get("recommended_seeds") or {}).get(model_type)
+        if not pointer:
+            return None
+        # 指標失效（種子已被取消）時視為沒有，避免學員下載到不存在的模型。
+        if not any(
+            item.get("model_id") == pointer and item.get("is_seed")
+            for item in self.store.data["models"]
+        ):
+            return None
+        return str(pointer)
+
+    def recommended_seed(self, model_type: str) -> dict | None:
+        model_id = self.recommended_seed_model_id(model_type)
+        if not model_id:
+            return None
+        try:
+            return self._attach_health(self._find("models", "model_id", model_id))
+        except KeyError:
+            return None
+
+    def seed_models(self, model_type: str | None = None) -> list[dict]:
+        """該任務的所有種子（按期數排序；不含已取消標記的歷史）。"""
+        items = [
+            self._attach_health(dict(item))
+            for item in self.store.data["models"]
+            if item.get("is_seed") and (model_type is None or item.get("model_type") == model_type)
+        ]
+        items.sort(key=lambda item: int(item.get("seed_generation") or 0))
+        return items
+
+    def seed_version_chain(self, model_type: str) -> list[dict]:
+        """版本鏈（供教師頁顯示「是否越來越準」）：期數、mAP50、驗證信心變化。"""
+        chain = []
+        for item in self.seed_models(model_type):
+            chain.append({
+                "model_id": item.get("model_id"),
+                "model_name": item.get("model_name") or item.get("model_id"),
+                "version": item.get("version") or "",
+                "generation": int(item.get("seed_generation") or 0),
+                "parent_model_id": item.get("seed_parent_model_id"),
+                "map50": item.get("seed_map50") if item.get("seed_map50") is not None else item.get("health_map50"),
+                "validation_confidence": item.get("seed_validation_confidence"),
+                "seeded_at": item.get("seeded_at") or "",
+                "seeded_by": item.get("seeded_by") or "",
+                "seed_note": item.get("seed_note") or "",
+                "status": item.get("status"),
+                "is_recommended": self.recommended_seed_model_id(model_type) == item.get("model_id"),
+                "file_hash": item.get("file_hash") or "",
+            })
+        return chain
+
+    def _seed_comparison(self, model: dict, parent_model_id, *, new_map50, new_confidence) -> dict:
+        """與上一期種子比較（mAP50／驗證信心）；低於上一期時給對比提示，但由教師決定。"""
+        parent = None
+        if parent_model_id:
+            try:
+                parent = self._find("models", "model_id", parent_model_id)
+            except KeyError:
+                parent = None
+        if parent is None:
+            candidates = [
+                item for item in self.store.data["models"]
+                if item.get("model_type") == model["model_type"]
+                and item.get("is_seed") and item.get("model_id") != model["model_id"]
+            ]
+            parent = max(candidates, key=lambda item: int(item.get("seed_generation") or 0), default=None)
+        if parent is None:
+            return {"has_previous": False, "warning": ""}
+        prev_map50 = parent.get("seed_map50") if parent.get("seed_map50") is not None else parent.get("health_map50")
+        prev_conf = parent.get("seed_validation_confidence")
+        map50_delta = (round(float(new_map50) - float(prev_map50), 6)
+                       if new_map50 is not None and prev_map50 is not None else None)
+        conf_delta = (round(float(new_confidence) - float(prev_conf), 6)
+                      if new_confidence is not None and prev_conf is not None else None)
+        warning = ""
+        if (map50_delta is not None and map50_delta < 0) or (conf_delta is not None and conf_delta < 0):
+            warning = (
+                "對比提示：新一期指標低於上一期（mAP50 %s→%s、驗證信心 %s→%s）。"
+                "系統只提示，是否仍入庫由教師決定。"
+                % (
+                    prev_map50 if prev_map50 is not None else "—",
+                    new_map50 if new_map50 is not None else "—",
+                    prev_conf if prev_conf is not None else "—",
+                    new_confidence if new_confidence is not None else "—",
+                )
+            )
+        return {
+            "has_previous": True,
+            "previous_model_id": parent.get("model_id"),
+            "previous_generation": int(parent.get("seed_generation") or 0),
+            "previous_map50": prev_map50,
+            "previous_validation_confidence": prev_conf,
+            "map50_delta": map50_delta,
+            "confidence_delta": conf_delta,
+            "warning": warning,
+        }
+
+    def seed_model(self, model_id: str, seeded_by: str, *, generation=None,
+                   parent_model_id=None, note: str = "", recommended: bool = True) -> dict:
+        """入庫為種子模型（教師）。條件：health=OK 且有驗證通過紀錄（最高信心 ≥ 0.6）。
+
+        - 冪等：已是種子時更新備註／推薦位後回傳（already_seeded=True），不重複計期；
+        - 期數：明確指定 > 沿用原值 > 自動（該任務最大期數 + 1）；
+        - parent_model_id：明確指定 > 沿用 > 當前推薦種子（自動形成版本鏈）；
+        - recommended=True 時本模型成為該任務「當前推薦基礎模型」（唯一）；
+        - 指標低於上一期時回傳 seed_comparison.warning（只提示，不阻擋）；
+        - 操作前自動備份 store；審計 JSONL 記錄完整欄位。
+        """
+        model = self._find("models", "model_id", model_id)
+        if model.get("quarantined"):
+            raise ModelValidationError("seed_model_quarantined")
+        path = Path(model.get("file_path") or "")
+        if not path.exists() or not os.access(str(path), os.R_OK):
+            raise ModelValidationError("seed_model_file_unreadable")
+        # 健康度與 mAP50：優用匯入時已存事實，缺失時當場檢查（不猜）。
+        health = model.get("health")
+        map50 = model.get("health_map50")
+        if health not in ALL_HEALTH_STATES or map50 is None:
+            facts = self._inspect_health(path)
+            if health not in ALL_HEALTH_STATES:
+                health = facts.get("health")
+            if map50 is None:
+                map50 = facts.get("map50")
+        if health != HEALTH_OK:
+            raise ModelValidationError("seed_health_not_ok")
+        threshold = activation_min_confidence()
+        confidence = self.validation_pass_confidence(model_id)
+        if confidence is None:
+            raise ModelValidationError("seed_validation_required")
+        if confidence < threshold:
+            raise ModelValidationError("seed_validation_confidence_too_low")
+
+        already_seed = bool(model.get("is_seed"))
+        backup = self._backup_store("seed", model_id)
+        if generation is None:
+            generation = model.get("seed_generation") or self._next_seed_generation(model["model_type"])
+        generation = int(generation)
+        if parent_model_id is None:
+            parent_model_id = model.get("seed_parent_model_id") or self.recommended_seed_model_id(model["model_type"])
+        parent_model_id = str(parent_model_id) if parent_model_id else None
+        if parent_model_id == model_id:
+            parent_model_id = None
+        comparison = self._seed_comparison(
+            model, parent_model_id, new_map50=map50, new_confidence=confidence
+        )
+        model.update(
+            is_seed=True,
+            seed_generation=generation,
+            seed_parent_model_id=parent_model_id,
+            seeded_at=utc_now(),
+            seeded_by=str(seeded_by),
+            seed_note=str(note or ""),
+            seed_validation_confidence=confidence,
+            seed_map50=map50,
+            seed_file_hash=model.get("file_hash") or "",
+        )
+        if recommended:
+            self.store.data.setdefault("recommended_seeds", {})[model["model_type"]] = model_id
+        self._write_manifest(path.parent, model)
+        self.store.save()
+        self._audit(
+            "model_seeded", model_id=model_id, operator=str(seeded_by), reason=str(note or ""),
+            extra={
+                "seed_generation": generation,
+                "seed_parent_model_id": parent_model_id,
+                "seed_validation_confidence": confidence,
+                "seed_map50": map50,
+                "seed_file_hash": model.get("seed_file_hash"),
+                "recommended": bool(recommended),
+                "already_seed": already_seed,
+                **backup,
+            },
+        )
+        result = self._attach_health(dict(model))
+        result["already_seeded"] = already_seed
+        result["seed_comparison"] = comparison
+        result["backup_path"] = backup["backup_path"]
+        result["store_sha256"] = backup["store_sha256"]
+        return result
+
+    def unseed_model(self, model_id: str, unseeded_by: str, reason: str = "") -> dict:
+        """取消種子標記（教師）。取消後該模型才可被永久刪除。
+
+        - 若取消的是「當前推薦基礎模型」，推薦位自動改為期數最高的其餘種子
+          （沒有則清空），學員端永遠有明確（或空）的推薦；
+        - 回傳 version_chain_impact：以本模型為 parent 的下一代種子（版本鏈影響）；
+        - 操作前自動備份 store；審計 JSONL 記錄。
+        """
+        model = self._find("models", "model_id", model_id)
+        if not model.get("is_seed"):
+            raise ModelValidationError("model_not_seed")
+        backup = self._backup_store("unseed", model_id)
+        children = sorted(
+            str(item.get("model_id")) for item in self.store.data["models"]
+            if item.get("seed_parent_model_id") == model_id
+        )
+        was_recommended = self.recommended_seed_model_id(model["model_type"]) == model_id
+        model.update(
+            is_seed=False,
+            unseeded_at=utc_now(),
+            unseeded_by=str(unseeded_by),
+            unseeded_reason=str(reason or ""),
+        )
+        promoted_model_id = None
+        if was_recommended:
+            remaining = [
+                item for item in self.store.data["models"]
+                if item.get("model_type") == model["model_type"] and item.get("is_seed")
+            ]
+            if remaining:
+                promoted = max(remaining, key=lambda item: int(item.get("seed_generation") or 0))
+                promoted_model_id = promoted["model_id"]
+                self.store.data.setdefault("recommended_seeds", {})[model["model_type"]] = promoted_model_id
+            else:
+                (self.store.data.get("recommended_seeds") or {}).pop(model["model_type"], None)
+        self._write_manifest(Path(model["file_path"]).parent, model)
+        self.store.save()
+        self._audit(
+            "model_unseeded", model_id=model_id, operator=str(unseeded_by), reason=str(reason or ""),
+            extra={
+                "was_recommended": was_recommended,
+                "promoted_recommended_model_id": promoted_model_id,
+                "version_chain_impact": children,
+                **backup,
+            },
+        )
+        result = dict(model)
+        result["was_recommended"] = was_recommended
+        result["promoted_recommended_model_id"] = promoted_model_id
+        result["version_chain_impact"] = children
+        result["backup_path"] = backup["backup_path"]
+        result["store_sha256"] = backup["store_sha256"]
+        return result
+
+    def download_seed_model(self, *, model_id: str | None = None, model_type: str | None = None,
+                            downloaded_by: str = "") -> dict:
+        """學員下載種子 .pt 作為訓練起點（數據飛輪 B-5）。
+
+        - 指定 model_id 則下載該種子；否則下載 model_type 的「當前推薦基礎模型」；
+        - 只允許 is_seed 的模型（避免非種子被當作訓練起點下載）；
+        - 回傳 .pt 的 base64（前端直接觸發下載），並寫審計（誰／何時／哪一顆）；
+        - 不修改 store、不刪除 .pt、不改閾值。
+        """
+        if model_id:
+            model = self._find("models", "model_id", model_id)
+        else:
+            if not model_type:
+                raise ValueError("model_type_required")
+            model_id = self.recommended_seed_model_id(model_type)
+            if not model_id:
+                raise ValueError("no_recommended_seed")
+            model = self._find("models", "model_id", model_id)
+        if not model.get("is_seed"):
+            raise ModelValidationError("model_not_seed")
+        path = Path(model.get("file_path") or "")
+        if not path.exists() or not os.access(str(path), os.R_OK):
+            raise ModelValidationError("seed_file_unreadable")
+        content = path.read_bytes()
+        self._audit(
+            "seed_downloaded", model_id=model.get("model_id"), operator=str(downloaded_by),
+            reason="student_download_seed_as_training_start",
+            extra={
+                "model_type": model.get("model_type"),
+                "seed_generation": model.get("seed_generation"),
+                "file_size": len(content),
+                "file_hash": model.get("file_hash") or "",
+            },
+        )
+        return {
+            "model_id": model.get("model_id"),
+            "model_name": model.get("model_name") or model.get("model_id"),
+            "model_type": model.get("model_type"),
+            "seed_generation": model.get("seed_generation"),
+            "file_name": f"{model.get('model_name') or model.get('model_id')}.pt",
+            "file_base64": base64.b64encode(content).decode("ascii"),
+            "file_size": len(content),
+            "file_hash": model.get("file_hash") or "",
+        }
 
     # ---- Student model submission (inert attachment, never executed) ----
     def create_submission(
@@ -908,6 +1874,7 @@ class VisionCenter:
         growth_record_id: str = "", growth_record_slot: str = "",
         evidence_reference: str = "", evidence_type: str = "",
         enrollment_id: int = 0, cohort_ids: list[str] | None = None,
+        parent_model_id: str = "",
     ) -> dict:
         if task_id not in MODEL_TYPES:
             raise ValueError("unsupported_submission_task")
@@ -921,10 +1888,28 @@ class VisionCenter:
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / "submission.pt"
         path.write_bytes(content)
+        file_hash = sha256_bytes(content)
+        # M5（2026-10-21）：重複檔案改為「資訊提示」而非拒絕。學員重傳同一 .pt
+        # （例如教師歸檔不理想模型後，學員重新上傳同一份）不應被擋；若該檔與
+        # 「已歸檔」模型相同，回傳提示讓上層顯示「此文件與已歸檔模型相同」。
+        # 提示只影響文案，任何健康度檢查（D2 匯入閘門）都不放寬。
+        matching_archived = sorted(
+            str(item.get("model_id")) for item in self.store.data["models"]
+            if item.get("file_hash") == file_hash and item.get("status") == "ARCHIVED"
+        )
+        matching_pending = sorted(
+            str(item.get("submission_id")) for item in self.store.data["submissions"]
+            if item.get("file_hash") == file_hash and not item.get("superseded")
+        )
+        duplicate_hint = ""
+        if matching_archived:
+            duplicate_hint = "same_as_archived_model"
+        elif matching_pending:
+            duplicate_hint = "same_as_pending_submission"
         record = {
             "submission_id": submission_id, "task_id": task_id, "student_id": str(student_id).strip(),
             "group_id": str(group_id).strip(), "original_filename": str(original_filename),
-            "file_path": str(path), "file_hash": sha256_bytes(content), "file_size": len(content),
+            "file_path": str(path), "file_hash": file_hash, "file_size": len(content),
             "uploaded_at": utc_now(), "status": "SUBMITTED", "imported_model_id": None, "imported_at": None,
             "import_attempted_at": None, "import_last_error": None,
             "notes": notes, "growth_record_id": str(growth_record_id),
@@ -934,6 +1919,11 @@ class VisionCenter:
             # 跨 Cohort 檢查；不從請求本文取值。
             "enrollment_id": int(enrollment_id or 0),
             "cohort_ids": [str(item) for item in (cohort_ids or [])],
+            "duplicate_hint": duplicate_hint,
+            "matching_archived_model_ids": matching_archived,
+            # 2026-10-23 數據飛輪：學員可選「基於的種子模型」（預設當前推薦），
+            # 匯入時複製到模型紀錄，形成第 N 期 → 第 N+1 期的版本鏈。
+            "parent_model_id": str(parent_model_id or ""),
         }
         self.store.data["submissions"].append(record)
         self.store.save()
@@ -1120,6 +2110,14 @@ class VisionCenter:
         submission.update(status="IMPORTED", imported_model_id=model["model_id"], imported_at=utc_now(),
                           import_attempted_at=utc_now(), import_last_error=None,
                           import_last_error_code=None)
+        # 2026-10-23 數據飛輪：把提交時選擇的「基於的種子模型」複製到模型紀錄，
+        # 形成版本鏈（第 N 期種子 → 第 N+1 期模型）。新模型仍須走完整導入閘門
+        # 與 0.6 驗證才可啟用，飛輪不放寬任何標準。
+        parent_model_id = submission.get("parent_model_id") or ""
+        if parent_model_id:
+            stored = self._find("models", "model_id", model["model_id"])
+            stored["parent_model_id"] = str(parent_model_id)
+            self._write_manifest(Path(stored["file_path"]).parent, stored)
         self.store.save()
         return dict(model)
 

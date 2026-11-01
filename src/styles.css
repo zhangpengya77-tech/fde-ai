@@ -663,6 +663,30 @@ body:has(#inspection:target) main {
   margin-bottom: 28px;
 }
 
+/* 歷史／擴充檢測區（2026-11-01：四面懸停退出正式入口後收進此區） */
+.inspection-legacy-panel {
+  margin-top: 24px;
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 171, 194, 0.28);
+  border-radius: 16px;
+  background: rgba(11, 26, 43, 0.42);
+}
+
+.inspection-legacy-panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.inspection-legacy-panel .workflow-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 16px 0 20px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
 .resource-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;

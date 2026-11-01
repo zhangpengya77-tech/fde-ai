@@ -36,8 +36,19 @@ urlpatterns = [
     path("student/courses/<int:enrollment_id>/project-direction/", views.select_project_direction, name="select_project_direction"),
     path("student/courses/<int:enrollment_id>/growth/", views.student_growth_dashboard, name="student_growth_dashboard"),
     path("student/courses/<int:enrollment_id>/growth/R07/model/", views.growth_model_upload, name="growth_model_upload"),
+    path(
+        "student/courses/<int:enrollment_id>/growth/seed/download/",
+        views.student_seed_download,
+        name="student_seed_download",
+    ),
     path("student/courses/<int:enrollment_id>/prop-scan/", views.student_prop_scan, name="student_prop_scan"),
     path("student/courses/<int:enrollment_id>/rotation-v5/", views.student_rotation_v5_scan, name="student_rotation_v5_scan"),
+    # POWER_INSPECTION_V1：獨立 MP4 巡檢任務，不影響既有 R07／V5。
+    path("student/power-inspection/", views.student_power_inspection_entry, name="power_inspection_entry"),
+    path("student/power-inspection/upload/", views.student_power_inspection_api_upload, name="power_inspection_api_upload"),
+    path("student/courses/<int:enrollment_id>/power-inspection/", views.student_power_inspection_task, name="power_inspection_task"),
+    path("student/courses/<int:enrollment_id>/power-inspection/upload/", views.student_power_inspection_upload, name="power_inspection_upload"),
+    path("student/power-inspection/jobs/<uuid:job_id>/", views.student_power_inspection_job, name="power_inspection_student_job"),
     path("student/courses/<int:enrollment_id>/learning-path/", views.student_learning_path, name="student_learning_path"),
     path("student/courses/<int:enrollment_id>/growth/<str:slot_id>/", views.growth_record_detail, name="growth_record_detail"),
     path("student/courses/<int:enrollment_id>/growth/R08/survey/", views.student_survey, name="student_survey"),
@@ -108,6 +119,16 @@ urlpatterns = [
     # --- AI 視覺模型中心（2026-10-10 指令 P）：單一教師入口、四個區域 ---
     path("teacher/vision-center/", views.teacher_vision_center, name="teacher_vision_center"),
     path("teacher/vision-center/rotation-v5/", views.teacher_rotation_v5_trial, name="teacher_rotation_v5_trial"),
+    # POWER_INSPECTION_V1：教師端模型匯入／試用／部署／停用／回退與工作覆核。
+    path("teacher/power-inspection/", views.teacher_power_inspection, name="power_inspection_teacher"),
+    path("teacher/power-inspection/models/import/", views.teacher_power_inspection_model_import, name="power_inspection_model_import"),
+    path("teacher/power-inspection/models/<uuid:model_id>/trial/", views.teacher_power_inspection_trial, name="power_inspection_trial"),
+    path("teacher/power-inspection/models/<uuid:model_id>/deploy/", views.teacher_power_inspection_deploy, name="power_inspection_deploy"),
+    path("teacher/power-inspection/deployments/<int:deployment_id>/disable/", views.teacher_power_inspection_deployment_disable, name="power_inspection_deployment_disable"),
+    path("teacher/power-inspection/deployments/<int:deployment_id>/rollback/<int:event_id>/", views.teacher_power_inspection_deployment_rollback, name="power_inspection_deployment_rollback"),
+    path("teacher/power-inspection/jobs/<uuid:job_id>/", views.teacher_power_inspection_job, name="power_inspection_teacher_job"),
+    path("teacher/power-inspection/jobs/<uuid:job_id>/review/", views.teacher_power_inspection_review, name="power_inspection_review"),
+    path("teacher/power-inspection/jobs/<uuid:job_id>/retry/", views.teacher_power_inspection_retry, name="power_inspection_retry"),
     path(
         "teacher/vision-center/validate/",
         views.teacher_vision_center_validate,
@@ -143,10 +164,36 @@ urlpatterns = [
         views.teacher_vision_center_delete_submission,
         name="teacher_vision_center_delete_submission",
     ),
+    # --- 模型管理（M1/M2/M3，2026-10-21）：歸檔／還原／永久刪除 ---
+    path(
+        "teacher/vision-center/models/archive/",
+        views.teacher_vision_center_archive_model,
+        name="teacher_vision_center_archive_model",
+    ),
+    path(
+        "teacher/vision-center/models/restore/",
+        views.teacher_vision_center_restore_model,
+        name="teacher_vision_center_restore_model",
+    ),
+    path(
+        "teacher/vision-center/models/delete/",
+        views.teacher_vision_center_delete_model,
+        name="teacher_vision_center_delete_model",
+    ),
     path(
         "teacher/vision-center/upload/",
         views.teacher_vision_center_upload,
         name="teacher_vision_center_upload",
+    ),
+    path(
+        "teacher/vision-center/seed/",
+        views.teacher_vision_center_seed,
+        name="teacher_vision_center_seed",
+    ),
+    path(
+        "teacher/vision-center/unseed/",
+        views.teacher_vision_center_unseed,
+        name="teacher_vision_center_unseed",
     ),
     path("teacher/vision-models/", views.teacher_vision_model_list, name="teacher_vision_model_list"),
     path("teacher/vision-models/<uuid:evidence_id>/", views.teacher_vision_model_detail, name="teacher_vision_model_detail"),

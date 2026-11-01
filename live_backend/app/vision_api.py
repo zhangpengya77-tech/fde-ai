@@ -126,6 +126,20 @@ async def _any_identity(request: Request) -> tuple[dict | None, Response | None]
 
 
 def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
+async def _safe_json(request: Request) -> dict:
+    """寬鬆解析 JSON body（模型管理用）：無 body／非物件時回退空 dict。
+
+    歸檔／還原／刪除的 reason 是選填，呼叫方可能送空 body；
+    此時以空原因繼續，不讓管理功能因 payload 解析失敗而不可用。
+    """
+    try:
+        value = await request.json()
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def vision_routes(center: VisionCenter) -> list[Route]:
     async def models(request: Request):
         if request.method == "GET":
             return json_response(center.list_models(request.query_params.get("model_type")))
@@ -169,7 +183,20 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
         if denied:
             return denied
         try:
-            return json_response(center.activate_model(request.path_params["model_id"], teacher_id))
+            # 2026-10-23 教師指令：撤銷「教師覆寫」路徑——請求明確帶 override=true
+            # 一律拒絕（teacher_override_disabled），不留靜音放行的後門。
+            # 啟用資格（health OK＋驗證通過且最高信心≥0.6＋類別名恰為四類＋
+            # 非 DEMO_IMPORTED）全部由 Live activate_model 硬判定。
+            payload = await _safe_json(request)
+            if payload.get("override") is True or payload.get("override") == "true":
+                return error_response(
+                    "teacher_override_disabled",
+                    "教師覆寫路徑已撤銷：啟用資格為硬規則，不符合條件的模型不得啟用。",
+                    422,
+                )
+            return json_response(
+                center.activate_model(request.path_params["model_id"], teacher_id)
+            )
         except KeyError:
             return error_response("model_not_found", "Model was not found.", 404)
         except ValueError as exc:
@@ -180,9 +207,42 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
         if denied:
             return denied
         try:
-            return json_response(center.archive_model(request.path_params["model_id"], teacher_id))
+            payload = await _safe_json(request)
+            reason = str(payload.get("reason", "") or "")
+            return json_response(center.archive_model(request.path_params["model_id"], teacher_id, reason))
         except KeyError:
             return error_response("model_not_found", "Model was not found.", 404)
+        except (ValueError, ModelValidationError) as exc:
+            # M4（2026-10-21）：ACTIVE／驗證中模型在此拒絶並回傳可追溯錯誤碼
+            # （model_active_cannot_manage / model_validation_in_progress），
+            # 不依賴前端隱藏按鈕。
+            return error_response("model_manage_failed", str(exc), 422)
+
+    async def restore(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _safe_json(request)
+            reason = str(payload.get("reason", "") or "")
+            return json_response(center.restore_model(request.path_params["model_id"], teacher_id, reason))
+        except KeyError:
+            return error_response("model_not_found", "Model was not found.", 404)
+        except (ValueError, ModelValidationError) as exc:
+            return error_response("model_restore_failed", str(exc), 422)
+
+    async def delete_model(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _safe_json(request)
+            reason = str(payload.get("reason", "") or "")
+            return json_response(center.delete_model(request.path_params["model_id"], teacher_id, reason))
+        except KeyError:
+            return error_response("model_not_found", "Model was not found.", 404)
+        except (ValueError, ModelValidationError) as exc:
+            return error_response("model_delete_failed", str(exc), 422)
 
     async def prop_check(request: Request):
         try:
@@ -617,6 +677,7 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
                 rule_version=payload.get("rule_version") or None,
                 image_width=payload.get("image_width"),
                 image_height=payload.get("image_height"),
+                validated_by=teacher_id,
             )
             result["validated_by"] = teacher_id
             return json_response(result)
@@ -658,6 +719,83 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
         except (ValueError, ModelValidationError, binascii.Error) as exc:
             return error_response("image_validation_failed", str(exc), 422)
 
+    # ---- Data flywheel: seed models ----
+    async def seed_model(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _safe_json(request)
+            note = str(payload.get("note") or "")
+            recommended = payload.get("recommended", True)
+            if not isinstance(recommended, bool):
+                recommended = True
+            generation = payload.get("generation")
+            parent_model_id = payload.get("parent_model_id") or None
+            return json_response(center.seed_model(
+                request.path_params["model_id"], teacher_id,
+                generation=generation, parent_model_id=parent_model_id,
+                note=note, recommended=recommended,
+            ), 200)
+        except KeyError:
+            return error_response("model_not_found", "Model was not found.", 404)
+        except (ValueError, ModelValidationError) as exc:
+            return error_response("seed_failed", str(exc), 422)
+
+    async def unseed_model(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        try:
+            payload = await _safe_json(request)
+            reason = str(payload.get("reason") or "")
+            return json_response(center.unseed_model(request.path_params["model_id"], teacher_id, reason))
+        except KeyError:
+            return error_response("model_not_found", "Model was not found.", 404)
+        except (ValueError, ModelValidationError) as exc:
+            return error_response("unseed_failed", str(exc), 422)
+
+    async def recommended_seed(request: Request):
+        model_type = request.path_params["model_type"]
+        seed = center.recommended_seed(model_type)
+        return json_response({
+            "model_type": model_type,
+            "recommended_seed": seed,
+        })
+
+    async def seed_version_chain(request: Request):
+        model_type = request.path_params["model_type"]
+        return json_response({
+            "model_type": model_type,
+            "version_chain": center.seed_version_chain(model_type),
+        })
+
+    async def download_seed(request: Request):
+        """學員下載種子 .pt（數據飛輪 B-5）。僅要求已登入學員身分（student_id）。
+
+        不使用教師閘門；student_id 為空時由 Django 端攔截（未登入不可見按鈕）。
+        """
+        try:
+            model_id = request.query_params.get("model_id") or None
+            model_type = request.query_params.get("model_type") or None
+            # 2026-10-28：下載會寫審計且取得 .pt，必須確認呼叫方為可信內部來源。
+            trusted, reason = await internal_auth.verify_async(request)
+            if not trusted:
+                return error_response("internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403)
+            # 2026-11-01 整合：身分只取自已驗證 Assertion，不讀可偽造標頭或查詢參數。
+            identity = internal_auth.identity_from_request(request) or {}
+            downloaded_by = str(identity.get("sub") or identity.get("teacher_id") or "anonymous")
+            data = center.download_seed_model(
+                model_id=model_id, model_type=model_type, downloaded_by=downloaded_by,
+            )
+            return json_response(data)
+        except KeyError:
+            return error_response("model_not_found", "Model was not found.", 404)
+        except ValueError as exc:
+            return error_response("seed_download_failed", str(exc), 422)
+        except ModelValidationError as exc:
+            return error_response("seed_download_failed", str(exc), 422)
+
     # ---- Version history & rollback ----
     async def model_history(request: Request):
         _teacher_id, denied = await _teacher(request)
@@ -698,6 +836,8 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
         Route("/api/v1/vision/models/{model_id}/evaluate", evaluate, methods=["POST"]),
         Route("/api/v1/vision/models/{model_id}/activate", activate, methods=["POST"]),
         Route("/api/v1/vision/models/{model_id}/archive", archive, methods=["POST"]),
+        Route("/api/v1/vision/models/{model_id}/restore", restore, methods=["POST"]),
+        Route("/api/v1/vision/models/{model_id}/delete", delete_model, methods=["POST"]),
         Route("/api/v1/vision/models/{model_id}/validate-image", validate_image, methods=["POST"]),
         Route("/api/v1/vision/tasks/{model_type}/history", model_history, methods=["GET"]),
         Route("/api/v1/vision/tasks/{model_type}/rollback", rollback, methods=["POST"]),
@@ -717,6 +857,11 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
         Route("/api/v1/vision/submissions/{submission_id}/import", import_submission, methods=["POST"]),
         Route("/api/v1/vision/submissions/{submission_id}/import-failure", record_import_failure, methods=["POST"]),
         Route("/api/v1/vision/submissions/{submission_id}/validate-image", validate_submission_image, methods=["POST"]),
+        Route("/api/v1/vision/models/{model_id}/seed", seed_model, methods=["POST"]),
+        Route("/api/v1/vision/models/{model_id}/unseed", unseed_model, methods=["POST"]),
+        Route("/api/v1/vision/tasks/{model_type}/recommended-seed", recommended_seed, methods=["GET"]),
+        Route("/api/v1/vision/tasks/{model_type}/seed-version-chain", seed_version_chain, methods=["GET"]),
+        Route("/api/v1/vision/seed/download", download_seed, methods=["GET"]),
         Route("/api/v1/vision/golden-sets", golden_sets, methods=["GET", "POST"]),
         Route("/api/v1/vision/golden-sets/{golden_set_id}", golden_set_detail, methods=["GET"]),
         Route("/api/v1/vision/models/{model_id}/golden-sets", model_golden_sets, methods=["GET"]),

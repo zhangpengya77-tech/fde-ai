@@ -378,6 +378,21 @@ class EntryHandler(BaseHTTPRequestHandler):
             target = (SITE_DIR / "assets" / name).resolve()
             if not str(target).startswith(str((SITE_DIR / "assets").resolve())):
                 return False
+        elif path == "/sim" or path.startswith("/sim/"):
+            # R6-B 跨專案整合（2026-11-01，本地未提交）：將真實 3D 仿真訓練中心
+            # （codex/simulator-center-beta 分支 public-site/simulator 的構建產物）接回
+            # 正式 DEMO 站「練」入口 /sim/。僅靜態託管，不動任何產品邏輯或驗證規則。
+            rel = path[len("/sim/"):] if path.startswith("/sim/") else ""
+            if not rel or rel.endswith("/"):
+                rel = (rel.rstrip("/") + "/index.html").lstrip("/")
+            target = (SITE_DIR / "sim" / rel).resolve()
+            # 目錄穿越防護：解析後必須仍位於 SITE_DIR/sim 內。
+            if not str(target).startswith(str((SITE_DIR / "sim").resolve())):
+                return False
+            if target.is_dir():
+                target = (target / "index.html").resolve()
+                if not str(target).startswith(str((SITE_DIR / "sim").resolve())):
+                    return False
         else:
             return False
         if not target.is_file():

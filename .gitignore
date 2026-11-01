@@ -65,3 +65,14 @@ docs/delivery/LAN_LOGIN_P0_FIX_2026-10-18.md
 tools/ffmpeg/
 # I5 修改前暫存備份
 *.i5-prebak
+
+# ===== 提交前安全收口（2026-10-23 教師指令）=====
+# ① 本機驗證腳本（原含明文測試密碼，已改為環境變數讀取；仍不進版本控制）
+demo/runtime/shot_scene2.js
+demo/runtime/shot_scene3.js
+demo/runtime/verify_scene2_cta_http.sh
+demo/runtime/verify_scene3_http.sh
+# ② 含 CSRF Token 的本機 HTML 驗證證據（視為本機驗證資料）
+site-r07m/evidence/
+# ③ 本機備份目錄（521M：.bak 源碼副本／store JSON／.pt；非專案原始碼）
+backups/

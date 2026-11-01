@@ -6,6 +6,11 @@ import zipfile
 from pathlib import Path
 
 from app.vision_center import (
+    HEALTH_LOW_QUALITY,
+    HEALTH_NC_MISMATCH,
+    HEALTH_OK,
+    HEALTH_UNKNOWN,
+    HEALTH_UNTRAINED,
     HOVER_CLASSES,
     PROP_CLASSES,
     ModelClassNamesMappingRequiredError,
@@ -52,13 +57,24 @@ def prop_detection(class_name, x, y, confidence=0.9):
     return {"class": class_name, "confidence": confidence, "bbox": [x - 5, y - 5, x + 5, y + 5], "center_x": x, "center_y": y}
 
 
+class OkHealthInspector:
+    """舊版（非健康度）測試用的健康度檢查器：一律回傳 OK，避免假 .pt 內容干擾既有斷言。"""
+
+    def __call__(self, _path):
+        return {
+            "health": HEALTH_OK, "reasons": [], "map50": 0.9, "nc": 4, "names_count": 4,
+            "map50_threshold": 0.5,
+        }
+
+
 class VisionCenterTests(unittest.TestCase):
     def setUp(self):
         test_root = Path(__file__).resolve().parents[2] / ".test-temp"
         test_root.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=test_root)
         self.root = Path(self.temp.name)
-        self.center = VisionCenter(self.root, model_validator=FixtureValidator())
+        # 舊版測試使用假 .pt 內容（非真實模型），注入 OK 健康度檢查器，使其不受 D1/D6 閘門影響。
+        self.center = VisionCenter(self.root, model_validator=FixtureValidator(), model_health_inspector=OkHealthInspector(), quality_gate={"require_evaluation": False})
 
     def tearDown(self):
         self.temp.cleanup()
@@ -80,6 +96,17 @@ class VisionCenterTests(unittest.TestCase):
             dataset_version=dataset["dataset_version"], rule_version="r1", uploaded_by="teacher",
         )
 
+    def remember_validation(self, model_id, model_type="PROP_DIRECTION", confidence=0.9):
+        """A 硬規則（2026-10-23 教師指令）：啟用需有「真實圖片驗證通過」紀錄且
+        最高信心 ≥ 0.6。匯入時的類別閘門（FixtureValidator）不等同圖片驗證，
+        測試以 _remember_validation 模擬一次真實推論驗證通過（decision=MATCH）。
+        """
+        self.center._remember_validation(
+            model_id=model_id, model_type=model_type, decision="MATCH",
+            max_confidence=confidence, expected_class=None,
+            confidence_threshold=0.5, validated_by="teacher", reason_code="OK",
+        )
+
     def test_valid_prop_model_is_validated(self):
         self.assertEqual(self.model()["validation_status"], "VALIDATED")
 
@@ -90,6 +117,7 @@ class VisionCenterTests(unittest.TestCase):
 
     def test_failed_candidate_does_not_replace_active(self):
         active = self.model(version="v1")
+        self.remember_validation(active["model_id"])
         self.center.activate_model(active["model_id"], "teacher")
         with self.assertRaises(ModelValidationError):
             self.model(version="v2", validator=WrongClassValidator())
@@ -203,6 +231,8 @@ class VisionCenterTests(unittest.TestCase):
     def test_only_one_active_per_model_type(self):
         first = self.model(version="v1")
         second = self.model(version="v2")
+        self.remember_validation(first["model_id"])
+        self.remember_validation(second["model_id"])
         self.center.activate_model(first["model_id"], "teacher")
         self.center.activate_model(second["model_id"], "teacher")
         self.assertEqual(self.center.get_model(first["model_id"])["status"], "ARCHIVED")
@@ -211,6 +241,8 @@ class VisionCenterTests(unittest.TestCase):
     def test_prop_and_hover_active_models_are_independent(self):
         prop = self.model("PROP_DIRECTION")
         hover = self.model("FOUR_SIDE_HOVER")
+        self.remember_validation(prop["model_id"], "PROP_DIRECTION")
+        self.remember_validation(hover["model_id"], "FOUR_SIDE_HOVER")
         self.center.activate_model(prop["model_id"], "teacher")
         self.center.activate_model(hover["model_id"], "teacher")
         self.assertEqual(self.center.active_model("PROP_DIRECTION")["model_id"], prop["model_id"])
@@ -428,6 +460,7 @@ class VisionCenterTests(unittest.TestCase):
             self.skipTest("opencv unavailable")
         self.center.model_runner = FakeHoverRunner()
         hover = self.model("FOUR_SIDE_HOVER")
+        self.remember_validation(hover["model_id"], "FOUR_SIDE_HOVER")
         self.center.activate_model(hover["model_id"], "teacher")
         tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
         writer = cv2.VideoWriter(tmp.name, cv2.VideoWriter_fourcc(*"mp4v"), 10, (64, 64))
@@ -444,6 +477,170 @@ class VisionCenterTests(unittest.TestCase):
         self.assertLessEqual(result["frame_count"], 6)
         self.assertEqual(result["calibration_status"], "CALIBRATION_REQUIRED")
         self.assertIn("FRONT", result["directions"])
+
+
+class FakeHealthInspector:
+    """D1/D2/D5/D6 測試用健康度檢查器：回傳預設事實，不讀真 .pt。"""
+
+    def __init__(self, health, *, map50=None, nc=None, names_count=None, threshold=0.5):
+        self.health = health
+        self.facts = {
+            "health": health, "reasons": [str(health).lower()], "map50": map50,
+            "nc": nc, "names_count": names_count, "map50_threshold": threshold,
+        }
+
+    def __call__(self, _path):
+        return dict(self.facts)
+
+
+class VisionCenterHealthTests(unittest.TestCase):
+    def setUp(self):
+        test_root = Path(__file__).resolve().parents[2] / ".test-temp"
+        test_root.mkdir(parents=True, exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(dir=test_root)
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def make_center(self, health_inspector):
+        # 質量證據閘口在此刻意關閉（require_evaluation=False），專注驗證健康度/匯入/啟用邏輯；
+        # 門檻本身由 test_vision_quality_gate.py 覆蓋。
+        return VisionCenter(self.root, model_validator=FixtureValidator(), model_health_inspector=health_inspector, quality_gate={"require_evaluation": False})
+
+    # ---- D2：匯入閘門 ----
+    def test_untrained_model_rejected_in_production(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_UNTRAINED))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        with self.assertRaises(ModelValidationError) as ctx:
+            center.upload_model(
+                model_type="PROP_DIRECTION", model_name="x", version="v1",
+                content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+                dataset_version="v1", rule_version="r1", uploaded_by="teacher",
+            )
+        self.assertEqual(str(ctx.exception), "model_untrained")
+        self.assertEqual(center.list_models()[0]["status"], "REJECTED")
+
+    def test_nc_mismatch_model_rejected_in_production(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_NC_MISMATCH, nc=80, names_count=4))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        with self.assertRaises(ModelValidationError) as ctx:
+            center.upload_model(
+                model_type="PROP_DIRECTION", model_name="x", version="v1",
+                content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+                dataset_version="v1", rule_version="r1", uploaded_by="teacher",
+            )
+        self.assertEqual(str(ctx.exception), "model_nc_mismatch")
+        self.assertEqual(center.list_models()[0]["status"], "REJECTED")
+
+    def test_untrained_model_demo_allowed_but_not_validated(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_UNTRAINED))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        model = center.upload_model(
+            model_type="PROP_DIRECTION", model_name="x", version="v1",
+            content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+            dataset_version="v1", rule_version="r1", uploaded_by="teacher", demo_relaxed=True,
+        )
+        self.assertEqual(model["validation_status"], "DEMO_IMPORTED")
+        self.assertTrue(model["demo_health_blocked"])
+        # DEMO 放行模型不得進 ACTIVE：清單標示不可通過。
+        self.assertFalse(model["pass_eligible"])
+        # 實際啟用仍被阻擋（D6＋A 硬規則：DEMO 放寬匯入不得啟用）。
+        with self.assertRaises(ValueError) as ctx:
+            center.activate_model(model["model_id"], "teacher")
+        self.assertEqual(str(ctx.exception), "model_demo_imported_not_allowed")
+
+    # ---- D5：PASS 判定補強 ----
+    def test_low_quality_model_not_pass_eligible_and_not_activatable(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_LOW_QUALITY, map50=0.12))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        model = center.upload_model(
+            model_type="PROP_DIRECTION", model_name="x", version="v1",
+            content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+            dataset_version="v1", rule_version="r1", uploaded_by="teacher",
+        )
+        # 低品質（mAP50 不足）雖通過類別閘門，但 not pass_eligible → 清單顯示「需覆核」。
+        self.assertEqual(model["health"], HEALTH_LOW_QUALITY)
+        self.assertFalse(model["pass_eligible"])
+        with self.assertRaises(ValueError) as ctx:
+            center.activate_model(model["model_id"], "teacher")
+        # A 硬規則（2026-10-23）：健康度不是 OK 一律不得啟用（原因碼統一為
+        # model_health_not_ok；原 model_low_quality_not_eligible 已併入此碼）。
+        self.assertEqual(str(ctx.exception), "model_health_not_ok")
+
+    def test_ok_model_is_pass_eligible_and_activatable(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.85))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        model = center.upload_model(
+            model_type="PROP_DIRECTION", model_name="x", version="v1",
+            content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+            dataset_version="v1", rule_version="r1", uploaded_by="teacher",
+        )
+        self.assertTrue(model["pass_eligible"])
+        # A 硬規則（2026-10-23）：啟用需有真實圖片驗證通過紀錄且最高信心 ≥ 0.6；
+        # 匯入時的類別閘門不等同圖片驗證，先補一次 MATCH 紀錄。
+        center._remember_validation(
+            model_id=model["model_id"], model_type="PROP_DIRECTION", decision="MATCH",
+            max_confidence=0.9, expected_class=None, confidence_threshold=0.5,
+            validated_by="teacher", reason_code="OK",
+        )
+        # 啟用成功，且不影響清單標示。
+        activated = center.activate_model(model["model_id"], "teacher")
+        self.assertEqual(activated["status"], "ACTIVE")
+
+    # ---- D6：阻止未訓練設 ACTIVE；已 ACTIVE 舊記錄保持不動 ----
+    def test_already_active_untrained_model_stays_untouched(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_UNTRAINED))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        model = center.upload_model(
+            model_type="PROP_DIRECTION", model_name="x", version="v1",
+            content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+            dataset_version="v1", rule_version="r1", uploaded_by="teacher", demo_relaxed=True,
+        )
+        # 強制模擬遺留的 ACTIVE 未訓練模型（如 003fe6）。
+        # 注意：get_model 回傳的是副本，必須直接改 store 裡的紀錄才會生效。
+        stored = next(m for m in center.store.data["models"] if m["model_id"] == model["model_id"])
+        stored["status"] = "ACTIVE"
+        stored["validation_status"] = "VALIDATED"
+        center.store.save()
+        # 再次對其 activate：舊 ACTIVE 記錄保持不動，不拋錯、不改狀態。
+        result = center.activate_model(model["model_id"], "teacher")
+        self.assertEqual(result["status"], "ACTIVE")
+        self.assertTrue(result["activation"]["already_active"])
+
+    # ---- D1 迴歸：不可解析檔案的健度判定必須確定（快取不得改變結論）----
+    def test_unreadable_checkpoint_health_is_deterministic(self):
+        # 預設真實檢查器（不注入假檢查器）：寫入非 checkpoint 垃圾位元組，
+        # 連續兩次檢查都必須得到 UNKNOWN（早期快取重分類會讓第二次變 UNTRAINED）。
+        center = self.make_center(None)
+        model_file = self.root / "not-a-checkpoint.pt"
+        model_file.write_bytes(b"fixture-pt-not-a-real-checkpoint")
+        first = center._inspect_health(model_file)
+        second = center._inspect_health(model_file)
+        self.assertEqual(first.get("health"), HEALTH_UNKNOWN)
+        self.assertEqual(second.get("health"), HEALTH_UNKNOWN)
+
+    # ---- D3 迴歸：model_history 必須附帶健康度（步驟③ 清單修復）----
+    def test_model_history_attaches_health_for_legacy_records(self):
+        center = self.make_center(FakeHealthInspector(HEALTH_LOW_QUALITY, map50=0.12))
+        dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
+        model = center.upload_model(
+            model_type="PROP_DIRECTION", model_name="x", version="v1",
+            content=b"fixture-pt", dataset_id=dataset["dataset_id"],
+            dataset_version="v1", rule_version="r1", uploaded_by="teacher", demo_relaxed=True,
+        )
+        # 模擬匯入時未持久化健康度事實的舊紀錄（如 PROP_20261019_DEMO-A_v1_994d）：
+        # store 裡不含任何 health* 鍵，歷史清單仍須當場判定並附帶摘要。
+        stored = next(m for m in center.store.data["models"] if m["model_id"] == model["model_id"])
+        for key in [k for k in list(stored) if k.startswith("health")]:
+            del stored[key]
+        center.store.save()
+        history = center.model_history("PROP_DIRECTION")
+        self.assertEqual(len(history), 1)
+        row = history[0]
+        self.assertEqual(row["health"], HEALTH_LOW_QUALITY)
+        self.assertEqual(row["health_label"], "低品質")
+        self.assertFalse(row["pass_eligible"])
 
 
 if __name__ == "__main__":

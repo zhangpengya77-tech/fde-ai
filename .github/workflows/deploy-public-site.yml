@@ -1,0 +1,37 @@
+name: Deploy FDE public site
+
+# 只發布 public-site/ 一個資料夾，且只在下列分支觸發；
+# 其他分支（含 feat/m02-simulator-entry）推上去不會動到 Pages。
+# 若要改由 main 發布，把 branches 改成 [main] 即可（需同步確認 Settings → Pages → Source = GitHub Actions）。
+on:
+  push:
+    branches: [codex/github-pages-public]
+    paths:
+      - public-site/**
+      - .github/workflows/deploy-public-site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      # 唯一發布來源：public-site/。不要改成 repo 根目錄，否則會把後端程式碼一起公開。
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public-site
+      - id: deployment
+        uses: actions/deploy-pages@v4

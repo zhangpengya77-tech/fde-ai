@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FDE-AI-UAS · 無人載具學習平台（公開入口 · v2.0A 展示版）</title>
+<style>
+  :root{
+    --bg:#07111F; --surface:#0B1726; --surface2:#0F1F33;
+    --blue:#168BFF; --cyan:#00C2FF; --text:#DDF3FF; --muted:#8FB2CC;
+    --success:#35E6A8; --warning:#F5B84B; --danger:#FF5C73;
+    --line:rgba(120,170,220,.18);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; font-family:-apple-system,"Segoe UI",Roboto,"PingFang TC","Microsoft JhengHei",sans-serif;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(0,194,255,.12), transparent 60%),
+      radial-gradient(900px 500px at 0% 10%, rgba(22,139,255,.12), transparent 55%),
+      var(--bg);
+    color:var(--text); line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit; text-decoration:none}
+  .wrap{max-width:1180px; margin:0 auto; padding:0 22px}
+
+  /* demo badge */
+  .demo-badge{
+    position:fixed; top:14px; right:14px; z-index:50;
+    background:rgba(245,184,75,.16); color:var(--warning);
+    border:1px solid rgba(245,184,75,.4); border-radius:999px;
+    padding:6px 14px; font-size:12px; letter-spacing:.3px;
+  }
+
+  /* top nav */
+  header.topnav{position:sticky; top:0; z-index:40;
+    backdrop-filter:blur(10px); background:rgba(7,17,31,.72); border-bottom:1px solid var(--line)}
+  .topnav .wrap{display:flex; align-items:center; gap:18px; height:66px}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700}
+  .brand .mark{width:34px; height:34px; border-radius:9px; display:grid; place-items:center;
+    background:linear-gradient(135deg,var(--blue),var(--cyan)); color:#04111f; font-weight:800}
+  .brand small{display:block; color:var(--muted); font-weight:500; font-size:11px; letter-spacing:.5px}
+  nav.portal{margin-left:auto; display:flex; flex-wrap:wrap; gap:6px}
+  nav.portal a{padding:8px 13px; border-radius:9px; font-size:14px; color:var(--muted);
+    border:1px solid transparent; transition:.15s}
+  nav.portal a:hover{color:var(--text); border-color:var(--line); background:var(--surface)}
+
+  /* hero */
+  .hero{display:grid; grid-template-columns:1.15fr .85fr; gap:40px; align-items:center; padding:64px 0 56px}
+  .eyebrow{color:var(--cyan); letter-spacing:2px; font-size:12px; text-transform:uppercase; margin:0 0 12px}
+  .hero h1{font-size:42px; line-height:1.15; margin:0 0 16px;
+    background:linear-gradient(120deg,#fff,var(--cyan)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .hero p.lead{color:var(--muted); font-size:17px; max-width:560px}
+  .systems{display:flex; flex-wrap:wrap; gap:10px; margin:22px 0}
+  .systems span{font-size:13px; padding:7px 13px; border-radius:999px; border:1px solid var(--line);
+    background:var(--surface); color:var(--text)}
+  .sysstatus{display:grid; gap:10px; margin-top:18px}
+  .sysstatus .row{display:flex; gap:12px; align-items:flex-start; background:var(--surface);
+    border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+  .sysstatus .chip{font-size:11px; padding:3px 9px; border-radius:6px; background:rgba(22,139,255,.18); color:var(--cyan); white-space:nowrap}
+  .sysstatus .row b{display:block; font-size:14px}
+  .sysstatus .row small{color:var(--muted); font-size:12.5px}
+  .actions{display:flex; gap:12px; margin-top:24px; flex-wrap:wrap}
+  .btn{padding:12px 20px; border-radius:11px; font-weight:600; font-size:15px; cursor:pointer; transition:.15s; border:1px solid transparent}
+  .btn.primary{background:linear-gradient(135deg,var(--blue),var(--cyan)); color:#04111f}
+  .btn.ghost{background:transparent; border-color:var(--line); color:var(--text)}
+  .btn:hover{transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,194,255,.25)}
+
+  /* drone animation */
+  .stage{position:relative; height:340px; border:1px solid var(--line); border-radius:18px;
+    background:radial-gradient(420px 220px at 50% 40%, rgba(0,194,255,.10), transparent 70%), var(--surface);
+    overflow:hidden}
+  .grid-plane{position:absolute; inset:0;
+    background-image:linear-gradient(rgba(0,194,255,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(0,194,255,.10) 1px,transparent 1px);
+    background-size:34px 34px; transform:perspective(600px) rotateX(58deg); opacity:.5}
+  .scan-ring{position:absolute; left:50%; top:46%; width:160px; height:160px; margin:-80px 0 0 -80px;
+    border:2px solid var(--cyan); border-radius:50%; opacity:.0; animation:scan 3.4s ease-out infinite}
+  @keyframes scan{0%{transform:scale(.3);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+  .drone{position:absolute; left:50%; top:46%; width:170px; height:170px; margin:-85px 0 0 -85px; animation:float 5s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(-6px)}50%{transform:translateY(8px)}}
+  .drone .arm{position:absolute; height:6px; background:linear-gradient(90deg,var(--blue),var(--cyan)); border-radius:6px; top:82px; left:35px; width:100px; transform-origin:center}
+  .drone .arm-a{transform:rotate(45deg)} .drone .arm-b{transform:rotate(-45deg)}
+  .drone .body-core{position:absolute; left:60px; top:60px; width:50px; height:50px; border-radius:12px;
+    background:linear-gradient(135deg,#0b2a4a,#0a3a66); border:1px solid var(--cyan); box-shadow:0 0 24px rgba(0,194,255,.4)}
+  .drone .rotor{position:absolute; width:46px; height:46px; border-radius:50%; border:2px dashed rgba(0,194,255,.7); animation:spin 1.1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .drone .r1{left:6px; top:6px} .drone .r2{right:6px; top:6px}
+  .drone .r3{left:6px; bottom:6px} .drone .r4{right:6px; bottom:6px}
+  .boot-lines{position:absolute; left:0; right:0; bottom:14px; display:flex; flex-direction:column; gap:4px; align-items:center; font-size:11px; letter-spacing:2px; color:var(--success); opacity:.85}
+
+  /* sections */
+  section.block{padding:46px 0; border-top:1px solid var(--line)}
+  .sect-intro{max-width:720px; margin-bottom:26px}
+  .sect-intro h2{font-size:28px; margin:8px 0 10px}
+  .sect-intro p{color:var(--muted); margin:0}
+
+  .overview{display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px}
+  .overview a{display:block; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; transition:.15s}
+  .overview a:hover{border-color:var(--cyan); transform:translateY(-2px)}
+  .overview span{font-size:13px; color:var(--cyan); font-weight:700}
+  .overview strong{display:block; margin:6px 0 4px}
+  .overview small{color:var(--muted); font-size:12.5px}
+
+  .flow{display:grid; grid-template-columns:repeat(5,1fr); gap:12px}
+  .flow .node{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px 16px; text-align:center; position:relative}
+  .flow .node .big{font-size:30px; font-weight:800; color:var(--cyan)}
+  .flow .node b{display:block; margin:8px 0 4px}
+  .flow .node small{color:var(--muted); font-size:12.5px}
+  .flow .node:not(:last-child)::after{content:"→"; position:absolute; right:-12px; top:50%; transform:translateY(-50%); color:var(--muted)}
+
+  .modes{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  .mode{background:linear-gradient(180deg,var(--surface2),var(--surface)); border:1px solid var(--line); border-radius:16px; padding:22px}
+  .mode .tag{font-size:11px; color:var(--cyan); letter-spacing:1px; text-transform:uppercase}
+  .mode h3{margin:8px 0 10px; font-size:20px}
+  .mode p{color:var(--muted); font-size:14px; margin:0 0 12px}
+  .mode ul{margin:0; padding-left:18px; color:var(--text); font-size:13.5px}
+  .mode ul li{margin:4px 0}
+
+  .features{display:grid; grid-template-columns:repeat(2,1fr); gap:16px}
+  .feature{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:8px}
+  .feature .tag{align-self:flex-start; font-size:11px; padding:4px 10px; border-radius:999px; background:rgba(53,230,168,.15); color:var(--success)}
+  .feature h3{margin:0; font-size:19px}
+  .feature p{color:var(--muted); font-size:14px; margin:0}
+
+  footer{border-top:1px solid var(--line); padding:30px 0 50px; color:var(--muted); font-size:13px}
+  footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px}
+
+  @media(max-width:880px){
+    .hero{grid-template-columns:1fr} .stage{height:260px}
+    .flow{grid-template-columns:repeat(2,1fr)} .flow .node::after{display:none}
+    .modes{grid-template-columns:1fr} .features{grid-template-columns:1fr}
+    nav.portal{display:none}
+  }
+</style>
+</head>
+<body>
+  <div class="demo-badge">靜態展示版 · 含示意資料 · 無後台</div>
+
+  <header class="topnav">
+    <div class="wrap">
+      <a class="brand" href="#home">
+        <span class="mark">FDE</span>
+        <span>FDE-AI-UAS<small>無人載具學習平台</small></span>
+      </a>
+      <nav class="portal">
+        <a href="#home">首頁</a>
+        <a href="/student/">學員前端</a>
+        <a href="/register/">學員註冊</a>
+        <a href="/teacher/login/">教師後台</a>
+        <a href="/downloads/">下載中心</a>
+        <a href="/sim/">無人機仿真訓練</a>
+        <a href="/m02-simulator/">模擬飛行 M02</a>
+        <a href="/student/growth/">我的成長日誌</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- HERO -->
+    <section class="hero" id="home">
+      <div class="hero-copy">
+        <p class="eyebrow">System Boot · AI Vehicle Lab</p>
+        <h1>FDE-AI 無人載具學習平台</h1>
+        <p class="lead">AI 雙師教學｜學・練・做・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。</p>
+        <div class="systems">
+          <span>AI 驅動雙師教學系統</span>
+          <span>鷹眼 AI 評測系統</span>
+        </div>
+        <div class="sysstatus">
+          <div class="row"><span class="chip">本機模型</span><div><b>YOLO v2</b><small>已預設接入 F450 零件與 CW/CCW 槳葉檢測流程。</small></div></div>
+          <div class="row"><span class="chip">評分入口</span><div><b>四面懸停</b><small>先使用上傳影片與模擬評分，後續接入正式飛行檢測模型。</small></div></div>
+          <div class="row"><span class="chip">本機教材</span><div><b>RAG 知識庫</b><small>作的階段只查詢本機教材，不連接外部 API。</small></div></div>
+        </div>
+        <div class="actions">
+          <a class="btn primary" href="/student/growth/">我的成長日誌</a>
+          <a class="btn ghost" href="#inspection">觀看系統 Demo</a>
+        </div>
+      </div>
+      <div class="stage" aria-label="半透明藍色四旋翼無人機進場動畫">
+        <div class="grid-plane"></div>
+        <div class="scan-ring"></div>
+        <div class="drone">
+          <span class="arm arm-a"></span><span class="arm arm-b"></span>
+          <span class="body-core"></span>
+          <span class="rotor r1"></span><span class="rotor r2"></span>
+          <span class="rotor r3"></span><span class="rotor r4"></span>
+        </div>
+        <div class="boot-lines">
+          <span>MISSION PACK ONLINE</span>
+          <span>AI INSPECTION READY</span>
+          <span>TEACHER REVIEW CHANNEL</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- OVERVIEW -->
+    <section class="block" id="overview">
+      <div class="sect-intro">
+        <p class="eyebrow">Mobile Demo Mode</p>
+        <h2>三分鐘看懂 FDE-AI</h2>
+        <p>公開入口依照首頁、任務、學練作測證、AI 檢測與成果發表的結構排列，方便校長、教師、合作機構快速理解平台價值。</p>
+      </div>
+      <div class="overview">
+        <a href="#home"><span>01</span><strong>首頁</strong><small>FDE-AI 無人載具學習平台</small></a>
+        <a href="#modes"><span>02</span><strong>三種模式</strong><small>公開展示 / 學生任務 / 教師復核</small></a>
+        <a href="#flow"><span>03</span><strong>學</strong><small>課程影片與學習資源</small></a>
+        <a href="#flow"><span>04</span><strong>練</strong><small>模擬器與考照練習</small></a>
+        <a href="#flow"><span>05</span><strong>作</strong><small>F450、AI 助教與專案實作</small></a>
+        <a href="#inspection"><span>06</span><strong>測</strong><small>鷹眼 AI 檢測中心</small></a>
+        <a href="/student/growth/"><span>07</span><strong>證</strong><small>學習成長日誌（R01–R08）</small></a>
+        <a href="#features"><span>08</span><strong>飛行健康 AI</strong><small>飛控日誌健康分析</small></a>
+        <a href="#features"><span>09</span><strong>教師復核</strong><small>查看教師複核流程示例</small></a>
+      </div>
+    </section>
+
+    <!-- LEARNING FLOW -->
+    <section class="block" id="flow">
+      <div class="sect-intro">
+        <p class="eyebrow">Learning Data Stream</p>
+        <h2>學・練・作・測・證</h2>
+        <p>整個平台的核心視覺語言固定在五個節點：從課程理解，到模擬訓練、專案實作、AI 測評與能力存證。</p>
+      </div>
+      <div class="flow">
+        <div class="node"><div class="big">學</div><b>課程理解</b><small>影片、教材與工具用途</small></div>
+        <div class="node"><div class="big">練</div><b>模擬練習</b><small>模擬器與考照題庫</small></div>
+        <div class="node"><div class="big">作</div><b>專案實作</b><small>F450 組裝與 AI 助教</small></div>
+        <div class="node"><div class="big">測</div><b>AI 測評</b><small>槳葉檢查 / 四面懸停</small></div>
+        <div class="node"><div class="big">證</div><b>成果存證</b><small>R01–R08 成長日誌</small></div>
+      </div>
+    </section>
+
+    <!-- THREE MODES -->
+    <section class="block" id="modes">
+      <div class="sect-intro">
+        <p class="eyebrow">Three Modes</p>
+        <h2>公開展示、學生任務、教師復核三種模式</h2>
+        <p>同一套視覺系統下，外層有科技展廳感，內層保持教學平台和操作控制台的穩定感。</p>
+      </div>
+      <div class="modes">
+        <div class="mode">
+          <span class="tag">Public</span><h3>公開展示模式</h3>
+          <p>面向校長、老師、論壇與合作機構，展示專案定位、五階段流程、任務包、AI 評分與成果案例。</p>
+          <ul><li>項目介紹</li><li>學練作測證</li><li>任務包</li><li>鷹眼評分</li><li>作品成果</li><li>合作入口</li></ul>
+        </div>
+        <div class="mode">
+          <span class="tag">Student</span><h3>學生任務模式</h3>
+          <p>學生只看任務、練習、檢測、作品、成績與 AI 助教，操作路徑保持簡單。</p>
+          <ul><li>首頁</li><li>我的任務</li><li>模擬訓練</li><li>AI 檢測</li><li>我的作品</li><li>我的成績</li><li>AI 助教</li></ul>
+        </div>
+        <div class="mode">
+          <span class="tag">Teacher</span><h3>教師復核模式</h3>
+          <p>教師端追求快、清楚、資訊密度高，以待復核和 AI 異常為核心。</p>
+          <ul><li>班級</li><li>任務發布</li><li>待復核</li><li>AI 異常</li><li>學生能力</li><li>成果導出</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES (public-facing) -->
+    <section class="block" id="features">
+      <div class="sect-intro">
+        <p class="eyebrow">Core Capabilities</p>
+        <h2>公開可體驗的核心能力</h2>
+        <p>以下入口對外開放，訪客即可預覽平台如何把工程實作與 AI 評測串成可複核的學習證據。</p>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <span class="tag">AI 檢測</span>
+          <h3>鷹眼 AI 檢測中心</h3>
+          <p>F450 槳葉正反及方向檢查、四面懸停檢測：上傳照片或影片，產生可複核的 PASS / NG / CHECK 結果。</p>
+        </div>
+        <div class="feature">
+          <span class="tag">飛行健康</span>
+          <h3>飛行健康 AI 分析</h3>
+          <p>上傳飛控日誌，快速了解飛機目前健康狀況，並取得下一步檢查建議，適用飛後檢查與故障復盤。</p>
+        </div>
+        <div class="feature">
+          <span class="tag">成長日誌</span>
+          <h3>學習成長日誌（R01–R08）</h3>
+          <p>八項成長紀錄的真實進度與教師複核結果，資料取自學員端成長紀錄，形成完整學習歷程。</p>
+        </div>
+        <div class="feature">
+          <span class="tag">雙師助教</span>
+          <h3>F450 本機 RAG 助教</h3>
+          <p>遇到組裝問題可上傳照片詢問 AI 助教；只查本機教材知識庫，不連接外部 API。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>FDE-AI-UAS · 無人載具學習平台 — 公開入口展示版（v2.0A）</span>
+      <span>本頁為靜態展示，含示意資料，不含後台系統。</span>
+    </div>
+  </footer>
+</body>
+</html>

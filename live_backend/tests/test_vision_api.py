@@ -15,6 +15,22 @@ class OfflineVision:
         return False
 
 
+class OkHealthInspector:
+    """假 .pt 內容（b"fixture"）不是真實 checkpoint（真實檢查判 UNKNOWN）；
+    注入 OK 健康度，讓本檔聚焦 API 契約（健康度閈門由 test_model_health.py 覆蓋）。
+    nc=None 不斷言分類頭數量，與 PROP/HOVER 兩種預期類別集都相容。"""
+
+    def __call__(self, _path):
+        return {
+            "health": "OK",
+            "reasons": [],
+            "map50": 0.9,
+            "nc": None,
+            "names_count": None,
+            "map50_threshold": 0.5,
+        }
+
+
 class FixtureValidator:
     def validate(self, _path, model_type):
         return {"class_names": list(PROP_CLASSES if model_type == "PROP_DIRECTION" else HOVER_CLASSES), "task": "detect", "smoke_inference": True}
@@ -44,7 +60,14 @@ class VisionApiTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2] / ".test-temp"
         root.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=root)
-        self.center = VisionCenter(self.temp.name, model_validator=FixtureValidator(), model_runner=FixtureRunner())
+        self.center = VisionCenter(
+            self.temp.name,
+            model_validator=FixtureValidator(),
+            model_runner=FixtureRunner(),
+            model_health_inspector=OkHealthInspector(),
+            # 本檔聚焦 API 契約，品質閘門另由 test_vision_quality_gate.py 專門覆蓋。
+            quality_gate={"require_evaluation": False},
+        )
         # P6：Live 只接受綁定 method/path/body 的 Assertion；client 會自動簽發。
         # self.teacher 保留舊的偽造標頭，正好證明它們不再影響身分。
         app = create_app(vision_adapter=OfflineVision(), vision_center=self.center, dev_mode=True)
@@ -68,6 +91,15 @@ class VisionApiTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def remember_validation(self, model_id, model_type="PROP_DIRECTION"):
+        """A 硬規則（2026-10-23）：啟用需有真實圖片驗證通過紀錄（最高信心 ≥ 0.6）。
+        本檔以一次 MATCH 紀錄滿足啟用前置條件（資格判定由專門套件覆蓋）。"""
+        self.center._remember_validation(
+            model_id=model_id, model_type=model_type, decision="MATCH",
+            max_confidence=0.9, expected_class=None, confidence_threshold=0.5,
+            validated_by="teacher-1", reason_code="OK",
+        )
+
     def create_dataset(self, model_type="PROP_DIRECTION"):
         response = self.client.post("/api/v1/vision/datasets", headers=self.teacher, json={"model_type": model_type, "dataset_version": "v1", "created_by": "ignored"})
         self.assertEqual(response.status_code, 201)
@@ -89,6 +121,7 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v1/vision/models/{model['model_id']}").status_code, 200)
         metrics = {"precision": .8, "recall": .7, "map50": .75, "map50_95": .5, "per_class_metrics": {}, "confusion_matrix": [], "error_count": 2, "low_confidence_count": 1}
         self.assertEqual(self.client.post(f"/api/v1/vision/models/{model['model_id']}/evaluate", headers=self.teacher, json=metrics).status_code, 200)
+        self.remember_validation(model["model_id"])
         active = self.client.post(f"/api/v1/vision/models/{model['model_id']}/activate", headers=self.teacher, json={})
         self.assertEqual(active.json()["status"], "ACTIVE")
 
@@ -124,6 +157,7 @@ class VisionApiTests(unittest.TestCase):
 
     def test_student_image_uses_active_prop_model_without_model_selection(self):
         model = self.upload().json()
+        self.remember_validation(model["model_id"])
         self.client.post(f"/api/v1/vision/models/{model['model_id']}/activate", headers=self.teacher, json={})
         response = self.client.post("/api/v1/vision/prop-check", json={
             "image_base64": base64.b64encode(b"prop-image").decode(), "image_width": 100, "image_height": 100,
@@ -134,6 +168,7 @@ class VisionApiTests(unittest.TestCase):
 
     def test_hover_frame_images_use_active_hover_model(self):
         model = self.upload("FOUR_SIDE_HOVER").json()
+        self.remember_validation(model["model_id"], "FOUR_SIDE_HOVER")
         self.client.post(f"/api/v1/vision/models/{model['model_id']}/activate", headers=self.teacher, json={})
         response = self.client.post("/api/v1/vision/hover-analyze", json={"frames": [
             {"timestamp": 0, "image_base64": base64.b64encode(b"hover-image").decode()},
@@ -167,6 +202,7 @@ class VisionApiTests(unittest.TestCase):
 
     def test_r07_submission_metadata_is_preserved_without_changing_active_model(self):
         active_model = self.upload().json()
+        self.remember_validation(active_model["model_id"])
         self.client.post(
             f"/api/v1/vision/models/{active_model['model_id']}/activate",
             headers=self.teacher,
@@ -309,6 +345,7 @@ class VisionApiTests(unittest.TestCase):
         except ImportError:
             self.skipTest("opencv unavailable")
         model = self.upload("FOUR_SIDE_HOVER").json()
+        self.remember_validation(model["model_id"], "FOUR_SIDE_HOVER")
         self.client.post(f"/api/v1/vision/models/{model['model_id']}/activate", headers=self.teacher, json={})
         tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
         writer = cv2.VideoWriter(tmp.name, cv2.VideoWriter_fourcc(*"mp4v"), 10, (64, 64))

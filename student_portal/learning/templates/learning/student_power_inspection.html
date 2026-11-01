@@ -1,0 +1,40 @@
+{% extends "learning/base.html" %}
+{% block title %}電力巡檢任務｜FDE-AI-UAS{% endblock %}
+{% block content %}
+<main class="container" style="max-width:900px;margin:2rem auto">
+  <h1>POWER_INSPECTION_V1｜電力巡檢任務</h1>
+  <p>班級：{{ enrollment.cohort.name }}。僅可上傳 MP4；影片與分析紀錄只屬於本人。</p>
+  {% if deployment %}
+    <p><strong>班級預設模型已可用。</strong> 版本：{{ deployment.model.version }}。上傳後將排入隔離巡檢程序。</p>
+  {% else %}
+    <p><strong>尚未載入真實模型。</strong> 可測試上傳與學習流程，但不會產生假 AI 異常結果。</p>
+  {% endif %}
+  <form data-api-form method="post" enctype="multipart/form-data" action="{% url 'learning:power_inspection_upload' enrollment.pk %}">
+    {% csrf_token %}
+    <label>巡檢 MP4 <input type="file" name="video" accept="video/mp4,.mp4" required></label>
+    <button type="submit">上傳並建立巡檢工作</button>
+  </form>
+  <p class="power-api-result" aria-live="polite"></p>
+  <h2>我的巡檢紀錄</h2>
+  <ul>
+  {% for job in jobs %}
+    <li>
+      {{ job.original_filename|default:"未命名影片" }}：{{ job.get_status_display }}／{{ job.get_inference_mode_display }}
+      {% if job.video_metadata %}<p>影片資訊：{{ job.video_metadata }}</p>{% endif %}
+      {% if job.anomaly_timeline %}<details><summary>異常時間軸</summary><pre>{{ job.anomaly_timeline }}</pre></details>{% endif %}
+      {% if job.inference_mode == 'MOCK' %}<p><strong>MOCK TEST ONLY：此結果不是真實 YOLO 推論。</strong></p>{% endif %}
+      {% if job.last_error %}<p>處理錯誤：{{ job.last_error }}</p>{% endif %}
+      {% for review in job.reviews.all %}<p>教師覆核：{{ review.get_decision_display }}{% if review.score != None %}，{{ review.score }} 分{% endif %}</p>{% endfor %}
+    </li>
+  {% empty %}<li>尚未上傳巡檢影片。</li>{% endfor %}
+  </ul>
+</main>
+<script>
+document.querySelectorAll('form[data-api-form]').forEach((form) => form.addEventListener('submit', async (event) => {
+  event.preventDefault(); const result = form.parentElement.querySelector('.power-api-result');
+  result.textContent = '正在送出…';
+  try { const response = await fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin'}); const body = await response.json(); result.textContent = body.detail || (body.ok ? '已保存，重新整理可查看工作狀態。' : '操作未完成。'); }
+  catch (_) { result.textContent = '連線失敗，未確認建立任何巡檢工作。'; }
+}));
+</script>
+{% endblock %}
