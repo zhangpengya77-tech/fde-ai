@@ -3,6 +3,7 @@ import csv
 import datetime
 import hmac
 import hashlib
+import uuid
 import json
 import logging
 import mimetypes
@@ -2434,12 +2435,12 @@ def _validated_inspection_image(upload):
     return None, "只接受 JPG、JPEG、PNG 圖片。"
 
 
-def _save_inspection_record(enrollment, task_type, upload, content, result):
+def _save_inspection_record(enrollment, task_type, upload, content, result, *, token=""):
     """把 Live 的真實推論結果與圖片保存成一筆可覆核紀錄。"""
     detections = result.get("detections") or []
     best = result.get("best_detection") or {}
     record = VisionInspectionRecord(
-        enrollment=enrollment, task_type=task_type, original_filename=upload.name[:255],
+        enrollment=enrollment, task_type=task_type, submission_token=token, original_filename=upload.name[:255],
         image_sha256=hashlib.sha256(content).hexdigest(),
         image_width=int(result.get("image_width") or 0), image_height=int(result.get("image_height") or 0),
         model_id=str(result.get("model_id") or ""), model_version=str(result.get("model_version") or ""),
@@ -2452,18 +2453,25 @@ def _save_inspection_record(enrollment, task_type, upload, content, result):
         with transaction.atomic():
             record.save()
     except IntegrityError:
-        # 雙擊或重試同時送達：保留先寫入的紀錄，移除這次多存的圖片。
+        # 同一提交併發送達：保留先寫入的紀錄，移除這次多存的圖片。
         record.image.delete(save=False)
-        return _pending_inspection_record(enrollment, task_type, content)
+        return _inspection_record_for_token(enrollment, token)
     return record
 
 
-def _pending_inspection_record(enrollment, task_type, content):
-    """同一張圖已有待覆核紀錄時直接沿用；已覆核的圖片可重新檢測。"""
-    return enrollment.vision_inspection_records.filter(
-        task_type=task_type, image_sha256=hashlib.sha256(content).hexdigest(),
-        review_status=VisionInspectionRecord.ReviewStatus.PENDING,
-    ).first()
+def _inspection_token(value):
+    """只接受伺服器簽發格式的 UUID；其餘視為沒有冪等鍵。"""
+    try:
+        return str(uuid.UUID(str(value or "")))
+    except ValueError:
+        return ""
+
+
+def _inspection_record_for_token(enrollment, token):
+    """冪等鍵範圍限該學員課程，別人的識別碼不可能取回他人紀錄。"""
+    if not token:
+        return None
+    return enrollment.vision_inspection_records.filter(submission_token=token).first()
 
 
 def _inspection_error_message(exc):
@@ -2573,7 +2581,11 @@ def student_rotation_v5_scan(request, enrollment_id):
     records = enrollment.vision_inspection_records.filter(
         task_type=VisionInspectionRecord.TaskType.PROP_ROTATION_V5,
     ).prefetch_related("review_events")
-    context = {"enrollment": enrollment, "record": None, "records": records[:20], "error": ""}
+    token = _inspection_token(request.POST.get("submission_token"))
+    context = {
+        "enrollment": enrollment, "record": None, "records": records[:20], "error": "",
+        "submission_token": token or uuid.uuid4(),
+    }
     selected = request.GET.get("record")
     if request.method == "GET":
         if selected:
@@ -2591,9 +2603,9 @@ def student_rotation_v5_scan(request, enrollment_id):
         context["error"] = error
         return render(request, "learning/student_rotation_v5_scan.html", context, status=422)
     task_type = VisionInspectionRecord.TaskType.PROP_ROTATION_V5
-    pending = _pending_inspection_record(enrollment, task_type, content)
-    if pending is not None:
-        return redirect(f"{reverse('learning:student_rotation_v5_scan', args=[enrollment.pk])}?record={pending.pk}")
+    existing = _inspection_record_for_token(enrollment, token)
+    if existing is not None:
+        return redirect(f"{reverse('learning:student_rotation_v5_scan', args=[enrollment.pk])}?record={existing.pk}")
     try:
         result = vision_api.rotation_v5_student_infer(
             image_bytes=content, student_id=enrollment.student.public_user_id,
@@ -2604,7 +2616,7 @@ def student_rotation_v5_scan(request, enrollment_id):
         context["error"] = _inspection_error_message(exc)
         return render(request, "learning/student_rotation_v5_scan.html", context, status=503)
     record = _save_inspection_record(
-        enrollment, VisionInspectionRecord.TaskType.PROP_ROTATION_V5, upload, content, result,
+        enrollment, task_type, upload, content, result, token=token,
     )
     return redirect(f"{reverse('learning:student_rotation_v5_scan', args=[enrollment.pk])}?record={record.pk}")
 

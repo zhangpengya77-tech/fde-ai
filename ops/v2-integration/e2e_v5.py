@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -85,6 +86,21 @@ for image in PHOTOS[:3]:
     record_urls.append(location.split("record=")[-1] if ok else "")
     check(f"學員上傳 {image.name} → 真實 YOLO", ok and bool(tags) and "<rect" in page.text and "v5_finetune_20261027_101500" in page.text, tags[:4])
 record_id = record_urls[0]
+def form_token(http, path):
+    return re.search(r'name="submission_token" value="([^"]+)"', http.get(path).text).group(1)
+
+
+submit_token = form_token(student, scan_url)
+payload = {"csrfmiddlewaretoken": token(student, scan_url), "submission_token": submit_token}
+upload = lambda: {"photo": (PHOTOS[3].name, PHOTOS[3].read_bytes(), "image/jpeg")}
+with ThreadPoolExecutor(3) as pool:
+    answers = list(pool.map(lambda _: student.post(scan_url, data=payload, files=upload()), range(3)))
+targets = {item.headers.get("location", "") for item in answers}
+check("相同識別碼併發三次只得一筆", len(targets) == 1 and all(item.status_code == 302 for item in answers), targets)
+retry = student.post(scan_url, data=payload, files=upload())
+check("相同識別碼重試取回原紀錄", retry.headers.get("location") in targets, "")
+other = student.post(scan_url, data={"csrfmiddlewaretoken": payload["csrfmiddlewaretoken"], "submission_token": form_token(student, scan_url)}, files=upload())
+check("相同照片的新提交另成一筆", other.status_code == 302 and other.headers.get("location") not in targets, "")
 image_url = f"/evidence/vision-inspections/{record_id}/image/"
 check("學員可讀自己的私有圖片", student.get(image_url).status_code == 200, "")
 anonymous = client()

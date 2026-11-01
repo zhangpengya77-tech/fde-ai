@@ -1376,6 +1376,8 @@ class VisionInspectionRecord(models.Model):
     record_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="vision_inspection_records")
     task_type = models.CharField(max_length=32, choices=TaskType.choices)
+    # 表單每次產生一個；同一表單因逾時或雙擊重送時帶相同值。
+    submission_token = models.CharField(max_length=36, blank=True, default="")
     image = models.FileField(upload_to=vision_inspection_upload_path)
     original_filename = models.CharField(max_length=255, blank=True)
     image_sha256 = models.CharField(max_length=64)
@@ -1403,12 +1405,12 @@ class VisionInspectionRecord(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["review_status", "-created_at"], name="vision_insp_review_idx")]
-        # 同一學員同一張圖只留一筆待覆核：回應遺失後重傳不得讓教師看到兩筆。
+        # 冪等鍵是提交識別碼，不是圖片內容：相同照片的不同提交都要保留。
         constraints = [
             models.UniqueConstraint(
-                fields=["enrollment", "task_type", "image_sha256"],
-                condition=models.Q(review_status="PENDING"),
-                name="vision_insp_one_pending_per_image",
+                fields=["enrollment", "submission_token"],
+                condition=~models.Q(submission_token=""),
+                name="vision_insp_one_record_per_token",
             ),
         ]
 

@@ -55,6 +55,7 @@ EXPECTED_CHAIN: tuple[str, ...] = (
     "0026_power_inspection_deployment_events",
     "0027_vision_inspection_records",
     "0028_vision_inspection_one_pending",
+    "0029_vision_inspection_submission_token",
 )
 
 

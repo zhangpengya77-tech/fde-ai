@@ -1,6 +1,7 @@
 """學員圖片檢測紀錄與教師覆核：Live 以替身回應，只測 Django 閉環與權限。"""
 
 import tempfile
+import uuid
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -23,7 +24,7 @@ INFERENCE = {
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
 class VisionInspectionRecordTests(TestCase):
     def setUp(self):
-        media = tempfile.TemporaryDirectory()
+        media = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(media.cleanup)
         overrider = override_settings(MEDIA_ROOT=media.name)
         overrider.enable()
@@ -118,37 +119,80 @@ class VisionInspectionRecordTests(TestCase):
         self.assertNotContains(self._client(self.teacher_b).get(url), "學員 A")
         self.assertNotContains(self._client(self.teacher_a).get(url, {"status": "PASS"}), "學員 A")
 
-    def test_retry_of_same_image_keeps_one_pending_record(self):
-        first = self._record()
-        with mock.patch("learning.views.vision_api.rotation_v5_student_infer") as infer:
-            response = self._client(self.student_a.user).post(
-                reverse("learning:student_rotation_v5_scan", args=[self.enrollment_a.pk]),
-                {"photo": SimpleUploadedFile("again.jpg", JPEG)},
-            )
-        self.assertEqual(response.status_code, 302)
-        self.assertIn(str(first.pk), response["Location"])
+    def _post_token(self, token, content=JPEG, client=None, name="prop.jpg", enrollment=None, side_effect=None):
+        client = client or self._client(self.student_a.user)
+        url = reverse("learning:student_rotation_v5_scan", args=[(enrollment or self.enrollment_a).pk])
+        with mock.patch("learning.views.vision_api.rotation_v5_student_infer", return_value=INFERENCE, side_effect=side_effect) as infer:
+            response = client.post(url, {"photo": SimpleUploadedFile(name, content), "submission_token": token})
+        return response, infer
+
+    def test_form_issues_a_token(self):
+        page = self._client(self.student_a.user).get(reverse("learning:student_rotation_v5_scan", args=[self.enrollment_a.pk]))
+        self.assertRegex(page.content.decode(), r'name="submission_token" value="[0-9a-f-]{36}"')
+
+    def test_same_token_retry_returns_same_record_without_inference(self):
+        token = str(uuid.uuid4())
+        first, _ = self._post_token(token)
+        second, infer = self._post_token(token)
+        self.assertEqual(first["Location"], second["Location"])
         infer.assert_not_called()
         self.assertEqual(VisionInspectionRecord.objects.count(), 1)
 
-    def test_concurrent_duplicate_save_returns_existing_record(self):
-        from learning import views
-
-        first = self._record()
-        upload = SimpleUploadedFile("b.jpg", JPEG)
-        with mock.patch("learning.views._pending_inspection_record", side_effect=[first]):
-            saved = views._save_inspection_record(self.enrollment_a, first.task_type, upload, JPEG, INFERENCE)
-        self.assertEqual(saved.pk, first.pk)
+    def test_retry_after_review_does_not_reset_review(self):
+        token = str(uuid.uuid4())
+        self._post_token(token)
+        record = VisionInspectionRecord.objects.get()
+        self._client(self.teacher_a).post(
+            reverse("learning:teacher_vision_inspection_detail", args=[record.pk]), {"decision": "PASS"},
+        )
+        _, infer = self._post_token(token)
+        infer.assert_not_called()
+        record.refresh_from_db()
+        self.assertEqual(record.review_status, "PASS")
         self.assertEqual(VisionInspectionRecord.objects.count(), 1)
 
-    def test_reviewed_image_can_be_inspected_again(self):
-        record = self._record()
-        self._client(self.teacher_a).post(
-            reverse("learning:teacher_vision_inspection_detail", args=[record.pk]), {"decision": "RESUBMIT"},
-        )
-        self.assertEqual(self._upload().status_code, 302)
+    def test_different_submissions_of_same_image_are_kept(self):
+        self._post_token(str(uuid.uuid4()))
+        self._post_token(str(uuid.uuid4()))
         self.assertEqual(VisionInspectionRecord.objects.count(), 2)
-        record.refresh_from_db()
-        self.assertEqual(record.review_status, "RESUBMIT")
+
+    def test_failed_attempt_can_retry_with_same_token(self):
+        token = str(uuid.uuid4())
+        failed, _ = self._post_token(token, side_effect=RuntimeError("vision_api_unavailable"))
+        self.assertEqual(failed.status_code, 503)
+        self.assertContains(failed, token, status_code=503)
+        self.assertFalse(VisionInspectionRecord.objects.exists())
+        retried, infer = self._post_token(token)
+        self.assertEqual(retried.status_code, 302)
+        infer.assert_called_once()
+        self.assertEqual(VisionInspectionRecord.objects.count(), 1)
+
+    def test_token_cannot_reach_another_students_record(self):
+        token = str(uuid.uuid4())
+        self._post_token(token)
+        mine = VisionInspectionRecord.objects.get()
+        response, infer = self._post_token(
+            token, client=self._client(self.student_b.user), enrollment=self.enrollment_b,
+        )
+        self.assertNotIn(str(mine.pk), response.get("Location", ""))
+        infer.assert_called_once()
+
+    def test_invalid_token_is_not_trusted(self):
+        self._post_token("not-a-uuid")
+        self._post_token("not-a-uuid")
+        self.assertEqual(VisionInspectionRecord.objects.count(), 2)
+        self.assertEqual(set(VisionInspectionRecord.objects.values_list("submission_token", flat=True)), {""})
+
+    def test_concurrent_save_of_same_token_keeps_first_record(self):
+        from learning import views
+
+        token = str(uuid.uuid4())
+        self._post_token(token)
+        first = VisionInspectionRecord.objects.get()
+        upload = SimpleUploadedFile("b.jpg", JPEG)
+        saved = views._save_inspection_record(self.enrollment_a, first.task_type, upload, JPEG, INFERENCE, token=token)
+        self.assertEqual(saved.pk, first.pk)
+        self.assertEqual(VisionInspectionRecord.objects.count(), 1)
 
     def test_real_timeout_shows_clear_message(self):
         response = self._upload(side_effect=RuntimeError("vision_api_rejected:503:rotation_inference_unavailable:sandbox_timeout"))
