@@ -93,6 +93,9 @@ function renderNavigation() {
     )
     .join('');
 
+  // 手機左側抽屜直接沿用桌面左側欄的導航，避免兩份清單各自維護而走樣。
+  const mobileNavList = document.getElementById('mobileNavList');
+  if (mobileNavList) mobileNavList.innerHTML = $('#moduleNav').innerHTML;
 }
 
 function applyRoute(routeKey) {
@@ -1430,58 +1433,70 @@ function bindActions() {
   });
 }
 
-// 手機兩個抽屜預設收合：左側主要導航、右側功能選單，同時間只開一個。
+// 手機導航預設收合；選取任何入口後回到內容畫面。
 function bindMobileMenu() {
   const toggle = document.getElementById('mobileMenuToggle');
   const menu = document.getElementById('mobileMenu');
-  const utilityToggle = document.getElementById('utilityMenuToggle');
-  const utilityMenu = document.getElementById('utilityMenu');
   const backdrop = document.getElementById('mobileMenuBackdrop');
-  if (!toggle || !menu || !utilityToggle || !utilityMenu) return;
+  const closeButton = document.getElementById('mobileMenuClose');
+  if (!toggle || !menu) return;
 
-  // 快捷功能固定四項；入口文字跟隨伺服器回傳的身分，實際權限仍由後端檢查。
-  let role = 'anonymous';
-  try {
-    role = JSON.parse(document.getElementById('fde-public-context')?.textContent || '{}').role || role;
-  } catch {
-    role = 'anonymous';
-  }
-  const studentLink = document.getElementById('utilityStudentLink');
-  const teacherLink = document.getElementById('utilityTeacherLink');
-  if (role === 'student') {
-    studentLink.textContent = '學員中心';
-    studentLink.href = '/student/';
-  }
-  if (role === 'teacher') {
-    teacherLink.textContent = '教師後台';
-    teacherLink.href = '/teacher/';
-  }
-
-  const panels = [[menu, toggle], [utilityMenu, utilityToggle]];
-  const setOpen = (panel) => {
-    panels.forEach(([item, button]) => {
-      item.hidden = item !== panel;
-      button.setAttribute('aria-expanded', String(item === panel));
-    });
-    document.body.classList.toggle('mobile-menu-open', Boolean(panel));
-    if (backdrop) backdrop.hidden = !panel;
-    document.body.style.overflow = panel ? 'hidden' : '';
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('mobile-menu-open', open);
+    if (backdrop) backdrop.hidden = !open;
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+    document.body.style.overflow = '';
+    // 換頁後把入口群組收回預設狀態，避免下次開選單還留著上一頁展開的痕跡。
+    const portalGroup = document.getElementById('mobilePortalGroup');
+    if (portalGroup) portalGroup.open = false;
   };
 
-  toggle.addEventListener('click', () => setOpen(menu.hidden ? menu : null));
-  utilityToggle.addEventListener('click', () => setOpen(utilityMenu.hidden ? utilityMenu : null));
-  document.getElementById('mobileMenuClose')?.addEventListener('click', () => setOpen(null));
-  document.getElementById('utilityMenuClose')?.addEventListener('click', () => setOpen(null));
-  backdrop?.addEventListener('click', () => setOpen(null));
-  [menu, utilityMenu].forEach((panel) => panel.addEventListener('click', (event) => {
-    if (event.target.closest('a')) setOpen(null);
-  }));
+  toggle.addEventListener('click', () => setOpen(menu.hidden));
+  closeButton?.addEventListener('click', () => setOpen(false));
+  backdrop?.addEventListener('click', () => setOpen(false));
+  menu.addEventListener('click', (event) => {
+    if (event.target.closest('a')) setOpen(false);
+  });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') setOpen(null);
+    if (event.key === 'Escape' && !menu.hidden) setOpen(false);
   });
   // 回到桌面寬度時抽屜一定不存在，避免殘留 body overflow:hidden 鎖住捲動。
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 768) setOpen(null);
+    if (window.innerWidth > 768 && !menu.hidden) setOpen(false);
+  });
+}
+
+// 右上角功能入口：手機收成下拉；登入後沿用伺服器渲染的登出表單。
+function bindPortalMenu() {
+  const toggle = document.getElementById('portalMenuToggle');
+  const menu = document.getElementById('portalMenu');
+  if (!toggle || !menu) return;
+
+  const logout = document.querySelector('.fde-public-links form');
+  if (logout) menu.append(logout.cloneNode(true));
+
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+  };
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  document.addEventListener('click', (event) => {
+    if (!menu.hidden && !event.target.closest('#portalMenu')) setOpen(false);
+  });
+  menu.addEventListener('click', (event) => {
+    if (event.target.closest('a')) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setOpen(false);
   });
 }
 
@@ -1505,5 +1520,6 @@ renderTeacherDashboard();
 renderCertificationChecklist();
 bindActions();
 bindMobileMenu();
+bindPortalMenu();
 syncViewFromLocation();
 })();

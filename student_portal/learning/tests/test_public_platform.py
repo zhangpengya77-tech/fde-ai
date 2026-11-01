@@ -13,7 +13,7 @@ class PublicPlatformRouteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="moduleNav"')
         self.assertContains(response, 'id="teacher"')
-        self.assertContains(response, "開始學習 / 註冊")
+        self.assertContains(response, "學員註冊")
         self.assertContains(response, "學員登入")
         self.assertContains(response, "教師登入")
         # 教師 2026-10-15 整合裁決（A4）：平台頁首五階段分類列（aria-label="平台学习分类"）已移除，

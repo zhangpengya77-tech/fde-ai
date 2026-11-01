@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FDE-AI | 無人載具學習控制中心</title>
-    <link rel="stylesheet" href="./src/styles.css?v=2.0-mobile-shell" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.2-fde-column" />
   </head>
   <body class="home-view">
     <aside class="sidebar">
@@ -23,51 +23,42 @@
     </aside>
 
     <header class="mobile-header">
-      <button id="mobileMenuToggle" class="mobile-nav-button" type="button" aria-label="開啟主導航" aria-expanded="false" aria-controls="mobileMenu">≡ 主導航</button>
-      <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI</a>
-      <button id="utilityMenuToggle" class="mobile-icon-button" type="button" aria-label="開啟快捷功能" aria-expanded="false" aria-controls="utilityMenu"><span class="mobile-icon-dots"></span></button>
+      <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習平台</small></a>
+      <button id="portalMenuToggle" class="mobile-portal-toggle" type="button" aria-expanded="false" aria-controls="portalMenu">功能</button>
+      <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileMenu">選單</button>
     </header>
 
-    <nav id="mobileMenu" class="mobile-demo-nav" aria-label="主導航" hidden>
-      <div class="mobile-menu-head">
-        <a class="mobile-menu-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習控制中心</small></a>
-        <button class="mobile-menu-close" id="mobileMenuClose" type="button" aria-label="關閉主導航">✕</button>
-      </div>
-      <div class="mobile-nav-list">
-        <a href="./" data-route="home">首頁</a>
-        <a href="./courses" data-route="learn">我的課程</a>
-        <a href="./f450" data-route="build">F450 組裝與 AI 助教</a>
-        <a href="/sim/">仿真訓練專區</a>
-        <a href="./eagle" data-route="inspection">鷹眼 AI 檢測中心</a>
-        <a href="/student/growth/">學習成長日誌 R01–R08</a>
-        <a href="/flight-health/">飛行健康 AI</a>
-        <a href="./results" data-route="cohorts">歷屆學員成果</a>
-        <a href="./tasks" data-route="missions">12 任務地圖</a>
-        <a href="./teacher" data-route="teacher">教師復核中心</a>
-      </div>
+    <nav id="portalMenu" class="mobile-portal-menu" aria-label="功能入口" hidden>
+      <a href="/login/">學員登入</a>
+      <a href="/register/">學員註冊</a>
+      <a href="/teacher/login/">教師登入</a>
+      <a href="/downloads/">下載中心</a>
+      <a href="/sim/">仿真訓練</a>
     </nav>
 
-    <aside id="utilityMenu" class="mobile-utility-menu" aria-label="快捷功能" hidden>
+    <nav id="mobileMenu" class="mobile-demo-nav" aria-label="Mobile demo navigation" hidden>
       <div class="mobile-menu-head">
-        <strong>快捷功能</strong>
-        <button class="mobile-menu-close" id="utilityMenuClose" type="button" aria-label="關閉快捷功能">✕</button>
+        <a class="mobile-menu-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習控制中心</small></a>
+        <button class="mobile-menu-close" id="mobileMenuClose" type="button" aria-label="關閉選單">✕</button>
       </div>
-      <div class="mobile-utility-list" id="utilityMenuList">
-        <a href="/downloads/">下載中心</a>
-        <a id="utilityStudentLink" href="/login/">學員登入</a>
-        <a id="utilityTeacherLink" href="/teacher/login/">教師登入</a>
-        <a href="/sim/">仿真訓練專區</a>
+
+      <!-- 與桌面左側欄同一份導航，由 renderNavigation() 同步寫入，不另外維護。 -->
+      <div class="mobile-nav-list" id="mobileNavList"></div>
+
+      <div class="mobile-menu-foot">
+        <span>v1.1 MVP</span>
+        <small>AI 雙師教學系統</small>
       </div>
-    </aside>
+    </nav>
     <div class="mobile-menu-backdrop" id="mobileMenuBackdrop" hidden></div>
 
     <main>
       <nav class="portal-entry-links" aria-label="Portal and tools">
-        <a href="/student/">學員前端</a>
+        <a href="/login/">學員登入</a>
         <a href="/register/">學員註冊</a>
-        <a href="/teacher/login/">教師後台</a>
-        <a href="/downloads/">下載中心 <small>Download Center</small></a>
-        <a href="/sim/">仿真訓練專區 <small>Simulation Zone</small></a>
+        <a href="/teacher/login/">教師登入</a>
+        <a href="/downloads/">下載中心</a>
+        <a href="/sim/">仿真訓練</a>
       </nav>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
@@ -94,30 +85,6 @@
             <span>AI INSPECTION READY</span>
             <span>TEACHER REVIEW CHANNEL</span>
           </div>
-        </div>
-      </section>
-
-      <section class="sim-center" id="simCenter" aria-labelledby="simCenterTitle">
-        <div class="sim-center-head">
-          <div>
-            <p class="eyebrow">Simulation Center</p>
-            <h2 id="simCenterTitle">仿真訓練專區</h2>
-          </div>
-          <a class="sim-center-download" href="/downloads/">下載中心</a>
-        </div>
-        <div class="sim-center-grid">
-          <a class="sim-card" href="/sim/app/?mode=exam&amp;exam=0">
-            <span class="sim-card-tag">可使用</span>
-            <strong>F450 八字飛行模擬訓練</strong>
-            <span>F450 考場模擬：起降、四面懸停、八字飛行與評分。</span>
-            <small>USB 遙控器請用 Windows Chrome／Edge；手機瀏覽器無法使用 USB 飛行控制。</small>
-          </a>
-          <a class="sim-card" href="/sim/app/">
-            <span class="sim-card-tag">可使用</span>
-            <strong>AI 電力巡檢模擬訓練</strong>
-            <span>輸電線 3D 場景：巡檢任務、拍照、安全距離提示與教學評分。</span>
-            <small>畫面中的 AI 判讀為模擬事件，不是真實模型結果。</small>
-          </a>
         </div>
       </section>
 
@@ -304,7 +271,6 @@
         <div class="inspection-layout">
           <div class="panel upload-panel">
             <h3>F450 槳葉正反及方向檢查</h3>
-            <a class="primary-action v5-entry" href="/student/rotation-v5/">上傳照片：YOLO V5 CW／CCW 檢測</a>
             <label class="dropzone">
               <input type="file" id="propellerInput" accept="image/*" />
               <span>上傳 F450 俯視照片</span>

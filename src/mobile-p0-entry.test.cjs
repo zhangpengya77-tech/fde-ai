@@ -10,7 +10,7 @@ const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 test('手機選單預設收合且提供既有平台入口', () => {
   assert.match(html, /id="mobileMenuToggle"/);
   assert.match(html, /id="mobileMenu"[^>]*hidden/);
-  assert.match(html, /class="mobile-login-link" href="\/student\/"/);
+  assert.match(html, /id="portalMenuToggle"/);
   assert.match(html, /href="\/teacher\/login\/">教師後台<\/a>/);
   assert.match(html, /href="\/flight-health\/"/);
   assert.match(html, /href="\/student\/growth\/"/);

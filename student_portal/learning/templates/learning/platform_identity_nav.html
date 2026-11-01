@@ -4,9 +4,6 @@
   <nav class="fde-public-links" aria-label="帳號導覽">
     {% if role == "anonymous" %}
       <a href="{{ growth_url }}">我的學習成長日誌</a>
-      <a href="{{ student_login_url }}">學員登入</a>
-      <a href="{{ register_url }}">開始學習 / 註冊</a>
-      <a href="{{ teacher_login_url }}">教師登入</a>
     {% elif role == "student" and profile %}
       <span class="fde-public-identity">{{ profile.public_user_id }} · {{ profile.nickname }}</span>
       <a href="{{ growth_url }}">我的學習成長日誌</a>

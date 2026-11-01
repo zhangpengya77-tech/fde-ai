@@ -135,7 +135,7 @@ body:has(.fde-public-bar) .sidebar {
 }
 
 @media (max-width: 768px) {
-  /* 手機帳號項目移入右上角功能選單，頂部只留一條 Header。 */
+  /* 手機入口集中在右上角功能選單，避免帳號列佔據首屏。 */
   .fde-public-bar {
     display: none;
   }

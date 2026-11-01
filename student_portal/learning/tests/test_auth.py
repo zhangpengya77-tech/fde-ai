@@ -52,7 +52,7 @@ class StudentRegistrationTests(TestCase):
             'id="learn"',
             'id="inspection"',
             'id="teacher"',
-            "開始學習 / 註冊",
+            "學員註冊",
             "學員登入",
             "教師登入",
         ):
