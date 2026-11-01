@@ -76,3 +76,6 @@ demo/runtime/verify_scene3_http.sh
 site-r07m/evidence/
 # ③ 本機備份目錄（521M：.bak 源碼副本／store JSON／.pt；非專案原始碼）
 backups/
+
+# 2026-11-01 測試重放帳本為執行期產物
+live_backend/var/
