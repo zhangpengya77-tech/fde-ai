@@ -1,0 +1,170 @@
+{
+  "generated_at": "2026-10-28T10:19:22.615Z",
+  "url_prefix": "/fde-ai/v2/",
+  "total": 6,
+  "passed": 6,
+  "results": [
+    {
+      "id": "S1-login-online",
+      "desc": "狀態端點回 classroom_server=true 且允許跨域",
+      "pass": true,
+      "observed": {
+        "static": "online",
+        "login": "online",
+        "vision": "unknown",
+        "title": "教學系統目前可使用",
+        "loginText": "可用",
+        "visionText": "無法確認",
+        "studentHref": "https://fde-ai-gateway.fde-ai-gateway.workers.dev/login/",
+        "courseCount": 0
+      },
+      "courses": {
+        "count": 12,
+        "first": "安全、法規與證照認知",
+        "last": "M12"
+      },
+      "expected": {
+        "login": "online",
+        "vision": "unknown",
+        "title": "教學系統目前可使用"
+      },
+      "consoleErrors": []
+    },
+    {
+      "id": "S2-login-offline",
+      "desc": "狀態端點回 classroom_server=false（教學主機離線）",
+      "pass": true,
+      "observed": {
+        "static": "online",
+        "login": "offline",
+        "vision": "unknown",
+        "title": "FDE-AI 教學系統目前離線",
+        "loginText": "目前不可用",
+        "visionText": "無法確認",
+        "studentHref": "#system-status",
+        "courseCount": 0
+      },
+      "courses": {
+        "count": 12,
+        "first": "安全、法規與證照認知",
+        "last": "M12"
+      },
+      "expected": {
+        "login": "offline",
+        "vision": "unknown",
+        "title": "FDE-AI 教學系統目前離線"
+      },
+      "consoleErrors": []
+    },
+    {
+      "id": "S3-no-cors-degrade",
+      "desc": "端點可達但不回 CORS 標頭（等同現況 Worker）→ 必須顯示無法確認",
+      "pass": true,
+      "observed": {
+        "static": "online",
+        "login": "unknown",
+        "vision": "unknown",
+        "title": "教學系統狀態無法確認",
+        "loginText": "無法確認",
+        "visionText": "無法確認",
+        "studentHref": "https://fde-ai-gateway.fde-ai-gateway.workers.dev/login/",
+        "courseCount": 0
+      },
+      "courses": {
+        "count": 12,
+        "first": "安全、法規與證照認知",
+        "last": "M12"
+      },
+      "expected": {
+        "login": "unknown",
+        "vision": "unknown",
+        "title": "教學系統狀態無法確認"
+      },
+      "consoleErrors": [
+        "Access to fetch at 'http://127.0.0.1:18101/gateway-status' from origin 'http://127.0.0.1:18100' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+        "Failed to load resource: net::ERR_FAILED"
+      ]
+    },
+    {
+      "id": "S4-backend-down",
+      "desc": "狀態端點完全不可達 → 必須顯示離線",
+      "pass": true,
+      "observed": {
+        "static": "online",
+        "login": "offline",
+        "vision": "unknown",
+        "title": "FDE-AI 教學系統目前離線",
+        "loginText": "目前不可用",
+        "visionText": "無法確認",
+        "studentHref": "#system-status",
+        "courseCount": 0
+      },
+      "courses": {
+        "count": 12,
+        "first": "安全、法規與證照認知",
+        "last": "M12"
+      },
+      "expected": {
+        "login": "offline",
+        "vision": "unknown",
+        "title": "FDE-AI 教學系統目前離線"
+      },
+      "consoleErrors": [
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED",
+        "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+      ]
+    },
+    {
+      "id": "S5-vision-online",
+      "desc": "提供 vision.available=true 的匿名端點 → YOLO 顯示可用",
+      "pass": true,
+      "observed": {
+        "static": "online",
+        "login": "online",
+        "vision": "online",
+        "title": "教學系統目前可使用",
+        "loginText": "可用",
+        "visionText": "可用",
+        "studentHref": "https://fde-ai-gateway.fde-ai-gateway.workers.dev/login/",
+        "courseCount": 0
+      },
+      "courses": {
+        "count": 12,
+        "first": "安全、法規與證照認知",
+        "last": "M12"
+      },
+      "expected": {
+        "login": "online",
+        "vision": "online",
+        "title": "教學系統目前可使用"
+      },
+      "consoleErrors": []
+    },
+    {
+      "id": "S6-unconfigured",
+      "desc": "完全未設定狀態端點 → 不得顯示可用",
+      "pass": true,
+      "observed": {
+        "static": "online",
+        "login": "unknown",
+        "vision": "unknown",
+        "title": "教學系統狀態無法確認",
+        "loginText": "無法確認",
+        "visionText": "無法確認",
+        "studentHref": "#system-status",
+        "courseCount": 0
+      },
+      "courses": {
+        "count": 12,
+        "first": "安全、法規與證照認知",
+        "last": "M12"
+      },
+      "expected": {
+        "login": "unknown",
+        "vision": "unknown",
+        "title": "教學系統狀態無法確認"
+      },
+      "consoleErrors": []
+    }
+  ]
+}

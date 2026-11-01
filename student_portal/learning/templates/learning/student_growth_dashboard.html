@@ -33,4 +33,14 @@
   <p class="empty-state">本期成長記錄尚未啟用，請聯絡教師。</p>
   {% endfor %}
 </section>
+<section class="section-block" aria-label="AI 電力巡檢紀錄">
+  <div class="section-heading"><h2>AI 電力巡檢紀錄</h2></div>
+  <p class="muted">此區保留影片分析與教師覆核歷程，不變更 R01–R08 原有記錄。</p>
+  <ul>
+  {% for job in power_inspection_jobs %}
+    <li>{{ job.original_filename|default:"未命名巡檢影片" }}｜{{ job.get_status_display }}{% if job.model %}｜模型 {{ job.model.version }}{% endif %}</li>
+  {% empty %}<li>尚未建立電力巡檢工作。</li>{% endfor %}
+  </ul>
+  <a class="button secondary" href="{% url 'learning:power_inspection_task' enrollment.pk %}">前往 AI 電力巡檢</a>
+</section>
 {% endblock %}

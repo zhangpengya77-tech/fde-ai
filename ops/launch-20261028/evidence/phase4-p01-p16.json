@@ -1,0 +1,274 @@
+{
+  "generated_at": "2026-10-28T19:18:27",
+  "isolated_django": "http://127.0.0.1:18110",
+  "isolated_live": "http://127.0.0.1:18111",
+  "iso_root": "D:/FDE-AI-UAS-v2.0/ops/launch-20261028/isolated-phase4",
+  "task_id": "PROP_DIRECTION",
+  "cohorts": {
+    "A": {
+      "cohort_id": "F450-DEMO-2026",
+      "teacher": "demo.teacher@fde-demo.local",
+      "student": "demo.student01@fde-demo.local",
+      "enrollment_id": 1
+    },
+    "B": {
+      "cohort_id": "2026-99",
+      "teacher": "phase4.teacherB@fde-demo.local",
+      "student": "phase4.studentB@fde-demo.local",
+      "enrollment_id": 3
+    },
+    "C": {
+      "teacher": "phase4.teacherC@fde-demo.local",
+      "cohort": null
+    }
+  },
+  "target_submission_id": "sub-427d8bad-9bcb-4be3-aa6c-8fba53b66be8",
+  "target_model_id": "PROP_20261023_DEMO-A_v1",
+  "total": 16,
+  "passed": 16,
+  "results": [
+    {
+      "id": "P-01",
+      "name": "匿名請求被拒絕（教師頁與教師動作）",
+      "pass": true,
+      "evidence": {
+        "get_teacher_page_http": 302,
+        "get_teacher_page_location": "/teacher/login/?next=/teacher/vision-center/%3Ftask%3DPROP_DIRECTION%26scene%3D1",
+        "post_activate_http": 403
+      }
+    },
+    {
+      "id": "P-02",
+      "name": "學員偽造教師角色/標頭無法提權",
+      "pass": true,
+      "evidence": {
+        "get_teacher_page_http": 403,
+        "post_activate_http": 403,
+        "get_with_forged_headers_http": 403,
+        "body_snippet": "\n<!doctype html>\n<html lang=\"zh-Hant\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>帳號權限不足｜FD"
+      }
+    },
+    {
+      "id": "P-03",
+      "name": "同班教師（A）可見學員 A 的提交",
+      "pass": true,
+      "evidence": {
+        "http": 200,
+        "cohort_a_submissions": [
+          "sub-fc75c194-384e-4339-ad74-6c9eb8ddbdf7",
+          "sub-fd43fd64-48c4-4e0a-9fa3-98e24446e2e6",
+          "sub-c6b7da58-cd18-4878-8289-6196b2e7efa9",
+          "sub-427d8bad-9bcb-4be3-aa6c-8fba53b66be8",
+          "sub-d1f6faf6-1ce5-4d67-ab26-8b4976d046a9"
+        ],
+        "visible_on_page": [
+          "sub-427d8bad-9bcb-4be3-aa6c-8fba53b66be8",
+          "sub-d1f6faf6-1ce5-4d67-ab26-8b4976d046a9"
+        ],
+        "html_bytes": 60473
+      }
+    },
+    {
+      "id": "P-04",
+      "name": "異班教師（B）列表中不含班級 A 任何提交或學員衍生模型",
+      "pass": true,
+      "evidence": {
+        "http": 200,
+        "cohort_a_submissions": [
+          "sub-fc75c194-384e-4339-ad74-6c9eb8ddbdf7",
+          "sub-fd43fd64-48c4-4e0a-9fa3-98e24446e2e6",
+          "sub-c6b7da58-cd18-4878-8289-6196b2e7efa9",
+          "sub-427d8bad-9bcb-4be3-aa6c-8fba53b66be8",
+          "sub-d1f6faf6-1ce5-4d67-ab26-8b4976d046a9"
+        ],
+        "leaked_submissions": [],
+        "cohort_a_student_models": [
+          "PROP_20261023_DEMO-A_v1",
+          "PROP_20261024_DEMO-A_v1",
+          "PROP_20261028_DEMO-A_v1"
+        ],
+        "leaked_models": [],
+        "global_teacher_models_not_cohort_scoped": [
+          "PROP_20261023_X_v1",
+          "PROP_20261024_X_v1"
+        ],
+        "html_bytes": 38894
+      }
+    },
+    {
+      "id": "P-05",
+      "name": "異班教師直接猜 submission_id / model_id 也無法取得詳情",
+      "pass": true,
+      "evidence": {
+        "get_with_submission_id_http": 403,
+        "get_with_model_id_http": 403,
+        "get_with_model_param_http": 200,
+        "model_id_in_page": false,
+        "denied_body": "\n<!doctype html>\n<html lang=\"zh-Hant\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>帳號權限不足｜FD"
+      }
+    },
+    {
+      "id": "P-06",
+      "name": "異班教師不能驗證／匯入／刪除他班提交",
+      "pass": true,
+      "evidence": {
+        "validate_submission_http": 403,
+        "import_http": 403,
+        "delete_submission_http": 403,
+        "validate_body": "\n<!doctype html>\n<html lang=\"zh-Hant\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>帳號權限不足｜FD",
+        "import_body": "\n<!doctype html>\n<html lang=\"zh-Hant\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>帳號權限不足｜FD"
+      }
+    },
+    {
+      "id": "P-07",
+      "name": "異班教師不能啟用他班模型（ACTIVE 未變）",
+      "pass": true,
+      "evidence": {
+        "activate_http": 403,
+        "active_before": [],
+        "active_after": [],
+        "body": "\n<!doctype html>\n<html lang=\"zh-Hant\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>帳號權限不足｜FD"
+      }
+    },
+    {
+      "id": "P-08",
+      "name": "無班級關聯教師（C）安全拒絕（空清單 + 資源一律 403）",
+      "pass": true,
+      "evidence": {
+        "list_http": 200,
+        "submission_in_list": false,
+        "detail_http": 403,
+        "activate_http": 403
+      }
+    },
+    {
+      "id": "P-09",
+      "name": "無效 .pt 被拒且未進入待審佇列",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "flash": "模型檔案未通過安全檢查，已拒絕且不會進入待審佇列（原因：不是 PyTorch 權重容器（缺少 ZIP 結構））。",
+        "submissions_before": 5,
+        "submissions_after": 5,
+        "junk_size": 2100
+      }
+    },
+    {
+      "id": "P-10",
+      "name": "合法 .pt 通過預檢並建立受控待審候選",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "submissions_before": 5,
+        "submissions_after": 6,
+        "matching_submissions": [
+          "sub-fd43fd64-48c4-4e0a-9fa3-98e24446e2e6",
+          "sub-c6b7da58-cd18-4878-8289-6196b2e7efa9",
+          "sub-427d8bad-9bcb-4be3-aa6c-8fba53b66be8"
+        ],
+        "model_sha256": "02995b79d6608bb0d081b64361d49520470b72d5e7932edd2e2ed8da4508bc85"
+      }
+    },
+    {
+      "id": "P-11",
+      "name": "Live 只接受帶正確簽章的內部呼叫（未簽章/偽造/過期一律 403）",
+      "pass": true,
+      "evidence": {
+        "no_headers": 403,
+        "forged_role_only": 403,
+        "bad_signature": 403,
+        "stale_signature": 403,
+        "valid_signature": 200
+      }
+    },
+    {
+      "id": "P-12",
+      "name": "偽造 X-FDE-Role／X-FDE-Teacher-ID／X-FDE-Cohort 不得提權",
+      "pass": true,
+      "evidence": {
+        "live_forged_headers_http": 403,
+        "live_signed_with_wrong_subject_http": 403,
+        "django_forged_headers_http": 403
+      }
+    },
+    {
+      "id": "P-13",
+      "name": "代理逾時安全退出（fail-closed，不掛住請求）",
+      "pass": true,
+      "evidence": {
+        "returncode": 0,
+        "result": {
+          "ok": true,
+          "list_submissions": {
+            "raised": "vision_api_unavailable",
+            "elapsed_seconds": 3.08,
+            "timeout_configured": 3,
+            "bounded": true
+          },
+          "guard": {
+            "teacher": "demo.teacher@fde-demo.local",
+            "status_code": 403,
+            "elapsed_seconds": 3.24,
+            "fail_closed": true
+          }
+        },
+        "stderr_tail": ""
+      }
+    },
+    {
+      "id": "P-14",
+      "name": "真實 YOLO 推論成功（非替身，有候選框與信心值）",
+      "pass": true,
+      "evidence": {
+        "http": 200,
+        "image": "prop_real_02.jpg",
+        "evidence_source": "REAL_INFERENCE",
+        "detection_count": 300,
+        "max_confidence": 0.4385,
+        "verdict": "INSUFFICIENT_DATA",
+        "class_names": "CW_F, CCW_F, CW_B, CCW_B"
+      }
+    },
+    {
+      "id": "P-15",
+      "name": "低品質/未達門檻模型仍不能 ACTIVE（門檻未被放寬）",
+      "pass": true,
+      "evidence": {
+        "model_id": "PROP_20261023_DEMO-A_v1",
+        "activation_eligible": false,
+        "health": "LOW_QUALITY",
+        "health_map50": 0.11746,
+        "http": 302,
+        "flash": "",
+        "status_after": "DEMO_IMPORTED",
+        "active_before": [],
+        "active_after": []
+      }
+    },
+    {
+      "id": "P-16",
+      "name": "正式 Registry 與正式 DB 前後指紋不變",
+      "pass": true,
+      "evidence": {
+        "sha256_before": {
+          "prod_db": "1fa462fef825980eb1808cc7f3535d336240c41b91ebc440031d156d9c19c133",
+          "demo_db": "fdaf180529979bb88f84c837910204329e76f3dfb4ec71775eab8134ec845aab",
+          "demo_registry": "9ffa6cb305f40b7b5afd72fbcaaad51a2c60ad5dd7749fd7b1f562cc3d416b32",
+          "default_registry": "7b3f674fbca0e6a13f2f154d5dddd926ecc9506e486926d3009ee5ae02615c36"
+        },
+        "sha256_after": {
+          "prod_db": "1fa462fef825980eb1808cc7f3535d336240c41b91ebc440031d156d9c19c133",
+          "demo_db": "fdaf180529979bb88f84c837910204329e76f3dfb4ec71775eab8134ec845aab",
+          "demo_registry": "9ffa6cb305f40b7b5afd72fbcaaad51a2c60ad5dd7749fd7b1f562cc3d416b32",
+          "default_registry": "7b3f674fbca0e6a13f2f154d5dddd926ecc9506e486926d3009ee5ae02615c36"
+        },
+        "unchanged": {
+          "prod_db": true,
+          "demo_db": true,
+          "demo_registry": true,
+          "default_registry": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+32bf3a4463846c5395c3a976dacf7f0d  ./live_backend/app/main.py
+c1bba329fe87e717ed1aea16804570aa  ./live_backend/app/vision_api.py
+a9dbfc6051ea50fa5fb80a7720146b67  ./live_backend/app/vision_center.py
+71719c469480eec1124881e284d81d9e  ./student_portal/learning/forms.py
+b32dfe1cc09f22304e068deab96b818c  ./student_portal/learning/urls.py
+aea597909e32cdade2a127aa2abdc716  ./student_portal/learning/views.py
+a85850498ee3fbfc2b78343e72696717  ./student_portal/learning/vision_submission.py

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="FDE-AI-UAS 無人機模擬仿真訓練中心。">
+  <title>模擬仿真訓練｜FDE-AI-UAS</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    .sim-main { max-width: 1080px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+    .sim-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+    .sim-card { display: flex; min-height: 19rem; flex-direction: column; justify-content: space-between; }
+    .sim-card h2 { margin-top: 0; }
+    .sim-card .actions { margin-top: 1.5rem; }
+    .sim-note { margin-top: 2rem; color: var(--muted, #586673); font-size: .92rem; }
+    @media (max-width: 720px) { .sim-grid { grid-template-columns: 1fr; } .sim-main { padding-inline: 1rem; } }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <nav class="nav" aria-label="主要導覽">
+      <a class="brand" href="../">FDE-AI <span>UAS</span></a>
+      <a href="../">首頁</a>
+      <a href="../courses/">公開課程</a>
+      <a aria-current="page" href="./">模擬仿真訓練</a>
+    </nav>
+    <div class="page-heading">
+      <p class="eyebrow">公開測試版 Beta</p>
+      <h1>無人機模擬仿真訓練中心</h1>
+      <p>兩種獨立教學場景；僅供練習，非民航局官方考試系統。</p>
+    </div>
+  </header>
+
+  <main class="sim-main">
+    <section class="sim-grid" aria-label="選擇仿真訓練模式">
+      <article class="card sim-card">
+        <div>
+          <p class="section-label">教學模式</p>
+          <h2>無人機考照模擬訓練</h2>
+          <p>練習起飛、降落、懸停、八字航線與飛行軌跡。建議以 Windows Chrome 或 Edge 連接 USB Joystick (HID)；未偵測到遙控器時會如實提示，可改用鍵盤體驗。</p>
+        </div>
+        <div class="actions"><a class="button primary" href="app/?mode=exam&amp;exam=0">開始考照模擬練習</a></div>
+      </article>
+
+      <article class="card sim-card">
+        <div>
+          <p class="section-label">場景教學</p>
+          <h2>電力巡檢場景仿真訓練</h2>
+          <p>在輸電塔、輸電線與巡檢區中進行飛行、取景與任務練習。畫面中的缺陷判讀為模擬事件／教學示範，不呼叫 YOLO，也不是實際 AI 辨識結果。</p>
+        </div>
+        <div class="actions"><a class="button primary" href="app/">進入巡檢場景訓練</a></div>
+      </article>
+    </section>
+    <p class="sim-note">遙控器準備：連接 USB-C 資料線 → 遙控器選擇 USB Joystick (HID) → 輕推搖桿供瀏覽器辨識 → 油門歸零後開始。行動裝置可閱讀與操作鍵盤替代介面，但不作 USB HID 遙控器相容性承諾。</p>
+  </main>
+  <footer>FDE-AI-UAS 模擬仿真訓練中心｜公開測試版 Beta</footer>
+</body>
+</html>

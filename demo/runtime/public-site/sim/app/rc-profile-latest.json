@@ -1,0 +1,97 @@
+{
+  "schema": "fde.device-profile/1",
+  "profile": {
+    "id": "Radiomaster Pocket Joystick (Vendor: 1209 Product: 4f54)",
+    "label": "Radiomaster Pocket Joystick (Vendor: 1209 Product: 4f54) (M1 最終標定 2026-10-22 Mode2 pitch 方向修正（真機實測 axis1 推上為正）)",
+    "type": "gamepad",
+    "mode": "custom",
+    "axes": {
+      "roll": {
+        "source": 0,
+        "kind": "bipolar",
+        "calibration": {
+          "min": -0.9833903312683105,
+          "center": 0.015144109725952148,
+          "max": 1,
+          "reverse": false,
+          "deadzone": 0.05,
+          "expo": 0
+        }
+      },
+      "pitch": {
+        "source": 1,
+        "kind": "bipolar",
+        "calibration": {
+          "min": -0.9843673706054688,
+          "center": 0,
+          "max": 0.9843673706054688,
+          "reverse": false,
+          "deadzone": 0.05,
+          "expo": 0
+        }
+      },
+      "yaw": {
+        "source": 3,
+        "kind": "bipolar",
+        "calibration": {
+          "min": -1,
+          "center": 0,
+          "max": 0.9765510559082031,
+          "reverse": false,
+          "deadzone": 0.05,
+          "expo": 0
+        }
+      },
+      "throttle": {
+        "source": 2,
+        "kind": "unipolar",
+        "calibration": {
+          "min": -1,
+          "center": -1,
+          "max": 0.9491939544677734,
+          "reverse": false,
+          "deadzone": 0.02,
+          "expo": 0
+        }
+      }
+    },
+    "gimbal": null,
+    "armButton": null,
+    "unsupported": false
+  },
+  "savedAtMs": 1792630304022,
+  "correctedAtMs": 1792630304022,
+  "sourceCaptureFile": "fde-stick-axis-probe-2026-10-22T00-08-20-141Z.json",
+  "calibration": {
+    "device": "Radiomaster Pocket Joystick (Vendor: 1209 Product: 4f54)",
+    "elapsedMs": 88200,
+    "axesRaw": [
+      {
+        "axis": 2,
+        "min": -1,
+        "center": -1,
+        "max": 0.949
+      },
+      {
+        "axis": 3,
+        "min": -1,
+        "center": 0,
+        "max": 0.977
+      },
+      {
+        "axis": 1,
+        "min": -0.984,
+        "center": 0,
+        "max": 0.984
+      },
+      {
+        "axis": 0,
+        "min": -0.983,
+        "center": 0.015,
+        "max": 1
+      }
+    ],
+    "armButton": null,
+    "note": "PITCH 方向修正 2026-10-22 08:51 (CST)：唯一改動是 pitch.calibration.reverse true→false。實測依據 fde-stick-axis-probe-2026-10-22T00-08-20-141Z.json：右桿上下 = axis1，推上原始值 +0.984（峰值有效）；當時綁定 pitch←axis1 reverse=true，推滿歸一化為 -1，判定方向反。2026-10-22 真機實測 axis1 推上為正，歷史紀錄 -1 已不適用（2026-10-20 live probe 與 2026-10-21 pitchroll-restore 檔註解均記成上推=-1，實為誤記）。改為 reverse=false 後：上推（原始 +0.984）→ 歸一化 +1 → pitch +1 → 機頭下壓、前進 (-Z)。roll←axis0 reverse=false 已由另一次實測驗證（右打為正、峰值 1.000），本次完全不動；yaw←axis3 reverse=false、throttle←axis2 unipolar、四軸 source/kind/min/center/max/deadzone/expo 全部不變。"
+  }
+}

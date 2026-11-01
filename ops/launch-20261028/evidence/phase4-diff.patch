@@ -1,0 +1,412 @@
+--- a/live_backend/app/main.py
++++ b/live_backend/app/main.py
+@@ -25,6 +25,7 @@
+ )
+ from .config import LiveConfig
+ from .errors import error_response, json_response
++from . import internal_auth
+ from .guidance import DeterministicGuidanceProvider
+ from .mock_vision import MockVision
+ from .orchestrator import CoachOrchestrator
+@@ -137,7 +138,13 @@
+         components = {"live_backend": "online", "vision": "online" if vision_online else "offline"}
+         if general_ai_provider is not None and hasattr(general_ai_provider, "health_status"):
+             components["general_ai"] = general_ai_provider.health_status()
+-        return json_response({"status": "online" if vision_online else "degraded", "components": components})
++        return json_response({
++            "status": "online" if vision_online else "degraded",
++            "components": components,
++            # 2026-10-28：讓運維一眼看出內部呼叫是否已啟用簽章驗證。
++            # unsigned_legacy 代表任何本機程序都能偽造 X-FDE-Role，正式環境不得停留此狀態。
++            "internal_auth": internal_auth.auth_mode(),
++        })
+ 
+     async def downloads_manifest(request):
+         return await manifest_endpoint(request, downloads_root, downloads_manifest_file)
+--- a/live_backend/app/vision_api.py
++++ b/live_backend/app/vision_api.py
+@@ -8,6 +8,7 @@
+ from starlette.routing import Route
+ 
+ from .errors import error_response, json_response
++from . import internal_auth
+ from .vision_center import (
+     ModelClassNamesMappingRequiredError,
+     ModelValidationError,
+@@ -18,11 +19,20 @@
+ 
+ 
+ def _teacher(request: Request) -> tuple[str | None, Response | None]:
++    """教師身分驗證。
++
++    2026-10-28（上線收尾第四階段 B）：標頭本身可被任意偽造，因此除角色與 ID 外，
++    必須通過內部簽章驗證（見 app/internal_auth.py）。未設定密鑰時維持
++    unsigned_legacy 相容模式，但健康端點會明確回報該狀態。
++    """
+     if request.headers.get("X-FDE-Role", "").casefold() != "teacher":
+         return None, error_response("teacher_required", "This action requires a teacher.", 403)
+     teacher_id = request.headers.get("X-FDE-Teacher-ID", "").strip()
+     if not teacher_id:
+         return None, error_response("teacher_id_required", "Teacher identity is required.", 403)
++    trusted, reason = internal_auth.verify(request)
++    if not trusted:
++        return None, error_response("internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403)
+     return teacher_id, None
+ 
+ 
+@@ -557,6 +567,10 @@
+             model_id = request.query_params.get("model_id") or None
+             model_type = request.query_params.get("model_type") or None
+             student_id = request.headers.get("X-FDE-Student-ID", "").strip()
++            # 2026-10-28：下載會寫審計且取得 .pt，必須確認呼叫方為可信內部來源。
++            trusted, reason = internal_auth.verify(request)
++            if not trusted:
++                return error_response("internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403)
+             downloaded_by = student_id or request.query_params.get("student_id") or "anonymous"
+             data = center.download_seed_model(
+                 model_id=model_id, model_type=model_type, downloaded_by=downloaded_by,
+--- a/student_portal/learning/views.py
++++ b/student_portal/learning/views.py
+@@ -1,6 +1,7 @@
+ import base64
+ import csv
+ import datetime
++import json
+ import logging
+ import mimetypes
+ import re
+@@ -71,6 +72,7 @@
+ )
+ from .vision_submission import submit_model_evidence_to_vision
+ from . import vision_submission as vision_api
++from . import vision_preflight
+ from .vision_rule_templates import template_choices_for_task, template_for_task
+ from . import prop_scan
+ from .vision_verification import runner_state
+@@ -725,6 +727,11 @@
+             return redirect_to_login(request.get_full_path(), reverse("learning:teacher_login"))
+         if not request.user.is_staff:
+             return render(request, "learning/role_denied.html", {"required_role": "教師"}, status=403)
++        # 2026-10-28（階段四 C）：資源級班級隔離。所有教師視圖共用同一道檢查，
++        # 避免逐個視圖漏加，也不依賴前端隱藏按鈕。URL 路徑上的 id 同樣要比對。
++        denied = vision_resource_guard(request, kwargs)
++        if denied is not None:
++            return denied
+         return view_func(request, *args, **kwargs)
+ 
+     return wrapped
+@@ -737,6 +744,153 @@
+     return cohorts.filter(teacher_accesses__teacher=user)
+ 
+ 
++# ---------------------------------------------------------------------------
++# 班級隔離（2026-10-28 上線收尾第四階段 C）
++#
++# 背景：teacher_vision_center 及相關操作原本只檢查「是否為教師」，未檢查「是否為
++# 該學員所屬班級的教師」，因此任何教師（含異班教師）只要知道 submission_id 或
++# model_id，就能查看、驗證、匯入甚至啟用他班模型。
++#
++# 設計：以 Live Registry 的 student_id（= Django 的 public_user_id）為橋樑，
++# 對照「教師被授權班級內的 active enrollment」，得到可見學員集合。
++#   * superuser → 不受限（沿用既有角色契約；models.TeacherCohortAccess.clean
++#     也要求只有 is_staff 才能被指派班級）。
++#   * 一般教師 → 只看得到 teacher_accesses 指向的 active 班級。
++#   * 無班級關聯 → 集合為空 → 一律拒絕（不因「沒有資料」而放行）。
++# ---------------------------------------------------------------------------
++def vision_visible_student_ids(user):
++    """回傳此教師可見的學員 public_user_id 集合；None 代表不受限（superuser）。"""
++    if user.is_superuser:
++        return None
++    return set(
++        Enrollment.objects.filter(cohort__in=teacher_cohorts(user), active=True)
++        .values_list("student__public_user_id", flat=True)
++    )
++
++
++def vision_can_see_student(user, public_user_id) -> bool:
++    allowed = vision_visible_student_ids(user)
++    if allowed is None:
++        return True
++    if not public_user_id:
++        return False
++    return str(public_user_id) in allowed
++
++
++def vision_cohort_denied(request):
++    return render(
++        request,
++        "learning/role_denied.html",
++        {"required_role": "所屬班級（此資源不屬於您被授權的班級）"},
++        status=403,
++    )
++
++
++def vision_resource_guard(request, path_kwargs=None):
++    """若請求帶 submission_id / model_id，驗證該資源是否屬於教師被授權班級。
++
++    id 來源有三處，全部都要看，否則只要換一種傳遞方式就能繞過：
++      1. POST 表單
++      2. GET 查詢字串
++      3. URL 路徑參數（例如 /teacher/vision-repository/<model_id>/integrity-check/）
++
++    回傳 None 表示通過（或本次請求不需檢查），否則回傳 403 回應。
++    由 teacher_required 統一呼叫，確保所有教師視圖都經過同一道檢查。
++
++    效能：一次請求只查一次（結果快取在 request 上），避免同一請求內重複打 Live。
++    """
++    cached = getattr(request, "_vision_guard_checked", None)
++    if cached is not None:
++        return cached
++
++    result = _vision_resource_guard_impl(request, path_kwargs or {})
++    request._vision_guard_checked = result
++    return result
++
++
++def _vision_lookup_submission_student(submission_id, *, teacher_id):
++    """回傳 (是否找到, 該提交的學員 public_user_id)。
++
++    找不到 → (False, None)；Live 不可用 → 拋 RuntimeError（由呼叫端 fail-closed）。
++    獨立成小函式是為了讓單元測試能以可控 stub 取代實際跨進程呼叫。
++    """
++    items = vision_api.list_submissions(teacher_id=teacher_id)
++    items = items if isinstance(items, list) else (items.get("submissions") or [])
++    target = next(
++        (item for item in items if str(item.get("submission_id")) == str(submission_id)), None
++    )
++    if target is None:
++        return False, None
++    return True, target.get("student_id")
++
++
++def _vision_lookup_model_student(model_id, *, teacher_id, preferred_task):
++    """回傳 (是否找到, 該模型的來源學員 public_user_id)。
++
++    先查 preferred_task，找不到再查另一個任務，避免任務類型不符造成誤判 403。
++    教師自行上傳的模型 source_student_id 為空字串，代表不屬於任何班級。
++    """
++    order = [preferred_task] + [
++        meta["id"] for meta in VISION_CENTER_TASKS if meta["id"] != preferred_task
++    ]
++    for model_type in order:
++        history = vision_api.task_model_history(model_type=model_type, teacher_id=teacher_id)
++        rows = (history or {}).get("history") or []
++        target = next(
++            (item for item in rows if str(item.get("model_id")) == str(model_id)), None
++        )
++        if target is not None:
++            return True, target.get("source_student_id")
++    return False, None
++
++
++def _vision_resource_guard_impl(request, kwargs):
++    submission_id = (
++        request.POST.get("submission_id")
++        or request.GET.get("submission_id")
++        or kwargs.get("submission_id")
++        or ""
++    ).strip()
++    model_id = (
++        request.POST.get("model_id")
++        or request.GET.get("model_id")
++        or kwargs.get("model_id")
++        or ""
++    ).strip()
++    if not submission_id and not model_id:
++        return None
++
++    allowed = vision_visible_student_ids(request.user)
++    if allowed is None:
++        return None  # superuser：沿用既有不受限契約
++
++    try:
++        if submission_id:
++            # 不帶 task_id：一次取回全部提交，避免「任務類型猜錯 → 合法請求被誤判 403」，
++            # 也避免攻擊者用 task 參數把查詢導向其他任務而閃過比對。
++            found, source_student = _vision_lookup_submission_student(
++                submission_id, teacher_id=request.user.pk
++            )
++        else:
++            found, source_student = _vision_lookup_model_student(
++                model_id, teacher_id=request.user.pk, preferred_task=_vision_task_id(request)
++            )
++    except RuntimeError:
++        # 取不到清單時 fail-closed：寧可拒絕，也不放行未經確認的資源。
++        return vision_cohort_denied(request)
++
++    if not found:
++        # 查不到就代表無法確認歸屬 → 拒絕（不做「查不到就放行」）。
++        return vision_cohort_denied(request)
++    if not source_student:
++        # 教師自行上傳的模型不屬於任何班級（無 source_student_id），
++        # 依既有契約允許教師管理；由 submission 匯入的模型一律有 source_student_id。
++        return None
++    if not vision_can_see_student(request.user, source_student):
++        return vision_cohort_denied(request)
++    return None
++
++
+ def ordered_phase_progress(enrollment):
+     progress = {item.phase: item for item in PhaseProgress.objects.filter(enrollment=enrollment)}
+     return [progress[phase] for phase, _ in TaskDefinition.Stage.choices if phase in progress]
+@@ -1205,6 +1359,46 @@
+     )
+ 
+ 
++_MODEL_UPLOAD_REJECT_TEXT = {
++    "empty_file": "檔案是空的",
++    "file_too_large": "檔案超過 100 MB",
++    "extension_not_allowed": "副檔名不是 .pt",
++    "unsafe_pickle_format": "舊式純 pickle 格式無法安全驗證",
++    "not_a_torch_archive": "不是 PyTorch 權重容器（缺少 ZIP 結構）",
++    "corrupt_archive": "壓縮容器損壞",
++    "torch_payload_missing": "容器內缺少模型權重資料（data.pkl）",
++    "unsafe_archive_entry": "壓縮容器內含不安全路徑",
++    "archive_expansion_too_large": "解壓後體積異常（疑似 ZIP 炸彈）",
++    "preflight_timeout": "結構檢查逾時",
++    "preflight_failed": "結構檢查無法完成",
++}
++
++
++def _record_model_upload_rejection(*, request, enrollment, filename, result):
++    """把拒絕事件寫入審計（append-only），但不建立任何可被誤認為合法候選的紀錄。"""
++    try:
++        audit_path = getattr(
++            settings,
++            "VISION_UPLOAD_AUDIT_PATH",
++            str(Path(settings.MEDIA_ROOT) / "vision_upload_audit.jsonl"),
++        )
++        Path(audit_path).parent.mkdir(parents=True, exist_ok=True)
++        record = {
++            "event": "model_upload_rejected",
++            "at": timezone.now().isoformat(),
++            "user_id": getattr(request.user, "pk", None),
++            "enrollment_id": getattr(enrollment, "pk", None),
++            "cohort_id": getattr(getattr(enrollment, "cohort", None), "cohort_id", ""),
++            "filename": filename,
++            "reason": result.get("reason"),
++            "details": result.get("details") or {},
++        }
++        with open(audit_path, "a", encoding="utf-8") as handle:
++            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
++    except Exception:  # noqa: BLE001 - 審計失敗不得阻斷拒絕流程
++        pass
++
++
+ @student_required
+ @require_POST
+ def growth_model_upload(request, enrollment_id):
+@@ -1245,6 +1439,26 @@
+     original_name = Path(str(upload.name)).name
+     content = upload.read()
+ 
++    # 2026-10-28（階段四 D）：結構預檢。只檢查容器結構，不反序列化、不載入模型。
++    # 失敗時只寫審計事件，不建立 Evidence、不進教師待審佇列。
++    preflight = vision_preflight.inspect_bytes(content, original_name)
++    if not preflight.get("ok"):
++        _record_model_upload_rejection(
++            request=request,
++            enrollment=enrollment,
++            filename=original_name,
++            result=preflight,
++        )
++        messages.error(
++            request,
++            "模型檔案未通過安全檢查，已拒絕且不會進入待審佇列（原因：{}）。".format(
++                _MODEL_UPLOAD_REJECT_TEXT.get(
++                    preflight.get("reason"), preflight.get("reason") or "unknown"
++                )
++            ),
++        )
++        return redirect(redirect_url)
++
+     # 數據飛輪 B-6：學員可選填「基於的種子模型」，預設為當前推薦基礎模型。
+     # 匯入時由 Live 複製到模型紀錄，形成第 N 期 → 第 N+1 期的版本鏈。
+     chosen_parent = (request.POST.get("parent_model_id") or "").strip()
+@@ -3291,10 +3505,17 @@
+                 {
+                     "label": meta["label"],
+                     "active": history.get("active"),
+-                    "history_count": len(history.get("history") or []),
++                    # 階段四 C：計數也要按班級過濾，否則異班教師可從「有幾筆」推測他班活動量。
++                    "history_count": sum(
++                        1
++                        for item in (history.get("history") or [])
++                        if vision_can_see_student(request.user, item.get("source_student_id"))
++                        or not item.get("source_student_id")
++                    ),
+                 }
+             )
+             if meta["id"] == task_id:
++                # 階段四 C：只保留本教師被授權班級的模型（superuser 不受限）。
+                 history_models = [
+                     _vision_model_row(
+                         item,
+@@ -3302,6 +3523,8 @@
+                         recommended_seed_id=recommended_seed_id,
+                     )
+                     for item in (history.get("history") or [])
++                    if vision_can_see_student(request.user, item.get("source_student_id"))
++                    or not item.get("source_student_id")
+                 ]
+                 inference_source = history.get("inference_source") or {}
+ 
+@@ -3312,6 +3535,13 @@
+         except RuntimeError:
+             raw_submissions = []
+ 
++        # 階段四 C：提交列表同樣只保留本教師被授權班級的學員。
++        raw_submissions = [
++            item
++            for item in (raw_submissions or [])
++            if vision_can_see_student(request.user, item.get("student_id"))
++        ]
++
+         models_by_submission = {
+             item["model_id"]: item
+             for item in history_models
+--- a/student_portal/learning/vision_submission.py
++++ b/student_portal/learning/vision_submission.py
+@@ -5,6 +5,8 @@
+ 
+ from django.conf import settings
+ 
++from . import internal_auth
++
+ 
+ class VisionImportClassNamesMappingRequired(RuntimeError):
+     """Live 回報：模型類別名與任務預期不同但數量一致，需要教師提供對照表。"""
+@@ -75,6 +77,8 @@
+     if teacher_id:
+         headers["X-FDE-Role"] = "teacher"
+         headers["X-FDE-Teacher-ID"] = str(teacher_id)
++    # 2026-10-28（階段四 B）：加上伺服器端簽章，讓 Live 能區分「Django 轉發」與「本機偽造」。
++    headers = internal_auth.signed_headers("POST", path.split("?")[0], headers)
+     request = Request(
+         f"{base}{path}",
+         data=json.dumps(payload).encode("utf-8"),
+@@ -97,6 +101,7 @@
+     if teacher_id:
+         headers["X-FDE-Role"] = "teacher"
+         headers["X-FDE-Teacher-ID"] = str(teacher_id)
++    headers = internal_auth.signed_headers("GET", path.split("?")[0], headers)
+     request = Request(f"{base}{path}", headers=headers, method="GET")
+     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
+     try:
+@@ -210,6 +215,8 @@
+     if teacher_id:
+         headers["X-FDE-Role"] = "teacher"
+         headers["X-FDE-Teacher-ID"] = str(teacher_id)
++    # 2026-10-28（階段四 B）：DELETE 同樣要簽章，否則 signed 模式下刪除會被拒。
++    headers = internal_auth.signed_headers("DELETE", path.split("?")[0], headers)
+     request = Request(f"{base}{path}", headers=headers, method="DELETE")
+     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
+     try:
+@@ -511,6 +518,7 @@
+     headers = {"Content-Type": "application/json"}
+     if student_id:
+         headers["X-FDE-Student-ID"] = str(student_id)
++    headers = internal_auth.signed_headers("GET", "/api/v1/vision/seed/download", headers)
+     request = Request(
+         f"{base}/api/v1/vision/seed/download{query}",
+         headers=headers,

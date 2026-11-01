@@ -1,0 +1,7 @@
+{
+  "activate_http": 302,
+  "redirect": "/teacher/vision-center/?task=PROP_DIRECTION&scene=3",
+  "page_messages": [
+    "啟用失敗，原本的正式模型未變更：請完成圖片驗證並達到啟用門檻 0.6。"
+  ]
+}

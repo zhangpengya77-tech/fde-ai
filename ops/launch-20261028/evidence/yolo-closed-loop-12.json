@@ -1,0 +1,236 @@
+{
+  "generated_at": "2026-10-28T19:18:55",
+  "isolated_django": "http://127.0.0.1:18110",
+  "isolated_live": "http://127.0.0.1:18111",
+  "task_id": "PROP_DIRECTION",
+  "enrollment_id": 1,
+  "model_sha256": "02995b79d6608bb0d081b64361d49520470b72d5e7932edd2e2ed8da4508bc85",
+  "active_before": [],
+  "total": 12,
+  "passed": 12,
+  "isolation_proof": {
+    "source_store_path": "D:\\FDE-AI-UAS-v2.0\\demo\\runtime\\vision-center\\vision_center.json",
+    "source_store_sha256_baseline": "9FFA6CB305F40B7B5AFD72FBCAAAD51A2C60AD5DD7749FD7B1F562CC3D416B32",
+    "source_store_sha256_now": "9ffa6cb305f40b7b5afd72fbcaaad51a2c60ad5dd7749fd7b1f562cc3d416b32",
+    "source_store_unchanged": true,
+    "isolated_store_sha256_now": "fe203b0ebcc62ae866134d72588cab690e94837981f41437ea7a9054200e4459",
+    "isolated_store_differs_from_source": true
+  },
+  "results": [
+    {
+      "step": 1,
+      "name": "學員登入（Django session）",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "login": "demo.student01@fde-demo.local"
+      }
+    },
+    {
+      "step": 2,
+      "name": "學員上傳 best.pt（真實 multipart）",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "model_sha256": "02995b79d6608bb0d081b64361d49520470b72d5e7932edd2e2ed8da4508bc85",
+        "size": 5460378
+      }
+    },
+    {
+      "step": 3,
+      "name": "提交已保存於 Live Registry（sha256 與磁碟一致）",
+      "pass": true,
+      "evidence": {
+        "submission_id": "sub-cc02a452-d5e0-428d-8376-32261cfdf362",
+        "status": "SUBMITTED",
+        "file_hash_matches_disk": true,
+        "count_before": 6,
+        "count_after": 7,
+        "duplicate_hint": "same_as_pending_submission"
+      }
+    },
+    {
+      "step": 4,
+      "name": "教師登入（Django teacher session）",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "login": "demo.teacher@fde-demo.local"
+      }
+    },
+    {
+      "step": 5,
+      "name": "教師頁面列出該筆提交",
+      "pass": true,
+      "evidence": {
+        "http": 200,
+        "submission_visible": true,
+        "html_bytes": 68751
+      }
+    },
+    {
+      "step": 6,
+      "name": "教師單張驗證（真實圖片送入 Live 推論）",
+      "pass": true,
+      "evidence": {
+        "http": 200,
+        "image": "prop_real_01.jpg",
+        "image_bytes": 329048,
+        "response_keys": [
+          "ok",
+          "result",
+          "submission_id"
+        ],
+        "error": null
+      }
+    },
+    {
+      "step": 7,
+      "name": "推論回傳真實結果（非替身）",
+      "pass": true,
+      "evidence": {
+        "evidence_source": "REAL_INFERENCE",
+        "verdict": "INSUFFICIENT_DATA",
+        "verdict_label": "CHECK（需要檢查）· 資料不足，無法判定",
+        "predicted_class": "CW_F",
+        "predicted_confidence": 0.2305,
+        "max_confidence": 0.2305,
+        "confidence_threshold_used": 0.5,
+        "detection_count": 300,
+        "first_box": {
+          "class": "CW_F",
+          "confidence": 0.2305,
+          "bbox": [
+            1157.1314697265625,
+            934.6978759765625,
+            1595.0401611328125,
+            1066.0
+          ]
+        },
+        "class_names": "CW_F, CCW_F, CW_B, CCW_B",
+        "rule_version": "PROP_RULE_v1",
+        "validated_at": "2026-10-28T11:18:51.033886Z"
+      }
+    },
+    {
+      "step": 8,
+      "name": "教師匯入為候選模型",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "model_id": "PROP_20261028_DEMO-A_v1_1306",
+        "status": "REVIEW_REQUIRED",
+        "health": "LOW_QUALITY",
+        "health_map50": 0.35139,
+        "activation_eligible": false
+      }
+    },
+    {
+      "step": 9,
+      "name": "資格判定有明確結論（合格或附原因不合格）",
+      "pass": true,
+      "evidence": {
+        "activation_eligible": false,
+        "blockers": [],
+        "health": "LOW_QUALITY",
+        "health_map50": 0.35139,
+        "evaluation_status": "NOT_EVALUATED"
+      }
+    },
+    {
+      "step": 10,
+      "name": "ACTIVE 流程遵守品質門檻（未降低門檻）",
+      "pass": true,
+      "evidence": {
+        "http": 302,
+        "active_before": [],
+        "active_after": [],
+        "page_message": ""
+      }
+    },
+    {
+      "step": 11,
+      "name": "學員回看 R07 成長紀錄",
+      "pass": true,
+      "evidence": {
+        "http": 200,
+        "mentions_model_file": true,
+        "html_bytes": 15759
+      }
+    },
+    {
+      "step": 12,
+      "name": "稽核軌跡可追溯（模型/提交事件）",
+      "pass": true,
+      "evidence": {
+        "history_total": 6,
+        "related_entries": 1,
+        "sample": [
+          {
+            "model_id": "PROP_20261028_DEMO-A_v1_1306",
+            "model_type": "PROP_DIRECTION",
+            "model_name": "學員模型 fdf362",
+            "version": "v1",
+            "file_path": "D:\\FDE-AI-UAS-v2.0\\ops\\launch-20261028\\isolated-phase4\\vision-center\\model_registry\\prop_direction\\PROP_20261028_DEMO-A_v1_1306\\best.pt",
+            "file_hash": "02995b79d6608bb0d081b64361d49520470b72d5e7932edd2e2ed8da4508bc85",
+            "file_size": 5460378,
+            "class_names": [
+              "CW_F",
+              "CCW_F",
+              "CW_B",
+              "CCW_B"
+            ],
+            "class_count": 4,
+            "source_group": "DEMO-A",
+            "source_submission_id": "sub-cc02a452-d5e0-428d-8376-32261cfdf362",
+            "source_student_id": "DEMO-STU-0001",
+            "dataset_id": "dataset-c58b0b23-f6a9-4474-8a79-629b7cff7de7",
+            "dataset_version": "v1",
+            "rule_version": "PROP_RULE_v1",
+            "uploaded_by": "2",
+            "uploaded_at": "2026-10-28T11:18:53.508522Z",
+            "validation_status": "REVIEW_REQUIRED",
+            "evaluation_status": "NOT_EVALUATED",
+            "metrics": {},
+            "status": "REVIEW_REQUIRED",
+            "notes": "由 AI 視覺模型中心導入",
+            "health": "LOW_QUALITY",
+            "health_reasons": [
+              "map50_below_threshold"
+            ],
+            "health_map50": 0.35139,
+            "health_nc": 4,
+            "health_names_count": 4,
+            "health_threshold": 0.5,
+            "health_has_train_args": true,
+            "health_has_epoch": true,
+            "health_has_metrics": true,
+            "review_reason": "無評估證據，僅類別名稱吻合（需 golden set 評估或 sandbox benchmark PASS）",
+            "health_label": "低品質",
+            "health_css": "candidate",
+            "health_note": "模型訓練品質低於門檻（mAP50 不足或無可證明的 mAP50），不建議作為正式模型。",
+            "nc": 4,
+            "names_count": 4,
+            "map50": 0.35139,
+            "map50_threshold": 0.5,
+            "has_train_args": true,
+            "has_epoch": true,
+            "has_metrics": true,
+            "train_imgsz": null,
+            "train_epochs": null,
+            "arch": "",
+            "inspected_at": "",
+            "pass_eligible": false,
+            "activation_eligible": false,
+            "activation_block_reason": "model_review_required",
+            "activation_block_detail": "模型尚無足夠質量證據（REVIEW_REQUIRED：需 golden set 評估達標或 sandbox benchmark PASS），不得啟用。",
+            "activation_min_confidence": 0.6,
+            "validation_pass_confidence": null,
+            "has_training_trace": true,
+            "training_trace_label": "有訓練痕跡"
+          }
+        ]
+      }
+    }
+  ]
+}

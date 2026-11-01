@@ -1,0 +1,41 @@
+{
+  "model_id": "PROP_20261028_DEMO-A_v1",
+  "model_type": "PROP_DIRECTION",
+  "model_name": "學員模型 2f681d",
+  "version": "v1",
+  "file_hash": "02995b79d6608bb0d081b64361d49520470b72d5e7932edd2e2ed8da4508bc85",
+  "file_size": 5460378,
+  "class_names": [
+    "CW_F",
+    "CCW_F",
+    "CW_B",
+    "CCW_B"
+  ],
+  "class_count": 4,
+  "source_group": "DEMO-A",
+  "source_submission_id": "sub-ddc92375-fc7e-4fd5-a9d2-e095892f681d",
+  "source_student_id": "DEMO-STU-0001",
+  "dataset_id": "dataset-9cdd7636-82d8-4141-8152-6409c90be0c9",
+  "dataset_version": "v1",
+  "rule_version": "PROP_RULE_v1",
+  "uploaded_by": "2",
+  "uploaded_at": "2026-10-28T10:41:41.582525Z",
+  "validation_status": "REVIEW_REQUIRED",
+  "evaluation_status": "NOT_EVALUATED",
+  "metrics": {},
+  "status": "REVIEW_REQUIRED",
+  "notes": "由 AI 視覺模型中心導入",
+  "health": "LOW_QUALITY",
+  "health_reasons": [
+    "map50_below_threshold"
+  ],
+  "health_map50": 0.35139,
+  "health_nc": 4,
+  "health_names_count": 4,
+  "health_threshold": 0.5,
+  "health_has_train_args": true,
+  "health_has_epoch": true,
+  "health_has_metrics": true,
+  "review_reason": "無評估證據，僅類別名稱吻合（需 golden set 評估或 sandbox benchmark PASS）",
+  "best_pt_relative": "best.pt"
+}

@@ -306,6 +306,7 @@ function renderMissionMap() {
                     <strong>${task.title}</strong>
                     <small>${task.subtitle}</small>
                     <span class="difficulty">${displayTaskMeta(task)}</span>
+                    ${task.entryHref ? '<span class="difficulty">進入單元 →</span>' : ''}
                   </button>
                 `
               )
@@ -578,18 +579,22 @@ function renderVoiceAssistantPanel() {
 }
 
 function renderAssessmentWorkflows() {
-  $('#assessmentWorkflows').innerHTML = assessmentWorkflows
-    .map(
-      (workflow) => `
+  // 正式入口只顯示前兩項（槳葉方向、電力巡檢）；帶 legacy 標記的流程
+  // （四面懸停）改在「歷史／擴充檢測」區呈現，不佔用正式檢測入口。
+  const formal = assessmentWorkflows.filter((workflow) => !workflow.legacy);
+  const legacy = assessmentWorkflows.filter((workflow) => workflow.legacy);
+  const card = (workflow) => `
         <article class="workflow-card">
           <span class="tag">${workflow.engine}</span>
           <h3>${workflow.title}</h3>
           <p>可上傳：${workflow.acceptedEvidence.join(' / ')}</p>
           <ul>${workflow.checks.map((check) => `<li>${check}</li>`).join('')}</ul>
         </article>
-      `
-    )
-    .join('');
+      `;
+  const grid = $('#assessmentWorkflows');
+  if (grid) grid.innerHTML = formal.map(card).join('');
+  const legacyGrid = $('#legacyAssessmentWorkflows');
+  if (legacyGrid) legacyGrid.innerHTML = legacy.map(card).join('');
 }
 
 function renderAssistantResult(result) {
@@ -1142,6 +1147,9 @@ function bindActions() {
     button.addEventListener('click', () => {
       selectedTaskId = button.dataset.taskId;
       renderTaskDetail(selectedTaskId);
+      // 具備 entryHref 的任務（如 M02）直接前往獨立單元頁；其餘任務行為不變。
+      const entryTask = missionTasks.find((item) => item.id === selectedTaskId);
+      if (entryTask && entryTask.entryHref) window.location.href = entryTask.entryHref;
     });
   });
 
@@ -1334,7 +1342,66 @@ function bindActions() {
     }
   });
 
+  // POWER_INSPECTION_V1：正式走 Django /student/power-inspection/upload/（JSON）。
+  // 沒有真實模型時後端會回 WAITING_FOR_REAL_MODEL / BLOCKED，前端如實顯示，
+  // 絕不顯示任何模擬異常結果。
+  $('#powerInspectionButton').addEventListener('click', async () => {
+    const file = $('#powerInspectionInput').files[0];
+    const target = $('#powerInspectionResult');
+    if (!file) {
+      target.innerHTML = missingFileCard('請先上傳巡檢 MP4 影片，再點擊「上傳並建立巡檢工作」。');
+      return;
+    }
+    if (!/\.mp4$/i.test(file.name)) {
+      target.innerHTML = missingFileCard('電力巡檢僅接受 MP4 影片格式。');
+      return;
+    }
+
+    target.innerHTML = '<article class="result-card"><p>正在上傳巡檢影片並建立隔離工作...</p></article>';
+    try {
+      const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+      const body = new FormData();
+      body.append('video', file, file.name);
+      const response = await fetch('/student/power-inspection/upload/', {
+        method: 'POST',
+        headers: csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {},
+        credentials: 'same-origin',
+        body,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        if (payload.code === 'login_required') {
+          const loginUrl = payload.login_url || '/login/';
+          target.innerHTML = `
+            <article class="result-card local-service-note">
+              <h3>請先以學員身分登入</h3>
+              <p>${escapeHtml(payload.detail || '登入後才能上傳電力巡檢影片。')}</p>
+              <p><a class="primary-action button" href="${escapeHtml(loginUrl)}?next=%2Fstudent%2Fpower-inspection%2F">前往學員登入</a></p>
+            </article>
+          `;
+          return;
+        }
+        target.innerHTML = unavailableCard(payload.detail || '巡檢影片上傳未完成，請稍後再試或聯絡教師。');
+        return;
+      }
+      const blocked = payload.inference_mode === 'BLOCKED' || payload.status === 'WAITING_FOR_REAL_MODEL';
+      target.innerHTML = `
+        <article class="result-card${blocked ? ' local-service-note' : ''}">
+          <h3>${blocked ? '已建立巡檢工作，但尚未載入真實模型' : '巡檢工作已建立'}</h3>
+          <p>工作編號：${escapeHtml(payload.job_id || '')}</p>
+          <p>狀態：${escapeHtml(payload.status || '')}｜推論模式：${escapeHtml(payload.inference_mode || '')}</p>
+          <p>${escapeHtml(payload.detail || '')}</p>
+          ${blocked ? '<p><strong>目前不會產生任何 AI 異常結果；待教師部署真實模型後才會實際分析。</strong></p>' : ''}
+          <p><a href="/student/power-inspection/">前往我的巡檢紀錄</a></p>
+        </article>
+      `;
+    } catch (error) {
+      target.innerHTML = unavailableCard('巡檢影片上傳失敗（連線異常），未確認建立任何工作。', error.message);
+    }
+  });
+
   // FOUR_SIDE_HOVER：正式走 /api/v1/vision/hover-video（後端抽幀 + 分析）。
+  // 2026-11-01 起此流程移至「歷史／擴充檢測」區，不再是本頁正式入口。
   $('#hoverButton').addEventListener('click', async () => {
     const file = $('#hoverInput').files[0];
     const client = window.FdeVisionClient;

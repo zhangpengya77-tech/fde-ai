@@ -167,6 +167,21 @@ class EntryHandler(BaseHTTPRequestHandler):
             target = (SITE_DIR / "assets" / name).resolve()
             if not str(target).startswith(str((SITE_DIR / "assets").resolve())):
                 return False
+        elif path == "/sim" or path.startswith("/sim/"):
+            # R6-B 跨專案整合（2026-11-01，本地未提交）：將真實 3D 仿真訓練中心
+            # （codex/simulator-center-beta 分支 public-site/simulator 的構建產物）接回
+            # 正式 DEMO 站「練」入口 /sim/。僅靜態託管，不動任何產品邏輯或驗證規則。
+            rel = path[len("/sim/"):] if path.startswith("/sim/") else ""
+            if not rel or rel.endswith("/"):
+                rel = (rel.rstrip("/") + "/index.html").lstrip("/")
+            target = (SITE_DIR / "sim" / rel).resolve()
+            # 目錄穿越防護：解析後必須仍位於 SITE_DIR/sim 內。
+            if not str(target).startswith(str((SITE_DIR / "sim").resolve())):
+                return False
+            if target.is_dir():
+                target = (target / "index.html").resolve()
+                if not str(target).startswith(str((SITE_DIR / "sim").resolve())):
+                    return False
         else:
             return False
         if not target.is_file():
@@ -198,6 +213,22 @@ class EntryHandler(BaseHTTPRequestHandler):
                 continue
             headers[key] = value
         headers["Host"] = f"{UPSTREAM_HOST}:{UPSTREAM_PORT}"
+        # CSRF 同源修正（2026-10-23）：瀏覽器經入口存取時，送出的 Origin/Referer 是入口位址
+        # （例：http://192.168.1.114:8112），但 Django 經 Live 代理後看到的 Host 是
+        # 127.0.0.1:8110，兩者不符會被 CSRF Origin 檢查拒絕（403）。
+        # 此處只改寫代理層標頭為 Django 端來源，不動任何產品邏輯、Django 設定或驗證規則。
+        _django_host, _django_port, _ = HEALTH_PROBES["django"]
+        django_origin = f"http://{_django_host}:{_django_port}"
+        for key in list(headers.keys()):
+            lower = key.lower()
+            if lower == "origin":
+                headers[key] = django_origin
+            elif lower == "referer":
+                parts = urlsplit(headers[key])
+                suffix = parts.path or "/"
+                if parts.query:
+                    suffix = f"{suffix}?{parts.query}"
+                headers[key] = f"{django_origin}{suffix}"
         headers["Content-Length"] = str(len(body))
         headers["X-Forwarded-Proto"] = self.headers.get("X-Forwarded-Proto", "https")
         headers["X-Forwarded-Host"] = self.headers.get("Host", "")

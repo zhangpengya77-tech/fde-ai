@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="FDE-AI-UAS 無人載具學習平台的公開課程入口。">
+  <title>FDE-AI-UAS｜無人載具學習平台</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="hero">
+    <nav class="nav" aria-label="主要導覽">
+      <a class="brand" href="./">FDE-AI <span>UAS</span></a>
+      <a href="courses/">公開課程</a>
+      <a href="m02/">M02 模擬飛行</a>
+      <a href="#system-status">教學系統</a>
+    </nav>
+    <div class="hero-content">
+      <p class="eyebrow">FDE-AI-UAS v2.0</p>
+      <h1>無人載具 AI 實訓學習平台</h1>
+      <p>公開課程可隨時瀏覽；學員成長紀錄、作業上傳與教師審核只在教學系統安全連線時開放。</p>
+      <div class="actions">
+        <a class="button primary" href="courses/">瀏覽公開課程</a>
+        <a class="button" data-portal-link="student" href="#system-status">學員登入</a>
+        <a class="button" data-portal-link="teacher" href="#system-status">教師登入</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="section intro">
+      <p class="section-label">公開學習</p>
+      <h2>學、練、作、測、證</h2>
+      <p>以無人機安全、模擬飛行、F450 工程組裝、AI 視覺與產業應用為主軸，循序建立實作能力。</p>
+      <a class="text-link" href="courses/">查看 12 項課程主題 →</a>
+    </section>
+
+    <section class="section" aria-label="實作單元入口">
+      <p class="section-label">實作單元</p>
+      <article class="card">
+        <h2>M02 模擬飛行訓練</h2>
+        <p>環境設定四步、M02-A～D 四張任務卡、安全提醒與學習紀錄填寫說明。此頁為公開教學說明，不需登入即可閱讀；學習紀錄的填寫與證據上傳仍須登入教學系統。</p>
+        <a class="text-link" href="m02/">進入 M02 單元 →</a>
+      </article>
+    </section>
+
+    <section class="section grid" aria-label="平台功能說明">
+      <article class="card"><h2>公開課程</h2><p>課程主題、學習方向與教學說明可在本公開網站瀏覽。</p></article>
+      <article class="card"><h2>實訓紀錄</h2><p>任務進度、成長檔案與成果證據由安全教學系統保存。</p></article>
+      <article class="card"><h2>AI 輔助</h2><p>Live Coach、視覺辨識與飛行健康分析僅於教師電腦服務可用時啟動。</p></article>
+    </section>
+
+    <section id="system-status" class="section status-card" aria-live="polite">
+      <p class="section-label">服務狀態</p>
+      <h2 id="status-title">正在確認教學系統狀態…</h2>
+      <p id="status-detail">公開課程不受影響。登入、上傳與 AI 功能需要教師電腦及安全教學服務在線。</p>
+      <ul class="status-list">
+        <li class="status-row" data-status-row="static" data-state="online">
+          <span class="status-dot" aria-hidden="true"></span>
+          <strong>靜態網站</strong>
+          <span data-status-value>可用（本頁已載入）</span>
+        </li>
+        <li class="status-row" data-status-row="login" data-state="pending">
+          <span class="status-dot" aria-hidden="true"></span>
+          <strong>登入服務</strong>
+          <span data-status-value>正在確認…</span>
+        </li>
+        <li class="status-row" data-status-row="vision" data-state="pending">
+          <span class="status-dot" aria-hidden="true"></span>
+          <strong>YOLO 視覺服務</strong>
+          <span data-status-value>正在確認…</span>
+        </li>
+      </ul>
+      <div class="actions">
+        <a class="button primary disabled" data-portal-link="student" aria-disabled="true" href="#system-status">進入學員系統</a>
+        <a class="button disabled" data-portal-link="teacher" aria-disabled="true" href="#system-status">進入教師系統</a>
+        <button class="button button-plain" id="status-refresh" type="button">重新檢查</button>
+      </div>
+      <p class="status-note">離線時不會接受登入、上傳或提交；無法確認時顯示「無法確認」，不會顯示虛假的成功結果。</p>
+      <p class="status-note" id="status-source"></p>
+    </section>
+  </main>
+
+  <footer>FDE-AI-UAS 公開學習入口</footer>
+  <script src="assets/config.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

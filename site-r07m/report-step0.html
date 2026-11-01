@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-Hans"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R07-M 步骤0调查</title>
+<style>
+body{font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;max-width:920px;margin:0 auto;padding:32px 20px;color:#1f2328;line-height:1.7}
+h1{border-bottom:3px solid #2563eb;padding-bottom:8px}
+h2{border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-top:32px}
+h3{color:#2563eb}
+code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:.9em}
+pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto}
+pre code{background:none;color:inherit}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:.92em}
+th,td{border:1px solid #d1d5db;padding:8px 10px;text-align:left}
+th{background:#eff6ff}
+tr:nth-child(even) td{background:#f8fafc}
+a{color:#2563eb}
+blockquote{border-left:4px solid #cbd5e1;margin:0;padding:4px 16px;color:#475569}
+</style></head><body>
+<h1>R07「模型管理」步驟 0：學員上傳 .pt 拒絕點唯讀調查報告（2026-10-21）</h1>
+<p>&gt; 範圍：教師指令「學員端上傳 .pt 的所有拒絕點」。本調查只讀不寫；未改任何檔案、未動 store。 &gt; 調查對象：學員成長紀錄上傳 best.pt → Django <code>growth_model_upload</code> → Live <code>POST /api/v1/vision/submissions</code> → &gt; <code>VisionCenter.create_submission</code> → （教師匯入）<code>import_submission</code> → <code>upload_model</code>。</p>
+<h2>a. 是否限制每任務／小組只能有一筆提交 → <strong>否，無任何數量限制</strong></h2>
+<table>
+<thead><tr><th>檔案</th><th>行號</th><th>事實</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1160–1190（<code>create_submission</code>）</td><td>僅檢查 task_id 合法（1166–1167）、副檔名 .pt（1168–1169）、內容非空且 ≤100MB（1170–1171）。<strong>沒有</strong>小組／任務／學員的唯一性檢查，每次呼叫都新建 <code>sub-{uuid}</code> 記錄</td></tr>
+<tr><td><code>student_portal/learning/views.py</code></td><td>1189–1269（<code>growth_model_upload</code>）</td><td>僅檢查成长記錄狀態可編輯（1203–1209）與表單有效（1211–1214）。<strong>沒有</strong>「已有提交就拒絕」的判斷；每次上傳新建一筆 Evidence＋一筆 Live 提交</td></tr>
+<tr><td><code>student_portal/learning/templates/learning/growth_record_detail.html</code></td><td>43–58</td><td>上傳表單顯示條件只有 <code>model_upload_allowed</code>（R07＋ai_flight_assessment）與 <code>editable</code>，<strong>與是否已有提交無關</strong></td></tr>
+<tr><td>DEMO store 實證</td><td><code>demo/runtime/vision-center/vision_center.json</code></td><td>同一小組 DEMO-A／同一學員 DEMO-STU-0001 有 <strong>10 筆</strong> PROP_DIRECTION 提交，其中 4 筆 sha256 完全相同（<code>9725803a…</code>）、另 4 筆完全相同（<code>2ae4dac3…</code>）——同組同檔重複上傳目前被允許</td></tr>
+</tbody></table>
+<h2>b. sha256 重複檢查 → <strong>學員上傳路徑不存在重複檢查</strong></h2>
+<table>
+<thead><tr><th>檔案</th><th>行號</th><th>事實</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1181（<code>create_submission</code>）</td><td>只把 sha256 寫入記錄的 <code>file_hash</code> 欄位，<strong>從未比對</strong></td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>908（<code>upload_model</code>）</td><td>同上，只寫不比較</td></tr>
+<tr><td><code>live_backend/app/vision_api.py</code></td><td>212–234（<code>submissions</code> POST）</td><td>只檢查 .pt 副檔名與 base64 解碼，無重複檢查</td></tr>
+<tr><td>全倉 grep <code>file_hash ==</code>／<code>duplicate</code></td><td>live_backend/app</td><td>無任何提交或模型層級的重複檔比對</td></tr>
+</tbody></table>
+<p>唯一的 sha256 去重位於<strong>另一條流程</strong>（教師模型收藏/入庫，非學員上傳）：</p>
+<ul><li><code>student_portal/learning/vision_repository.py:92</code>（「此證據已入庫，不得重複登錄」）、<code>:295</code>（<code>ALREADY_CATALOGUED</code>「不得重複收藏」）</li><li><code>student_portal/learning/vision_snapshot.py:178–270</code>（同內容快照 dedup）</li></ul>
+<p><strong>結論</strong>：現行沒有人因 sha256 重複被拒；REJECTED/ARCHIVED 是否計入比對的問題不存在（無比對）。M5 的新檢查據此設計：比對時排除 ARCHIVED 與已刪除記錄；命中已歸檔模型只提示、不拒絕。</p>
+<h2>c. <code>submission_not_importable</code> 的觸發條件 → <strong>提交狀態 ≠ SUBMITTED</strong></h2>
+<table>
+<thead><tr><th>檔案</th><th>行號</th><th>觸發條件</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1318–1319（<code>import_submission</code>）</td><td><code>submission[&quot;status&quot;] != &quot;SUBMITTED&quot;</code> → <code>raise ValueError(&quot;submission_not_importable&quot;)</code>。現行 <code>SUBMISSION_STATUSES = (&quot;SUBMITTED&quot;, &quot;IMPORTED&quot;, &quot;REJECTED&quot;)</code>（:37），即 <strong>IMPORTED（已導入）與 REJECTED（已駁回）都不可再導入</strong></td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1477–1478（<code>preflight_import</code>）</td><td>同上（匯入前預檢同一道閘門）</td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1320–1321／1479–1480</td><td>相關但不同碼：檔案不存在 → <code>submission_file_missing</code></td></tr>
+<tr><td><code>live_backend/app/vision_api.py</code></td><td>255–279／281–291</td><td>API 層包成 422 <code>import_failed</code>／<code>import_preflight_failed</code></td></tr>
+<tr><td><code>student_portal/learning/views.py</code></td><td>3662</td><td>Django 端文案：<code>submission_already_imported</code> →「此提交已導入過，請勿重複導入。」</td></tr>
+</tbody></table>
+<p>另有冪等防護（:1326–1335）：即使狀態被改回 SUBMITTED，已有非 REJECTED 模型引用該提交時仍拒（<code>submission_already_imported</code>）。</p>
+<h2>d. 學員頁面是否因已有提交而隱藏上傳入口 → <strong>否；入口只受成长記錄狀態閘門控制</strong></h2>
+<table>
+<thead><tr><th>檔案</th><th>行號</th><th>事實</th></tr></thead>
+<tbody>
+<tr><td><code>student_portal/learning/views.py</code></td><td>1164–1167</td><td><code>model_upload_allowed</code> = slot 為 R07 且 project_direction 為 ai_flight_assessment，<strong>不看已有提交</strong></td></tr>
+<tr><td><code>student_portal/learning/views.py</code></td><td>932–936</td><td><code>editable</code> = growth 狀態 ∈ {NOT_STARTED, IN_PROGRESS, NEEDS_REVISION}；上傳模型只把 NOT_STARTED→IN_PROGRESS（:1258–1260），<strong>提交後仍可再次上傳</strong></td></tr>
+<tr><td><code>student_portal/learning/views.py</code></td><td>1203–1209</td><td><code>growth_model_upload</code> 的拒絕點：狀態 ∉ 可編輯集合（已送審 SUBMITTED／已核准 APPROVED／已駁回 REJECTED）→「此成長記錄已提交或完成複核，目前唯讀」</td></tr>
+<tr><td><code>student_portal/learning/views.py</code></td><td>3952–3990（<code>_vision_mark_submission_removed</code>）</td><td>既有「教師刪除提交」流程：Evidence 標 <code>REMOVED_BY_TEACHER</code>＋growth 收回 NEEDS_REVISION → 上傳入口重現（此模式將复用到 M5）</td></tr>
+<tr><td>模板 <code>growth_record_detail.html</code></td><td>55</td><td><code>{% if has_removed_model %}</code> 按鈕文案——<strong>view 從未提供 <code>has_removed_model</code></strong>（全檔 grep 無此變數），按鈕永遠顯示「上傳」而非「重新上傳」（潛在缺陷，M5 一併修正）</td></tr>
+</tbody></table>
+<h2>匯入後的其他拒絕點（D2 匯入閘門，重傳時仍然有效，M5 明確不放寬）</h2>
+<table>
+<thead><tr><th>檔案</th><th>行號</th><th>拒絕碼</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>936–955</td><td><code>model_untrained</code> ／ <code>model_nc_mismatch</code>（正式環境直接 raise；DEMO 放行為 DEMO_IMPORTED）</td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>972–992</td><td>分類頭 nc 與 class_names 數量不符 → <code>model_nc_mismatch</code></td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1052–1053</td><td><code>smoke_inference_failed</code></td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td>1041–1045</td><td><code>model_class_names_mismatch</code> ／ <code>model_class_names_mapping_required</code></td></tr>
+<tr><td><code>live_backend/app/vision_center.py</code>（質量證據閘口，工作區未提交改動）</td><td>995–998 等</td><td>無評估證據 → REVIEW_REQUIRED（不得 ACTIVE，activate 時 <code>model_quality_gate</code>）</td></tr>
+</tbody></table>
+<h2>調查結論（據此實作 M1–M7）</h2>
+<ol><li>重傳的實際阻擋點不是「限一筆」也不是「sha256 重複」，而是：① growth 記錄狀態閘門（送審後唯讀）與 ② 提交一旦 IMPORTED 就不可再匯入。因此 M5 的正解是：<strong>歸檔/刪除模型後，把來源提交標記「已被取代」並把 growth 收回 NEEDS_REVISION</strong>，入口自然重顯。</li><li>sha256 重複檢查需<strong>新建</strong>（排除 ARCHIVED/已刪除；命中已歸檔模型僅提示「此文件與已歸檔模型相同」）。</li><li>既有 <code>archive_model</code>（:1152）<strong>無任何防護</strong>，可直接归档 ACTIVE——M4 必須在後端硬攔。</li><li><code>model_history</code>／<code>list_models</code> 目前把 ARCHIVED 一併回傳，Django 端靠狀態過濾；歸檔後從候選與驗證下拉隱藏已由既有過濾達成（<code>verifiable_models</code> 限 {VALIDATED, CANDIDATE, ACTIVE, DEMO_IMPORTED}，views.py:3148–3152），但「版本管理」歷史區會混入教師歸檔件——M1/M2 需拆分「已歸檔」折疊區。</li><li>回滾（rollback）目標=<code>previous_active_model</code>（:764–776）選「最近一個 ARCHIVED 且 VALIDATED」；教師歸檔件必須排除，否則會被回滾意外復活。</li></ol>
+</body></html>

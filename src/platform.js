@@ -558,11 +558,19 @@ export const assessmentWorkflows = [
     checks: ['槳葉 M1 = CCW', '槳葉 M2 = CCW', '槳葉 M3 = CW', '槳葉 M4 = CW', '錯誤項目交由 RAG 知識庫回答']
   },
   {
+    key: 'power-inspection',
+    title: '電力巡檢 MP4 影片上傳與分析',
+    engine: 'POWER_INSPECTION_V1 isolated worker',
+    acceptedEvidence: ['mp4-video'],
+    checks: ['學生上傳巡檢 MP4 後建立隔離巡檢工作', '未載入真實模型時維持 WAITING_FOR_REAL_MODEL，不產生虛構推論', '異常時間軸與截圖保存於本人紀錄', '教師覆核結果回寫學生巡檢紀錄']
+  },
+  {
     key: 'hover-scoring',
     title: 'F450 四面懸停 AI 評分',
     engine: 'YOLOv8 hover scoring placeholder',
     acceptedEvidence: ['30-second-video'],
-    checks: ['機頭朝前懸停', '機頭朝右懸停', '機頭朝後懸停', '機頭朝左懸停', '線下老師完成最終評分']
+    checks: ['機頭朝前懸停', '機頭朝右懸停', '機頭朝後懸停', '機頭朝左懸停', '線下老師完成最終評分'],
+    legacy: true
   }
 ];
 

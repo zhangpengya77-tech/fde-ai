@@ -1,0 +1,80 @@
+﻿{
+    "suite":  "P20-A-E4c",
+    "total":  12,
+    "pass":  12,
+    "fail":  0,
+    "results":  [
+                    {
+                        "id":  "E4C-01",
+                        "name":  "real-page-replica 2-marker AllMarkers=True",
+                        "pass":  true,
+                        "detail":  "status=200 allMarkers=True len=376"
+                    },
+                    {
+                        "id":  "E4C-02",
+                        "name":  "old 3-marker AllMarkers=False on real page",
+                        "pass":  true,
+                        "detail":  "allMarkers=False fakeHasResend=False (resend is a separate route, never in /login/)"
+                    },
+                    {
+                        "id":  "E4C-03",
+                        "name":  "injected UNKNOWN e4c=False",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e4c=False"
+                    },
+                    {
+                        "id":  "E4C-04",
+                        "name":  "injected UNKNOWN e4c=True e5=False",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e4c=True e5=False"
+                    },
+                    {
+                        "id":  "E4C-05",
+                        "name":  "injected UNKNOWN e7=False status=302",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e7_ok=False status=302"
+                    },
+                    {
+                        "id":  "E4C-06",
+                        "name":  "injected UNKNOWN E3_commandline_unreadable",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN reasons=E1_listener_ok,E2_process_or_creation_unreadable,E3_commandline_unreadable"
+                    },
+                    {
+                        "id":  "E4C-07",
+                        "name":  "injected UNKNOWN e6=False",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e6=False"
+                    },
+                    {
+                        "id":  "E4C-08",
+                        "name":  "ADOPTABLE + isolated state claim writes single owner",
+                        "pass":  true,
+                        "detail":  "adoptable=True claimed=True pid=90001"
+                    },
+                    {
+                        "id":  "E4C-09",
+                        "name":  "OWNED=\u003eREUSE; 0 termination primitives",
+                        "pass":  true,
+                        "detail":  "action=REUSE killPrimitives=0"
+                    },
+                    {
+                        "id":  "E4C-10",
+                        "name":  "UNKNOWN=\u003eABORT",
+                        "pass":  true,
+                        "detail":  "action=ABORT reason=unknown_evidence"
+                    },
+                    {
+                        "id":  "E4C-11",
+                        "name":  "UNKNOWN e7=False=\u003eABORT",
+                        "pass":  true,
+                        "detail":  "action=ABORT reason=unknown_evidence"
+                    },
+                    {
+                        "id":  "E4C-12",
+                        "name":  "production 8022/8770/8030 state unchanged",
+                        "pass":  true,
+                        "detail":  "before=8022:True/8770:True/8030:False after=8022:True/8770:True/8030:False"
+                    }
+                ]
+}

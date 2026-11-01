@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M02 模擬飛行訓練 | FDE-AI-UAS</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --bg-2: #0b1726;
+      --surface: #0f2033;
+      --surface-2: #132b44;
+      --line: rgba(0, 194, 255, 0.24);
+      --line-strong: rgba(22, 139, 255, 0.62);
+      --text: #ddf3ff;
+      --muted: #94abc2;
+      --blue: #168bff;
+      --cyan: #00c2ff;
+      --green: #35e6a8;
+      --yellow: #f5b84b;
+      --red: #ff5c73;
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.26);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(rgba(0, 194, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 194, 255, 0.035) 1px, transparent 1px),
+        radial-gradient(circle at 80% 8%, rgba(22, 139, 255, 0.2), transparent 28%),
+        var(--bg);
+      background-size: 48px 48px, 48px 48px, auto, auto;
+      color: var(--text);
+      font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, -apple-system, sans-serif;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--cyan); }
+
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 80px; }
+
+    header.top {
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 17, 31, 0.86);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .top-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: #04121f; font-weight: 900; font-size: 15px;
+    }
+    .brand h1 { margin: 0; font-size: 17px; letter-spacing: 0.4px; }
+    .brand small { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+
+    .top-actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: rgba(22, 139, 255, 0.12);
+      color: var(--text); text-decoration: none;
+      font-size: 13px; font-weight: 600;
+      transition: transform .15s ease, background .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); background: rgba(22, 139, 255, 0.22); }
+    .btn.primary {
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      color: #04121f; border-color: transparent;
+    }
+    /* 教學系統未設定或離線時，入口按鈕必須看得出來是停用狀態（與公開站首頁一致），不得假裝可用。 */
+    .btn.disabled {
+      opacity: .45;
+      pointer-events: none;
+      cursor: default;
+      filter: grayscale(.4);
+    }
+
+    .hero { padding: 44px 0 8px; }
+    .eyebrow {
+      color: var(--cyan); font-size: 12px; letter-spacing: 2.4px;
+      text-transform: uppercase; font-weight: 700; margin: 0 0 10px;
+    }
+    .hero h2 {
+      margin: 0 0 12px;
+      font-size: clamp(26px, 4vw, 38px);
+      line-height: 1.25;
+    }
+    .hero p.lead { color: var(--muted); max-width: 760px; margin: 0 0 18px; }
+
+    .meta-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .chip {
+      font-size: 12px; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--line); color: var(--muted);
+      background: rgba(15, 32, 51, 0.7);
+    }
+    .chip b { color: var(--text); font-weight: 700; }
+
+    section.block { margin-top: 42px; }
+    .block-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .block-head h3 { margin: 0; font-size: 21px; }
+    .block-head span { color: var(--muted); font-size: 13px; }
+
+    .card {
+      border: 1px solid var(--line);
+      background: rgba(15, 32, 51, 0.9);
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+
+    ol.steps { margin: 0; padding-left: 0; list-style: none; counter-reset: step; }
+    ol.steps li {
+      counter-increment: step;
+      position: relative;
+      padding: 0 0 18px 44px;
+      border-left: 1px dashed var(--line);
+      margin-left: 14px;
+    }
+    ol.steps li:last-child { border-left: 0; padding-bottom: 0; }
+    ol.steps li::before {
+      content: counter(step);
+      position: absolute; left: -14px; top: 0;
+      width: 28px; height: 28px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--surface-2); border: 1px solid var(--line-strong);
+      color: var(--cyan); font-weight: 800; font-size: 13px;
+    }
+    ol.steps strong { display: block; font-size: 15px; margin-bottom: 2px; }
+    ol.steps p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .task-card { display: flex; flex-direction: column; gap: 10px; }
+    .task-code {
+      font-size: 12px; letter-spacing: 1.6px; color: var(--cyan); font-weight: 800;
+    }
+    .task-card h4 { margin: 0; font-size: 17px; }
+    .task-card .goal { color: var(--muted); font-size: 14px; margin: 0; }
+    .task-card ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--text); }
+    .task-card ul li { margin-bottom: 4px; }
+    .pass {
+      margin-top: auto;
+      font-size: 13px;
+      border-top: 1px dashed var(--line);
+      padding-top: 10px;
+      color: var(--green);
+    }
+    .pass b { color: var(--green); }
+
+    .warn { border-color: rgba(255, 92, 115, 0.42); background: rgba(255, 92, 115, 0.07); }
+    .warn h3 { color: var(--red); }
+    .warn ul { margin: 0; padding-left: 20px; }
+    .warn li { margin-bottom: 8px; }
+
+    .note {
+      border-left: 3px solid var(--yellow);
+      background: rgba(245, 184, 75, 0.08);
+      padding: 14px 16px; border-radius: 0 10px 10px 0;
+      color: var(--text); font-size: 14px;
+    }
+
+    .honest { border-color: rgba(148, 171, 194, 0.35); background: rgba(148, 171, 194, 0.06); }
+    .honest h3 { color: var(--muted); }
+    .honest ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+    .honest li { margin-bottom: 6px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--cyan); font-size: 12px; letter-spacing: 1px; font-weight: 700; }
+    td:first-child { white-space: nowrap; color: var(--text); font-weight: 600; }
+
+    footer.foot {
+      margin-top: 56px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted); font-size: 12.5px;
+    }
+
+    @media (max-width: 560px) {
+      .hero { padding-top: 28px; }
+      .card { padding: 18px; }
+      .top-actions { width: 100%; }
+      .btn { flex: 1; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="brand-mark">FDE</span>
+      <div>
+        <h1>M02 模擬飛行訓練</h1>
+        <small>FDE-AI 無人載具學習平台 · 實操單元</small>
+      </div>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="../">← 返回首頁</a>
+      <!-- 靜態託管版：不再寫死 /student/growth/ 絕對路徑（GitHub Pages 子路徑下會 404）。
+           教學系統未設定或離線時，維持回到公開站狀態區塊；設定 portalBaseUrl 後由 app.js 改寫為正式後台網址。 -->
+      <a class="btn primary" data-portal-link="student" data-portal-fallback="../#system-status" href="../#system-status">前往學習紀錄 →</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="hero">
+    <p class="eyebrow">Module M02 · Flight Simulation</p>
+    <h2>先在地面練熟，再讓飛機離地</h2>
+    <p class="lead">
+      本單元使用「凌動飛行模擬」（中山凌動科技）作為練習工具，讓你在零風險的環境中建立方向感、油門手感與定點懸停能力。
+      完成本頁的任務卡之後，請回到平台填寫學習紀錄，作為本單元的成果依據。
+    </p>
+    <div class="meta-chips">
+      <span class="chip">課程代碼 <b>M02</b></span>
+      <span class="chip">對應任務 <b>T02</b></span>
+      <span class="chip">學習紀錄 <b>R02</b></span>
+      <span class="chip">建議時數 <b>3–6 小時</b></span>
+      <span class="chip">前置單元 <b>M01</b></span>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h3>一、開始前準備</h3>
+      <span>Before you start</span>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h4 style="margin:0 0 8px;font-size:16px;">你需要具備</h4>
+        <ul style="margin:0;padding-left:18px;font-size:14px;color:var(--muted);">
+          <li>Windows 電腦（建議獨立顯卡；內顯可能無法順暢執行）</li>
+          <li>一支 USB 遙控器（模擬器）或可用的遊戲手把</li>
+          <li>約 4 GB 以上可用磁碟空間</li>
+          <li>已完成 M01「安全、法規與證照認知」</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="margin:0 0 8px;font-size:16px;">軟體取得方式</h4>
+        <p style="margin:0;font-size:14px;color:var(--muted);">
+          模擬器為中山凌動科技的商業軟體，<strong>本平台不提供安裝檔、也不代為散布</strong>。
+          請依課程公告向授課教師取得合法授權的版本與安裝方式，或自行向廠商購買。
+          安裝與授權問題請洽廠商，本頁不提供破解、序號或授權繞過方法。
+        </p>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px;">
+      <strong>版本提醒：</strong>不同版本的介面與可用場景可能不同。若你的畫面與本頁描述不一致，以你實際安裝的版本為準，並回報給教師。
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h3>二、環境設定四步</h3>
+      <span>Setup</span>
+    </div>
+    <div class="card">
+      <ol class="steps">
+        <li>
+          <strong>接上遙控器並確認被系統辨識</strong>
+          <p>先開遙控器電源，再插入 USB。到系統的「遊戲控制器」設定中確認有出現裝置；若沒有，換一個 USB 埠或換線再試。</p>
+        </li>
+        <li>
+          <strong>在模擬器內完成遙控器綁定</strong>
+          <p>進入模擬器的遙控器設定頁，依畫面指示逐一撥動搖桿，讓系統對應油門、副翼、升降、方向四個通道。若某個通道沒有反應，通常是通道對應錯誤或遙控器未設為 USB 模擬器模式。</p>
+        </li>
+        <li>
+          <strong>確認飛行模式切換鍵</strong>
+          <p>本模擬器以鍵盤數字鍵 <strong>1、2、3</strong> 切換飛行模式。開始練習前先各按一次，確認畫面顯示的模式有變化。</p>
+        </li>
+        <li>
+          <strong>試飛 30 秒確認手感</strong>
+          <p>起飛後小幅推桿，確認四軸反應方向與你的預期一致。若升降或方向相反，回到設定頁把該通道設為反向（Invert）。</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h3>三、任務卡</h3>
+      <span>請依序完成，每張卡都要達到通過標準</span>
+    </div>
+    <div class="grid-4">
+
+      <div class="card task-card">
+        <span class="task-code">M02-A</span>
+        <h4>基礎起降</h4>
+        <p class="goal">建立油門手感與降落判斷。</p>
+        <ul>
+          <li>對尾起飛，離地約 1 公尺停住</li>
+          <li>維持 10 秒不碰地</li>
+          <li>緩慢下降，定點落地</li>
+        </ul>
+        <p class="pass"><b>通過標準：</b>連續 3 次起降，落地不翻覆、不彈跳。</p>
+      </div>
+
+      <div class="card task-card">
+        <span class="task-code">M02-B</span>
+        <h4>定點懸停</h4>
+        <p class="goal">練習細微修正，而非大幅搖桿。</p>
+        <ul>
+          <li>升至 2 公尺並穩定停住</li>
+          <li>維持在約 1 公尺範圍內</li>
+          <li>嘗試對頭懸停 10 秒</li>
+        </ul>
+        <p class="pass"><b>通過標準：</b>對尾懸停 30 秒、對頭懸停 10 秒，未飛出範圍。</p>
+      </div>
+
+      <div class="card task-card">
+        <span class="task-code">M02-C</span>
+        <h4>基礎航線</h4>
+        <p class="goal">練習連續轉向與高度維持。</p>
+        <ul>
+          <li>以四個航點圍出方形航線</li>
+          <li>每邊保持等高飛行</li>
+          <li>轉彎時不甩尾、不掉高</li>
+        </ul>
+        <p class="pass"><b>通過標準：</b>完整飛完 2 圈，未撞擊場景物件。</p>
+      </div>
+
+      <div class="card task-card">
+        <span class="task-code">M02-D</span>
+        <h4>定點拍攝</h4>
+        <p class="goal">結合懸停與取景，對應後續巡檢任務。</p>
+        <ul>
+          <li>飛至指定目標前懸停</li>
+          <li>調整機頭與高度完成取景</li>
+          <li>保持穩定後再拍攝</li>
+        </ul>
+        <p class="pass"><b>通過標準：</b>完成 3 個目標的拍攝，畫面主體完整、無明顯晃動。</p>
+      </div>
+
+    </div>
+    <div class="note" style="margin-top:14px;">
+      <strong>關於行業場景：</strong>部分版本的模擬器內建電力巡檢、物流配送、應急救援、農業植保等場景與評分機制。
+      是否可用取決於你的授權版本；若畫面中沒有這些場景，不影響本單元 A–D 四張任務卡的完成。
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h3>四、安全提醒</h3>
+      <span>Safety</span>
+    </div>
+    <div class="card warn">
+      <ul>
+        <li><strong>油門歸零再開機。</strong>接電前確認遙控器油門在最低位，避免一開機就高速起轉。</li>
+        <li><strong>模擬器不是真機。</strong>模擬器沒有真實的風、電池衰減與 GPS 誤差，手感僅供建立基礎，不能取代真機訓練。</li>
+        <li><strong>螺旋槳與馬達的物理常識要保留。</strong>在模擬器裡撞機不會受傷，但請把「保持安全距離」養成習慣。</li>
+        <li><strong>身體不適立即停止。</strong>長時間注視快速移動畫面可能引起頭暈或不適，休息後再繼續。</li>
+        <li><strong>每 40 分鐘休息一次。</strong>疲勞時的練習效果會下降，也容易養成錯誤動作。</li>
+        <li><strong>帳號與授權不得共用。</strong>軟體授權多為機器綁定，共用帳號可能導致授權失效。</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h3>五、填寫學習紀錄</h3>
+      <span>R02 模擬飛行訓練</span>
+    </div>
+    <div class="card">
+      <p style="margin-top:0;">
+        完成任務卡後，請到平台的成長日誌，選擇 <strong>R02 模擬飛行訓練</strong> 填寫紀錄。
+        學習紀錄是教師評分的依據，請據實填寫。
+      </p>
+      <table>
+        <thead>
+          <tr><th>欄位</th><th>填寫內容</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>學習備註</td><td>這次練了哪幾張任務卡、練習多久、遇到什麼問題、怎麼修正，以及需要教師協助的地方。</td></tr>
+          <tr><td>學習證據（照片）</td><td>模擬器完成畫面截圖，建議 1–3 張，能看出任務名稱與結果。</td></tr>
+          <tr><td>學習證據（影片／檔案）</td><td>選填。需要示範操作過程時，可上傳短影片或成果檔案。</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-bottom:0;margin-top:14px;">
+        <a class="btn primary" data-portal-link="student" data-portal-fallback="../#system-status" href="../#system-status">前往我的成長日誌 →</a>
+      </p>
+      <p style="margin-bottom:0;margin-top:12px;font-size:13px;color:var(--muted);">
+        本頁為公開教學說明，不需登入即可閱讀；學習紀錄的填寫與上傳必須在教學系統連線時進行。
+      </p>
+    </div>
+    <div class="note" style="margin-top:14px;">
+      <strong>評分方式：</strong>本單元由教師依「學習紀錄 + 證據 + 課堂口頭提問」綜合評分，<strong>不是 AI 自動評分</strong>。
+      評分結果與回饋會由教師在平台上回填。
+      （「本期學習總結」欄位僅出現在 R08 綜合成果，R02 不需要填。）
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h3>六、本單元不做什麼</h3>
+      <span>Scope boundary</span>
+    </div>
+    <div class="card honest">
+      <ul>
+        <li>本頁<strong>不會</strong>自動啟動模擬器，也不會與模擬器交換資料。</li>
+        <li>本頁<strong>不會</strong>讀取模擬器的飛行數據、成績或遙測。</li>
+        <li>本平台<strong>不會</strong>修改、中文化或重新打包模擬器本體。</li>
+        <li>模擬器的所有權利屬中山凌動科技；本頁僅為教學說明，不代表任何授權關係。</li>
+        <li>若未來要進行資料交換或自動化，必須先取得廠商書面授權與技術規格，才會另行規劃。</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="foot">
+    FDE-AI 無人載具學習平台 · M02 模擬飛行訓練 ·
+    模擬器名稱與商標屬中山凌動科技有限公司所有 ·
+    本頁僅供課程教學使用
+  </footer>
+
+</div>
+
+<script src="../assets/config.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "quality_gate": {
+    "require_evaluation": true,
+    "map50_threshold": 0.5
+  },
+  "demo_quality_gate": {
+    "require_evaluation": true,
+    "map50_threshold": 0.5
+  }
+}

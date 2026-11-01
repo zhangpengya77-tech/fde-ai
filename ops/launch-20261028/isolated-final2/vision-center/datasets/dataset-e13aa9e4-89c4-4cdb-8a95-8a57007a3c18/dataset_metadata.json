@@ -1,0 +1,20 @@
+{
+  "dataset_id": "dataset-e13aa9e4-89c4-4cdb-8a95-8a57007a3c18",
+  "model_type": "PROP_DIRECTION",
+  "dataset_version": "v1",
+  "total_images": 0,
+  "train_count": 0,
+  "val_count": 0,
+  "test_count": 0,
+  "class_distribution": {},
+  "source_groups": [],
+  "created_at": "2026-10-15T19:06:27.923513Z",
+  "created_by": "2",
+  "parent_dataset_id": null,
+  "notes": "AI 視覺模型中心自動建立",
+  "storage_path": "D:\\FDE-AI-UAS-v2.0\\demo\\runtime\\vision-center\\datasets\\dataset-e13aa9e4-89c4-4cdb-8a95-8a57007a3c18",
+  "manifest_path": "D:\\FDE-AI-UAS-v2.0\\demo\\runtime\\vision-center\\datasets\\dataset-e13aa9e4-89c4-4cdb-8a95-8a57007a3c18\\dataset_metadata.json",
+  "hard_example_ids": [],
+  "hard_example_count": 0,
+  "auto_train_enabled": false
+}

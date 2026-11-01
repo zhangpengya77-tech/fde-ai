@@ -1,0 +1,157 @@
+{
+  "generated_at": "2026-10-28T18:50:52",
+  "isolated_django": "http://127.0.0.1:18110",
+  "isolated_live": "http://127.0.0.1:18111",
+  "total": 10,
+  "passed": 8,
+  "results": [
+    {
+      "id": "S-01",
+      "name": "匿名使用者不能上傳模型",
+      "pass": true,
+      "evidence": {
+        "http": 403,
+        "redirect": "",
+        "blocked_by": "csrf",
+        "submission_count_unchanged": true
+      }
+    },
+    {
+      "id": "S-02",
+      "name": "學員不能查看其他學員的私人資料",
+      "pass": true,
+      "evidence": {
+        "own_growth_http": 200,
+        "other_growth_http": 404,
+        "other_course_http": 404,
+        "note": "9999 為不存在的 enrollment，回 404 代表未做越權回退"
+      }
+    },
+    {
+      "id": "S-03",
+      "name": "學員不能查看或操作教師後台",
+      "pass": true,
+      "evidence": {
+        "teacher_page_http": 403,
+        "teacher_page_redirect": null,
+        "activate_http": 403,
+        "activate_redirect": null,
+        "cross_class_teacher_scoping": "NOT_IMPLEMENTED",
+        "cross_class_note": "teacher_vision_center 以 list_submissions(task_id) 取全部提交，未按班級/教師過濾；DEMO 僅 1 班級故無法以第二班級實測"
+      }
+    },
+    {
+      "id": "S-04",
+      "name": "學員不能直接將模型設為 ACTIVE",
+      "pass": true,
+      "evidence": {
+        "active_before": [],
+        "active_after": [],
+        "student_activate_http": 403
+      }
+    },
+    {
+      "id": "S-05",
+      "name": "未經教師批准的模型不能成為正式使用版本",
+      "pass": true,
+      "evidence": {
+        "active_models": [],
+        "status_distribution": {
+          "DEMO_IMPORTED": 1,
+          "REJECTED": 1,
+          "REVIEW_REQUIRED": 3
+        },
+        "note": "隔離環境無任何 ACTIVE；候選模型停在 REVIEW_REQUIRED"
+      }
+    },
+    {
+      "id": "S-06",
+      "name": "非法檔案／超大檔案／錯誤格式被拒絕",
+      "pass": false,
+      "evidence": {
+        "txt_rejected_at_form": true,
+        "oversize_101mb_rejected_at_form": true,
+        "garbage_pt_rejected_by_content_check": false,
+        "txt_http": 302,
+        "fake_pt_http": 302,
+        "oversize_101mb_http": 302,
+        "submission_count_before": 3,
+        "submission_count_after": 4,
+        "form_rules": "forms.py:423-429 僅檢查 .pt 副檔名與 <=100MB，不檢查檔案內容",
+        "finding": "2KB 垃圾位元組偽裝成 .pt 可通過表單驗證並在 Live 建立 SUBMITTED 提交紀錄；內容合法性要到教師「匯入預檢」載入模型時才會失敗"
+      }
+    },
+    {
+      "id": "S-07",
+      "name": "上傳失敗不留下假成功紀錄",
+      "pass": false,
+      "evidence": {
+        "before": 3,
+        "after": 4,
+        "no_phantom_submission": false
+      }
+    },
+    {
+      "id": "S-08",
+      "name": "模型驗證結果可追溯",
+      "pass": true,
+      "evidence": {
+        "history_entries": 5,
+        "traceable_entries": 5,
+        "required_fields_present": [
+          "activation_eligible",
+          "class_names",
+          "file_hash",
+          "model_id"
+        ],
+        "sample_file_hash": "02995b79d6608bb0d081b64361d49520470b72d5e7932edd2e2ed8da4508bc85",
+        "sample_class_names": [
+          "CW_F",
+          "CCW_F",
+          "CW_B",
+          "CCW_B"
+        ],
+        "management_audit_lines": 0,
+        "note": "model_management_audit.jsonl 僅涵蓋歸檔/還原/刪除，匯入與驗證的軌跡在 history"
+      }
+    },
+    {
+      "id": "S-09",
+      "name": "前端不暴露管理密鑰／內網位址",
+      "pass": true,
+      "evidence": {
+        "files_scanned": 10,
+        "hits": [],
+        "hit_count": 0
+      }
+    },
+    {
+      "id": "S-10",
+      "name": "Gateway 保持原有隔離契約（未新增視覺/ Live 路由）",
+      "pass": true,
+      "evidence": {
+        "worker_sha_baseline": "4e7cecbad678c4a2bdb2b08788909db824709f7993be37324f2999d88fb472f6",
+        "worker_sha_now": "4e7cecbad678c4a2bdb2b08788909db824709f7993be37324f2999d88fb472f6",
+        "worker_unchanged": true,
+        "dynamic_prefixes": [
+          "/admin",
+          "/accounts",
+          "/activate",
+          "/api",
+          "/courses",
+          "/evidence",
+          "/login",
+          "/logout",
+          "/media",
+          "/password-reset",
+          "/register",
+          "/reset",
+          "/student",
+          "/teacher"
+        ],
+        "vision_route_added": false,
+        "live_port_referenced": false
+      }
+    }
+  ]
+}

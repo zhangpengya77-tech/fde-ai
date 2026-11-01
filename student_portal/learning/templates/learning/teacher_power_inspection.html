@@ -1,0 +1,44 @@
+{% extends "learning/base.html" %}
+{% block title %}電力巡檢模型管理｜FDE-AI-UAS{% endblock %}
+{% block content %}
+<main class="container" style="max-width:1000px;margin:2rem auto">
+  <h1>POWER_INSPECTION_V1｜教師電力巡檢中心</h1>
+  <p>模型匯入 → MP4 驗證 → 人工覆核 → 指定班級教學試用。{% if not real_model_available %}<strong>目前尚未載入真實模型。</strong>{% endif %}</p>
+  <section><h2>匯入模型</h2>
+    <form data-api-form method="post" enctype="multipart/form-data" action="{% url 'learning:power_inspection_model_import' %}">{% csrf_token %}
+      <label>模型 <input name="model_file" type="file" accept=".pt,.onnx" required></label>
+      <label>版本 <input name="version" required></label>
+      <label>類別契約（逗號分隔）<input name="class_contract" required></label>
+      <label>規則版本 <input name="rule_version" value="POWER_INSPECTION_RULE_V1"></label>
+      <label>規則設定 JSON（經獨立測試校準後才可部署）<textarea name="rule_config" rows="3" placeholder='{"confidence_threshold": 0.8, "max_gap_ms": 1500}'></textarea></label>
+      <label>data.yaml（真實核驗必需）<input name="data_yaml_file" type="file" accept=".yaml,.yml"></label>
+      <label>模型交付 metadata JSON（訓練、測試、推論、來源與授權）<textarea name="delivery_manifest" rows="6" placeholder='{"training": {"version": "...", "date": "YYYY-MM-DD"}, "metrics": {"precision": 0, "recall": 0, "map50": 0}}'></textarea></label>
+      <button type="submit">保存待核驗模型</button>
+    </form>
+    <p class="power-api-result" aria-live="polite"></p>
+  </section>
+  <section><h2>模型管理</h2><ul>{% for model in models %}
+    <li>{{ model.version }}｜SHA-256：{{ model.sha256|default:"待計算" }}｜{{ model.get_status_display }}｜{{ model.get_inference_mode_display }}｜{{ model.class_contract }}
+      {% if model.status == 'VALIDATED' or model.status == 'TEACHING_TRIAL' %}{% if model.inference_mode == 'REAL' %}
+      <form data-api-form method="post" action="{% url 'learning:power_inspection_deploy' model.model_id %}">{% csrf_token %}<select name="cohort_id">{% for cohort in cohorts %}<option value="{{ cohort.cohort_id }}">{{ cohort.name }}</option>{% endfor %}</select><button>設為班級預設模型</button></form>{% endif %}{% endif %}
+    </li>{% empty %}<li>尚未匯入模型。</li>{% endfor %}</ul></section>
+  <section><h2>班級預設模型</h2><ul>{% for deployment in deployments %}<li>{{ deployment.cohort.name }}：{{ deployment.model.version }}{% if deployment.enabled %}<form data-api-form method="post" action="{% url 'learning:power_inspection_deployment_disable' deployment.pk %}">{% csrf_token %}<button>停用班級模型</button></form>{% else %}（已停用）{% endif %}</li>{% empty %}<li>尚未設定任何班級預設模型。</li>{% endfor %}</ul></section>
+  <section><h2>模型部署歷程</h2><ul>{% for event in deployment_events %}<li>{{ event.created_at }}｜{{ event.cohort.name }}｜{{ event.get_action_display }}：{{ event.model_version }}{% if event.previous_model_version %}（原 {{ event.previous_model_version }}）{% endif %}｜{{ event.rule_version }}｜{{ event.actor.username }}{% if event.action != 'DISABLED' %}<form data-api-form method="post" action="{% url 'learning:power_inspection_deployment_rollback' event.deployment.pk event.pk %}">{% csrf_token %}<button>回退到此版本</button></form>{% endif %}</li>{% empty %}<li>尚無模型部署歷程。</li>{% endfor %}</ul></section>
+  <section><h2>學員影片與異常時間軸</h2><ul>{% for job in jobs %}
+    <li>{{ job.enrollment.cohort.name }}／{{ job.original_filename }}：{{ job.get_status_display }}／{{ job.get_inference_mode_display }}
+      <a href="{% url 'learning:power_inspection_teacher_job' job.job_id %}">查看 API 結果</a>
+      <form data-api-form method="post" action="{% url 'learning:power_inspection_review' job.job_id %}">{% csrf_token %}<select name="decision"><option value="CORRECT">正確</option><option value="INCORRECT">錯誤</option><option value="PENDING">待確認</option></select><input name="score" type="number" min="0" max="100"><input name="note" placeholder="覆核意見"><button>保存覆核</button></form>
+      {% if job.status == 'FAILED' %}<form data-api-form method="post" action="{% url 'learning:power_inspection_retry' job.job_id %}">{% csrf_token %}<button>重試處理</button></form>{% endif %}
+    </li>{% empty %}<li>尚無班級巡檢影片。</li>{% endfor %}</ul></section>
+  <section><h2>覆核歷史</h2><ul>{% for review in reviews %}<li>{{ review.created_at }}｜{{ review.get_decision_display }}｜{{ review.score|default:"未評分" }}｜{{ review.note }}</li>{% empty %}<li>尚無覆核紀錄。</li>{% endfor %}</ul></section>
+</main>
+<script>
+document.querySelectorAll('form[data-api-form]').forEach((form) => form.addEventListener('submit', async (event) => {
+  event.preventDefault(); let result = form.querySelector('.power-api-result');
+  if (!result) { result = document.createElement('p'); result.className = 'power-api-result'; form.after(result); }
+  result.textContent = '正在處理…';
+  try { const response = await fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin'}); const body = await response.json(); result.textContent = body.detail || (body.ok ? '操作已保存，重新整理可查看最新狀態。' : '操作未完成。'); }
+  catch (_) { result.textContent = '連線失敗，未確認任何狀態變更。'; }
+}));
+</script>
+{% endblock %}
