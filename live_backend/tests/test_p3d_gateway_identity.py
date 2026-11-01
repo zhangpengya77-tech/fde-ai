@@ -19,6 +19,7 @@ ASSERTION_KEY = "p3d-gateway-assertion-key"
 PROXY_KEY = "p3d-gateway-proxy-key"
 GATEWAY_KEY = "p3d-gateway-internal-key"
 DJANGO_ORIGIN = "http://django.test"
+PUBLIC_ORIGIN = "https://entry.test"
 STUDENT_SUBJECT = "student:501"
 STUDENT_ENROLLMENT = 77
 STUDENT_COHORT = "cohort-a"
@@ -79,6 +80,9 @@ def _build(handler=_django_handler, *, config=None, transport=None):
         gateway_key=GATEWAY_KEY,
         proxy_key=PROXY_KEY,
         timeout_seconds=2.0,
+        # P7-B3：閘道必須送出一個「Django 會信任」的 Origin；測試模擬運維已把
+        # 對外入口位址設定進 FDE_GATEWAY_CSRF_ORIGIN。
+        csrf_origin=PUBLIC_ORIGIN,
     )
     transport = transport or httpx.MockTransport(handler)
     return TestClient(IdentityGateway(live_app, config=gateway_config, transport=transport))

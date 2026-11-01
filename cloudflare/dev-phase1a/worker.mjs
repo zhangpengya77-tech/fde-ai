@@ -23,6 +23,28 @@ function isLivePath(pathname) {
   return pathname === '/live' || pathname.startsWith('/live/') || pathname.startsWith('/api/live/');
 }
 
+// P6（2026-10-28）：客戶端送來的身分標頭一律不得進入 Live 上游。
+//   * `X-FDE-*`：舊的 X-FDE-Role / X-FDE-Teacher-ID / X-FDE-Student-ID，
+//     以及任何客戶端自帶的 X-FDE-Live-Assertion（Assertion 只能由 Django 簽發）。
+//   * Cookie / Authorization：外部瀏覽器憑證不得轉發給內部服務。
+//   * X-Forwarded-* / X-Real-IP / X-Original-* / X-Client-* / X-Auth-* / Forwarded。
+const STRIPPED_EXACT = ['cookie', 'authorization', 'forwarded', 'x-real-ip'];
+const STRIPPED_PREFIX = ['x-fde-', 'x-forwarded-', 'x-original-', 'x-client-', 'x-auth-'];
+
+function shouldStripHeader(name) {
+  const lower = String(name).toLowerCase();
+  return STRIPPED_EXACT.includes(lower) || STRIPPED_PREFIX.some((prefix) => lower.startsWith(prefix));
+}
+
+function stripClientIdentityHeaders(headers) {
+  const clean = new Headers();
+  for (const [name, value] of headers.entries()) {
+    if (shouldStripHeader(name)) continue;
+    clean.append(name, value);
+  }
+  return clean;
+}
+
 async function handler(request, env, context = {}) {
   const incoming = new URL(request.url);
   if (!isLivePath(incoming.pathname)) {
@@ -37,8 +59,9 @@ async function handler(request, env, context = {}) {
   const target = new URL(liveOrigin);
   target.pathname = incoming.pathname;
   target.search = incoming.search;
-  const headers = new Headers(request.headers);
+  const headers = stripClientIdentityHeaders(request.headers);
   headers.delete('host');
+  headers.delete('X-FDE-Live-Assertion');
   const init = {
     method: request.method,
     headers,
@@ -65,4 +88,4 @@ async function handler(request, env, context = {}) {
 }
 
 export default { fetch: handler };
-export { handler, isLivePath };
+export { handler, isLivePath, stripClientIdentityHeaders };

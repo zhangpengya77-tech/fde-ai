@@ -37,6 +37,7 @@ urlpatterns = [
     path("student/courses/<int:enrollment_id>/growth/", views.student_growth_dashboard, name="student_growth_dashboard"),
     path("student/courses/<int:enrollment_id>/growth/R07/model/", views.growth_model_upload, name="growth_model_upload"),
     path("student/courses/<int:enrollment_id>/prop-scan/", views.student_prop_scan, name="student_prop_scan"),
+    path("student/courses/<int:enrollment_id>/rotation-v5/", views.student_rotation_v5_scan, name="student_rotation_v5_scan"),
     path("student/courses/<int:enrollment_id>/learning-path/", views.student_learning_path, name="student_learning_path"),
     path("student/courses/<int:enrollment_id>/growth/<str:slot_id>/", views.growth_record_detail, name="growth_record_detail"),
     path("student/courses/<int:enrollment_id>/growth/R08/survey/", views.student_survey, name="student_survey"),
@@ -106,6 +107,7 @@ urlpatterns = [
     ),
     # --- AI 視覺模型中心（2026-10-10 指令 P）：單一教師入口、四個區域 ---
     path("teacher/vision-center/", views.teacher_vision_center, name="teacher_vision_center"),
+    path("teacher/vision-center/rotation-v5/", views.teacher_rotation_v5_trial, name="teacher_rotation_v5_trial"),
     path(
         "teacher/vision-center/validate/",
         views.teacher_vision_center_validate,

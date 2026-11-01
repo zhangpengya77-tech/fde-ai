@@ -34,7 +34,15 @@ class P3DAssertionEndpointTests(TestCase):
         client = self._client()
         response = client.post(
             self.endpoint,
-            data=json.dumps({"enrollment_id": self.enrollment.pk, "student_id": 9999, "role": "teacher"}),
+            data=json.dumps({
+                "enrollment_id": self.enrollment.pk,
+                "student_id": 9999,
+                "role": "teacher",
+                # P7-B4：真實操作描述（偽造的 student_id / role 一律不採用）
+                "method": "POST",
+                "path": "/api/live/sessions",
+                "body_sha256": "0" * 64,
+            }),
             content_type="application/json",
             HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
             HTTP_X_FDE_GATEWAY_AUTH="p3d-test-gateway-key",
@@ -45,6 +53,10 @@ class P3DAssertionEndpointTests(TestCase):
         self.assertEqual(claims["sub"], f"student:{self.student.pk}")
         self.assertEqual(claims["enrollment_id"], self.enrollment.pk)
         self.assertEqual(claims["role"], "student")
+        # P7-B4：簽出的票必須綁定真實操作，而不是預設的 GET /
+        self.assertEqual(claims["method"], "POST")
+        self.assertEqual(claims["path"], "/api/live/sessions")
+        self.assertEqual(claims["body_sha256"], "0" * 64)
 
     def test_missing_gateway_key_does_not_issue_assertion(self):
         client = self._client()
@@ -58,12 +70,21 @@ class P3DAssertionEndpointTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertNotIn("assertion", response.json())
 
-    def _post(self, client, payload=None):
+    # P7-B4：Assertion 必須綁定真實操作的 method / path / body hash。
+    TARGET = {
+        "method": "POST",
+        "path": "/api/live/sessions",
+        "body_sha256": "0" * 64,
+    }
+
+    def _post(self, client, payload=None, *, target=None):
         if "csrftoken" not in client.cookies:
             client.get(reverse("learning:live_session_auth"))
+        body = dict(payload or {})
+        body.update(self.TARGET if target is None else target)
         return client.post(
             self.endpoint,
-            data=json.dumps(payload or {}),
+            data=json.dumps(body),
             content_type="application/json",
             HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
             HTTP_X_FDE_GATEWAY_AUTH="p3d-test-gateway-key",
@@ -149,4 +170,8 @@ class P3DAssertionEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         claims = verify_assertion(response.json()["assertion"], "p3d-test-signing-key")
         self.assertEqual(claims["role"], "student")
+        # P7-B4：簽出的票必須綁定真實操作，而不是預設的 GET /
+        self.assertEqual(claims["method"], "POST")
+        self.assertEqual(claims["path"], "/api/live/sessions")
+        self.assertEqual(claims["body_sha256"], "0" * 64)
         self.assertEqual(claims["cohort_ids"], [self.enrollment.cohort_id])

@@ -19,6 +19,8 @@ from pathlib import Path
 
 from starlette.testclient import TestClient
 
+from p6_signed_client import signed_teacher_client
+
 from app.main import create_app
 from app.vision_center import HOVER_CLASSES, PROP_CLASSES, VisionCenter
 
@@ -60,9 +62,12 @@ class TeacherVisionCenterTests(unittest.TestCase):
         self.center = VisionCenter(
             self.temp.name, model_validator=FixtureValidator(), model_runner=FixtureRunner()
         )
-        self.client = TestClient(
-            create_app(vision_adapter=OfflineVision(), vision_center=self.center, dev_mode=True)
-        )
+        # P6：Live 只接受綁定 method/path/body 的 Assertion；client 會自動簽發。
+        # self.teacher 保留舊的偽造標頭，正好證明它們不再影響身分。
+        app = create_app(vision_adapter=OfflineVision(), vision_center=self.center, dev_mode=True)
+        self.client = signed_teacher_client(TestClient(app), subject="teacher-1")
+        # 沒有 Assertion 的直接呼叫（瀏覽器／本機程序）：P6 一律拒絕。
+        self.direct_client = TestClient(app)
         self.teacher = {"X-FDE-Role": "teacher", "X-FDE-Teacher-ID": "teacher-1"}
 
     def tearDown(self):
@@ -160,7 +165,7 @@ class TeacherVisionCenterTests(unittest.TestCase):
 
     def test_validate_image_requires_teacher(self):
         model = self.upload()
-        response = self.client.post(
+        response = self.direct_client.post(
             f"/api/v1/vision/models/{model['model_id']}/validate-image",
             json={"image_base64": base64.b64encode(b"match-image").decode()},
         )
@@ -292,12 +297,12 @@ class TeacherVisionCenterTests(unittest.TestCase):
 
     def test_rollback_requires_teacher(self):
         self.assertEqual(
-            self.client.post("/api/v1/vision/tasks/PROP_DIRECTION/rollback", json={}).status_code, 403
+            self.direct_client.post("/api/v1/vision/tasks/PROP_DIRECTION/rollback", json={}).status_code, 403
         )
 
     def test_history_requires_teacher(self):
         self.assertEqual(
-            self.client.get("/api/v1/vision/tasks/PROP_DIRECTION/history").status_code, 403
+            self.direct_client.get("/api/v1/vision/tasks/PROP_DIRECTION/history").status_code, 403
         )
 
     def test_history_is_per_task(self):

@@ -19,6 +19,7 @@ from starlette.routing import Mount, Route
 from starlette.responses import FileResponse, Response
 from starlette.staticfiles import StaticFiles
 
+from .credential_isolation import ClientCredentialIsolation
 from .download_center import (
     configured_download_root,
     configured_manifest_path,
@@ -27,6 +28,7 @@ from .download_center import (
 )
 from .config import LiveConfig
 from .errors import error_response, json_response
+from . import internal_auth
 from .guidance import DeterministicGuidanceProvider
 from .live_assertions import LiveAssertionError, verify_live_assertion
 from .mock_vision import MockVision
@@ -43,6 +45,7 @@ from .coach_ask import LiveCoachAskService
 from .providers.provider_manager import GeneralAIProviderManager
 from .vision_api import vision_routes
 from .vision_center import VisionCenter
+from .prop_rotation_service import build_rotation_trial_service_from_environment
 from .benchmark import PropBenchmarkSandbox, runtime_status
 
 
@@ -142,6 +145,8 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         center_root,
         demo_simulation_enabled=os.environ.get("FDE_DEMO_SIMULATED_INFERENCE", "").strip() == "1",
     )
+    # PROP_ROTATION_V5 僅在明確隔離環境設定時啟用；不影響既有四類 PROP_DIRECTION。
+    rotation_trial = build_rotation_trial_service_from_environment()
     if hasattr(sessions, "set_prop_vision_probe"):
         sessions.set_prop_vision_probe(lambda: center.active_model("PROP_DIRECTION") is not None)
     # P1-2：PROP Benchmark Sandbox（僅教師主動觸發；隔離於 Production / A06）
@@ -160,7 +165,13 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         components = {"live_backend": "online", "vision": "online" if vision_online else "offline"}
         if general_ai_provider is not None and hasattr(general_ai_provider, "health_status"):
             components["general_ai"] = general_ai_provider.health_status()
-        return json_response({"status": "online" if vision_online else "degraded", "components": components})
+        return json_response({
+            "status": "online" if vision_online else "degraded",
+            "components": components,
+            # 2026-10-28：讓運維一眼看出內部呼叫是否已啟用簽章驗證。
+            # unsigned_legacy 代表任何本機程序都能偽造 X-FDE-Role，正式環境不得停留此狀態。
+            "internal_auth": internal_auth.auth_mode(),
+        })
 
     async def downloads_manifest(request):
         return await manifest_endpoint(request, downloads_root, downloads_manifest_file)
@@ -640,7 +651,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         if not sessions.delete(request.path_params["session_id"]): return error_response("session_not_found", "Live session was not found.", 404)
         return json_response({"deleted": True})
 
-    routes = vision_routes(center) + [
+    routes = vision_routes(center, rotation_trial=rotation_trial) + [
         Route("/login/", django_portal_proxy, methods=["GET", "POST"]),
         Route("/login/{portal_path:path}", django_portal_proxy, methods=["GET", "POST"]),
         Route("/register/", django_portal_proxy, methods=["GET", "POST"]),
@@ -743,6 +754,10 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         return await call_next(request)
 
     app.add_middleware(BaseHTTPMiddleware, dispatch=trusted_live_identity)
+    # P7-B2（2026-10-29）：最後加入 = 最外層 = 最先執行。在身分驗證之前先把
+    # 「Live 自有路由的瀏覽器憑證」與「不可信 X-FDE-* 標頭」剝掉；Django Portal
+    # 代理前綴則原樣放行，讓登入與 CSRF 的 Cookie 能到達 Django。
+    app.add_middleware(ClientCredentialIsolation, proxy_key=proxy_key)
     app.state.vision_adapter = adapter
     app.state.session_store = sessions
     app.state.dev_mode = development
