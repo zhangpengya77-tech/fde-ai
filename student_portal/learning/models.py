@@ -22,6 +22,12 @@ def evidence_upload_path(instance, filename):
     return f"evidence/{instance.evidence_id}/{uuid.uuid4().hex}.{suffix}"
 
 
+def power_inspection_upload_path(instance, filename):
+    """保存電力巡檢隔離資產，不與既有 Evidence／Vision 資產混用。"""
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    return f"power_inspection/{instance.pk or uuid.uuid4().hex}/{uuid.uuid4().hex}.{suffix}"
+
+
 def validate_evidence_size(file_obj):
     if file_obj.size > 100 * 1024 * 1024:
         from django.core.exceptions import ValidationError
@@ -1159,6 +1165,173 @@ class GoldenSetSample(models.Model):
 
     def __str__(self):
         return f"{self.golden_set.golden_set_id} · {self.get_label_display()}"
+
+
+class PowerInspectionModel(models.Model):
+    """POWER_INSPECTION_V1 專用模型資產；正式 Registry 不在本模型中切換。"""
+
+    class Status(models.TextChoices):
+        IMPORTED = "IMPORTED", "模型已匯入"
+        PENDING_REAL_MODEL_VALIDATION = "PENDING_REAL_MODEL_VALIDATION", "等待真實模型驗證"
+        VALIDATED = "VALIDATED", "已驗證"
+        TEACHING_TRIAL = "TEACHING_TRIAL", "教學試用"
+        ACTIVE = "ACTIVE", "正式啟用"
+        REJECTED = "REJECTED", "已退回"
+
+    class InferenceMode(models.TextChoices):
+        BLOCKED = "BLOCKED", "尚未載入真實模型"
+        MOCK = "MOCK", "模擬流程"
+        REAL = "REAL", "真實 YOLO"
+
+    model_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task_type = models.CharField(max_length=40, default="POWER_INSPECTION_V1", editable=False)
+    model_name = models.CharField(max_length=120, default="POWER_INSPECTION_V1")
+    version = models.CharField(max_length=64)
+    artifact = models.FileField(upload_to=power_inspection_upload_path, blank=True)
+    # 保存交付的 data.yaml，僅供隔離 worker 核驗類別契約，不在 Web 程序載入模型。
+    data_yaml = models.FileField(upload_to=power_inspection_upload_path, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True)
+    class_contract = models.JSONField(default=list, blank=True)
+    # 規則與模型檔分離，只有完成獨立校準後才可設定為班級預設模型。
+    rule_version = models.CharField(max_length=64, default="POWER_INSPECTION_RULE_V1")
+    rule_config = models.JSONField(default=dict, blank=True)
+    # 訓練與獨立測試交付 metadata；缺項時模型必須停在待真實核驗狀態。
+    delivery_manifest = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=36, choices=Status.choices, default=Status.PENDING_REAL_MODEL_VALIDATION)
+    inference_mode = models.CharField(max_length=12, choices=InferenceMode.choices, default=InferenceMode.BLOCKED)
+    trial_cohorts = models.ManyToManyField(Cohort, blank=True, related_name="power_inspection_trial_models")
+    imported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="power_inspection_models")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [models.UniqueConstraint(fields=["version", "sha256"], name="one_power_inspection_model_version_hash")]
+
+
+class PowerInspectionCohortDeployment(models.Model):
+    """班級預設成品模型；學員上傳時只能由可信 Enrollment 解析此映射。"""
+
+    cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="power_inspection_deployments")
+    task_type = models.CharField(max_length=40, default="POWER_INSPECTION_V1", editable=False)
+    model = models.ForeignKey(PowerInspectionModel, on_delete=models.PROTECT, related_name="cohort_deployments")
+    deployed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="power_inspection_deployments")
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["cohort_id", "task_type"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["cohort", "task_type"],
+                name="one_power_inspection_deployment_per_cohort_task",
+            ),
+        ]
+
+
+class PowerInspectionCohortDeploymentEvent(models.Model):
+    """班級預設模型的稽核事件；停用與回退不刪除任何資產或學生紀錄。"""
+
+    class Action(models.TextChoices):
+        DEPLOYED = "DEPLOYED", "設為預設"
+        UPDATED = "UPDATED", "更新預設"
+        DISABLED = "DISABLED", "已停用"
+        ROLLED_BACK = "ROLLED_BACK", "已回退"
+
+    deployment = models.ForeignKey(PowerInspectionCohortDeployment, on_delete=models.CASCADE, related_name="events")
+    cohort = models.ForeignKey(Cohort, on_delete=models.PROTECT, related_name="power_inspection_deployment_events")
+    model = models.ForeignKey(PowerInspectionModel, on_delete=models.PROTECT, related_name="deployment_events")
+    # 版本字串為事件快照，避免日後編輯模型 metadata 時失去當時的部署證據。
+    model_version = models.CharField(max_length=64)
+    previous_model = models.ForeignKey(PowerInspectionModel, null=True, blank=True, on_delete=models.PROTECT, related_name="superseded_deployment_events")
+    previous_model_version = models.CharField(max_length=64, blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="power_inspection_deployment_events")
+    action = models.CharField(max_length=16, choices=Action.choices)
+    rule_version = models.CharField(max_length=64, blank=True)
+    outcome = models.CharField(max_length=32, default="SUCCESS")
+    failure_reason = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PowerInspectionJob(models.Model):
+    """學員 MP4 巡檢工作與時間軸；真實推論前不能被標成成功。"""
+
+    class Status(models.TextChoices):
+        WAITING_FOR_REAL_MODEL = "WAITING_FOR_REAL_MODEL", "等待真實模型"
+        QUEUED = "QUEUED", "等待處理"
+        PROCESSING = "PROCESSING", "處理中"
+        COMPLETED = "COMPLETED", "已完成"
+        FAILED = "FAILED", "處理失敗"
+
+    class InferenceMode(models.TextChoices):
+        BLOCKED = "BLOCKED", "尚未載入真實模型"
+        MOCK = "MOCK", "模擬流程"
+        REAL = "REAL", "真實 YOLO"
+
+    job_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="power_inspection_jobs")
+    model = models.ForeignKey(PowerInspectionModel, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs")
+    video = models.FileField(upload_to=power_inspection_upload_path, blank=True)
+    original_filename = models.CharField(max_length=255, blank=True)
+    video_sha256 = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.WAITING_FOR_REAL_MODEL)
+    inference_mode = models.CharField(max_length=12, choices=InferenceMode.choices, default=InferenceMode.BLOCKED)
+    # 工作建立時複製模型規則，後續模型調整不能改寫歷史巡檢報告。
+    rule_version = models.CharField(max_length=64, default="POWER_INSPECTION_RULE_V1")
+    rule_config = models.JSONField(default=dict, blank=True)
+    anomaly_timeline = models.JSONField(default=list, blank=True)
+    video_metadata = models.JSONField(default=dict, blank=True)
+    result_json = models.JSONField(default=dict, blank=True)
+    worker_detail = models.CharField(max_length=500, blank=True)
+    last_error = models.CharField(max_length=500, blank=True)
+    retry_count = models.PositiveSmallIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PowerInspectionAnomalyFrame(models.Model):
+    """巡檢異常截圖；檔案只由隔離 worker 寫入，Web request 不產生截圖。"""
+
+    frame_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job = models.ForeignKey(PowerInspectionJob, on_delete=models.CASCADE, related_name="anomaly_frames")
+    timestamp_ms = models.PositiveIntegerField()
+    class_name = models.CharField(max_length=120)
+    confidence = models.FloatField()
+    screenshot = models.FileField(upload_to=power_inspection_upload_path, blank=True)
+    inference_mode = models.CharField(max_length=12, choices=PowerInspectionJob.InferenceMode.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["timestamp_ms", "created_at"]
+
+
+class PowerInspectionReview(models.Model):
+    """教師覆核電力巡檢工作；保留正確、錯誤與待確認三態。"""
+
+    class Decision(models.TextChoices):
+        CORRECT = "CORRECT", "正確"
+        INCORRECT = "INCORRECT", "錯誤"
+        PENDING = "PENDING", "待確認"
+
+    review_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job = models.ForeignKey(PowerInspectionJob, on_delete=models.CASCADE, related_name="reviews")
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="power_inspection_reviews")
+    decision = models.CharField(max_length=12, choices=Decision.choices)
+    score = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    note = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 
 # ---------------------------------------------------------------------------

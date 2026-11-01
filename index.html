@@ -44,6 +44,7 @@
           <a href="/downloads/">下載中心</a>
           <a href="/flight-health/">飛行健康 AI</a>
           <a href="/sim/">無人機仿真訓練</a>
+          <a href="/m02-simulator/">模擬飛行 M02</a>
           <a href="/student/growth/">我的成長日誌</a>
         </div>
       </details>
@@ -65,6 +66,7 @@
         <a href="/teacher/login/">教師後台</a>
         <a href="/downloads/">下載中心 <small>Download Center</small></a>
         <a href="/sim/">無人機仿真訓練 <small>Inspection Simulator</small></a>
+        <a href="/m02-simulator/">模擬飛行 M02 <small>Flight Simulation</small></a>
       </nav>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
@@ -271,7 +273,7 @@
         <div class="section-intro">
           <p class="eyebrow">AI Inspection Center · 測</p>
           <h2>鷹眼 AI 檢測中心</h2>
-          <p>本頁只保留兩個檢測入口：F450 槳葉正反及方向檢查、F450 四面懸停檢測。</p>
+          <p>本頁只保留兩個正式檢測入口：F450 槳葉正反及方向檢查、電力巡檢 MP4 影片上傳與分析。四面懸停檢測移至下方「歷史／擴充檢測」區，不再佔用正式入口。</p>
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
         <div class="inspection-layout">
@@ -285,23 +287,43 @@
             <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
           </div>
           <div class="panel upload-panel">
-            <h3>四面懸停檢測</h3>
+            <h3>電力巡檢 MP4 影片上傳與分析</h3>
             <label class="dropzone">
-              <input type="file" id="hoverInput" accept="video/*" />
-              <span>上傳 30 秒影片</span>
-              <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
+              <input type="file" id="powerInspectionInput" accept="video/mp4,.mp4" />
+              <span>上傳巡檢 MP4 影片</span>
+              <small>影片只會進入本人的隔離巡檢工作與教師覆核流程；尚未載入真實模型時不會產生任何虛構推論結果。</small>
             </label>
-            <button class="primary-action button" id="hoverButton">執行懸停評分</button>
+            <button class="primary-action button" id="powerInspectionButton">上傳並建立巡檢工作</button>
           </div>
           <div class="panel result-panel propeller-result-panel">
             <h3>F450 槳葉檢測結果</h3>
             <div class="result" id="propellerResult"></div>
           </div>
           <div class="panel result-panel">
-            <h3>飛行分析儀表板</h3>
-            <div class="result" id="hoverResult"></div>
+            <h3>電力巡檢結果</h3>
+            <div class="result" id="powerInspectionResult"></div>
           </div>
         </div>
+        <details class="inspection-legacy-panel">
+          <summary>歷史／擴充檢測：F450 四面懸停（正式入口已讓給電力巡檢）</summary>
+          <p class="muted">此區保留既有四面懸停評分流程，供舊課程與擴充教學使用，不會顯示為本頁的正式檢測入口。</p>
+          <div class="workflow-grid" id="legacyAssessmentWorkflows"></div>
+          <div class="inspection-layout">
+            <div class="panel upload-panel">
+              <h3>四面懸停檢測</h3>
+              <label class="dropzone">
+                <input type="file" id="hoverInput" accept="video/*" />
+                <span>上傳 30 秒影片</span>
+                <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
+              </label>
+              <button class="primary-action button" id="hoverButton">執行懸停評分</button>
+            </div>
+            <div class="panel result-panel">
+              <h3>飛行分析儀表板</h3>
+              <div class="result" id="hoverResult"></div>
+            </div>
+          </div>
+        </details>
       </section>
 
       <section class="section-block light-section" id="teacher">

@@ -131,6 +131,16 @@
 .vc-admin th,.vc-admin td{border:1px solid #e0e8ed;padding:7px 9px;text-align:left;vertical-align:top}
 .vc-admin th{background:#f4f8fa;color:#3c5566;font-weight:650}
 
+/* 模型管理（歸檔／還原／永久刪除，2026-10-21） */
+.vc-manage{margin-top:10px;padding:10px 12px;border:1px solid #e0e8ed;background:#fafcfd;border-radius:8px}
+.vc-manage label{display:block;font-size:13px;color:#3c5566;font-weight:650;margin-bottom:6px}
+.vc-manage input[type=text]{width:100%;max-width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cfdbe2;border-radius:6px;font-size:14px}
+.vc-manage .vc-manage-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.vc-manage .vc-manage-actions .button{flex:0 0 auto}
+.vc-manage-check{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:#8f2d1d;font-weight:650;margin:8px 0}
+.vc-manage-check input{margin-top:2px}
+.vc-manage .vc-manage-warn{font-size:12.5px;color:#8f2d1d;margin:6px 0 0}
+
 /* 手機：導覽卡改為兩欄，按鈕全寬易點 */
 @media(max-width:640px){
   .vc-nav{grid-template-columns:repeat(2,1fr);gap:8px}
@@ -140,6 +150,7 @@
   .vc-card{padding:15px 14px}
   .vc-field-row .vc-f{flex:1 1 100%}
   .vc-actions .vc-cta,.vc-actions .button{flex:1 1 100%}
+  .vc-manage .vc-manage-actions .button{flex:1 1 100%}
 }
 </style>
 
@@ -150,7 +161,10 @@
       <h1>AI 視覺模型中心</h1>
       <p class="vc-flowline">四個步驟一次做一件事：<b>看學員模型</b> → <b>驗一張圖</b> → <b>設正式模型</b> → <b>留教學資料</b>。不需懂 YOLO 或部署。</p>
     </div>
-    <a class="button quiet" href="{% url 'learning:teacher_dashboard' %}">回教師後台</a>
+    <div class="vc-actions" style="margin-top:0">
+      <a class="button quiet" href="{% url 'learning:power_inspection_teacher' %}">電力巡檢模型管理</a>
+      <a class="button quiet" href="{% url 'learning:teacher_dashboard' %}">回教師後台</a>
+    </div>
   </div>
 </section>
 
@@ -158,6 +172,7 @@
 <div class="vc-note bad">
   <strong>推論服務目前無法連線，驗證與啟用按鈕暫不開放。</strong><br>
   請確認 Live Backend 已啟動。這是正確的保護行為 —— 服務不在線時不會產生任何假的辨識結果。
+  {% if api_detail %}<br><span style="font-size:12.5px">系統回報：<code>{{ api_detail }}</code>（回報此訊息可協助定位是服務未啟動或呼叫錯誤）</span>{% endif %}
 </div>
 {% endif %}
 
@@ -165,8 +180,8 @@
 <nav class="vc-nav" aria-label="視覺模型中心四個場景">
   <a class="vc-nav-card{% if scene == 1 %} active{% endif %}" data-scene="1" href="?task={{ task_id }}&amp;scene=1">
     <span class="vc-nav-num">①</span>
-    <span class="vc-nav-title">學員模型</span>
-    <span class="vc-nav-sub">挑一個待複核的模型</span>
+    <span class="vc-nav-title">上傳 .pt</span>
+    <span class="vc-nav-sub">上傳與挑選模型</span>
   </a>
   <a class="vc-nav-card{% if scene == 2 %} active{% endif %}" data-scene="2" href="?task={{ task_id }}&amp;scene=2">
     <span class="vc-nav-num">②</span>
@@ -175,13 +190,13 @@
   </a>
   <a class="vc-nav-card{% if scene == 3 %} active{% endif %}" data-scene="3" href="?task={{ task_id }}&amp;scene=3">
     <span class="vc-nav-num">③</span>
-    <span class="vc-nav-title">正式模型</span>
+    <span class="vc-nav-title">正式啟用</span>
     <span class="vc-nav-sub">看現在用哪個</span>
   </a>
   <a class="vc-nav-card{% if scene == 4 %} active{% endif %}" data-scene="4" href="?task={{ task_id }}&amp;scene=4">
     <span class="vc-nav-num">④</span>
-    <span class="vc-nav-title">下一輪資料飛輪</span>
-    <span class="vc-nav-sub">留給下屆的教學資料</span>
+    <span class="vc-nav-title">歸檔與回流</span>
+    <span class="vc-nav-sub">種子模型與版本鏈</span>
   </a>
 </nav>
 
@@ -356,6 +371,33 @@
       <br><strong>DEMO 模擬複核</strong>只標記 DEMO 狀態，<strong>不會</strong>修改正式 ACTIVE 模型，也<strong>不能</strong>當作真實品質驗證。
     {% endif %}
   </div>
+
+  {# 教師自行上傳模型（從 進階管理 移入此處，使「① 上傳 .pt」涵蓋教師上傳；進階管理其餘區塊已依教師指令隱藏） #}
+  <div class="vc-card" style="margin-top:14px">
+    <h2>教師上傳自己的模型</h2>
+    <p class="vc-purpose">教師自行訓練的模型可從這裡上傳；上傳後仍須完成「② 圖片驗證」才可設為正式模型。</p>
+    <form method="post" action="{% url 'learning:teacher_vision_center_upload' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="task_id" value="{{ task_id }}">
+      <div class="vc-field-row">
+        <div class="vc-f">
+          <label for="vc-up-name">模型名稱</label>
+          <input type="text" name="model_name" id="vc-up-name" placeholder="例如：四槳方向 v2" required>
+        </div>
+        <div class="vc-f">
+          <label for="vc-up-version">版本</label>
+          <input type="text" name="version" id="vc-up-version" value="v1" required>
+        </div>
+      </div>
+      <div class="vc-field-row">
+        <div class="vc-f">
+          <label for="vc-up-file">模型檔案（best.pt）</label>
+          <input type="file" name="model_file" id="vc-up-file" accept=".pt" required>
+        </div>
+      </div>
+      <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>上傳並檢查</button>
+    </form>
+  </div>
 </section>
 
 {# ============================ 場景② 圖片驗證 ============================ #}
@@ -375,7 +417,7 @@
           <label for="vc-model-select">要驗證的模型</label>
           <select id="vc-model-select">
             {% for m in verifiable_models %}
-              <option value="{{ m.model_id }}" {% if m.model_id == selected_model_id %}selected{% endif %}>{{ m.model_name|default:m.model_id }}（{{ m.version }}）· {{ m.status_label }}</option>
+              <option value="{{ m.model_id }}" {% if m.model_id == selected_model_id %}selected{% endif %}>{{ m.model_name|default:m.model_id }}（{{ m.version }}）· {{ m.status_label }}{% if m.health %} · 健康度：{{ m.health_label }}{% endif %}</option>
             {% endfor %}
           </select>
         </div>
@@ -431,11 +473,18 @@
         </div>
         <div class="vc-note ok" id="vc-r-source">本結果來自<strong>真實推論</strong>（Live Backend 實際載入該模型 .pt 執行），<strong>不是 DEMO 模擬</strong>。建議多張真實照片重複驗證後再啟用。</div>
         <div class="vc-note bad" id="vc-r-nodetect" style="display:none"><strong>未辨識到槳葉，請更換照片。</strong>系統不會把這張當作通過。</div>
+        {# 2026-10-22 教師指令：驗證通過才出現「前往③啟用正式模型」捷徑。 容器本身**不含任何按鈕文字**（由 JS 依 verdict 動態產生）， 確保「未通過時不出現」是真正的「不渲染」，不是 CSS 隱藏。 #}
+        <div class="vc-actions" id="vc-r-pass-cta" style="display:none"
+             data-href="?task={{ task_id }}&amp;scene=3"></div>
       </div>
 
       <div class="vc-actions" style="margin-top:16px">
         <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=1">← 返回學員模型</a>
-        <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=3">查看正式模型 →</a>
+        {% if validation_result %}
+          <a class="vc-cta primary" href="?task={{ task_id }}&amp;scene=3">{{ validation_result.verdict_cta_label|default:"驗證完成" }} → 前往啟用正式模型</a>
+        {% else %}
+          <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=3">查看正式模型 →</a>
+        {% endif %}
       </div>
     {% endif %}
   </div>
@@ -447,21 +496,40 @@
     <div class="vc-verdict-big {{ validation_result.verdict_css }}">{{ validation_result.verdict_label }}</div>
     <div class="vc-v-row"><span>使用模型</span><span>{{ validation_result.model_name }}（{{ validation_result.model_version }}）</span></div>
     <div class="vc-v-row"><span>AI 預測類別</span><span>{{ validation_result.predicted_class|default:"無" }}</span></div>
-    <div class="vc-v-row"><span>信心值</span><span>{% if validation_result.predicted_confidence != None %}{{ validation_result.predicted_confidence }}{% else %}—{% endif %}</span></div>
+    {# A.3（2026-10-23）：驗證結果頁顯示「最高信心值」與「啟用門檻 0.6」， #}
+    {# 通過（MATCH 且信心≥0.6）才出現「前往③啟用正式模型」；否則明確提示「信心 X 低於 0.6，不可啟用」。 #}
+    <div class="vc-v-row"><span>最高信心值</span><span>{% if validation_result.highest_confidence != None %}{{ validation_result.highest_confidence }}{% else %}—{% endif %}</span></div>
+    <div class="vc-v-row"><span>驗證使用門檻</span><span>{% if validation_result.confidence_threshold_used != None %}{{ validation_result.confidence_threshold_used }}{% else %}—{% endif %}</span></div>
+    <div class="vc-v-row"><span>啟用門檻（須達到此值才可啟用）</span><span>{% if validation_result.activation_min_confidence != None %}{{ validation_result.activation_min_confidence }}{% else %}0.6{% endif %}</span></div>
     <div class="vc-v-row"><span>說明</span><span>{{ validation_result.reason }}</span></div>
-    {% if validation_result.reason_code == 'NO_DETECTION' %}
-      <div class="vc-note bad"><strong>未辨識到槳葉，請更換照片。</strong></div>
+    {% if validation_result.verdict_reason_code == 'NO_DETECTION' %}
+      <div class="vc-note bad"><strong>① 無框：模型未偵測到任何目標（最高信心值為 0）。請更換照片或確認模型已訓練。</strong></div>
+    {% elif validation_result.verdict_reason_code == 'LOW_CONFIDENCE' %}
+      <div class="vc-note warn"><strong>② 信心過低：最高信心 {{ validation_result.highest_confidence }} &lt; 門檻 {{ validation_result.confidence_threshold_used }}，不足以判定。模型可能已訓練但品質不足。</strong></div>
+    {% elif validation_result.verdict_reason_code == 'OK' or validation_result.verdict_reason_code == 'NO_ANNOTATION' %}
+      <div class="vc-note good"><strong>③ 通過：模型偵測到目標且信心達門檻。</strong></div>
+    {% endif %}
+    {% if validation_result.below_activation_threshold %}
+      <div class="vc-note bad"><strong>信心 {{ validation_result.highest_confidence }} 低於啟用門檻 {% if validation_result.activation_min_confidence != None %}{{ validation_result.activation_min_confidence }}{% else %}0.6{% endif %}，不可啟用。</strong>請先達到啟用門檻，或在場景③確認該模型是否符合啟用資格。</div>
     {% endif %}
     <p class="muted" style="font-size:13px;margin:10px 0 0">本判定來自<strong>真實推論</strong>，<strong>不是 DEMO 模擬結果</strong>。單張圖片不足以代表整體品質，建議重複驗證後再啟用。</p>
+    {# A.3（2026-10-23）：圖片驗證通過且信心≥0.6 才出現「前往③啟用正式模型」捷徑。 #}
+    {# 此按鈕只做場景導覽，不執行啟用；能否啟用仍由場景③的硬規則與 Live 端最終把關。 #}
+    {% if validation_result.verdict_passed %}
+    <div class="vc-actions" style="margin-top:14px">
+      <a class="vc-cta primary" href="?task={{ task_id }}&amp;scene=3">{{ validation_result.verdict_cta_label|default:"驗證通過，前往啟用正式模型" }} → 前往啟用正式模型</a>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 </section>
 
 {# ============================ 場景③ 正式模型 ============================ #}
+{# 2026-10-22 教師指令：本頁只保留三個動作（啟用／歸檔／刪除），其餘一律移除。 所有後端判定（D1–D6 健康度閘門、ACTIVE 不可歸檔/刪除、DEMO_IMPORTED 不得啟用、 M1–M7 模型管理）完全未改；此處只決定「按鈕要不要渲染」，閘門仍在 Live 端。 #}
 <section class="vc-scene{% if scene == 3 %} active{% endif %}" data-scene="3">
   <div class="vc-card">
     <h2>③ 正式模型</h2>
-    <p class="vc-purpose">每個任務只會有一個 <strong>正式使用（ACTIVE）</strong> 模型。驗證通過後按「設為正式模型」即完成切換；舊版本會自動保留，隨時可回復。</p>
+    <p class="vc-purpose">每個任務只會有一個 <strong>正式使用（ACTIVE）</strong> 模型。</p>
 
     {% if active_model %}
       <div class="vc-hero">
@@ -469,108 +537,231 @@
         <div class="vc-hero-row">
           <span class="vc-hero-name">{{ active_model.model_name|default:active_model.model_id }}</span>
           <span class="vc-hero-meta">版本 {{ active_model.version }}</span>
-          <span class="vc-badge active">正式使用</span>
-          {% if active_model.temporary_mapping %}<span class="vc-badge candidate">{{ active_model.temporary_mapping_label }}</span>{% endif %}
+          <span class="vc-badge active" style="background:#fff;border-color:#fff;color:#087f91">正式使用</span>
           <span class="vc-hero-meta">啟用時間：{{ active_model.activated_at_display|default:"—" }}</span>
         </div>
+        {# 健康度不足時只留一枚警示徽章，細節放 hover；不再輸出長篇紅字 #}
+        {% if active_model.health and active_model.health != 'OK' %}
+          <div class="vc-hero-row" style="margin-top:8px">
+            <span class="vc-badge candidate" style="background:#fff;border-color:#fff;color:#8a6412"
+                  title="{{ active_model.health_note }}（mAP50 {{ active_model.health_map50|default:'—' }}／門檻 {{ active_model.health_map50_threshold|default:'—' }}）">⚠ 健康度：{{ active_model.health_label }}</span>
+          </div>
+        {% endif %}
       </div>
     {% else %}
-      <div class="vc-empty">「{{ task_label }}」目前尚未啟用任何正式模型。學員端辨識在啟用前不會使用任何模型。</div>
+      <div class="vc-empty">「{{ task_label }}」目前尚未啟用任何正式模型。</div>
     {% endif %}
 
-    <h3 style="margin:18px 0 4px;font-size:16px">可設為正式模型的版本</h3>
-    <div class="vc-note">
-      <strong>「已通過結構驗證」只代表模型可載入、類別正確，不代表真實圖片辨識品質已通過。</strong>請以「② 圖片驗證」的<strong>真實推論結果</strong>作為辨識品質依據。
-    </div>
-
-    {% if candidate_models %}
+    {# ---- 動作一：啟用（健康度 OK＋圖片驗證最高信心≥0.6＋類別規範四類＋非 DEMO 放寬匯入，才可啟用；2026-10-23 恢復硬規則）---- #}
+    <h3 style="margin:18px 0 8px;font-size:16px">設為正式模型</h3>
+    {% if settable_active_models %}
       <div class="vc-sublist">
-        {% for m in candidate_models %}
+        {% for m in settable_active_models %}
         <div class="vc-sub">
           <div class="vc-sub-head">
             <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
-            <span class="vc-badge {{ m.status_css }}">{{ m.status_label }}</span>
-            {% if m.temporary_mapping %}<span class="vc-badge candidate">{{ m.temporary_mapping_label }}</span>{% endif %}
-            {% if m.demo_class_relaxed %}<span class="vc-badge warn">類別不一致（DEMO 放行）</span>{% endif %}
+            <span class="vc-badge {{ m.eligibility_css }}" title="{{ m.eligibility_title }}">{{ m.eligibility_label }}</span>
           </div>
           <div class="vc-meta">
-            來源：{{ m.source_label|default:"—" }}｜上傳：{{ m.uploaded_at_display|default:"—" }}<br>
-            圖片驗證依據：<span class="vc-badge {{ m.image_evidence_css }}">{{ m.image_evidence_label }}</span>
+            來源：{{ m.source_label|default:"—" }}｜上傳：{{ m.uploaded_at_display|default:"—" }}｜最近驗證：{{ m.last_image_validation.predicted_class|default:"—" }}
           </div>
-          {% if m.temporary_mapping %}
-          <div class="vc-note bad" style="margin-top:10px">
-            <strong>{{ m.temporary_mapping_label }}</strong>：這是臨時映射模型，不是正式訓練模型。類別名對照：{{ m.class_name_mapping_display }}{% if m.class_name_mapping_note %}。{{ m.class_name_mapping_note }}{% endif %}
-          </div>
-          {% endif %}
-          {% if m.recognition_quality_proven %}
-            <div class="vc-note ok" style="margin-top:10px">已有真實圖片驗證依據（最近一次：{{ m.last_image_validation.predicted_class|default:"無" }}／信心值 {% if m.last_image_validation.predicted_confidence != None %}{{ m.last_image_validation.predicted_confidence }}{% else %}—{% endif %}）。</div>
-          {% else %}
-            <div class="vc-note" style="margin-top:10px"><strong>尚未完成品質驗證。</strong>請先在「② 圖片驗證」用真實圖片驗證過，再考慮設為正式模型。</div>
-          {% endif %}
           <div class="vc-actions">
-            {% if m.can_activate %}
-              <form method="post" action="{% url 'learning:teacher_vision_center_activate' %}" class="inline-form"
-                    onsubmit="return confirm('{% if m.temporary_mapping %}【映射版·臨時】這個模型的類別名是由筆誤對照而來，不是正式訓練模型。確定仍要設為正式使用嗎？目前的正式模型會保留為歷史版本。{% else %}確定要把這個模型設為正式使用嗎？目前的正式模型會保留為歷史版本。{% endif %}');">
-                {% csrf_token %}
-                <input type="hidden" name="task_id" value="{{ task_id }}">
-                <input type="hidden" name="model_id" value="{{ m.model_id }}">
-                <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>設為正式模型</button>
-              </form>
-            {% else %}
-              <span class="muted" style="font-size:13px">此版本尚未通過驗證，無法啟用。請先到「② 圖片驗證」用圖片驗證。</span>
-            {% endif %}
-            <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=2&amp;model={{ m.model_id }}">先驗證圖片 →</a>
+            <form method="post" action="{% url 'learning:teacher_vision_center_activate' %}" class="inline-form"
+                  onsubmit="return vcActivate(this, '{{ m.model_name|default:m.model_id|escapejs }}', '{{ m.eligibility_title|escapejs }}');">
+              {% csrf_token %}
+              <input type="hidden" name="task_id" value="{{ task_id }}">
+              <input type="hidden" name="model_id" value="{{ m.model_id }}">
+              <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>設為正式模型</button>
+            </form>
           </div>
         </div>
         {% endfor %}
       </div>
     {% else %}
-      <div class="vc-empty" style="margin-top:10px">目前沒有可設為正式的候選版本。</div>
+      <div class="vc-empty">暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻 0.6（需健康度 OK、類別為規範四類、非 DEMO 放寬匯入）。</div>
     {% endif %}
 
+    {# ---- 動作二：歸檔（每個非 ACTIVE 模型一枚按鈕；原因改由確認框內填寫）---- #}
+    <h3 style="margin:20px 0 8px;font-size:16px">模型</h3>
+    {% if scene3_models %}
+      <div class="vc-sublist">
+        {% for m in scene3_models %}
+        <div class="vc-sub">
+          <div class="vc-sub-head">
+            <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
+            <span class="vc-badge {{ m.eligibility_css }}" title="{{ m.eligibility_title }}">{{ m.eligibility_label }}</span>
+          </div>
+          <div class="vc-meta">
+            來源：{{ m.source_label|default:"—" }}｜上傳：{{ m.uploaded_at_display|default:"—" }}
+          </div>
+          {% if m.can_archive %}
+          <div class="vc-actions">
+            <form method="post" action="{% url 'learning:teacher_vision_center_archive_model' %}" class="inline-form vc-archive-form"
+                  onsubmit="return vcArchive(this, '{{ m.model_name|default:m.model_id|escapejs }}');">
+              {% csrf_token %}
+              <input type="hidden" name="task_id" value="{{ task_id }}">
+              <input type="hidden" name="model_id" value="{{ m.model_id }}">
+              <input type="hidden" name="reason" class="vc-archive-reason" value="">
+              <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>歸檔</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="vc-empty">目前沒有其他模型。</div>
+    {% endif %}
+
+    {# ---- 動作三：永久刪除（只放在「已歸檔」折疊區）---- #}
     <details class="vc-admin" style="margin-top:18px">
-      <summary>版本管理（歷史版本與回復）</summary>
-      {% if history %}
+      <summary>已歸檔（{{ archived_models|length }} 個）</summary>
+      {% if archived_models %}
         <div class="vc-sublist" style="margin-top:12px">
-          {% for h in history %}
+          {% for a in archived_models %}
           <div class="vc-sub">
             <div class="vc-sub-head">
-              <span class="vc-sub-title">{{ h.model_name|default:h.model_id }}（{{ h.version }}）</span>
-              <span class="vc-badge {{ h.status_css }}">{{ h.status_label }}</span>
-              {% if h.temporary_mapping %}<span class="vc-badge candidate">{{ h.temporary_mapping_label }}</span>{% endif %}
-              {% if h.demo_class_relaxed %}<span class="vc-badge warn">類別不一致（DEMO 放行）</span>{% endif %}
+              <span class="vc-sub-title">{{ a.model_name|default:a.model_id }}（{{ a.version }}）</span>
+              <span class="vc-badge {{ a.status_css }}">{{ a.status_label }}</span>
             </div>
-            <div class="vc-meta">上傳：{{ h.uploaded_at_display|default:"—" }}</div>
+            <div class="vc-meta">
+              歸檔時間：{{ a.archived_at_display|default:"—" }}｜歸檔前狀態：{{ a.status_before_archive|default:"—" }}{% if a.archived_reason %}<br>歸檔原因：{{ a.archived_reason }}{% endif %}
+            </div>
+            <div class="vc-actions">
+              <form method="post" action="{% url 'learning:teacher_vision_center_restore_model' %}" class="inline-form"
+                    onsubmit="return confirm('確定還原「{{ a.model_name|default:a.model_id }}」嗎？會回到歸檔前的狀態，並重新出現在清單中。');">
+                {% csrf_token %}
+                <input type="hidden" name="task_id" value="{{ task_id }}">
+                <input type="hidden" name="model_id" value="{{ a.model_id }}">
+                <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>一鍵還原</button>
+              </form>
+              {% if a.can_delete %}
+              <form method="post" action="{% url 'learning:teacher_vision_center_delete_model' %}" class="inline-form"
+                    onsubmit="return confirm('【永久刪除】確定要刪除「{{ a.model_name|default:a.model_id }}」這筆模型記錄嗎？此動作無法從本頁復原（系統會先自動備份；若 .pt 仍被其他記錄共用，只刪記錄不刪檔案）。');">
+                {% csrf_token %}
+                <input type="hidden" name="task_id" value="{{ task_id }}">
+                <input type="hidden" name="model_id" value="{{ a.model_id }}">
+                <label class="vc-manage-check" for="confirm-delete-{{ forloop.counter }}">
+                  <input id="confirm-delete-{{ forloop.counter }}" type="checkbox" name="confirm_delete" value="yes" required>
+                  我已確認要永久刪除這筆模型記錄
+                </label>
+                <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>永久刪除</button>
+              </form>
+              {% endif %}
+            </div>
           </div>
           {% endfor %}
         </div>
       {% else %}
-        <div class="vc-empty" style="margin-top:12px">目前沒有模型版本。</div>
-      {% endif %}
-      {% if can_rollback %}
-      <div class="vc-actions">
-        <form method="post" action="{% url 'learning:teacher_vision_center_rollback' %}" class="inline-form"
-              onsubmit="return confirm('確定要回復到上一個已驗證的版本嗎？目前的正式模型會保留為歷史版本。');">
-          {% csrf_token %}
-          <input type="hidden" name="task_id" value="{{ task_id }}">
-          <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>回復舊版本</button>
-        </form>
-      </div>
+        <div class="vc-empty" style="margin-top:12px">目前沒有已歸檔的模型。</div>
       {% endif %}
     </details>
 
     <div class="vc-actions" style="margin-top:16px">
       <a class="vc-cta ghost" href="?task={{ task_id }}&amp;scene=2">← 返回圖片驗證</a>
-      <a class="vc-cta ghost" href="{% url 'learning:teacher_vision_model_list' %}">進入完整模型管理頁 →</a>
     </div>
   </div>
 </section>
 
-{# ============================ 場景④ 下一輪資料 ============================ #}
+{# ============================ 場景④ 歸檔與回流 ============================ #}
 <section class="vc-scene{% if scene == 4 %} active{% endif %}" data-scene="4">
   <div class="vc-card">
-    <h2>④ 下一輪資料飛輪</h2>
-    <p class="vc-purpose">這一區只回答三件事：<strong>哪些模型已經過教師認可、哪些圖片值得再訓練、下一輪教學資料準備得怎麼樣</strong>。模型檔案屬於模型庫，與這裡是兩件事。</p>
+    <h2>④ 歸檔與回流</h2>
+    <p class="vc-purpose">這一區負責<strong>數據飛輪</strong>：把教師認可的優質模型入庫為「種子模型」，下一期學員下載其 .pt 當作訓練起點；並顯示版本鏈（模型是否逐期變準）與已歸檔模型的還原／永久刪除。</p>
+
+    {# ---- 數據飛輪：當前推薦基礎模型 ---- #}
+    <div class="vc-zone">
+      <h3>當前推薦基礎模型（種子）</h3>
+      {% if recommended_seed_model %}
+        <div class="vc-sublist">
+          <div class="vc-sub">
+            <div class="vc-sub-head">
+              <span class="vc-sub-title">{{ recommended_seed_model.model_name|default:recommended_seed_model.model_id }}（{{ recommended_seed_model.version }}）</span>
+              <span class="vc-badge seed">種子·第 {{ recommended_seed_model.seed_generation }} 期</span>
+            </div>
+            <div class="vc-meta">
+              任務：{{ recommended_seed_model.model_type }}｜mAP50：{% if recommended_seed_model.seed_map50 is not None %}{{ recommended_seed_model.seed_map50 }}{% else %}—{% endif %}｜驗證信心：{% if recommended_seed_model.seed_validation_confidence is not None %}{{ recommended_seed_model.seed_validation_confidence }}{% else %}—{% endif %}｜入庫：{{ recommended_seed_model.seeded_at|default:"—" }}
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="vc-empty">目前尚未入庫任何種子模型。請在下方「種子模型管理」把合格的模型入庫為基礎模型。</div>
+      {% endif %}
+    </div>
+
+    {# ---- 數據飛輪：種子模型管理（入庫／取消） ---- #}
+    <div class="vc-zone">
+      <h3>種子模型管理</h3>
+      <p class="vc-zone-sub">入庫條件：健康度 OK 且已通過真實圖片驗證（最高信心 ≥ 0.6）。入庫後成為「當前推薦基礎模型」，學員下一期可下載其 .pt。種子模型不可永久刪除，須先取消標記。</p>
+      {% if history %}
+        <div class="vc-sublist">
+          {% for m in history %}
+          <div class="vc-sub">
+            <div class="vc-sub-head">
+              <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
+              {% if m.is_seed %}
+                <span class="vc-badge seed">種子{% if m.is_recommended_seed %}·推薦{% endif %}</span>
+              {% elif m.eligibility == 'ready' %}
+                <span class="vc-badge active">符合入庫資格</span>
+              {% else %}
+                <span class="vc-badge {{ m.eligibility_css }}" title="{{ m.eligibility_title }}">{{ m.eligibility_label }}</span>
+              {% endif %}
+            </div>
+            <div class="vc-meta">
+              狀態：{{ m.status_label }}｜健康度：{% if m.health %}{{ m.health_label }}{% else %}—{% endif %}｜驗證信心：{% if m.validation_pass_confidence is not None %}{{ m.validation_pass_confidence }}{% else %}—{% endif %}／啟用門檻 {% if m.activation_min_confidence is not None %}{{ m.activation_min_confidence }}{% else %}0.6{% endif %}
+            </div>
+            <div class="vc-actions">
+              {% if m.is_seed %}
+                <form method="post" action="{% url 'learning:teacher_vision_center_unseed' %}" class="inline-form"
+                      onsubmit="return confirm('確定取消「{{ m.model_name|default:m.model_id }}」的種子標記嗎？取消後該模型才可永久刪除。');">
+                  {% csrf_token %}
+                  <input type="hidden" name="task_id" value="{{ task_id }}">
+                  <input type="hidden" name="model_id" value="{{ m.model_id }}">
+                  <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>取消種子標記</button>
+                </form>
+              {% else %}
+                <form method="post" action="{% url 'learning:teacher_vision_center_seed' %}" class="inline-form"
+                      onsubmit="return confirm('確定把「{{ m.model_name|default:m.model_id }}」入庫為種子（基礎訓練模型）嗎？會成為當前推薦基礎模型。');">
+                  {% csrf_token %}
+                  <input type="hidden" name="task_id" value="{{ task_id }}">
+                  <input type="hidden" name="model_id" value="{{ m.model_id }}">
+                  <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>入庫為種子</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="vc-empty">目前沒有任何模型。</div>
+      {% endif %}
+    </div>
+
+    {# ---- 數據飛輪：版本鏈（是否逐期變準） ---- #}
+    <div class="vc-zone">
+      <h3>版本鏈（是否逐期變準）</h3>
+      <p class="vc-zone-sub">同一任務的種子按「期數」排列，顯示 mAP50 與驗證信心變化。若新一期低於上一期，系統只提示，是否仍入庫由教師決定。</p>
+      {% if seed_chain %}
+        <table class="vc-chain">
+          <thead><tr><th>期數</th><th>模型</th><th>mAP50</th><th>驗證信心</th><th>入庫日期</th><th>推薦</th></tr></thead>
+          <tbody>
+            {% for c in seed_chain %}
+            <tr>
+              <td>第 {{ c.generation }} 期</td>
+              <td>{{ c.model_name|default:c.model_id }}</td>
+              <td>{% if c.map50 is not None %}{{ c.map50 }}{% else %}—{% endif %}</td>
+              <td>{% if c.validation_confidence is not None %}{{ c.validation_confidence }}{% else %}—{% endif %}</td>
+              <td>{{ c.seeded_at|default:"—" }}</td>
+              <td>{% if c.is_recommended %}<span class="vc-badge seed">推薦</span>{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="vc-empty">目前還沒有種子版本鏈。</div>
+      {% endif %}
+    </div>
+
 
     {# A 教師認可的模型 #}
     <div class="vc-zone">
@@ -616,9 +807,6 @@
         <div class="vc-status-item"><div class="vc-s-label">本輪驗證報告</div><div class="vc-s-value warn">{{ resources.validation_reports }}（本次登入期間，尚未持久化）</div></div>
         <div class="vc-status-item"><div class="vc-s-label">匯出下一輪資料包</div><div class="vc-s-value off">尚未接通匯出</div></div>
       </div>
-      <div class="vc-actions" style="margin-top:14px">
-        <a class="vc-cta ghost" href="{% url 'learning:teacher_vision_flywheel' %}">進入完整資料飛輪頁 →</a>
-      </div>
     </div>
 
     <div class="vc-note">
@@ -630,76 +818,52 @@
   </div>
 </section>
 
-{# ============================ 進階管理（頁尾，預設關閉） ============================ #}
-<details class="vc-admin">
-  <summary>進階管理（一般教師不需使用）</summary>
-
-  <div class="vc-admin-block">
-    <h3>任務類型切換</h3>
-    <p class="muted" style="font-size:13.5px;margin:0 0 8px">兩個任務使用同一套複核流程，各自有獨立的模型、版本與正式版本。</p>
-    <div class="vc-taskbar">
-      {% for option in task_options %}
-        <a class="vc-tab {% if option.id == task_id %}active{% endif %}" href="?task={{ option.id }}">{{ option.label }}</a>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="vc-admin-block">
-    <h3>推論服務與版本狀態</h3>
-    <div>
-      <span class="vc-pill"><b>推論服務</b>
-        {% if api_online %}<span style="color:#12695a;font-weight:650">正常</span>{% else %}<span style="color:#8f2d1d;font-weight:650">無法連線</span>{% endif %}
-      </span>
-      {% for row in task_summary %}
-      <span class="vc-pill">
-        <b>{{ row.label }}</b>
-        {% if row.active %}<span style="color:#12695a;font-weight:650">正式：{{ row.active.model_name|default:row.active.model_id }}（{{ row.active.version }}）</span>
-        {% else %}<span style="color:#8a6412">尚未啟用</span>{% endif %}
-        <span class="muted">｜版本數 {{ row.history_count }}</span>
-      </span>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="vc-admin-block">
-    <h3>上傳您自己的模型</h3>
-    <p class="muted" style="font-size:13.5px;margin:0 0 8px">教師自行訓練的模型可從這裡上傳；上傳後仍須完成「② 圖片驗證」才可設為正式模型。</p>
-    <form method="post" action="{% url 'learning:teacher_vision_center_upload' %}" enctype="multipart/form-data">
-      {% csrf_token %}
-      <input type="hidden" name="task_id" value="{{ task_id }}">
-      <div class="vc-field-row">
-        <div class="vc-f">
-          <label for="vc-up-name">模型名稱</label>
-          <input type="text" name="model_name" id="vc-up-name" placeholder="例如：四槳方向 v2" required>
-        </div>
-        <div class="vc-f">
-          <label for="vc-up-version">版本</label>
-          <input type="text" name="version" id="vc-up-version" value="v1" required>
-        </div>
-      </div>
-      <div class="vc-field-row">
-        <div class="vc-f">
-          <label for="vc-up-file">模型檔案（best.pt）</label>
-          <input type="file" name="model_file" id="vc-up-file" accept=".pt" required>
-        </div>
-      </div>
-      <button class="button secondary" type="submit" {% if not api_online %}disabled{% endif %}>上傳並檢查</button>
-    </form>
-  </div>
-
-  <div class="vc-admin-block">
-    <h3>系統運作方式（供技術人員參考）</h3>
-    <table>
-      <tr><th>推論執行位置</th><td>Live Backend 獨立推論服務（Django 不載入 .pt）</td></tr>
-      <tr><th>Django 是否載入 .pt</th><td>否。學生模型為 PyTorch pickle，載入即執行任意程式碼，一律交由獨立進程處理。</td></tr>
-      <tr><th>兩個任務是否共用模型</th><td>否。各自獨立的模型、規則、測試集與啟用版本。</td></tr>
-      <tr><th>舊模型是否被刪除</th><td>否。切換時只改狀態，原版本永久保留為歷史。</td></tr>
-    </table>
-  </div>
-</details>
-
 <script>
 (function () {
+  // ---- 場景③ 歸檔：原因改由確認框內填寫（不再常駐輸入框）----
+  // 歸檔原因仍照舊以 POST 參數 reason 送給 Live（審計紀錄語義不變）；
+  // 這裡只把「填寫時機」從常駐輸入框改到確認對話框，長度上限同樣 120 字。
+  window.vcArchive = function (form, modelName) {
+    var msg = '確定歸檔「' + modelName + '」嗎？歸檔後不再出現在清單與驗證下拉，'
+            + '但 .pt 檔案會保留，可隨時從「已歸檔」一鍵還原。';
+    if (!window.confirm(msg)) { return false; }
+    var reason = window.prompt('歸檔原因（選填，會寫入審計紀錄，最長 120 字）：', '');
+    if (reason === null) { return false; }              // 使用者按取消 → 整筆取消
+    reason = String(reason).slice(0, 120);
+    var field = form.querySelector('.vc-archive-reason');
+    if (field) { field.value = reason; }
+    return true;
+  };
+
+  // ---- 場景③ 啟用：驗證通過才可啟用（2026-10-23 教師指令，恢復硬規則）----
+  // 啟用資格（健康度 OK＋圖片驗證最高信心≥0.6＋類別為規範四類＋非 DEMO 放寬匯入）
+  // 由 Live activate_model 硬判定；按鈕僅在 activation_eligible 時渲染，後端亦逐条把關，
+  // 不符合一律拒絕（override 路徑已撤銷），無法覆寫。
+  window.vcActivate = function (form, modelName, facts) {
+    var msg = '確定要把「' + modelName + '」設為正式使用嗎？\n\n'
+            + '目前的正式模型會保留為歷史版本。\n\n'
+            + '此模型已通過啟用資格檢核：' + (facts || '（無）') + '\n\n'
+            + '若資格未達標，系統會直接拒絕啟用（無法覆寫）。';
+    return window.confirm(msg);
+  };
+
+  // ---- 場景②：驗證通過才動態產生「前往③啟用正式模型」捷徑（2026-10-22 教師指令）----
+  // 按鈕文字只在此處由 JS 產生，伺服器輸出的 HTML 在未通過時**完全不含**該文字，
+  // 因此「未通過不出現」是真的不渲染，不是 CSS 隱藏。此捷徑只做場景導覽，不啟用。
+  function vcRenderPassCta(r) {
+    var box = document.getElementById('vc-r-pass-cta');
+    if (!box) { return; }
+    if (r && r.verdict) {
+      var label = r.verdict === 'MATCH' ? '測試通過' : (r.verdict_label || '驗證完成');
+      box.innerHTML = '<a class="vc-cta primary" href="' + box.getAttribute('data-href')
+                    + '">' + label + ' → 前往啟用正式模型</a>';
+      box.style.display = 'flex';
+    } else {
+      box.innerHTML = '';
+      box.style.display = 'none';
+    }
+  }
+
   // ---- 場景切換 ----
   var scene = {{ scene|default:1 }};
   function switchScene(n, push) {
@@ -819,6 +983,7 @@
           document.getElementById('vc-r-exp').textContent = r.expected_class || '（未標註）';
           document.getElementById('vc-r-reason').textContent = r.reason || '';
           document.getElementById('vc-r-nodetect').style.display = (r.reason_code === 'NO_DETECTION') ? 'block' : 'none';
+          vcRenderPassCta(r);
           drawBoxes(localUrl, r.boxes);
           resultBox.classList.add('show');
         })

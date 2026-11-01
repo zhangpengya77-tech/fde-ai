@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-Hans"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R07-M 交付报告</title>
+<style>
+body{font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;max-width:920px;margin:0 auto;padding:32px 20px;color:#1f2328;line-height:1.7}
+h1{border-bottom:3px solid #2563eb;padding-bottom:8px}
+h2{border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-top:32px}
+h3{color:#2563eb}
+code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:.9em}
+pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto}
+pre code{background:none;color:inherit}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:.92em}
+th,td{border:1px solid #d1d5db;padding:8px 10px;text-align:left}
+th{background:#eff6ff}
+tr:nth-child(even) td{background:#f8fafc}
+a{color:#2563eb}
+blockquote{border-left:4px solid #cbd5e1;margin:0;padding:4px 16px;color:#475569}
+</style></head><body>
+<h1>R07-M 模型管理（歸檔／還原／永久刪除／學員重傳）交付報告</h1>
+<ul><li>日期：2026-10-21</li><li>專案：<code>D:\FDE-AI-UAS-v2.0</code>（分支 <code>fde-ai-v2.0-dev</code>）</li><li>教師指令：「教師視覺模型中心新增『模型管理』：不理想模型可歸檔/刪除，學員可再傳新模型。僅限本功能，其他一律不動。持續執行到底。」</li><li>範圍：<strong>僅</strong>模型管理（M1–M7）。未改動 ACTIVE 模型、未改 .pt、未降任何閾值、未 commit／未 push、未動其他功能。</li><li>結論：<strong>M1–M7 全部實作完成並以自動化測試 + DEMO 真實 HTTP 實測驗證通過</strong>。既有測試失敗數<strong>未增加</strong>（Live 14 項、Django 3 項，皆為既有質量閘門造成）。</li></ul>
+<hr/>
+<h2>一、步驟 0：學員上傳 .pt 的拒絕點清單（唯讀調查，文件:行號）</h2>
+<p>調查報告：<code>demo/runtime/logs/R07-M-模型管理-步骤0-上传拒绝点调查报告_2026-10-21.md</code></p>
+<table>
+<thead><tr><th>#</th><th>調查項</th><th>結論</th><th>證據（文件:行號）</th></tr></thead>
+<tbody>
+<tr><td>a</td><td>是否限制每任務／小組只能有一筆提交</td><td><strong>沒有任何數量限制</strong>。<code>create_submission</code> 直接 append，無唯一性檢查；DEMO store 同組 10 筆提交、同檔 4 筆重複即為實證</td><td><code>live_backend/app/vision_center.py:1391</code>（<code>create_submission</code>）、<code>:1438</code>（append）、<code>:1446</code>（save）</td></tr>
+<tr><td>b</td><td>sha256 重複檢查比對哪些記錄／REJECTED、ARCHIVED 算不算</td><td><strong>學員上傳路徑完全沒有 sha256 重複檢查</strong>。<code>file_hash</code> 只寫不比較；唯一去重發生在教師「收藏至倉庫」流程（<code>vision_repository.py</code>、<code>vision_snapshot.py</code>），與學員上傳無關。因此「REJECTED／ARCHIVED 算不算」在現況下無意義——<strong>本次改為「資訊提示」而非拒絕</strong></td><td><code>vision_center.py:1418</code>（計算 <code>file_hash</code>）、<code>:1436</code>（寫入）；本次新增 <code>:1422-1426</code>（提示）</td></tr>
+<tr><td>c</td><td><code>submission_not_importable</code> 觸發條件</td><td><strong>提交狀態 ≠ <code>SUBMITTED</code></strong>（<code>SUBMISSION_STATUSES = SUBMITTED / IMPORTED / REJECTED</code>）。IMPORTED 之後不可再匯入；另有冪等防護 <code>submission_already_imported</code></td><td><code>vision_center.py:1570</code>（匯入）、<code>:1586</code>（冪等）、<code>:1729</code>（預檢）；狀態集 <code>:37</code></td></tr>
+<tr><td>d</td><td>學員頁面是否因已有提交而隱藏上傳入口</td><td><strong>不是</strong>。上傳區塊只看 <code>model_upload_allowed</code>（R07 ＋ 專業方向），表單只看 <code>editable</code>（成長記錄狀態）；<code>has_removed_model</code> 變數<strong>從未被 view 提供</strong>（模板 :55 的按鈕文案永不切換）——本次一併修正</td><td><code>student_portal/learning/views.py:932-936</code>（editable 判定）、<code>:1171-1179</code>（本次補上 <code>has_removed_model</code> / <code>model_upload_open</code>）、<code>templates/learning/growth_record_detail.html:51-56</code></td></tr>
+</tbody></table>
+<p><strong>匯入後其他拒絕點（本次不放寬，僅記錄）</strong>：<code>submission_file_missing</code>（:1572）、<code>model_untrained</code>／<code>model_nc_mismatch</code>（D2 健康度閘門，<code>upload_model</code>）、<code>model_quality_gate</code>（質量證據閘門）、<code>validated_model_required</code>（啟用）。</p>
+<p><strong>調查結論（據此實作）</strong>：真正阻擋「學員重傳」的不是名額或重複檢查，而是①成長記錄狀態閘門（送審後唯讀）②提交一旦 IMPORTED 不可再匯入。因此 M5 的正解是「歸檔／刪除 → 來源提交標記『已被取代』 → 成長記錄收回 NEEDS_REVISION（或已通過者只重開模型上傳入口）」，而不是新增任何「每人只能一筆」的限制。</p>
+<hr/>
+<h2>二、M1–M7 逐項狀態與證據</h2>
+<table>
+<thead><tr><th>項目</th><th>狀態</th><th>實作位置</th><th>證據</th></tr></thead>
+<tbody>
+<tr><td><strong>M1 歸檔</strong></td><td>完成</td><td><code>vision_center.py:1245</code>（<code>archive_model</code>）、<code>vision_api.py</code> <code>POST /models/{id}/archive</code>（收 <code>reason</code>）、<code>views.py:4200</code>（教師 view）、模板候選列＋版本管理列「歸檔此模型」表單（含原因輸入）</td><td>歸檔後 <code>status=ARCHIVED</code>、<code>archived_via=teacher</code>、<code>archived_reason</code>、<code>status_before_archive</code>；<code>.pt</code> 不動；從候選清單與驗證下拉隱藏（既有 <code>ARCHIVED</code> 過濾）；<code>test_archive_hides_model_but_keeps_pt_file</code></td></tr>
+<tr><td><strong>M2 還原</strong></td><td>完成</td><td><code>vision_center.py:1286</code>（<code>restore_model</code>）、<code>views.py:4241</code>、「已歸檔」折疊區「一鍵還原」</td><td>回到 <code>status_before_archive</code>，並清空 <code>archived_via</code>／<code>archived_by</code>／<code>archived_at</code>（歸檔時間轉存 <code>last_archived_at</code>，原因保留），避免已還原模型仍被判定為「教師歸檔件」；<strong>雙向解除</strong> Live 提交 superseded 與 Django Evidence <code>SUPERSEDED</code>；僅教師手動歸檔件可還原（系統歸檔回 422 <code>restore_not_teacher_archived</code>）；<code>test_restore_round_trip</code>、<code>test_restore_clears_superseded_metadata_back_to_original</code>、HTTP 實測第 2 輪</td></tr>
+<tr><td><strong>M3 永久刪除</strong></td><td>完成</td><td><code>vision_center.py:1317</code>（<code>delete_model</code>）、<code>views.py:4273</code>、「進階管理：永久刪除模型」折疊區（原因輸入＋勾選二次確認＋confirm 對話框）</td><td>依 sha256 判定共用：有共用 → <code>file_removed=False</code> 並回報 <code>shared_with</code>；無共用 → 物理刪除模型目錄；連帶移除該模型 evaluations；提交記錄保留（審計可溯）；<code>test_delete_keeps_shared_pt_and_reports_owner</code>、<code>test_delete_removes_file_when_not_shared</code>、<code>test_delete_removes_model_evaluations</code></td></tr>
+<tr><td><strong>M4 後端硬攔</strong></td><td>完成</td><td><code>vision_center.py:1157</code>（<code>_guard_model_manageable</code>），archive／restore／delete 三者共用；三條路由全走 <code>_teacher()</code></td><td>ACTIVE → <code>model_active_cannot_manage</code>；VALIDATING → <code>model_validation_in_progress</code>；皆回 422 可追溯錯誤碼（非前端隱藏）；無教師標頭 → 403 <code>teacher_required</code>；<code>test_archive_rejects_active_model</code>、<code>test_delete_rejects_active_model</code>、<code>test_archive_and_delete_reject_validating_model</code>、<code>test_management_requires_teacher_header</code></td></tr>
+<tr><td><strong>M5 學員重傳（核心）</strong></td><td>完成</td><td>Live：<code>_supersede_source_submission</code>（:1204）、<code>create_submission</code> 重複提示（:1422-1426）；Django：<code>_vision_mark_submission_superseded</code>（:4079）、<code>_vision_clear_submission_superseded</code>（:4130）、<code>model_upload_open</code>（:1172）、<code>growth_model_upload</code> 閘門例外（:1218-1230）</td><td>歸檔／刪除後來源提交 <code>superseded=True</code>；學員可再上傳新檔並建立新提交；重傳同檔 → <code>duplicate_hint=same_as_archived_model</code> 只提示不拒絕；重傳未訓練模型仍被 D2 拒（<code>test_resubmitted_untrained_model_still_rejected_by_d2</code>）；已通過記錄不改評分狀態但重開上傳入口</td></tr>
+<tr><td><strong>M6 審計</strong></td><td>完成</td><td><code>vision_center.py:1180</code>（<code>_audit</code>）→ <code>&lt;root&gt;/audit/model_management_audit.jsonl</code>（append-only JSONL，store 之外）</td><td>每筆含 <code>event/at/model_id/operator/reason/backup_path/store_sha256</code>；DEMO 已有 7 筆真實事件（3 次歸檔、2 次還原等）</td></tr>
+<tr><td><strong>M7 操作前備份</strong></td><td>完成</td><td><code>vision_center.py:1171</code>（<code>_backup_store</code>）→ <code>&lt;root&gt;/backups/&lt;戳&gt;-&lt;op&gt;-&lt;model_id&gt;/</code></td><td>備份 store JSON ＋（刪除時）模型目錄；回傳 <code>store_sha256</code> 可核對；<code>test_audit_and_backup_written_before_mutation</code> 驗證「備份內容是改動前狀態」</td></tr>
+</tbody></table>
+<p><strong>額外一致性修正（本次一併處理，屬 M2 範疇）</strong>：教師歸檔件不得成為回滾目標 → <code>previous_active_model</code> 排除 <code>archived_via=teacher</code>（<code>vision_center.py:764</code>），Django <code>can_rollback</code> 同口徑（<code>views.py:3300</code> 附近）。測試：<code>test_rollback_does_not_resurrect_teacher_archived_model</code>。</p>
+<hr/>
+<h2>三、修改檔案清單（SHA256）與備份</h2>
+<p>備份目錄：<code>backups/20261021-model-management/</code>（含 7 個原始檔＋<code>SHA_BEFORE.txt</code>）</p>
+<table>
+<thead><tr><th>檔案</th><th>修改前 SHA256</th><th>修改後 SHA256</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/app/vision_center.py</code></td><td><code>0743b52d5681ae315cbeaa8b6ba9d922eef45103ba3ee9bb99c30d6baabaf489</code></td><td><code>0c80d8b53aaed93f3921725057e90dcb4d51b1f8fb9f95cd09f55edd3b1d1ff3</code></td></tr>
+<tr><td><code>live_backend/app/vision_api.py</code></td><td><code>f1fd7eaea9040562e84313cab631399400f488d67a07d053124e8b87af189f63</code></td><td><code>67a785f5e51279a7d9dd89c4ac0f957a71d0123fc5a5f39da6e9aa79e0eb75ca</code></td></tr>
+<tr><td><code>student_portal/learning/views.py</code></td><td><code>58546ce6da25ecbc26d11e60ea3a454d1663d8fd524f1100219bdbd1a8228fe7</code></td><td><code>6fb832ebfc34108ab3ceca63f42e290927e5ab528b38b00c78ac7107809c4439</code></td></tr>
+<tr><td><code>student_portal/learning/vision_submission.py</code></td><td><code>795ddf4d5cd0994c34a71523b9078b568e827027275ef60d4bc1d7633fefba9d</code></td><td><code>71a26b4dab411fe6f07d6a3d789fd99e5c257d5fee7a5627bc6a0ca2f700809d</code></td></tr>
+<tr><td><code>student_portal/learning/urls.py</code></td><td><code>de0530435696252d47da79a73d5e6aacd8171e4e6db4a1449c28b6144a21ee21</code></td><td><code>ac0a348256d39e0e33a47ecff1f35f670055258e44336b104156016e9dd4ad99</code></td></tr>
+<tr><td><code>student_portal/learning/templates/learning/teacher_vision_center.html</code></td><td><code>d0e3a1ca6b324acd3b0d4d0dcab100889dbf98fdc95228408db71c8f9c00b75f</code></td><td><code>8c15170b7032acbfd21cb569816ce831787ecded1f37dc34b7ab7ca062d20991</code></td></tr>
+<tr><td><code>student_portal/learning/templates/learning/growth_record_detail.html</code></td><td><code>58c3ead1fb0cdfdc3ba8f582ee292ee03bc541b11c2b426b42a2e851021c3921</code></td><td><code>67049dd99268341749d0303e231d141c5e5589101da9f3d67ecbb43a374b6b60</code></td></tr>
+</tbody></table>
+<p>新建檔案：</p>
+<table>
+<thead><tr><th>檔案</th><th>SHA256</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/tests/test_vision_model_management.py</code>（18 項）</td><td><code>047333e8cd4425887303c32e7af92c18f81d595257886d22f05f5b51d5e67d3c</code></td></tr>
+<tr><td><code>student_portal/learning/tests/test_vision_model_reupload.py</code>（8 項）</td><td><code>e93562d440ec6e374f4632011b36fdc2519d5264c1e9ed637c81c5125892022f</code></td></tr>
+<tr><td><code>demo/runtime/logs/R07-M-模型管理-步骤0-上传拒绝点调查报告_2026-10-21.md</code></td><td>步驟 0 調查</td></tr>
+<tr><td><code>demo/runtime/logs/evidence-model-management-2026-10-21/</code></td><td>HTTP 實測證據包（12 個 HTML/JSON）</td></tr>
+</tbody></table>
+<p>未修改：所有 <code>.pt</code> 檔、任何 ACTIVE 模型記錄、<code>MODEL_STATUSES</code>、健康度／質量閘門門檻、其他功能頁面。</p>
+<hr/>
+<h2>四、測試數量與通過數</h2>
+<h3>新增測試</h3>
+<table>
+<thead><tr><th>套件</th><th>數量</th><th>結果</th></tr></thead>
+<tbody>
+<tr><td><code>live_backend/tests/test_vision_model_management.py</code></td><td>18</td><td><strong>18 / 18 通過</strong></td></tr>
+<tr><td><code>student_portal/learning/tests/test_vision_model_reupload.py</code></td><td>8</td><td><strong>8 / 8 通過</strong></td></tr>
+<tr><td><code>student_portal/learning/tests/test_teacher_vision_center_page.py</code>（新增 <code>VisionCenterModelManagementTests</code>）</td><td>14</td><td><strong>14 / 14 通過</strong>（該檔合計 123 項全綠）</td></tr>
+</tbody></table>
+<p>兩支 Django 檔合跑：<strong>131 / 131 通過</strong>。</p>
+<h3>迴歸（既有套件）</h3>
+<table>
+<thead><tr><th>套件</th><th>數量</th><th>結果</th><th>與基線比較</th></tr></thead>
+<tbody>
+<tr><td><code>test_vision_center.py</code></td><td>49</td><td>全過</td><td>不變</td></tr>
+<tr><td><code>test_vision_submission_delete.py</code></td><td>5</td><td>全過</td><td>不變</td></tr>
+<tr><td><code>test_vision_quality_gate.py</code></td><td>9</td><td>全過</td><td>不變</td></tr>
+<tr><td><code>test_vision_api.py</code></td><td>17</td><td>4 失敗 + 1 錯誤</td><td><strong>與原始檔案完全相同</strong>（已用備份檔交換實測比對）</td></tr>
+<tr><td><code>test_teacher_vision_center.py</code></td><td>22</td><td>3 失敗 + 6 錯誤</td><td><strong>與原始檔案完全相同</strong>（同上）</td></tr>
+<tr><td><code>learning</code> 全量</td><td>1060</td><td>3 失敗 + 10 錯誤 + 26 略過</td><td><strong>舊失敗數不增加</strong>（見下）</td></tr>
+</tbody></table>
+<p><strong>既有 14 項 Live 失敗原因</strong>：測試以 <code>FixtureValidator</code> 上傳後直接啟用，但 2026-10-21 加入的「質量證據閘門」（<code>require_evaluation=True</code> 且無 golden eval）使啟用被拒 → <code>no_previous_validated_model</code>／<code>active_model</code> 為 None。屬<strong>既有質量閘門</strong>造成，依教師指示「不要碰」，本輪僅確認失敗數不增加。</p>
+<h3>全量回歸（<code>manage.py test learning</code>，序列執行、禁用 --parallel）</h3>
+<ul><li>結果：<strong>Ran 1060 tests — FAILED (failures=3, errors=10, skipped=26)</strong>，耗時 2080 秒。</li><li>13 項失敗全部分布在 5 個<strong>與本功能無關</strong>的模組：<code>test_platform_access</code>（7 錯誤，根因 <code>StudentProfile.display_name</code> property 無 setter）、<code>test_public_platform</code>（1 錯誤，靜態資產解析 <code>ValueError: substring not found</code> / <code>KeyError: &#x27;default&#x27;</code>）、<code>test_teacher_workflow</code>（2 錯誤＋1 失敗，圖片處理 400 與既有「訓練用途」欄位）、<code>test_auth</code>（1 失敗，首頁 hero 文案）、<code>test_vision_flywheel_framework</code>（1 失敗，既有「訓練用途」欄）。</li><li><strong>基線對照（決定性證據）</strong>：把 5 個 Django 修改檔暫時換回 <code>backups/20261021-model-management/</code> 的原始檔，單獨跑上述 5 個模組 → <strong>Ran 66 tests — FAILED (failures=3, errors=10)</strong>，與全量跑出的 13 項完全一致（測試名逐項相同）。→ 這 13 項為<strong>既有失敗，非本輪引入</strong>。</li><li><strong>最終碼定向複跑</strong>（改動面相關模組）：<code>test_teacher_vision_acceptance</code>、<code>test_growth_records</code>、<code>test_r07_upload_acceptance</code>、<code>test_vision_model_center</code>、<code>test_vision_import_reliability</code>、<code>test_vision_submission_network_errors</code> → <strong>Ran 100 tests — OK</strong>。</li></ul>
+<hr/>
+<h2>五、HTTP 實測結果（DEMO 棧，真實 HTTP 非 mock）</h2>
+<p>環境：Django <code>http://192.168.1.114:8110</code>、Live <code>http://192.168.1.114:8111</code>（已確認 8111 為 FDE Live：<code>GET /api/v1/vision/models</code> → 200；新路由無教師標頭 → 403 <code>teacher_required</code> 而非 404）。</p>
+<p>主流程 12 步全過（<code>evidence.json</code>）：</p>
+<table>
+<thead><tr><th>#</th><th>步驟</th><th>結果</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>教師登入 <code>/teacher/login/</code></td><td>PASS（200）</td></tr>
+<tr><td>2</td><td>③ 正式模型頁含歸檔表單與目標模型 <code>PROP_20261019_DEMO-A_v1_a0cc</code></td><td>PASS</td></tr>
+<tr><td>3</td><td>學員登入 <code>/login/</code></td><td>PASS（200 → <code>/student/</code>）</td></tr>
+<tr><td>4</td><td>學員 R07 頁可讀</td><td>PASS</td></tr>
+<tr><td>5</td><td>教師歸檔 → 成功訊息「已歸檔此模型」</td><td>PASS</td></tr>
+<tr><td>6</td><td>Live store：<code>status=ARCHIVED</code>、<code>archived_via=teacher</code>、<code>status_before_archive=DEMO_IMPORTED</code>；提交 <code>superseded=True</code>、<code>superseded_op=archive</code></td><td>PASS</td></tr>
+<tr><td>7</td><td>歸檔不刪 <code>.pt</code>（<code>best.pt</code> 仍存在）</td><td>PASS</td></tr>
+<tr><td>8</td><td>M7 備份＋M6 審計（<code>model_archived</code>、operator=2、reason、store SHA）</td><td>PASS</td></tr>
+<tr><td>9</td><td>學員頁出現「教師已歸檔／刪除此模型，請重新上傳新的 best.pt」＋上傳表單</td><td>PASS</td></tr>
+<tr><td>10</td><td>學員重傳新 <code>best.pt</code> → 成功訊息</td><td>PASS</td></tr>
+<tr><td>11</td><td>Live 建立新提交 <code>sub-bc52ee04-…</code>（status=SUBMITTED，student=DEMO-STU-0001）</td><td>PASS</td></tr>
+<tr><td>12</td><td>教師 ① 學員模型頁看到新提交檔名</td><td>PASS</td></tr>
+</tbody></table>
+<p>還原（M2）與一致性 2 步全過（<code>evidence_restore_consistency.json</code>）：</p>
+<table>
+<thead><tr><th>#</th><th>步驟</th><th>結果</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>「已歸檔」折疊區可見＋含「一鍵還原」表單；還原成功訊息；模型回 <code>DEMO_IMPORTED</code>；提交 <code>superseded=False</code></td><td>PASS</td></tr>
+<tr><td>2</td><td>Django Evidence：還原前 <code>SUPERSEDED</code> → 還原後 <code>SUBMITTED</code> 且 <code>superseded_at</code> 清除 → 再歸檔後 <code>SUPERSEDED</code>（雙向一致）</td><td>PASS</td></tr>
+</tbody></table>
+<p>審計日誌實際內容（<code>demo/runtime/vision-center/audit/model_management_audit.jsonl</code>，7 筆）：3 次 <code>model_archived</code>、2 次 <code>model_restored</code>（另有 2 次為早期測試輪次），每筆皆含 operator、reason、backup_path、store_sha256。</p>
+<p><strong>DEMO 最終狀態（可供教師直接查看）</strong>：</p>
+<ul><li><code>PROP_20261019_DEMO-A_v1_a0cc</code>：ARCHIVED（教師歸檔，原因已記錄），<code>.pt</code> 保留，可在「已歸檔」一鍵還原。</li><li>學員 DEMO-STU-0001 的 R07：新提交 <code>sub-bc52ee04-240f-4e3c-b584-3d48ba76081c</code>（<code>best_reupload_2ead4fb9.pt</code>）在 ① 學員模型「待複核」中。</li><li>ACTIVE 模型（含 003fe6）全程未動。</li></ul>
+<hr/>
+<h2>六、未完成項與原因</h2>
+<ol><li><strong>永久刪除（M3）未在 DEMO 實跑</strong>：避免破壞示範資料。已由 Live 端 4 項單元測試（共用 .pt 不誤刪、無共用時刪檔、連帶刪 evaluations、ACTIVE 拒絕）與 Django 端 3 項契約測試覆蓋。若教師要在 DEMO 實際演練，可在「進階管理」對任一非 ACTIVE 模型勾選確認後執行，系統會先自動備份。</li><li><strong>真機 iPhone 未測</strong>：本任務為教師後台管理功能，未要求真機驗收；頁面已沿用既有響應式樣式並為新表單補 390px 斷點（按鈕全寬、輸入框 100%）。</li><li><strong>DEMO 帳號憑證檔與實際密碼不一致</strong>：<code>~/.fde-demo-credentials/demo.student01.password.txt</code> 記錄的密碼已失效，實際可用的為共用密碼 <code>demo.shared.password.txt</code>；<code>demo.student02</code> 帳號在 DEMO 庫中不存在。屬既有資料問題，<strong>未修改</strong>，僅記錄。</li><li><strong>既有測試失敗未修</strong>：Live 14 項（質量閘門造成）；Django 全量 13 項（3 失敗 + 10 錯誤，見第四節基線對照，含 <code>StudentProfile.display_name</code> 無 setter、靜態資產解析、圖片處理 400、hero 文案、「訓練用途」欄位）。依教師指示「不要碰」，本輪僅以原始檔交換實測證明失敗數不增加。</li><li><strong>未 commit／未 push</strong>：依約束，所有改動留在工作區，備份與 SHA 已完整記錄。</li></ol>
+</body></html>

@@ -45,14 +45,37 @@
   <h2 id="r07-model-title">上傳 YOLO 模型 best.pt</h2>
   <p class="muted">任務類型：<strong>PROP_DIRECTION</strong>。模型會作為既有 MODEL / YOLO_MODEL 證據送交教師審核，不會自動啟用。</p>
   <p><a class="button secondary" href="{% url 'learning:student_prop_scan' enrollment.pk %}">槳葉方向辨識（手機拍照檢測）</a></p>
+  {# 數據飛輪 B-5：上期基礎模型（當前推薦種子），學員可下載 .pt 作為下一期訓練起點 #}
+  {% if recommended_seed_model %}
+  <section class="growth-seed-block" aria-labelledby="r07-seed-title">
+    <h3 id="r07-seed-title">上期基礎模型（推薦訓練起點）</h3>
+    <p class="muted">教師已將此模型入庫為「種子模型」，下一期學員可下載其 <code>.pt</code> 作為訓練起點，在其基礎上補充新圖片標註、繼續訓練，讓模型逐期變準。</p>
+    <ul class="growth-seed-meta">
+      <li><strong>期數：</strong>第 {{ recommended_seed_model.seed_generation }} 期</li>
+      <li><strong>模型：</strong>{{ recommended_seed_model.model_name|default:recommended_seed_model.model_id }}</li>
+      <li><strong>mAP50：</strong>{% if recommended_seed_model.seed_map50 is not None %}{{ recommended_seed_model.seed_map50 }}{% else %}—{% endif %}</li>
+      <li><strong>驗證信心：</strong>{% if recommended_seed_model.seed_validation_confidence is not None %}{{ recommended_seed_model.seed_validation_confidence }}{% else %}—{% endif %}</li>
+      <li><strong>入庫日期：</strong>{{ recommended_seed_model.seeded_at|default:'—' }}</li>
+    </ul>
+    <a class="button primary" href="{% url 'learning:student_seed_download' enrollment.pk %}?model_id={{ recommended_seed_model.model_id }}">下載 .pt 作為訓練起點</a>
+  </section>
+  {% endif %}
   <div class="growth-document-list">
-    {% for model in model_evidence %}<article class="growth-document"><div><strong>{{ model.original_metadata.filename|default:'best.pt' }}</strong><small>狀態：{% if model.processed_metadata.vision_model_review.status == 'CANDIDATE' %}已列為候選{% elif model.processed_metadata.vision_model_review.status == 'RETURNED' %}退回補件{% elif model.processed_metadata.submission_status == 'SUBMITTED' %}等待教師審核{% else %}{{ model.processed_metadata.submission_status|default:'已保存' }}{% endif %} · {{ model.created_at|date:'Y-m-d H:i' }}</small>{% if model.processed_metadata.vision_model_review.current_note %}<small>教師意見：{{ model.processed_metadata.vision_model_review.current_note }}</small>{% endif %}</div><a class="button secondary" href="{% url 'learning:evidence_download' model.pk %}">下載</a></article>{% empty %}<p class="empty-state">尚未上傳訓練模型。</p>{% endfor %}
+    {% for model in model_evidence %}<article class="growth-document"><div><strong>{{ model.original_metadata.filename|default:'best.pt' }}</strong><small>狀態：{% if model.processed_metadata.submission_status == 'REMOVED_BY_TEACHER' %}<span style="color:#b42318">教師已移除此模型，請重新上傳</span>{% elif model.processed_metadata.submission_status == 'SUPERSEDED' %}<span style="color:#b42318">教師已歸檔／刪除此模型，請重新上傳新的 best.pt</span>{% elif model.processed_metadata.vision_model_review.status == 'CANDIDATE' %}已列為候選{% elif model.processed_metadata.vision_model_review.status == 'RETURNED' %}退回補件{% elif model.processed_metadata.submission_status == 'SUBMITTED' %}等待教師審核{% else %}{{ model.processed_metadata.submission_status|default:'已保存' }}{% endif %} · {{ model.created_at|date:'Y-m-d H:i' }}</small>{% if model.processed_metadata.vision_model_review.current_note %}<small>教師意見：{{ model.processed_metadata.vision_model_review.current_note }}</small>{% endif %}</div><a class="button secondary" href="{% url 'learning:evidence_download' model.pk %}">下載</a></article>{% empty %}<p class="empty-state">尚未上傳訓練模型。</p>{% endfor %}
   </div>
-  {% if editable %}
+  {% if model_upload_open %}
   <form method="post" action="{% url 'learning:growth_model_upload' enrollment.pk %}" enctype="multipart/form-data">
     {% csrf_token %}
     <label for="id_model_file">best.pt</label><input id="id_model_file" name="model_file" type="file" accept=".pt" required>
-    <button class="button primary" type="submit">上傳 YOLO 模型 best.pt</button>
+    {# 數據飛輪 B-6：學員可選填「基於的種子模型」，預設為當前推薦基礎模型，形成版本鏈 #}
+    {% if recommended_seed_model %}
+    <label for="id_parent_model_id">基於的種子模型（預設上期基礎模型）</label>
+    <select id="id_parent_model_id" name="parent_model_id">
+      <option value="{{ recommended_seed_model.model_id }}">第 {{ recommended_seed_model.seed_generation }} 期：{{ recommended_seed_model.model_name|default:recommended_seed_model.model_id }}</option>
+      <option value="">無（全新訓練，不接續版本鏈）</option>
+    </select>
+    {% endif %}
+    <button class="button primary" type="submit">{% if has_removed_model %}重新上傳 YOLO 模型 best.pt{% else %}上傳 YOLO 模型 best.pt{% endif %}</button>
   </form>
   {% endif %}
 </section>

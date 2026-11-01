@@ -5,6 +5,8 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 
+from . import internal_auth
+
 
 class VisionImportClassNamesMappingRequired(RuntimeError):
     """Live 回報：模型類別名與任務預期不同但數量一致，需要教師提供對照表。"""
@@ -75,6 +77,8 @@ def _post(path, payload, timeout=None, *, teacher_id=""):
     if teacher_id:
         headers["X-FDE-Role"] = "teacher"
         headers["X-FDE-Teacher-ID"] = str(teacher_id)
+    # 2026-10-28（階段四 B）：加上伺服器端簽章，讓 Live 能區分「Django 轉發」與「本機偽造」。
+    headers = internal_auth.signed_headers("POST", path.split("?")[0], headers)
     request = Request(
         f"{base}{path}",
         data=json.dumps(payload).encode("utf-8"),
@@ -87,7 +91,7 @@ def _post(path, payload, timeout=None, *, teacher_id=""):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise _rejected(exc) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_api_unavailable") from exc
 
 
@@ -97,6 +101,7 @@ def _get(path, timeout=None, *, teacher_id=""):
     if teacher_id:
         headers["X-FDE-Role"] = "teacher"
         headers["X-FDE-Teacher-ID"] = str(teacher_id)
+    headers = internal_auth.signed_headers("GET", path.split("?")[0], headers)
     request = Request(f"{base}{path}", headers=headers, method="GET")
     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
     try:
@@ -104,7 +109,7 @@ def _get(path, timeout=None, *, teacher_id=""):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise _rejected(exc) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_api_unavailable") from exc
 
 
@@ -210,6 +215,8 @@ def _delete(path, timeout=None, *, teacher_id=""):
     if teacher_id:
         headers["X-FDE-Role"] = "teacher"
         headers["X-FDE-Teacher-ID"] = str(teacher_id)
+    # 2026-10-28（階段四 B）：DELETE 同樣要簽章，否則 signed 模式下刪除會被拒。
+    headers = internal_auth.signed_headers("DELETE", path.split("?")[0], headers)
     request = Request(f"{base}{path}", headers=headers, method="DELETE")
     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
     try:
@@ -217,7 +224,7 @@ def _delete(path, timeout=None, *, teacher_id=""):
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise _rejected(exc) from exc
-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_api_unavailable") from exc
 
 
@@ -234,12 +241,20 @@ def prop_check_status():
     return _get("/api/v1/vision/prop-check")
 
 
-def activate_model(*, model_id, teacher_id):
+def activate_model(*, model_id, teacher_id, override=False):
     """區域三：把已驗證模型設為該任務的正式模型（ACTIVE）。
 
     切換動作由 Live Backend 執行；Django 端只轉發並記錄結果。
+
+    `override=True`（2026-10-22 教師指令）：模型不符合自動品質判定時不再一律被擋，
+    改由教師看過「② 圖片驗證」結果後自行決定。Live 端仍會把被覆寫的閘門原因
+    逐條記進審計；`quarantined`（隔離）與 .pt 不可讀兩道硬攔**不會**被覆寫放行。
     """
-    return _post(f"/api/v1/vision/models/{model_id}/activate", {}, teacher_id=teacher_id)
+    return _post(
+        f"/api/v1/vision/models/{model_id}/activate",
+        {"override": bool(override)},
+        teacher_id=teacher_id,
+    )
 
 
 def rollback_model(*, model_type, teacher_id):
@@ -252,6 +267,37 @@ def rollback_model(*, model_type, teacher_id):
 def task_model_history(*, model_type, teacher_id):
     """區域三：讀取任務的完整版本歷史與目前推論來源。"""
     return _get(f"/api/v1/vision/tasks/{model_type}/history", teacher_id=teacher_id)
+
+
+def archive_model(*, model_id, teacher_id, reason=""):
+    """M1（2026-10-21）：歸檔非 ACTIVE 模型（.pt 保留，可還原）。
+
+    Live 端硬攔 ACTIVE 與驗證中模型，並在成功後把來源提交標記「已被取代」，
+    讓學員可重新上傳新模型。
+    """
+    return _post(
+        f"/api/v1/vision/models/{model_id}/archive",
+        {"reason": str(reason or "")},
+        teacher_id=teacher_id,
+    )
+
+
+def restore_model(*, model_id, teacher_id, reason=""):
+    """M2（2026-10-21）：一鍵還原教師手動歸檔的模型。"""
+    return _post(
+        f"/api/v1/vision/models/{model_id}/restore",
+        {"reason": str(reason or "")},
+        teacher_id=teacher_id,
+    )
+
+
+def delete_model(*, model_id, teacher_id, reason=""):
+    """M3（2026-10-21）：永久刪除模型記錄；.pt 僅在無其他引用時才實際刪除。"""
+    return _post(
+        f"/api/v1/vision/models/{model_id}/delete",
+        {"reason": str(reason or "")},
+        teacher_id=teacher_id,
+    )
 
 
 def upload_teacher_model(
@@ -377,8 +423,13 @@ def list_hard_examples(*, teacher_id, status=None):
 def submit_model_evidence_to_vision(
     *, task_type, student_id, group_id, growth_record_id, growth_record_slot,
     evidence_reference, evidence_type, original_filename, content, notes="",
+    parent_model_id="",
 ):
-    """將 R07 模型證據送入既有 Vision Submission，且不自動啟用模型。"""
+    """將 R07 模型證據送入既有 Vision Submission，且不自動啟用模型。
+
+    parent_model_id（2026-10-23 數據飛輪）：學員可選填「基於的種子模型」，
+    匯入時由 Live 複製到模型紀錄，形成第 N 期 → 第 N+1 期的版本鏈。
+    """
     payload = {
         "task_id": task_type,
         "student_id": student_id,
@@ -390,6 +441,7 @@ def submit_model_evidence_to_vision(
         "original_filename": original_filename,
         "file_base64": base64.b64encode(content).decode("ascii"),
         "notes": notes,
+        "parent_model_id": str(parent_model_id or ""),
     }
     url = f"{settings.VISION_SUBMISSION_API_BASE_URL.rstrip('/')}/api/v1/vision/submissions"
     request = Request(
@@ -401,8 +453,81 @@ def submit_model_evidence_to_vision(
     try:
         with urlopen(request, timeout=settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS) as response:
             result = json.loads(response.read().decode("utf-8"))
-    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("vision_submission_unavailable") from exc
     if result.get("status") != "SUBMITTED" or not result.get("submission_id"):
         raise RuntimeError("vision_submission_rejected")
     return result
+
+
+# ---- 數據飛輪（B，2026-10-23）：種子模型 ----
+def seed_model(*, model_id, teacher_id, note="", recommended=True, generation=None, parent_model_id=None):
+    """教師把合格模型入庫為種子（基礎訓練模型）。"""
+    payload = {
+        "note": str(note or ""),
+        "recommended": bool(recommended),
+    }
+    if generation is not None:
+        payload["generation"] = generation
+    if parent_model_id is not None:
+        payload["parent_model_id"] = str(parent_model_id)
+    return _post(
+        f"/api/v1/vision/models/{model_id}/seed",
+        payload,
+        teacher_id=teacher_id,
+    )
+
+
+def unseed_model(*, model_id, teacher_id, reason=""):
+    """教師取消種子標記（取消後才可永久刪除）。"""
+    return _post(
+        f"/api/v1/vision/models/{model_id}/unseed",
+        {"reason": str(reason or "")},
+        teacher_id=teacher_id,
+    )
+
+
+def recommended_seed(*, model_type, teacher_id=""):
+    """讀取該任務的「當前推薦基礎模型」（學員下一期訓練起點）。"""
+    return _get(
+        f"/api/v1/vision/tasks/{model_type}/recommended-seed",
+        teacher_id=teacher_id,
+    )
+
+
+def seed_version_chain(*, model_type, teacher_id=""):
+    """該任務的種子版本鏈（期數／mAP50／驗證信心變化）。"""
+    return _get(
+        f"/api/v1/vision/tasks/{model_type}/seed-version-chain",
+        teacher_id=teacher_id,
+    )
+
+
+def download_seed(*, model_id=None, model_type=None, student_id=""):
+    """學員下載種子 .pt 作為訓練起點（僅已登入學員可見按鈕；下載寫審計）。
+
+    GET 請求帶 X-FDE-Student-ID 表頭；未登入時由 Django 端控制可見性。
+    """
+    base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
+    params = []
+    if model_id:
+        params.append(f"model_id={model_id}")
+    if model_type:
+        params.append(f"model_type={model_type}")
+    query = ("?" + "&".join(params)) if params else ""
+    headers = {"Content-Type": "application/json"}
+    if student_id:
+        headers["X-FDE-Student-ID"] = str(student_id)
+    headers = internal_auth.signed_headers("GET", "/api/v1/vision/seed/download", headers)
+    request = Request(
+        f"{base}/api/v1/vision/seed/download{query}",
+        headers=headers,
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise _rejected(exc) from exc
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("vision_api_unavailable") from exc

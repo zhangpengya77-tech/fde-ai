@@ -28,6 +28,22 @@ class OfflineVision:
         return False
 
 
+class OkHealthInspector:
+    """假 .pt 內容不是真實 checkpoint（真實檢查判 UNKNOWN）；注入 OK 健康度，
+    讓本檔聚焦啟用/歷史/回滾的流程與狀態機（健康度閈門由 test_model_health.py
+    覆蓋）。nc=None 不斷言分類頭數量，與 PROP/HOVER 兩種預期類別集都相容。"""
+
+    def __call__(self, _path):
+        return {
+            "health": "OK",
+            "reasons": [],
+            "map50": 0.9,
+            "nc": None,
+            "names_count": None,
+            "map50_threshold": 0.5,
+        }
+
+
 class FixtureValidator:
     def validate(self, _path, model_type):
         return {
@@ -58,7 +74,13 @@ class TeacherVisionCenterTests(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=root)
         self.center = VisionCenter(
-            self.temp.name, model_validator=FixtureValidator(), model_runner=FixtureRunner()
+            self.temp.name,
+            model_validator=FixtureValidator(),
+            model_runner=FixtureRunner(),
+            model_health_inspector=OkHealthInspector(),
+            # 本檔聚焦啟用/歷史/回滾流程；質量證據閈口（require_evaluation）由
+            # test_vision_quality_gate.py 專門覆蓋，這裡關閉以隔离变量。
+            quality_gate={"require_evaluation": False},
         )
         self.client = TestClient(
             create_app(vision_adapter=OfflineVision(), vision_center=self.center, dev_mode=True)
@@ -97,7 +119,15 @@ class TeacherVisionCenterTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
-    def activate(self, model_id):
+    def activate(self, model_id, model_type="PROP_DIRECTION"):
+        # A 硬規則（2026-10-23）：啟用需有真實圖片驗證通過紀錄（最高信心 ≥ 0.6）。
+        # 本檔焦點為啟用/歷史/回滾的流程與狀態機，以一次 MATCH 紀錄滿足前置條件
+        #（驗證端點本身的行為由本檔 validate_image 系列與資格判定由專門套件覆蓋）。
+        self.center._remember_validation(
+            model_id=model_id, model_type=model_type, decision="MATCH",
+            max_confidence=0.9, expected_class=None, confidence_threshold=0.5,
+            validated_by="teacher-1", reason_code="OK",
+        )
         return self.client.post(
             f"/api/v1/vision/models/{model_id}/activate", headers=self.teacher, json={}
         )
@@ -218,7 +248,9 @@ class TeacherVisionCenterTests(unittest.TestCase):
         self.center._find("models", "model_id", model["model_id"])["validation_status"] = "REJECTED"
         response = self.activate(model["model_id"])
         self.assertEqual(response.status_code, 422)
-        self.assertIn("validated_model_required", response.text)
+        # 2026-10-23 A 硬規則：被駁回的紀錄一律不得啟用（原因碼 model_rejected；
+        # 原 validated_model_required 已由 _activation_eligibility 統一判定取代）。
+        self.assertIn("model_rejected", response.text)
 
     def test_activation_keeps_original_when_new_file_missing(self):
         """切換失敗必須保留原 ACTIVE（指令：切換失敗時保留原本正式模型）。"""

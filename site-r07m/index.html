@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>R07-M 模型管理 · 交付與驗收站點</title>
+<style>
+:root{--blue:#2563eb;--bg:#f8fafc;--card:#fff;--line:#e5e7eb}
+*{box-sizing:border-box}
+body{font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;max-width:1080px;margin:0 auto;padding:28px 20px 60px;color:#1f2328;background:var(--bg);line-height:1.65}
+h1{font-size:26px;border-bottom:3px solid var(--blue);padding-bottom:10px;margin-bottom:6px}
+.sub{color:#64748b;margin:0 0 24px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:18px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+h2{font-size:18px;margin:0 0 14px;color:var(--blue)}
+.btn{display:inline-block;background:var(--blue);color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-size:14px;margin:4px 8px 4px 0}
+.btn.alt{background:#0f172a}
+.btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fbfdff;text-decoration:none;color:#1f2328;transition:.15s}
+.card:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(37,99,235,.15)}
+.card b{display:block;color:var(--blue);margin-bottom:4px;font-size:14px}
+.card span{font-size:12px;color:#64748b}
+iframe{width:100%;height:520px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:10px}
+label{font-size:13px;color:#475569}
+footer{color:#94a3b8;font-size:12px;text-align:center;margin-top:30px}
+.json-list a{margin-right:18px;color:var(--blue);font-size:14px}
+</style>
+</head>
+<body>
+<h1>R07-M「模型管理」· 交付與驗收站點</h1>
+<p class="sub">FDE-AI-UAS v2.0 · 教師視覺模型中心新增：不理想模型可歸檔／刪除，學員可再傳新模型 · 2026-10-21</p>
+
+<section>
+  <h2>① 交付報告（線上閱讀）</h2>
+  <p>完整功能說明、M1–M7 實作、測試與 HTTP 實測結果。</p>
+  <a class="btn" href="report-delivery.html">主交付報告</a>
+  <a class="btn alt" href="report-step0.html">步驟0 上傳拒絕點調查</a>
+  <a class="btn ghost" href="R07-M-%E6%A8%A1%E5%9E%8B%E7%AE%A1%E7%90%86-%E4%BA%A4%E4%BB%98%E6%8A%A5%E5%91%8A_2026-10-21.md">原始 Markdown</a>
+</section>
+
+<section>
+  <h2>② HTTP 實測證據快照（12 步主流程 + 還原一致性）</h2>
+  <p>下方為 DEMO 真實 HTTP 端到端驗收的頁面快照，點卡片載入預覽。</p>
+  <div class="grid">
+    <a class="card" href="evidence/01_teacher_dashboard.html" target="prev"><b>01 教師首頁</b><span>功能入口總覽</span></a>
+    <a class="card" href="evidence/02_teacher_scene3_before.html" target="prev"><b>02 歸檔前</b><span>場景三：模型列表</span></a>
+    <a class="card" href="evidence/03_student_r07_before.html" target="prev"><b>03 學員R07前</b><span>上傳入口未開</span></a>
+    <a class="card" href="evidence/04_teacher_after_archive.html" target="prev"><b>04 歸檔後</b><span>模型隱藏＋原因</span></a>
+    <a class="card" href="evidence/05_student_r07_after.html" target="prev"><b>05 學員R07後</b><span>提示「請重傳」</span></a>
+    <a class="card" href="evidence/06_student_after_reupload.html" target="prev"><b>06 重傳後</b><span>新 best.pt 上傳</span></a>
+    <a class="card" href="evidence/07_teacher_scene1_after.html" target="prev"><b>07 場景一後</b><span>新提交出現</span></a>
+    <a class="card" href="evidence/08_teacher_scene3_archived_list.html" target="prev"><b>08 已歸檔區</b><span>一鍵還原摺疊區</span></a>
+    <a class="card" href="evidence/09_teacher_after_restore.html" target="prev"><b>09 還原後</b><span>回到原狀態</span></a>
+    <a class="card" href="evidence/10_teacher_after_restore_round2.html" target="prev"><b>10 二次還原</b><span>冪等驗證</span></a>
+    <a class="card" href="evidence/11_teacher_after_rearchive.html" target="prev"><b>11 再歸檔</b><span>往返穩定</span></a>
+    <a class="card" href="evidence/12_final_teacher_scene3.html" target="prev"><b>12 最終場景三</b><span>列表最終態</span></a>
+    <a class="card" href="evidence/13_final_teacher_scene1.html" target="prev"><b>13 最終場景一</b><span>佇列最終態</span></a>
+  </div>
+  <iframe name="prev" title="證據預覽" src="evidence/01_teacher_dashboard.html"></iframe>
+</section>
+
+<section>
+  <h2>③ 結構化證據（JSON）</h2>
+  <p class="json-list">
+    <a href="evidence/evidence.json">證據總表 evidence.json</a>
+    <a href="evidence/evidence_restore_consistency.json">還原一致性</a>
+    <a href="evidence/final_state.json">最終狀態檢查</a>
+  </p>
+</section>
+
+<footer>本頁由 WorkBuddy 自動整理發布 · 所有內容均來自 DEMO 隔離環境實測，未含正式資料</footer>
+</body>
+</html>

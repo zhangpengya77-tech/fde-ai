@@ -1993,6 +1993,196 @@
       .replaceAll("'", '&#039;');
   }
 
+  // ---- 視覺模型品質顯示（2026-10-21 質量證據閘口配套）----
+  // 原則：
+  // 1) 前端只做「可讀化」，不提供任何降低門檻的輸入（不得調低 confidence_threshold 讓驗證變綠）。
+  // 2) 綠色（通過）只有一種情況：VALIDATED 且已評估（evaluation_status=EVALUATED，mAP50 ≥ 門檻）
+  //    或 benchmark_status=PASS，且未被封存；未評估／REVIEW_REQUIRED／低於門檻一律不得顯示綠色通過。
+  // 3) 降級原因（review_reason）必須原樣呈現，不做無聲失敗。
+  const VISION_MAP50_THRESHOLD = 0.5;
+
+  function visionMap50Threshold(model) {
+    const threshold = Number(model?.map50_threshold);
+    return Number.isFinite(threshold) && threshold > 0 ? threshold : VISION_MAP50_THRESHOLD;
+  }
+
+  function visionModelEvidence(model) {
+    const evaluated = model?.evaluation_status === 'EVALUATED';
+    const benchmarkPass = String(model?.benchmark_status || '').toUpperCase() === 'PASS';
+    return { evaluated, benchmarkPass, hasEvidence: evaluated || benchmarkPass };
+  }
+
+  function visionModelStateMeta(model) {
+    const validation = String(model?.validation_status || '').toUpperCase();
+    const status = String(model?.status || '').toUpperCase();
+    const { evaluated, benchmarkPass } = visionModelEvidence(model);
+    const threshold = visionMap50Threshold(model);
+    const map50 = model?.metrics?.map50;
+    if (validation === 'REVIEW_REQUIRED' || status === 'REVIEW_REQUIRED') {
+      return { state: 'REVIEW_REQUIRED', label: '待審查', tone: 'warn', note: model?.review_reason || '缺少評估證據，僅類別名稱吻合' };
+    }
+    if (validation === 'REJECTED' || status === 'REJECTED') {
+      return { state: 'REJECTED', label: '已拒絕', tone: 'bad', note: model?.review_reason || '未通過匯入驗證' };
+    }
+    if (status === 'ARCHIVED') {
+      return { state: 'ARCHIVED', label: '已封存', tone: 'neutral', note: '' };
+    }
+    if (validation === 'VALIDATED' && evaluated && typeof map50 === 'number' && map50 < threshold) {
+      return { state: 'BELOW_THRESHOLD', label: 'mAP50 低於門檻', tone: 'warn', note: `mAP50 ${map50} 低於門檻 ${threshold}，未達啟用標準` };
+    }
+    if (validation === 'VALIDATED' && (evaluated || benchmarkPass)) {
+      return { state: 'PASS', label: evaluated ? '已驗證並評估' : '基準測試通過', tone: 'pass', note: evaluated ? `mAP50 ${map50} ≥ 門檻 ${threshold}` : 'BenchmarkPolicy 判定 PASS' };
+    }
+    if (validation === 'VALIDATED') {
+      return { state: 'VALIDATED_NOT_EVALUATED', label: '已驗證未評估', tone: 'warn', note: '僅類別名稱吻合，尚無 golden set 評估或 benchmark 證據，不得視為通過' };
+    }
+    if (validation === 'DEMO_IMPORTED' || status === 'DEMO_IMPORTED') {
+      return { state: 'DEMO_IMPORTED', label: '演示導入', tone: 'warn', note: '演示流程導入，未經評估' };
+    }
+    return { state: validation || status || 'UNKNOWN', label: validation || status || '未知', tone: 'neutral', note: '' };
+  }
+
+  function visionModelClassCount(model) {
+    for (const value of [model?.nc, model?.names_count, Array.isArray(model?.class_names) ? model.class_names.length : null]) {
+      if (typeof value === 'number' && value > 0) return value;
+    }
+    return null;
+  }
+
+  function visionTrainingTrace(model) {
+    if (model?.has_training_trace) {
+      const parts = [];
+      if (model.has_train_args) parts.push('train_args');
+      if (model.has_epoch) parts.push('epoch');
+      if (model.has_metrics) parts.push('metrics');
+      return { label: '有訓練痕跡', detail: parts.join(' · ') };
+    }
+    return { label: model?.training_trace_label || '無訓練痕跡', detail: '' };
+  }
+
+  function visionMap50Text(model) {
+    const { evaluated } = visionModelEvidence(model);
+    const value = model?.metrics?.map50;
+    if (evaluated && typeof value === 'number') return { text: String(value), evaluated: true };
+    if (typeof value === 'number') return { text: `${value}（未評估）`, evaluated: false };
+    return { text: '未評估', evaluated: false };
+  }
+
+  function visionErrorHtml(message) {
+    return `<p class="vm-reason vm-reason-bad">${escapeHtml(message || '未知錯誤')}</p>`;
+  }
+
+  function visionEmptyHtml(message) {
+    return `<p class="vm-empty">${escapeHtml(message)}</p>`;
+  }
+
+  function visionModelCardHtml(model) {
+    const meta = visionModelStateMeta(model);
+    const count = visionModelClassCount(model);
+    const map50 = visionMap50Text(model);
+    const trace = visionTrainingTrace(model);
+    const map50Cell = map50.evaluated ? `${escapeHtml(map50.text)}（門檻 ${visionMap50Threshold(model)}）` : escapeHtml(map50.text);
+    const rows = [
+      ['類型', escapeHtml(model?.model_type || '—')],
+      ['啟用狀態', escapeHtml(model?.status || '—')],
+      ['驗證狀態', `<span class="vm-badge vm-badge-${meta.tone}">${escapeHtml(meta.label)}</span>`],
+      ['類別數 nc', count === null ? '—' : String(count)],
+      ['mAP50', map50Cell],
+      ['評估狀態', model?.evaluation_status === 'EVALUATED' ? '<span class="vm-badge vm-badge-pass">已評估</span>' : '<span class="vm-badge vm-badge-warn">未評估</span>'],
+      ['訓練痕跡', escapeHtml(trace.label) + (trace.detail ? `（${escapeHtml(trace.detail)}）` : '')],
+    ];
+    if (model?.health) rows.push(['健康度', escapeHtml(model?.health_label || model.health)]);
+    if (model?.benchmark_status) rows.push(['Benchmark', escapeHtml(String(model.benchmark_status))]);
+    const reason = meta.note ? `<p class="vm-reason vm-reason-${meta.tone}">${escapeHtml(meta.note)}</p>` : '';
+    return `<article class="vm-card vm-card-${meta.tone}" data-model-id="${escapeHtml(model?.model_id || '')}" data-state="${escapeHtml(meta.state)}">
+      <header><strong>${escapeHtml(model?.model_name || model?.model_id || '未命名模型')}</strong><code>${escapeHtml(model?.model_id || '')}</code></header>
+      ${reason}
+      <table class="vm-table"><tbody>${rows.map(([key, value]) => `<tr><th>${key}</th><td>${value}</td></tr>`).join('')}</tbody></table>
+    </article>`;
+  }
+
+  function visionModelItems(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') {
+      if (Array.isArray(value.models)) return value.models;
+      if (value.model_id || value.model_name || value.status || value.validation_status) return [value];
+    }
+    return null;
+  }
+
+  function visionModelListHtml(value) {
+    if (value && typeof value === 'object' && !Array.isArray(value) && value.error) return visionErrorHtml(value.error);
+    const items = visionModelItems(value);
+    if (!items) return visionErrorHtml('無法解析模型列表');
+    if (!items.length) return visionEmptyHtml('尚無模型記錄');
+    return `<div class="vm-summary">共 ${items.length} 筆模型；僅「已驗證並評估」顯示綠色通過，未評估或待審查不得啟用。</div>${items.map(visionModelCardHtml).join('')}`;
+  }
+
+  function visionModelCompareHtml(value) {
+    if (value && typeof value === 'object' && !Array.isArray(value) && value.error) return visionErrorHtml(value.error);
+    const items = Array.isArray(value) ? value : (value && Array.isArray(value.models) ? value.models : null);
+    if (items) {
+      if (!items.length) return visionEmptyHtml('尚無模型可比較');
+      const rows = items.map(item => {
+        const meta = visionModelStateMeta(item);
+        const map50 = visionMap50Text(item);
+        return `<tr><td>${escapeHtml(item?.model_name || item?.model_id || '—')}</td><td>${escapeHtml(item?.dataset_version || '—')}</td><td>${escapeHtml(map50.text)}</td><td><span class="vm-badge vm-badge-${meta.tone}">${escapeHtml(meta.label)}</span></td></tr>`;
+      }).join('');
+      return `<table class="vm-table vm-table-compare"><thead><tr><th>模型</th><th>Dataset</th><th>mAP50</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    if (!value || typeof value !== 'object') return visionErrorHtml('無法解析評估結果');
+    // 單筆評估結果（保存統一評估後回傳的模型記錄）
+    const meta = visionModelStateMeta(value);
+    const metrics = value?.metrics || {};
+    const threshold = visionMap50Threshold(value);
+    const map50 = metrics.map50;
+    const map50Row = typeof map50 === 'number'
+      ? `<tr><th>mAP50</th><td>${escapeHtml(String(map50))}<span class="vm-badge vm-badge-${map50 >= threshold ? 'pass' : 'warn'}">${map50 >= threshold ? `≥ 門檻 ${threshold}` : `< 門檻 ${threshold}`}</span></td></tr>`
+      : '<tr><th>mAP50</th><td>未評估</td></tr>';
+    const detailRows = ['precision', 'recall', 'map50_95', 'error_count', 'low_confidence_count']
+      .filter(key => metrics[key] !== undefined)
+      .map(key => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(String(metrics[key]))}</td></tr>`).join('');
+    return `<article class="vm-card vm-card-${meta.tone}" data-model-id="${escapeHtml(value?.model_id || '')}" data-state="${escapeHtml(meta.state)}">
+      <header><strong>${escapeHtml(value?.model_name || '統一評估結果')}</strong><code>${escapeHtml(value?.model_id || '')}</code></header>
+      <p class="vm-reason vm-reason-${meta.tone}">${escapeHtml(meta.note || meta.label)}</p>
+      <table class="vm-table"><tbody>
+        <tr><th>評估狀態</th><td>${value?.evaluation_status === 'EVALUATED' ? '<span class="vm-badge vm-badge-pass">已評估</span>' : '<span class="vm-badge vm-badge-warn">未評估</span>'}</td></tr>
+        <tr><th>驗證狀態</th><td><span class="vm-badge vm-badge-${meta.tone}">${escapeHtml(meta.label)}</span></td></tr>
+        ${map50Row}${detailRows}
+      </tbody></table>
+      <p class="vm-note">門檻由伺服器設定檔控制（預設 mAP50 ≥ ${threshold}）；前端不提供調整入口，也不會因降低信心度門檻而改變判定。</p>
+    </article>`;
+  }
+
+  function propAssessmentHtml(value) {
+    if (value && typeof value === 'object' && value.error) return visionErrorHtml(value.error);
+    if (!value || typeof value !== 'object') return visionErrorHtml('無法解析檢測結果');
+    if (value.status === 'MODEL_NOT_READY') return `<p class="vm-reason vm-reason-warn">目前沒有可用的 ACTIVE 模型，請由教師先匯入並通過質量閘口後再啟用。</p>`;
+    const final = String(value.final_result || 'UNKNOWN').toUpperCase();
+    const tone = final === 'PASS' ? 'pass' : final === 'NG' ? 'bad' : 'warn';
+    const label = final === 'PASS' ? '通過' : final === 'NG' ? '未通過' : final === 'INSUFFICIENT_DATA' ? '資料不足' : final;
+    const positions = value.positions || {};
+    const rows = Object.entries(positions).map(([slot, item]) => {
+      const result = String(item?.result || 'UNKNOWN').toUpperCase();
+      const resultTone = result === 'PASS' ? 'pass' : result === 'NG' ? 'bad' : 'warn';
+      const confidence = typeof item?.confidence === 'number' ? item.confidence.toFixed(2) : '—';
+      return `<tr><td>${escapeHtml(slot)}</td><td>${escapeHtml(item?.expected || '—')}</td><td>${escapeHtml(item?.detected || '未檢測到')}</td><td>${escapeHtml(confidence)}</td><td><span class="vm-badge vm-badge-${resultTone}">${escapeHtml(result)}</span></td><td>${escapeHtml(item?.reason || '—')}</td></tr>`;
+    }).join('');
+    const model = value.model ? `使用模型 ${escapeHtml(value.model.model_id || '—')}（${escapeHtml(value.model.model_version || '—')}）` : '系統自動選擇 ACTIVE 模型';
+    return `<article class="vm-card vm-card-${tone}" data-final="${escapeHtml(final)}">
+      <header><strong>槳葉檢測結果</strong><span class="vm-badge vm-badge-${tone}">${escapeHtml(label)}</span></header>
+      <p class="vm-note">${model}；判定規則 ${escapeHtml(value.rule_version || '—')}；信心度門檻固定 0.5，低信心或資料不足一律不顯示為通過。</p>
+      <table class="vm-table vm-table-prop"><thead><tr><th>位置</th><th>期望</th><th>檢測到</th><th>信心度</th><th>結果</th><th>說明</th></tr></thead><tbody>${rows || '<tr><td colspan="6">尚無檢測資料</td></tr>'}</tbody></table>
+    </article>`;
+  }
+
+  // 啟用失敗時把閘口錯誤碼翻成教師看得懂的提示（不靜默、不引導繞過）。
+  function visionActivateErrorMessage(message) {
+    if (String(message || '').includes('model_quality_gate')) return '該模型未通過質量閘口：缺少 golden set 評估證據或 mAP50 低於門檻，暫時不能啟用。';
+    if (String(message || '').includes('model_health_blocked')) return '該模型健康度未達標（未訓練或類別數不符），暫時不能啟用。';
+    return String(message || '啟用失敗');
+  }
+
   async function visionJson(fetchImpl, url, payload, headers = {}) {
     const response = await fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(payload) });
     const body = await response.json();
@@ -2099,15 +2289,16 @@
 
   function initializeVisionCenter(documentRef = document, fetchImpl = fetch) {
     const render = (selector, value) => { const element = documentRef.querySelector(selector); if (element) element.textContent = JSON.stringify(value, null, 2); };
-    documentRef.querySelector('#refreshVisionModels')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/models').then(value => { render('#visionModelList', value); render('#visionModelCompare', value.map(item => ({ model_name: item.model_name, dataset_version: item.dataset_version, metrics: item.metrics, status: item.status }))); }).catch(error => render('#visionModelList', { error: error.message })));
+    const renderHtml = (selector, html) => { const element = documentRef.querySelector(selector); if (element) element.innerHTML = html; };
+    documentRef.querySelector('#refreshVisionModels')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/models').then(value => { renderHtml('#visionModelList', visionModelListHtml(value)); renderHtml('#visionModelCompare', visionModelCompareHtml(value)); }).catch(error => renderHtml('#visionModelList', visionErrorHtml(error.message))));
     documentRef.querySelector('#refreshHardExamples')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/hard-examples?status=PENDING', true).then(value => render('#hardExampleList', value)).catch(error => render('#hardExampleList', { error: error.message })));
     documentRef.querySelector('#refreshVisionDatasets')?.addEventListener('click', () => fetchVisionCollection(fetchImpl, '/api/v1/vision/datasets').then(value => render('#visionDatasetList', value)).catch(error => render('#visionDatasetList', { error: error.message })));
     documentRef.querySelector('#runPropAssessment')?.addEventListener('click', async () => {
       try {
         const file = documentRef.querySelector('#propAssessmentFile')?.files?.[0];
         if (!file) throw new Error('請先選擇槳葉照片');
-        render('#propAssessmentResult', await submitPropCheck(fetchImpl, { ...await imageFilePayload(file), input_reference: file.name }));
-      } catch (error) { render('#propAssessmentResult', { error: error.message }); }
+        renderHtml('#propAssessmentResult', propAssessmentHtml(await submitPropCheck(fetchImpl, { ...await imageFilePayload(file), input_reference: file.name })));
+      } catch (error) { renderHtml('#propAssessmentResult', visionErrorHtml(error.message)); }
     });
     documentRef.querySelector('#runHoverAssessment')?.addEventListener('click', async () => {
       try {
@@ -2121,12 +2312,12 @@
         const file = documentRef.querySelector('#visionModelFile')?.files?.[0];
         if (!file) throw new Error('請選擇 best.pt');
         const payload = { model_type: documentRef.querySelector('#visionModelType').value, model_name: file.name.replace(/\.pt$/i, ''), version: documentRef.querySelector('#visionModelVersion').value, rule_version: documentRef.querySelector('#visionRuleVersion').value, dataset_id: documentRef.querySelector('#visionModelDatasetId').value, dataset_version: documentRef.querySelector('#visionModelDatasetVersion').value, file_name: file.name, file_base64: await fileAsBase64(file) };
-        render('#visionModelList', await teacherVisionPost(fetchImpl, '/api/v1/vision/models', payload));
-      } catch (error) { render('#visionModelList', { error: error.message }); }
+        renderHtml('#visionModelList', visionModelListHtml(await teacherVisionPost(fetchImpl, '/api/v1/vision/models', payload)));
+      } catch (error) { renderHtml('#visionModelList', visionErrorHtml(error.message)); }
     });
-    documentRef.querySelector('#activateVisionModel')?.addEventListener('click', () => activateVisionModel(fetchImpl, documentRef.querySelector('#visionActionModelId').value, 'MOCK_TEACHER').then(value => render('#visionModelList', value)).catch(error => render('#visionModelList', { error: error.message })));
-    documentRef.querySelector('#archiveVisionModel')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(documentRef.querySelector('#visionActionModelId').value)}/archive`, {}).then(value => render('#visionModelList', value)).catch(error => render('#visionModelList', { error: error.message })));
-    documentRef.querySelector('#saveGoldenEvaluation')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(documentRef.querySelector('#visionEvaluationModelId').value)}/evaluate`, JSON.parse(documentRef.querySelector('#visionEvaluationMetrics').value)).then(value => render('#visionModelCompare', value)).catch(error => render('#visionModelCompare', { error: error.message })));
+    documentRef.querySelector('#activateVisionModel')?.addEventListener('click', () => activateVisionModel(fetchImpl, documentRef.querySelector('#visionActionModelId').value, 'MOCK_TEACHER').then(value => renderHtml('#visionModelList', visionModelListHtml(value))).catch(error => renderHtml('#visionModelList', visionErrorHtml(visionActivateErrorMessage(error.message)))));
+    documentRef.querySelector('#archiveVisionModel')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(documentRef.querySelector('#visionActionModelId').value)}/archive`, {}).then(value => renderHtml('#visionModelList', visionModelListHtml(value))).catch(error => renderHtml('#visionModelList', visionErrorHtml(error.message))));
+    documentRef.querySelector('#saveGoldenEvaluation')?.addEventListener('click', () => teacherVisionPost(fetchImpl, `/api/v1/vision/models/${encodeURIComponent(documentRef.querySelector('#visionEvaluationModelId').value)}/evaluate`, JSON.parse(documentRef.querySelector('#visionEvaluationMetrics').value)).then(value => renderHtml('#visionModelCompare', visionModelCompareHtml(value))).catch(error => renderHtml('#visionModelCompare', visionErrorHtml(error.message))));
     const review = decision => teacherVisionPost(fetchImpl, `/api/v1/vision/hard-examples/${encodeURIComponent(documentRef.querySelector('#hardExampleId').value)}/review`, { decision, teacher_label: documentRef.querySelector('#hardExampleLabel').value || null }).then(value => render('#hardExampleList', value)).catch(error => render('#hardExampleList', { error: error.message }));
     documentRef.querySelector('#confirmHardExample')?.addEventListener('click', () => review('CONFIRMED'));
     documentRef.querySelector('#correctHardExample')?.addEventListener('click', () => review('CORRECTED'));
@@ -2262,5 +2453,12 @@
     ,createGoldenSet
     ,listGoldenSets
     ,initializeVisionCenter
+    ,visionModelStateMeta
+    ,visionModelCardHtml
+    ,visionModelListHtml
+    ,visionModelCompareHtml
+    ,propAssessmentHtml
+    ,visionErrorHtml
+    ,visionActivateErrorMessage
   };
 });

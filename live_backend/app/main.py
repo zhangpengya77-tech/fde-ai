@@ -25,6 +25,7 @@ from .download_center import (
 )
 from .config import LiveConfig
 from .errors import error_response, json_response
+from . import internal_auth
 from .guidance import DeterministicGuidanceProvider
 from .mock_vision import MockVision
 from .orchestrator import CoachOrchestrator
@@ -137,7 +138,13 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         components = {"live_backend": "online", "vision": "online" if vision_online else "offline"}
         if general_ai_provider is not None and hasattr(general_ai_provider, "health_status"):
             components["general_ai"] = general_ai_provider.health_status()
-        return json_response({"status": "online" if vision_online else "degraded", "components": components})
+        return json_response({
+            "status": "online" if vision_online else "degraded",
+            "components": components,
+            # 2026-10-28：讓運維一眼看出內部呼叫是否已啟用簽章驗證。
+            # unsigned_legacy 代表任何本機程序都能偽造 X-FDE-Role，正式環境不得停留此狀態。
+            "internal_auth": internal_auth.auth_mode(),
+        })
 
     async def downloads_manifest(request):
         return await manifest_endpoint(request, downloads_root, downloads_manifest_file)
