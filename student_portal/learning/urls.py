@@ -43,7 +43,7 @@ urlpatterns = [
     ),
     path("student/courses/<int:enrollment_id>/prop-scan/", views.student_prop_scan, name="student_prop_scan"),
     path("student/courses/<int:enrollment_id>/rotation-v5/", views.student_rotation_v5_scan, name="student_rotation_v5_scan"),
-    path("vision-inspections/<uuid:record_id>/image/", views.vision_inspection_image, name="vision_inspection_image"),
+    path("evidence/vision-inspections/<uuid:record_id>/image/", views.vision_inspection_image, name="vision_inspection_image"),
     # POWER_INSPECTION_V1：獨立 MP4 巡檢任務，不影響既有 R07／V5。
     path("student/power-inspection/", views.student_power_inspection_entry, name="power_inspection_entry"),
     path("student/power-inspection/upload/", views.student_power_inspection_api_upload, name="power_inspection_api_upload"),
