@@ -135,12 +135,9 @@ body:has(.fde-public-bar) .sidebar {
 }
 
 @media (max-width: 768px) {
+  /* 手機帳號項目移入右上角功能選單，頂部只留一條 Header。 */
   .fde-public-bar {
-    position: relative;
-    align-items: stretch;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 10px;
+    display: none;
   }
 
   .fde-public-brand small {

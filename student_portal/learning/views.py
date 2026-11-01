@@ -566,7 +566,7 @@ def _platform_response(file_path, *, html=False, request=None):
             )
         content = content.replace(
             "</head>",
-            '    <link rel="stylesheet" href="/static/learning/public-platform.css?v=1.5b">\n</head>',
+            '    <link rel="stylesheet" href="/static/learning/public-platform.css?v=2.0-mobile-shell">\n</head>',
             1,
         )
         content = re.sub(
@@ -2568,6 +2568,16 @@ def teacher_vision_inspection_detail(request, record_id):
     return render(request, "learning/teacher_vision_inspection_detail.html", {
         "record": record, "overlay": _vision_overlay(record), "events": record.review_events.select_related("reviewer"),
     })
+
+
+@student_required
+@require_http_methods(["GET"])
+def student_rotation_v5_entry(request):
+    """鷹眼中心的上傳入口：課程只由登入身分解析，不接受前端指定。"""
+    enrollment = _power_active_enrollment(request)
+    if enrollment is None:
+        return redirect("learning:student_dashboard")
+    return redirect("learning:student_rotation_v5_scan", enrollment_id=enrollment.pk)
 
 
 @student_required

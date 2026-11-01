@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>仿真訓練專區｜FDE-AI</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #07111f; color: #dbe7ef; font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; line-height: 1.6; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 8px 16px; border-bottom: 1px solid rgba(0, 194, 255, .3); }
+    header a { color: #00c2ff; font-weight: 700; text-decoration: none; }
+    main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { margin: 0 0 4px; color: #fff; font-size: 28px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+    article { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1px solid rgba(0, 194, 255, .3); border-radius: 8px; background: #0f2033; }
+    h2 { margin: 0; color: #fff; font-size: 20px; }
+    p { margin: 0; }
+    .tag { align-self: flex-start; padding: 2px 8px; border-radius: 4px; background: rgba(46, 204, 113, .16); color: #4ade80; font-size: 12px; font-weight: 700; }
+    .note { color: #93a9b8; font-size: 14px; }
+    .go { margin-top: auto; padding: 12px; border-radius: 8px; background: #0ea5e9; color: #03121f; font-weight: 800; text-align: center; text-decoration: none; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/platform/">FDE-AI</a>
+    <a href="/downloads/">下載中心</a>
+  </header>
+  <main>
+    <h1>仿真訓練專區</h1>
+    <p class="note">僅供教學練習，非民航局官方考試系統。</p>
+    <div class="grid">
+      <article>
+        <span class="tag">可使用</span>
+        <h2>F450 八字飛行模擬訓練</h2>
+        <p>F450 考場模擬：起降、四面懸停、八字飛行、飛行軌跡與評分。</p>
+        <p class="note">USB 遙控器（如 RadioMaster）請用 Windows Chrome／Edge，設定為 USB Joystick (HID) 後輕推搖桿。手機瀏覽器無法使用 USB 飛行控制。</p>
+        <a class="go" href="app/?mode=exam&amp;exam=0">開始八字飛行訓練</a>
+      </article>
+      <article>
+        <span class="tag">可使用</span>
+        <h2>AI 電力巡檢模擬訓練</h2>
+        <p>輸電塔與輸電線 3D 場景：巡檢任務、拍照、安全距離提示與教學評分。</p>
+        <p class="note">畫面中的 AI 判讀為模擬事件，不是真實模型結果。</p>
+        <a class="go" href="app/">進入電力巡檢訓練</a>
+      </article>
+    </div>
+  </main>
+</body>
+</html>

@@ -126,6 +126,17 @@ class VisionInspectionRecordTests(TestCase):
             response = client.post(url, {"photo": SimpleUploadedFile(name, content), "submission_token": token})
         return response, infer
 
+    def test_inspection_center_entry_resolves_own_course(self):
+        response = self._client(self.student_a.user).get(reverse("learning:student_rotation_v5_entry"))
+        self.assertRedirects(
+            response, reverse("learning:student_rotation_v5_scan", args=[self.enrollment_a.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_inspection_center_entry_refuses_teacher(self):
+        response = self._client(self.teacher_a).get(reverse("learning:student_rotation_v5_entry"))
+        self.assertNotEqual(response.status_code, 200)
+
     def test_form_issues_a_token(self):
         page = self._client(self.student_a.user).get(reverse("learning:student_rotation_v5_scan", args=[self.enrollment_a.pk]))
         self.assertRegex(page.content.decode(), r'name="submission_token" value="[0-9a-f-]{36}"')

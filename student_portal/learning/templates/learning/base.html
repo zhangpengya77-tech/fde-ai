@@ -13,6 +13,8 @@
 <body>
   <header class="topbar">
     <a class="brand" href="{% url 'learning:home' %}"><span class="brand-mark">FDE</span><span>學員任務平台 <small>v1.5</small></span></a>
+    <input class="topbar-toggle-state" type="checkbox" id="topbarToggle" aria-label="開啟帳號選單">
+    <label class="topbar-toggle" for="topbarToggle">選單</label>
     <nav aria-label="主導覽">
       {% if user.is_authenticated %}
         {% if user.is_staff %}<a href="{% url 'learning:platform' %}">學習平台</a><a href="{% url 'learning:teacher_dashboard' %}">教師後台</a>{% if user.is_superuser or perms.learning.add_classcode or perms.learning.change_classcode %}<a href="{% url 'admin:index' %}">管理</a>{% endif %}
