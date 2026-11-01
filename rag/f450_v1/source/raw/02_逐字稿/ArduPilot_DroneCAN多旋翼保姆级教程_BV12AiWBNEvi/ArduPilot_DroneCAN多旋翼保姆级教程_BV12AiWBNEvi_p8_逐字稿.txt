@@ -1,0 +1,9 @@
+标题：【10年内无人机入门必看】Ardupilot和DroneCAN多旋翼全网最好保姆级教程 p08 P6-使用Initial tunnel parameters设置初始参数
+来源：B站
+作者：摄影师云飞
+日期：20260105
+链接：https://www.bilibili.com/video/BV12AiWBNEvi?p=8
+模型：Whisper small
+说明：以下为 Whisper 逐字转写原文，未做摘要覆盖。
+
+然后我们切换到setupMandatory Hardware Initial Tuner Parameter讲业尺寸根据你使用的讲业的实际规格比如1045这里就输入10我们这里使用的这个讲业规格是9405那我们这里就可以输入9.4电池S4输入3因为我们使用的是3S电池如果你使用的是4S电池或者6S电池那么你这里就要对应输入4或者6而我们这里是输入3电池材料选择理破材料满电电压保持为默认值4.2V完全亏电电压保持为默认值3.3V勾选上第二个复选框为4.0及更高版本的固件添加低电压保护和地理为难的建议参数然后点击Caccurate Initial Parameter计算初始参数其中我们要取消勾选这个Fence Enable参数然后点击Rite to FC把这些初始参数写入非控固件写入完成并且注意它这个弹框的提示在完成测试飞行之后我们需要把这三个参数值按照它这里的要求依次设置为对应的值点击OK

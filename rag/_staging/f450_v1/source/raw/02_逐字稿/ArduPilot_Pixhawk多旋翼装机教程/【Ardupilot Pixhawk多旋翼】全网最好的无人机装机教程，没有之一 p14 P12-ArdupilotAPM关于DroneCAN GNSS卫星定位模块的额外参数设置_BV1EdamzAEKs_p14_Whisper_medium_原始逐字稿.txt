@@ -1,0 +1,28 @@
+Whisper medium 原始逐字稿
+========================
+
+重要说明：本文件是 Whisper 对音频的原始逐字转写结果，保留时间轴，不允许用整理稿或摘要覆盖。
+标题：【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置
+来源：B站
+作者：摄影师云飞
+日期：2025-09-04
+链接：https://www.bilibili.com/video/BV1EdamzAEKs?p=14
+原始视频：【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置_BV1EdamzAEKs_p14.mp4
+音频WAV：E:\F450素材\01_原始视频\ArduPilot_Pixhawk多旋翼装机教程\ffmpeg提取音频\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置_BV1EdamzAEKs_p14_ffmpeg_16k_mono.wav
+识别模型：Whisper medium
+识别语言：中文 zh
+生成时间：2026-06-24 09:16:03
+技术参数保留：SERIAL, UART, TX, RX, GPS, Compass, RNGFND, PWM, CAN, I2C, SPI
+
+原始逐字稿正文
+==============
+
+[00:00:00.000 --> 00:00:03.840] 接下来我们还需要为其中一些junken外设进行
+[00:00:03.840 --> 00:00:07.040] 额外的关于junken的参数设置
+[00:00:07.040 --> 00:00:10.120] 首先是GNSS卫星定位模块
+[00:00:10.120 --> 00:00:13.000] 我们需要在全部参数列表里面
+[00:00:13.000 --> 00:00:14.360] 也就是config
+[00:00:14.360 --> 00:00:18.800] 然后全部参数列表里面找到GPS相关的参数组
+[00:00:18.800 --> 00:00:22.160] 然后在这里具体是GPS1参数组
+[00:00:22.160 --> 00:00:26.240] 我们需要把GPS1的type类型改成junken
+[00:00:26.240 --> 00:00:28.640] 其他的参数我们先保持默认

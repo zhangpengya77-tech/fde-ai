@@ -1,0 +1,26 @@
+{
+  "source_root": "E:\\F450素材",
+  "source_files_read_only": true,
+  "faq_files": 80,
+  "transcript_files": 77,
+  "curated_teacher_files": 12,
+  "qa_cards": 98,
+  "needs_review": 27,
+  "approved_cards": 10,
+  "transcript_chunks": 1007,
+  "index_documents": 1105,
+  "repaired_mojibake_lines": 430,
+  "topics": {
+    "Pixhawk 與飛控": 30,
+    "飛行與安全": 3,
+    "槳葉與馬達": 16,
+    "組裝與焊接": 11,
+    "電池與充電安全": 4,
+    "Mission Planner": 5,
+    "F450 基礎": 29
+  },
+  "embedding": "hashed-char-ngram-2048",
+  "vector_store": "NumPy NPZ + JSONL metadata",
+  "top_k": 5,
+  "min_score": 0.58
+}

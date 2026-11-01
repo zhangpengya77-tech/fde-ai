@@ -1,0 +1,944 @@
+[
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p01 请务必先观看该补充说明_BV1EdamzAEKs_p1_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p01 请务必先观看该补充说明_BV1EdamzAEKs_p1_FAQ.txt",
+    "size": 9060,
+    "sha256": "2c7c7da2c49de77ecd9c21b6b6bd1771386ba194de3b98be733a16cae2218193"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p02 【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一_BV1EdamzAEKs_p2_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p02 【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一_BV1EdamzAEKs_p2_FAQ.txt",
+    "size": 515633,
+    "sha256": "63bb27c425591e1e37f71ec51288df248692f14ebb63fff31343f85744bfe63b"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p03 P1-前情提要_BV1EdamzAEKs_p3_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p03 P1-前情提要_BV1EdamzAEKs_p3_FAQ.txt",
+    "size": 7168,
+    "sha256": "849443b00e59ff2a0fe64f62e57d5933ef22e3cf44a8e06c559d75d374f966d9"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p04 P2-DroneCAN机载外设、结构件和其他零部件介绍_BV1EdamzAEKs_p4_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p04 P2-DroneCAN机载外设、结构件和其他零部件介绍_BV1EdamzAEKs_p4_FAQ.txt",
+    "size": 21311,
+    "sha256": "7ddb6a883365a741e66f64fb83a14ecad85988586bdc26e721934a2e204a4cee"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p05 P3-F450和DroneCAN机载外设的物理装机_BV1EdamzAEKs_p5_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p05 P3-F450和DroneCAN机载外设的物理装机_BV1EdamzAEKs_p5_FAQ.txt",
+    "size": 52748,
+    "sha256": "f3bd8108b44303cc95d5f26a8c6af4658382820cecdf375db1221cd59104b555"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p06 P4-DroneCAN机载外设的CAN总线接线_BV1EdamzAEKs_p6_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p06 P4-DroneCAN机载外设的CAN总线接线_BV1EdamzAEKs_p6_FAQ.txt",
+    "size": 26986,
+    "sha256": "0a9c3cb972da4eb4f7d739047edf403b9983e521e78fe80ed13b877aa9982865"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p07 P5-高速CAN2.0B线性拓扑总线终端电阻的处理_BV1EdamzAEKs_p7_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p07 P5-高速CAN2.0B线性拓扑总线终端电阻的处理_BV1EdamzAEKs_p7_FAQ.txt",
+    "size": 9489,
+    "sha256": "1c340d3a59c91306f405de61937e39e99a9ae6d4bf51ae4d49b89f1cf0756225"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p08 P6-使用GUITool上位机检查DroneCAN外设是否正常工作_BV1EdamzAEKs_p8_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p08 P6-使用GUITool上位机检查DroneCAN外设是否正常工作_BV1EdamzAEKs_p8_FAQ.txt",
+    "size": 35754,
+    "sha256": "31a49709b697beede338c2cf04fe01f94181c09d78a8137923efcdb7f19e6177"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p09 P7-整机线束整理与固定_BV1EdamzAEKs_p9_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p09 P7-整机线束整理与固定_BV1EdamzAEKs_p9_FAQ.txt",
+    "size": 16494,
+    "sha256": "8a8578c65397a61dba2a72e890a27d1981ab50d155cef738bdd90cfae3c33e44"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p10 P8-使用Stlink烧录ArdupilotAPM固件_BV1EdamzAEKs_p10_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p10 P8-使用Stlink烧录ArdupilotAPM固件_BV1EdamzAEKs_p10_FAQ.txt",
+    "size": 25582,
+    "sha256": "7f50f0780bc7a51ddf5ac54cf9b395b2e6e3a28677da119f8d8c83c30264c007"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p11 P9-使用MissionPlanner更新ArdupilotAPM固件_BV1EdamzAEKs_p11_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p11 P9-使用MissionPlanner更新ArdupilotAPM固件_BV1EdamzAEKs_p11_FAQ.txt",
+    "size": 23884,
+    "sha256": "2a39d9960595ba669a795840b26de34638d01af4b12cb1e8bba29ff604d8f83a"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p12 P10-设置ArdupilotAPM固件的机架类型_BV1EdamzAEKs_p12_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p12 P10-设置ArdupilotAPM固件的机架类型_BV1EdamzAEKs_p12_FAQ.txt",
+    "size": 6680,
+    "sha256": "57f9a3ca8b25bd2554512675f376d4f5f0a2c812319387250fe57c03b19f6897"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p13 P11-开启ArdupilotAPM固件的CAN总线支持并设置协议为DroneCAN_BV1EdamzAEKs_p13_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p13 P11-开启ArdupilotAPM固件的CAN总线支持并设置协议为DroneCAN_BV1EdamzAEKs_p13_FAQ.txt",
+    "size": 20363,
+    "sha256": "3408fe28ba1b831a4cd3c2a76d9d036cd506772ba24fd7b9047f55f8c37586b5"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置_BV1EdamzAEKs_p14_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置_BV1EdamzAEKs_p14_FAQ.txt",
+    "size": 6585,
+    "sha256": "bc72319bf90dc88cfadc11a44a89192a82c458632760a01f51a3fe456be8fac6"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p15 P13-ArdupilotAPM关于DroneCAN RGB航行灯的额外参数设置_BV1EdamzAEKs_p15_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p15 P13-ArdupilotAPM关于DroneCAN RGB航行灯的额外参数设置_BV1EdamzAEKs_p15_FAQ.txt",
+    "size": 10147,
+    "sha256": "90c2eea42851a1ccc215cfd4e13f6aaa66d900a88052641147614ec3e2620cb3"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p16 P14-ArdupilotAPM关于DroneCAN电调的额外参数设置_BV1EdamzAEKs_p16_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p16 P14-ArdupilotAPM关于DroneCAN电调的额外参数设置_BV1EdamzAEKs_p16_FAQ.txt",
+    "size": 10509,
+    "sha256": "1f12657951755ddceb302768f33e0c5ab97af5c0e332b3865e8be0f14e9295d1"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p17 P15-ArdupilotAPM关于DroneCAN电流计的额外参数设置_BV1EdamzAEKs_p17_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p17 P15-ArdupilotAPM关于DroneCAN电流计的额外参数设置_BV1EdamzAEKs_p17_FAQ.txt",
+    "size": 10848,
+    "sha256": "9df70665337c7f8afd1841979a3bf507f2f38b8d078736f9f44edae54b953252"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p18 P16-检查ArdupilotAPM是否与总线上的DroneCAN外设正确交换数据_BV1EdamzAEKs_p18_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p18 P16-检查ArdupilotAPM是否与总线上的DroneCAN外设正确交换数据_BV1EdamzAEKs_p18_FAQ.txt",
+    "size": 10956,
+    "sha256": "4ef6d19c106acbc28e3ab433543980cc9e9121709e7ca6de9911ad4bdf42b808"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p19 P17-ArdupilotAPM关于Uart Mavlink WiFi数传的参数设置_BV1EdamzAEKs_p19_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p19 P17-ArdupilotAPM关于Uart Mavlink WiFi数传的参数设置_BV1EdamzAEKs_p19_FAQ.txt",
+    "size": 15021,
+    "sha256": "a2e4475721aa37c107e9faad6aa9a512657e2d7ffcf2186f4b39677311e3c3bf"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p20 P18-检查ArdupilotAPM对外广播的DroneCAN协议数据_BV1EdamzAEKs_p20_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p20 P18-检查ArdupilotAPM对外广播的DroneCAN协议数据_BV1EdamzAEKs_p20_FAQ.txt",
+    "size": 9962,
+    "sha256": "e98bc0711ff702d168132fa11fd343e4ba26197002716a5a0669f39de93a3d5b"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p21 P19-使用Initial Tune Parameter设置ArdupilotAPM初始参数_BV1EdamzAEKs_p21_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p21 P19-使用Initial Tune Parameter设置ArdupilotAPM初始参数_BV1EdamzAEKs_p21_FAQ.txt",
+    "size": 9549,
+    "sha256": "810848c71c87d3e63af8910dc16c4718b5257d7cca5a61978661adfe9d62df54"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p22 P20-进行ArdupilotAPM的加速度计方向设置和校准_BV1EdamzAEKs_p22_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p22 P20-进行ArdupilotAPM的加速度计方向设置和校准_BV1EdamzAEKs_p22_FAQ.txt",
+    "size": 27042,
+    "sha256": "00fbb16810d7a6514f45bcdb183d9229458e682d06ab295a43f0a478597cffc6"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p23 P21-进行ArdupilotAPM的磁力计方向设置和校准_BV1EdamzAEKs_p23_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p23 P21-进行ArdupilotAPM的磁力计方向设置和校准_BV1EdamzAEKs_p23_FAQ.txt",
+    "size": 26298,
+    "sha256": "0140040f369bc6a25bba0694cf6de0bc10cd9e94e1e686983fc5e0f734108b01"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p24 P22-进行ArdupilotAPM、乐迪AT9SPro遥控器、R9DS接收机的对频与校准_BV1EdamzAEKs_p24_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p24 P22-进行ArdupilotAPM、乐迪AT9SPro遥控器、R9DS接收机的对频与校准_BV1EdamzAEKs_p24_FAQ.txt",
+    "size": 31748,
+    "sha256": "94f0db55e6d574da50249af67fea5b793efd07df2622c6552ad80f9903a07bb1"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p25 P23-反向遥控器俯仰通道(Pitch)和ArdupilotAPM俯仰通道(Pitch)_BV1EdamzAEKs_p25_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p25 P23-反向遥控器俯仰通道(Pitch)和ArdupilotAPM俯仰通道(Pitch)_BV1EdamzAEKs_p25_FAQ.txt",
+    "size": 7246,
+    "sha256": "702756c1c8d3aa90a4b000160f2890842e4ad22fb26cd81f3b0155ef384cce76"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p26 P24-使用遥控器的三段式拨杆（通道5）控制飞控在三种飞行模式之间切换_BV1EdamzAEKs_p26_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p26 P24-使用遥控器的三段式拨杆（通道5）控制飞控在三种飞行模式之间切换_BV1EdamzAEKs_p26_FAQ.txt",
+    "size": 11681,
+    "sha256": "f2c017a85d0de18ebc2d8e750ab6d34e91c7ce6c32a858e5f48df3c802876662"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p27 P25-修改用于切换飞控飞行模式的通道，默认为通道5，修改为其他可选通道_BV1EdamzAEKs_p27_FAQ.txt",
+    "relative_path": "04_FAQ\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p27 P25-修改用于切换飞控飞行模式的通道，默认为通道5，修改为其他可选通道_BV1EdamzAEKs_p27_FAQ.txt",
+    "size": 7264,
+    "sha256": "adba14bfdf0bd175b45df2086c5919a524be1baae20cfcc9cf9f10e1f2c5fa80"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450_MP地面站_初次解锁_电机转向确认_BV1yr5p6CENJ\\F450_MP地面站_初次解锁_电机转向确认_FAQ详细版.txt",
+    "relative_path": "04_FAQ\\F450_MP地面站_初次解锁_电机转向确认_BV1yr5p6CENJ\\F450_MP地面站_初次解锁_电机转向确认_FAQ详细版.txt",
+    "size": 4538,
+    "sha256": "9545f6a35b27676651d1fdd6af5442c39f48090acaf075496f8970ecbccc4758"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450安裝視頻_FAQ版.txt",
+    "relative_path": "04_FAQ\\F450安裝視頻_FAQ版.txt",
+    "size": 7829,
+    "sha256": "9104eb4afd03b78b6692f0f1905a6f5db69f72aaef52a662a39a1d73ef341bea"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450安裝視頻_FAQ详细版.txt",
+    "relative_path": "04_FAQ\\F450安裝視頻_FAQ详细版.txt",
+    "size": 11636,
+    "sha256": "2b57521ce97ef52f092ed90b5995114e0a611277d9265c5f46d8789ec70dd609"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450碳纤维装调教程PIX标准版\\P02_F450碳纤维装调教程PIX标准版 p02 2.遥控器调试-富斯版 [BV1S4CSBFEry_p2]_FAQ.txt",
+    "relative_path": "04_FAQ\\F450碳纤维装调教程PIX标准版\\P02_F450碳纤维装调教程PIX标准版 p02 2.遥控器调试-富斯版 [BV1S4CSBFEry_p2]_FAQ.txt",
+    "size": 8606,
+    "sha256": "d7c7d226d8b88186ce9cd2ab91733d9293c637f761d2991079679dec48f071d2"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450碳纤维装调教程PIX标准版\\P03_F450碳纤维装调教程PIX标准版 p03 2.遥控器调试-乐迪版 [BV1S4CSBFEry_p3]_FAQ.txt",
+    "relative_path": "04_FAQ\\F450碳纤维装调教程PIX标准版\\P03_F450碳纤维装调教程PIX标准版 p03 2.遥控器调试-乐迪版 [BV1S4CSBFEry_p3]_FAQ.txt",
+    "size": 8606,
+    "sha256": "7a307e3f78abb2e2bd34842671e57212bdb12b72aaf29f8d9df63a899ebc4328"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450碳纤维装调教程PIX标准版\\P04_F450碳纤维装调教程PIX标准版 p04 3.飞控调试-富斯版 [BV1S4CSBFEry_p4]_FAQ.txt",
+    "relative_path": "04_FAQ\\F450碳纤维装调教程PIX标准版\\P04_F450碳纤维装调教程PIX标准版 p04 3.飞控调试-富斯版 [BV1S4CSBFEry_p4]_FAQ.txt",
+    "size": 8591,
+    "sha256": "5198a0a88cd9905fddcfddc0e782827745c0cb3de234356bb2b6a880e68940f4"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450碳纤维装调教程PIX标准版\\P05_F450碳纤维装调教程PIX标准版 p05 3.飞控调试-乐迪版 [BV1S4CSBFEry_p5]_FAQ.txt",
+    "relative_path": "04_FAQ\\F450碳纤维装调教程PIX标准版\\P05_F450碳纤维装调教程PIX标准版 p05 3.飞控调试-乐迪版 [BV1S4CSBFEry_p5]_FAQ.txt",
+    "size": 8591,
+    "sha256": "15fd9bb68ad3356bbaeca6d686a71a48e3190862c23e5a9d07afc2f1e3e9de35"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450装机教程PIX2.4.8版本\\PNA_F450装机教程PIX2.4.8版本_BV1Sps6e2EMK_FAQ.txt",
+    "relative_path": "04_FAQ\\F450装机教程PIX2.4.8版本\\PNA_F450装机教程PIX2.4.8版本_BV1Sps6e2EMK_FAQ.txt",
+    "size": 27514,
+    "sha256": "c09589298558a66d11e4d94d3f356c574eb7f8e88e66de9d39daad3a41d72aa3"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450起飞与飞行操作教程\\YH远航科技-F450无人机PIXHAWK飞控起飞教程(定点+自稳操作）_BV1Cu4m1g7CK_p1_FAQ.txt",
+    "relative_path": "04_FAQ\\F450起飞与飞行操作教程\\YH远航科技-F450无人机PIXHAWK飞控起飞教程(定点+自稳操作）_BV1Cu4m1g7CK_p1_FAQ.txt",
+    "size": 24145,
+    "sha256": "833ad40a4ad3f77225a0580b7f1e325ee64bca524d3fe7b05da2cbf7039356c8"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\mp地面站航線規劃模擬飛行說明_FAQ版.txt",
+    "relative_path": "04_FAQ\\mp地面站航線規劃模擬飛行說明_FAQ版.txt",
+    "size": 7885,
+    "sha256": "fbe7f88beab912583dda9723fb86d49479b90d850a1c7efb88a1e8c86f172150"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\mp地面站航線規劃模擬飛行說明_FAQ详细版.txt",
+    "relative_path": "04_FAQ\\mp地面站航線規劃模擬飛行說明_FAQ详细版.txt",
+    "size": 12915,
+    "sha256": "77ac76521a70807ea9258889370eb06b700f01b03520ee710c2f6498b08c9b89"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P01_Pixhawk基础视频教程全12讲 p01 Pixhawk视频教程 第1讲 PIX飞控布线_BV1Ub411s7N5_p1_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P01_Pixhawk基础视频教程全12讲 p01 Pixhawk视频教程 第1讲 PIX飞控布线_BV1Ub411s7N5_p1_FAQ.txt",
+    "size": 37353,
+    "sha256": "3b86d4effa89dd421c4506e839ca518cb80b12f32b8501e24b078d8f5e6fac7d"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P02_Pixhawk基础视频教程全12讲 p02 Pixhawk视频教程 第2讲 PIX固件升级_BV1Ub411s7N5_p2_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P02_Pixhawk基础视频教程全12讲 p02 Pixhawk视频教程 第2讲 PIX固件升级_BV1Ub411s7N5_p2_FAQ.txt",
+    "size": 41070,
+    "sha256": "cef96ec69072f90864a4a7f60837552aa3f63d0956a4cb30ffa50776146ade61"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P03_Pixhawk基础视频教程全12讲 p03 Pixhawk视频教程 第3讲 PIX初始设置_BV1Ub411s7N5_p3_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P03_Pixhawk基础视频教程全12讲 p03 Pixhawk视频教程 第3讲 PIX初始设置_BV1Ub411s7N5_p3_FAQ.txt",
+    "size": 52884,
+    "sha256": "e9a480ab89cca09a55d9f291d633651d0a4fe010aaee607b2a6e5c3ba678ab9d"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P04_Pixhawk基础视频教程全12讲 p04 Pixhawk视频教程 第4讲 PIX数传设置及失控保护基本设置_BV1Ub411s7N5_p4_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P04_Pixhawk基础视频教程全12讲 p04 Pixhawk视频教程 第4讲 PIX数传设置及失控保护基本设置_BV1Ub411s7N5_p4_FAQ.txt",
+    "size": 65843,
+    "sha256": "b13ea4840ba9d1468ef5575bad8c6e6a9a2c32bf4236288b1417cf6e164257f3"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P05_Pixhawk基础视频教程全12讲 p05 Pixhawk视频教程 第5讲 起飞前的检查与注意事项_BV1Ub411s7N5_p5_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P05_Pixhawk基础视频教程全12讲 p05 Pixhawk视频教程 第5讲 起飞前的检查与注意事项_BV1Ub411s7N5_p5_FAQ.txt",
+    "size": 54212,
+    "sha256": "6be735e7a97fe6ad753b18917d4b926cdf2214f580fb74095040e0969882141f"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P06_Pixhawk基础视频教程全12讲 p06 Pixhawk视频教程 第6讲 手机地面站与离线地图_BV1Ub411s7N5_p6_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P06_Pixhawk基础视频教程全12讲 p06 Pixhawk视频教程 第6讲 手机地面站与离线地图_BV1Ub411s7N5_p6_FAQ.txt",
+    "size": 66505,
+    "sha256": "f4ab5918821de79f837be597b98020f006be37df9a5c49aae719f2bf5524a21c"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P07_Pixhawk基础视频教程全12讲 p07 Pixhawk视频教程 第7讲 PIX自动调参_BV1Ub411s7N5_p7_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P07_Pixhawk基础视频教程全12讲 p07 Pixhawk视频教程 第7讲 PIX自动调参_BV1Ub411s7N5_p7_FAQ.txt",
+    "size": 37406,
+    "sha256": "e6cdf5e50de5ec003f009370f364228a9c3d0d17963077c6c338d6ba11d64659"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P08_Pixhawk基础视频教程全12讲 p08 Pixhawk视频教程 第8讲 PIX LOG日志的下载与读取_BV1Ub411s7N5_p8_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P08_Pixhawk基础视频教程全12讲 p08 Pixhawk视频教程 第8讲 PIX LOG日志的下载与读取_BV1Ub411s7N5_p8_FAQ.txt",
+    "size": 77453,
+    "sha256": "d092583abc20f64724c2d91dc67eadeba1dc40756bbb23b007e4465cca9d2424"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P09_Pixhawk基础视频教程全12讲 p09 Pixhawk视频教程 第9讲 PIX微调与自动微调_BV1Ub411s7N5_p9_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P09_Pixhawk基础视频教程全12讲 p09 Pixhawk视频教程 第9讲 PIX微调与自动微调_BV1Ub411s7N5_p9_FAQ.txt",
+    "size": 51756,
+    "sha256": "332b412c2e5a500d39c8b5a060638bf69091bbc75b35ff4f5aa0c83842edfc01"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P10_Pixhawk基础视频教程全12讲 p10 Pixhawk视频教程 第10讲 PIX油门行程统一校准_BV1Ub411s7N5_p10_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P10_Pixhawk基础视频教程全12讲 p10 Pixhawk视频教程 第10讲 PIX油门行程统一校准_BV1Ub411s7N5_p10_FAQ.txt",
+    "size": 28408,
+    "sha256": "d6cee6fc92dc693006efdfaa7cd7fd844ef67902199bd438e40a20c75be3a047"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P11_Pixhawk基础视频教程全12讲 p11 Pixhawk视频教程 第11讲 PIX电压电流计校准_BV1Ub411s7N5_p11_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P11_Pixhawk基础视频教程全12讲 p11 Pixhawk视频教程 第11讲 PIX电压电流计校准_BV1Ub411s7N5_p11_FAQ.txt",
+    "size": 26763,
+    "sha256": "3840289d5a1d54664668d86fb3c37c7b71daa573531b9bec34fcf8b0949a3cf3"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\P12_Pixhawk基础视频教程全12讲 p12 Pixhawk视频教程 第12讲 PIX双罗盘校准方法_BV1Ub411s7N5_p12_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\P12_Pixhawk基础视频教程全12讲 p12 Pixhawk视频教程 第12讲 PIX双罗盘校准方法_BV1Ub411s7N5_p12_FAQ.txt",
+    "size": 33872,
+    "sha256": "f984ca859674feb94cc5dc614b8d8e9bd4c23e42ed56b81b3c0d07ac5839149a"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\Pixhawk基础视频教程全12讲\\PNA_Pixhawk基础视频教程全12讲 p13 Pixhawk MINI介绍及装机教程_BV1Ub411s7N5_p13_FAQ.txt",
+    "relative_path": "04_FAQ\\Pixhawk基础视频教程全12讲\\PNA_Pixhawk基础视频教程全12讲 p13 Pixhawk MINI介绍及装机教程_BV1Ub411s7N5_p13_FAQ.txt",
+    "size": 86152,
+    "sha256": "43554ac29e158c6deaddc6034d5dad7d116fc5767b56d74c17b34bb140d0c2ff"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\抖音_815智飞模型_PIX飞控校准_从校准到解锁飞行\\抖音_815智飞模型_PIX飞控校准_FAQ详细版.txt",
+    "relative_path": "04_FAQ\\抖音_815智飞模型_PIX飞控校准_从校准到解锁飞行\\抖音_815智飞模型_PIX飞控校准_FAQ详细版.txt",
+    "size": 730,
+    "sha256": "5be5e403ca8a150094f44035d59bac0c084a24325b5afd48087cc789cb6a6180"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p02 第二章 飞控调试 2.1 地面站软件的安装_BV14M4y1C7Cb_p2_FAQ.txt",
+    "relative_path": "04_FAQ\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p02 第二章 飞控调试 2.1 地面站软件的安装_BV14M4y1C7Cb_p2_FAQ.txt",
+    "size": 51081,
+    "sha256": "ad6ac4f1c642d1208fcd2e72df2af6c209bc0ec07c5a174da0ef86accc4473fc"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p09 3.4 乐迪AT9S遥控器设置_BV14M4y1C7Cb_p9_FAQ.txt",
+    "relative_path": "04_FAQ\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p09 3.4 乐迪AT9S遥控器设置_BV14M4y1C7Cb_p9_FAQ.txt",
+    "size": 71658,
+    "sha256": "9882f6e2585f6e65cb957c0126bb5ab0f49fa22286447aac45151043be98b79d"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\無人機充電器使用說明_FAQ版.txt",
+    "relative_path": "04_FAQ\\無人機充電器使用說明_FAQ版.txt",
+    "size": 7899,
+    "sha256": "f9660ed0484456bee5762932888156d9c34bac4ab68e388fd0c7577156849374"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\無人機充電器使用說明_FAQ详细版.txt",
+    "relative_path": "04_FAQ\\無人機充電器使用說明_FAQ详细版.txt",
+    "size": 10124,
+    "sha256": "df00a9f7a68d3f3f25ec0dfb7324c8a84b240b5bc018fe18ff8020924ccf16b1"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p10_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p10_FAQ.md",
+    "size": 1693,
+    "sha256": "f704b75a3ba6fe84bd09bb6081902b8d1529409b7286c0e58464fd323f97e564"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p11_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p11_FAQ.md",
+    "size": 1708,
+    "sha256": "81f3e30d613bdc69de1f6face7cb217556729b7f2c74b4c4c68b25b2d33deeb1"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p12_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p12_FAQ.md",
+    "size": 1688,
+    "sha256": "c3351f8743c7c731157ecc757378967dd0fd1bc040d86c18437c97cf8909b4d4"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p13_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p13_FAQ.md",
+    "size": 1742,
+    "sha256": "7e29326d87e4e79f80cbe5aa59ee4aa65eb183b8d6ea3bfcdbc7194bcb322d60"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p14_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p14_FAQ.md",
+    "size": 1674,
+    "sha256": "6eaa0841b8e1605dcc67551d119fa6c559e712810f3ebebca73d521de54db626"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p15_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p15_FAQ.md",
+    "size": 1661,
+    "sha256": "ee414409990d2795569ebf59ec95a41310ddf61d7b2c7c9cb4308bb2114b06b9"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p16_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p16_FAQ.md",
+    "size": 1662,
+    "sha256": "e635f2e7dc18c8ed4967c1aac3193c307ef88a9c0a300fafbec9e29918428362"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p17_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p17_FAQ.md",
+    "size": 1707,
+    "sha256": "f196b5bbe15a3e1dd99ef26f1ab02bdb1be34190646d5b506684ef6316f5ee0a"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p18_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p18_FAQ.md",
+    "size": 1615,
+    "sha256": "28a6e27d0b92c3789028861dc3d411ac8d7209c667d28e174cb65c9965ac5769"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p1_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p1_FAQ.md",
+    "size": 3678,
+    "sha256": "a9e1a19d12fab730fa0a8c112d9bb53bba1d2dfea7f3aefebaafc80483160175"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p2_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p2_FAQ.md",
+    "size": 3779,
+    "sha256": "aa06748b5643c4c2e7cb8e04248c8a6c025d30265e8effbc90af15c77fbdf601"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p3_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p3_FAQ.md",
+    "size": 1757,
+    "sha256": "0ed01941917b0d92c2e5511cb72bbb300b9148a6a7c7ec139a671c0d65975215"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p4_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p4_FAQ.md",
+    "size": 1660,
+    "sha256": "14b48137b2c39534c0f4d88541c242d09d910fa3841c7a76479f5ccde87a540e"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p5_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p5_FAQ.md",
+    "size": 1666,
+    "sha256": "14c2b88248e0e806af2d0b8d8895ee1d5634f48e29f541a6b6d78e5c77937a69"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p6_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p6_FAQ.md",
+    "size": 1671,
+    "sha256": "1c9f908750dd79381aaba16d4f92ab2dfdb1752d7cbb240357edee33323dd059"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p7_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p7_FAQ.md",
+    "size": 1692,
+    "sha256": "a3d5a267437a13045b8cc017838f98b1876ceaea6c99180e02ae2b1e18fcacc1"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p8_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p8_FAQ.md",
+    "size": 1675,
+    "sha256": "1953d9c637cdc65ab0fb1401d894ce82c4cd8b0d48f8a39732bcb16df2957875"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p9_FAQ.md",
+    "relative_path": "04_FAQ\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p9_FAQ.md",
+    "size": 1632,
+    "sha256": "a92d439a6fc509a29ec0162bb740a1dfc97d8e85f6b40a7c90b274b6d6a0932b"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450_MP地面站_初次解锁_电机转向确认_BV1yr5p6CENJ\\F450_MP地面站_初次解锁_电机转向确认_FAQ.md",
+    "relative_path": "04_FAQ\\F450_MP地面站_初次解锁_电机转向确认_BV1yr5p6CENJ\\F450_MP地面站_初次解锁_电机转向确认_FAQ.md",
+    "size": 2037,
+    "sha256": "0b76d1a858ac30573c686696572f47990edaaa182b5b4f4a7e3f1e0633bffd3d"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb_p1_FAQ.md",
+    "relative_path": "04_FAQ\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb_p1_FAQ.md",
+    "size": 1644,
+    "sha256": "41288d772d72281eddaecfceae386d8a56680a1c26d49f12152934f2486e3a28"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\F450四旋翼无人机_第十章_初次解锁和电机转向确认_BV1yr5p6CENJ\\F450四旋翼无人机_第十章_初次解锁和电机转向确调整_BV1yr5p6CENJ_p1_FAQ.md",
+    "relative_path": "04_FAQ\\F450四旋翼无人机_第十章_初次解锁和电机转向确认_BV1yr5p6CENJ\\F450四旋翼无人机_第十章_初次解锁和电机转向确调整_BV1yr5p6CENJ_p1_FAQ.md",
+    "size": 1669,
+    "sha256": "3d3ef6325c478616e7717b21614252e35454151d3b10255d162d7be7b44acbeb"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\FYS飞舜极创_PIX飞控F450组装调试试飞教程\\FYS飞舜极创_PIX飞控F450组装调试试飞教程_BV1ZE421M7p7_FAQ.md",
+    "relative_path": "04_FAQ\\FYS飞舜极创_PIX飞控F450组装调试试飞教程\\FYS飞舜极创_PIX飞控F450组装调试试飞教程_BV1ZE421M7p7_FAQ.md",
+    "size": 4502,
+    "sha256": "303c9359f9e672de8969e0ee5d98dbb4a7384f54fe595a295ef80b075ab27a68"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\YOLO\\01_YOLOv8无人机识别检测系统_BV1mN7P6TEZ4\\YOLOv8目标检测无人机识别检测系统（项目源码+YOLO数据集+模型权重+UI界面+python+深度学习+环境配置+模型训练）_BV1mN7P6TEZ4_FAQ.md",
+    "relative_path": "04_FAQ\\YOLO\\01_YOLOv8无人机识别检测系统_BV1mN7P6TEZ4\\YOLOv8目标检测无人机识别检测系统（项目源码+YOLO数据集+模型权重+UI界面+python+深度学习+环境配置+模型训练）_BV1mN7P6TEZ4_FAQ.md",
+    "size": 2148,
+    "sha256": "3d4bb997d5be5a7aa5fb329dfc0ac4d4e7cfe36e495300ebb332a773be72dce5"
+  },
+  {
+    "path": "E:\\F450素材\\04_FAQ\\YOLO\\02_YOLO摄像头目标检测系统_BV1wvn2zBEkZ\\手把手带你从0到1实现基于yolo的图像目标检测系统-摄像头功能的目标检测_BV1wvn2zBEkZ_FAQ.md",
+    "relative_path": "04_FAQ\\YOLO\\02_YOLO摄像头目标检测系统_BV1wvn2zBEkZ\\手把手带你从0到1实现基于yolo的图像目标检测系统-摄像头功能的目标检测_BV1wvn2zBEkZ_FAQ.md",
+    "size": 1961,
+    "sha256": "f712496f2af8ea78f31ad199f50bdfa58b985bcae879493ae303d95a698f1ece"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p10_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p10_逐字稿.txt",
+    "size": 4689,
+    "sha256": "a2f9f6a567195bcf68343ffc6e2d2aee509c83e176c67d82fdf354f232864831"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p11_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p11_逐字稿.txt",
+    "size": 6890,
+    "sha256": "041286394b7f06ede10a4e7ea8539e7da9efc376d07a6051281c163da8e41741"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p12_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p12_逐字稿.txt",
+    "size": 1873,
+    "sha256": "d91bb7bab2ed95e6fecec55c4d5d20a9aeffbd074e55c7a3708af8208be4c0e5"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p13_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p13_逐字稿.txt",
+    "size": 12325,
+    "sha256": "3730958e992de6be8abc6244db5168d2744c21c1fbc00fb4a7a58051a83dd206"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p14_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p14_逐字稿.txt",
+    "size": 2847,
+    "sha256": "461c0133794c2a4f06f8707fae123144b8c7545e069bb173a516ba005b501cb0"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p15_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p15_逐字稿.txt",
+    "size": 1249,
+    "sha256": "11eea9afe830f3d36949e44135914405745602580dfb9d86c9876cf76349ad00"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p16_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p16_逐字稿.txt",
+    "size": 1039,
+    "sha256": "9b929c9f67a306a13be8d0626594bb08eba144f8af7901b33d1cfc5d0f5763f2"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p17_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p17_逐字稿.txt",
+    "size": 5372,
+    "sha256": "c8fb0a46c2d83a09c308f2eff26f9c3d615aa12d0a6d66109d16e8d8abd0a155"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p18_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p18_逐字稿.txt",
+    "size": 1841,
+    "sha256": "9a7433293a71f7c241ae5e15f4c699a38d63f5d3842af2fe3ada701c30e8dfbd"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p1_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p1_逐字稿.txt",
+    "size": 179480,
+    "sha256": "dd5e2a7fe46e9211fb41755e5aaf5baa38c74eb66aa385e96de6ded354c86b7a"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p2_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p2_逐字稿.txt",
+    "size": 21486,
+    "sha256": "1f65af648825c4ac48e6e4a3e1ebfeace67b60b8731e33540373c2d41ff06949"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p3_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p3_逐字稿.txt",
+    "size": 19099,
+    "sha256": "259c2cbafcb71ea802ffe7b14151dc58d1f997de7218abf6c709171f70b4fa3c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p4_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p4_逐字稿.txt",
+    "size": 3673,
+    "sha256": "cf581dbc329f8f267dd420e5594a0b59780e9d8539b030054a98a2c0dd4e4259"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p5_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p5_逐字稿.txt",
+    "size": 25047,
+    "sha256": "339d044ae1ae001ddbd9467f556742d71d4ba35dde21490859d439f3c1c2e1e5"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p6_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p6_逐字稿.txt",
+    "size": 7632,
+    "sha256": "5c2e1049b27f0850598a4fe413b15cae0f78be92f7e27cb91b6f1ebdf0cd84ee"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p7_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p7_逐字稿.txt",
+    "size": 3118,
+    "sha256": "4e978bc80c1c745214dd6974d014bd13cbfbe0862a02a0b0bba467c445dfe2fd"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p8_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p8_逐字稿.txt",
+    "size": 1305,
+    "sha256": "548ed4ba008e4a7c23faf644b7cfa2bc4cb9190af39d585e8d9e643d7955a2bf"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p9_逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi\\ArduPilot_DroneCAN多旋翼保姆级教程_BV12AiWBNEvi_p9_逐字稿.txt",
+    "size": 1611,
+    "sha256": "d03ce248f71fd8e9ba08259f89ffa30fdfa6c884e680cf2121bd3bf5f0616494"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p01 请务必先观看该补充说明_BV1EdamzAEKs_p1_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p01 请务必先观看该补充说明_BV1EdamzAEKs_p1_Whisper_medium_原始逐字稿.txt",
+    "size": 3089,
+    "sha256": "23959355be74b417af10e6323db467266c9ddf311320d0a912381f6ab983689b"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p02 【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一_BV1EdamzAEKs_p2_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p02 【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一_BV1EdamzAEKs_p2_Whisper_medium_原始逐字稿.txt",
+    "size": 254646,
+    "sha256": "7bb675645a2ef162dccdc741da30a198e506aa616b521a3d86c63e9379dffbd0"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p03 P1-前情提要_BV1EdamzAEKs_p3_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p03 P1-前情提要_BV1EdamzAEKs_p3_Whisper_medium_原始逐字稿.txt",
+    "size": 2125,
+    "sha256": "240e013679ee641c1c855dea31e34c4a9dc2dc67a4cbde5aad9a3e03d8ff9a32"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p04 P2-DroneCAN机载外设、结构件和其他零部件介绍_BV1EdamzAEKs_p4_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p04 P2-DroneCAN机载外设、结构件和其他零部件介绍_BV1EdamzAEKs_p4_Whisper_medium_原始逐字稿.txt",
+    "size": 9205,
+    "sha256": "d329c47e947d0b24d4688d24aa79e44202e23b39ccc7db44194c004005c51ab8"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p05 P3-F450和DroneCAN机载外设的物理装机_BV1EdamzAEKs_p5_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p05 P3-F450和DroneCAN机载外设的物理装机_BV1EdamzAEKs_p5_Whisper_medium_原始逐字稿.txt",
+    "size": 24788,
+    "sha256": "294432b1651b569b5a76a585675e181d374f9d0148b675981eef475c3c3970c9"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p06 P4-DroneCAN机载外设的CAN总线接线_BV1EdamzAEKs_p6_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p06 P4-DroneCAN机载外设的CAN总线接线_BV1EdamzAEKs_p6_Whisper_medium_原始逐字稿.txt",
+    "size": 12022,
+    "sha256": "09d053f61663596446209294ddf7815c7c9a8841c7d116b3b67fe2b86f46ce75"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p07 P5-高速CAN2.0B线性拓扑总线终端电阻的处理_BV1EdamzAEKs_p7_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p07 P5-高速CAN2.0B线性拓扑总线终端电阻的处理_BV1EdamzAEKs_p7_Whisper_medium_原始逐字稿.txt",
+    "size": 3286,
+    "sha256": "d760ec847130ad7406503df6069aeeec5d57b6f1946315a165e4132b45f2d96c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p08 P6-使用GUITool上位机检查DroneCAN外设是否正常工作_BV1EdamzAEKs_p8_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p08 P6-使用GUITool上位机检查DroneCAN外设是否正常工作_BV1EdamzAEKs_p8_Whisper_medium_原始逐字稿.txt",
+    "size": 16403,
+    "sha256": "c3def3ee177d2514a5b12a7c13505619c090e901f27132d83fdb563c8aa5ca49"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p09 P7-整机线束整理与固定_BV1EdamzAEKs_p9_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p09 P7-整机线束整理与固定_BV1EdamzAEKs_p9_Whisper_medium_原始逐字稿.txt",
+    "size": 6792,
+    "sha256": "7ea6821e028bc99f1662dbca01a6849844d5688877650cec6da6bcdf60823fa1"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p10 P8-使用Stlink烧录ArdupilotAPM固件_BV1EdamzAEKs_p10_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p10 P8-使用Stlink烧录ArdupilotAPM固件_BV1EdamzAEKs_p10_Whisper_medium_原始逐字稿.txt",
+    "size": 11319,
+    "sha256": "ae00f3ff8475f4b518ffb2c0ac89a3101dd6bd67eacb89326e8287fb3c28abcb"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p11 P9-使用MissionPlanner更新ArdupilotAPM固件_BV1EdamzAEKs_p11_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p11 P9-使用MissionPlanner更新ArdupilotAPM固件_BV1EdamzAEKs_p11_Whisper_medium_原始逐字稿.txt",
+    "size": 10484,
+    "sha256": "f3be9e22f459c3759c3d111485c6360a1721db07dc2fab8e0184a22ddd4578e3"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p12 P10-设置ArdupilotAPM固件的机架类型_BV1EdamzAEKs_p12_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p12 P10-设置ArdupilotAPM固件的机架类型_BV1EdamzAEKs_p12_Whisper_medium_原始逐字稿.txt",
+    "size": 1942,
+    "sha256": "95931774d4fe00d49bb3195fcef0919c113b0fd3f37a78e64f5913fa539d577a"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p13 P11-开启ArdupilotAPM固件的CAN总线支持并设置协议为DroneCAN_BV1EdamzAEKs_p13_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p13 P11-开启ArdupilotAPM固件的CAN总线支持并设置协议为DroneCAN_BV1EdamzAEKs_p13_Whisper_medium_原始逐字稿.txt",
+    "size": 8765,
+    "sha256": "577538abedf143e571e0e96df65ccf8cbee2a1d857f491d69618194f331c6bce"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置_BV1EdamzAEKs_p14_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p14 P12-ArdupilotAPM关于DroneCAN GNSS卫星定位模块的额外参数设置_BV1EdamzAEKs_p14_Whisper_medium_原始逐字稿.txt",
+    "size": 1868,
+    "sha256": "cdc064de4a6f15e1ba9d2886e7ab475128d1ec4a616b4604cd491c116dac91a1"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p15 P13-ArdupilotAPM关于DroneCAN RGB航行灯的额外参数设置_BV1EdamzAEKs_p15_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p15 P13-ArdupilotAPM关于DroneCAN RGB航行灯的额外参数设置_BV1EdamzAEKs_p15_Whisper_medium_原始逐字稿.txt",
+    "size": 3593,
+    "sha256": "6928c91b63c70ed4d9eb865b4435e9473e4bb2213758a8ef9db86050c5009ef6"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p16 P14-ArdupilotAPM关于DroneCAN电调的额外参数设置_BV1EdamzAEKs_p16_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p16 P14-ArdupilotAPM关于DroneCAN电调的额外参数设置_BV1EdamzAEKs_p16_Whisper_medium_原始逐字稿.txt",
+    "size": 3799,
+    "sha256": "7fad64aa762bc397fd690121c6b0aca180f6b57f0e4af9aa4a78b58c19b839fc"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p17 P15-ArdupilotAPM关于DroneCAN电流计的额外参数设置_BV1EdamzAEKs_p17_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p17 P15-ArdupilotAPM关于DroneCAN电流计的额外参数设置_BV1EdamzAEKs_p17_Whisper_medium_原始逐字稿.txt",
+    "size": 3967,
+    "sha256": "ecad475a3ed6eb1cd21e1bb7bd8229f8fe19bc553f27783fc88ee939b669ed61"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p18 P16-检查ArdupilotAPM是否与总线上的DroneCAN外设正确交换数据_BV1EdamzAEKs_p18_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p18 P16-检查ArdupilotAPM是否与总线上的DroneCAN外设正确交换数据_BV1EdamzAEKs_p18_Whisper_medium_原始逐字稿.txt",
+    "size": 4099,
+    "sha256": "d901730be450baa3b1c325f949d7522ba6e110ec30051107b3de0d135dc21cf6"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p19 P17-ArdupilotAPM关于Uart Mavlink WiFi数传的参数设置_BV1EdamzAEKs_p19_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p19 P17-ArdupilotAPM关于Uart Mavlink WiFi数传的参数设置_BV1EdamzAEKs_p19_Whisper_medium_原始逐字稿.txt",
+    "size": 6092,
+    "sha256": "3dfcca4caa9c590c1667ed9a4df15ec8d666226ce3b89472d793b4a32ba4228e"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p20 P18-检查ArdupilotAPM对外广播的DroneCAN协议数据_BV1EdamzAEKs_p20_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p20 P18-检查ArdupilotAPM对外广播的DroneCAN协议数据_BV1EdamzAEKs_p20_Whisper_medium_原始逐字稿.txt",
+    "size": 3600,
+    "sha256": "50b8c633f3e63a0cb6d027a9274869c36a9aa29cdbcc6b7dd02dce2d357ac9f4"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p21 P19-使用Initial Tune Parameter设置ArdupilotAPM初始参数_BV1EdamzAEKs_p21_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p21 P19-使用Initial Tune Parameter设置ArdupilotAPM初始参数_BV1EdamzAEKs_p21_Whisper_medium_原始逐字稿.txt",
+    "size": 3351,
+    "sha256": "463f5a6a601ded1a6b538aa7269517840ef9bdcedd4e353089ac5732ba9a4fdb"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p22 P20-进行ArdupilotAPM的加速度计方向设置和校准_BV1EdamzAEKs_p22_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p22 P20-进行ArdupilotAPM的加速度计方向设置和校准_BV1EdamzAEKs_p22_Whisper_medium_原始逐字稿.txt",
+    "size": 12028,
+    "sha256": "18d3a5f67e881c39f173089c4c5b5faeecbfc66d9e19cac97ef96a8658ff09d4"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p23 P21-进行ArdupilotAPM的磁力计方向设置和校准_BV1EdamzAEKs_p23_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p23 P21-进行ArdupilotAPM的磁力计方向设置和校准_BV1EdamzAEKs_p23_Whisper_medium_原始逐字稿.txt",
+    "size": 11683,
+    "sha256": "d17d284fb51a2d308050203105b791d67afc7a2b564a1599a8f43417f0699c6f"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p24 P22-进行ArdupilotAPM、乐迪AT9SPro遥控器、R9DS接收机的对频与校准_BV1EdamzAEKs_p24_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p24 P22-进行ArdupilotAPM、乐迪AT9SPro遥控器、R9DS接收机的对频与校准_BV1EdamzAEKs_p24_Whisper_medium_原始逐字稿.txt",
+    "size": 14419,
+    "sha256": "75f205f9490dca33adfd2cf81361b262922fd6f8edf519c2773c7c6fff5a89f8"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p25 P23-反向遥控器俯仰通道(Pitch)和ArdupilotAPM俯仰通道(Pitch)_BV1EdamzAEKs_p25_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p25 P23-反向遥控器俯仰通道(Pitch)和ArdupilotAPM俯仰通道(Pitch)_BV1EdamzAEKs_p25_Whisper_medium_原始逐字稿.txt",
+    "size": 2225,
+    "sha256": "6b87882116814e938046e54cba3eda9aa3f3396e37754d9272fac2fc2811c037"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p26 P24-使用遥控器的三段式拨杆（通道5）控制飞控在三种飞行模式之间切换_BV1EdamzAEKs_p26_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p26 P24-使用遥控器的三段式拨杆（通道5）控制飞控在三种飞行模式之间切换_BV1EdamzAEKs_p26_Whisper_medium_原始逐字稿.txt",
+    "size": 4452,
+    "sha256": "8389c24e649d26a3731744b30d4ec86dda53b28a474c1b3d91e348f98e7a54f2"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p27 P25-修改用于切换飞控飞行模式的通道，默认为通道5，修改为其他可选通道_BV1EdamzAEKs_p27_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\ArduPilot_Pixhawk多旋翼装机教程\\【Ardupilot Pixhawk多旋翼】全网最好的无人机装机教程，没有之一 p27 P25-修改用于切换飞控飞行模式的通道，默认为通道5，修改为其他可选通道_BV1EdamzAEKs_p27_Whisper_medium_原始逐字稿.txt",
+    "size": 2260,
+    "sha256": "868066f3a86f5548cc2ede4a2a50ff15d96fa18f3312dbfcb2abc137740422bc"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb_p1_逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb\\F450四旋翼无人机_第九章_飞控调试_BV1Cr5p6CEmb_p1_逐字稿.txt",
+    "size": 9860,
+    "sha256": "4bd287f15c4eeb34beb64957f702c3b756663e5d4c7b2854c32e3c467801edac"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450四旋翼无人机_第十章_初次解锁和电机转向确认_BV1yr5p6CENJ\\F450四旋翼无人机_第十章_初次解锁和电机转向确调整_BV1yr5p6CENJ_p1_逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450四旋翼无人机_第十章_初次解锁和电机转向确认_BV1yr5p6CENJ\\F450四旋翼无人机_第十章_初次解锁和电机转向确调整_BV1yr5p6CENJ_p1_逐字稿.txt",
+    "size": 5368,
+    "sha256": "a1cac2e3dc67354efa490e1b5f8bd72c8ccd29b30d5e0794e49d5078503bf176"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450安裝視頻_Whisper原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450安裝視頻_Whisper原始逐字稿.txt",
+    "size": 13052,
+    "sha256": "f79c10c3dd378cc0679680a226e5377352b00a4f9f7da3de04e7158713dea88b"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450碳纤维装调教程PIX标准版\\P02_F450碳纤维装调教程PIX标准版 p02 2.遥控器调试-富斯版 [BV1S4CSBFEry_p2]_Whisper_large-v3_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450碳纤维装调教程PIX标准版\\P02_F450碳纤维装调教程PIX标准版 p02 2.遥控器调试-富斯版 [BV1S4CSBFEry_p2]_Whisper_large-v3_原始逐字稿.txt",
+    "size": 9245,
+    "sha256": "7c8e78027d8976841f7a8080cfce0399442c330c14b90942f73016a81292dfdd"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450碳纤维装调教程PIX标准版\\P03_F450碳纤维装调教程PIX标准版 p03 2.遥控器调试-乐迪版 [BV1S4CSBFEry_p3]_Whisper_large-v3_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450碳纤维装调教程PIX标准版\\P03_F450碳纤维装调教程PIX标准版 p03 2.遥控器调试-乐迪版 [BV1S4CSBFEry_p3]_Whisper_large-v3_原始逐字稿.txt",
+    "size": 5419,
+    "sha256": "f7361734820166592d9698e68862c20391541ef4c06c50cd5cec0be3f9591764"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450碳纤维装调教程PIX标准版\\P04_F450碳纤维装调教程PIX标准版 p04 3.飞控调试-富斯版 [BV1S4CSBFEry_p4]_Whisper_large-v3_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450碳纤维装调教程PIX标准版\\P04_F450碳纤维装调教程PIX标准版 p04 3.飞控调试-富斯版 [BV1S4CSBFEry_p4]_Whisper_large-v3_原始逐字稿.txt",
+    "size": 17983,
+    "sha256": "2944b98766aaa111df22e62c24935511387bc24019bca8c79b02944d00ca5b12"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450碳纤维装调教程PIX标准版\\P05_F450碳纤维装调教程PIX标准版 p05 3.飞控调试-乐迪版 [BV1S4CSBFEry_p5]_Whisper_large-v3_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450碳纤维装调教程PIX标准版\\P05_F450碳纤维装调教程PIX标准版 p05 3.飞控调试-乐迪版 [BV1S4CSBFEry_p5]_Whisper_large-v3_原始逐字稿.txt",
+    "size": 14511,
+    "sha256": "70dafaab394c94bc4a1b422de3b4750c82b0e3b606c7c23078c407e1ca176a0d"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450装机教程PIX2.4.8版本\\PNA_F450装机教程PIX2.4.8版本_BV1Sps6e2EMK_Whisper_large-v3_原始逐字稿.partial.txt",
+    "relative_path": "02_逐字稿\\F450装机教程PIX2.4.8版本\\PNA_F450装机教程PIX2.4.8版本_BV1Sps6e2EMK_Whisper_large-v3_原始逐字稿.partial.txt",
+    "size": 10938,
+    "sha256": "606eac7db1f82d569845c4436f3dd6c58a185f85783a6c647be3aadc235ef307"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450装机教程PIX2.4.8版本\\PNA_F450装机教程PIX2.4.8版本_BV1Sps6e2EMK_Whisper_large-v3_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450装机教程PIX2.4.8版本\\PNA_F450装机教程PIX2.4.8版本_BV1Sps6e2EMK_Whisper_large-v3_原始逐字稿.txt",
+    "size": 10930,
+    "sha256": "238cd4b87d77830c0a676b31709fc3c77f561cdf74482bec4318fee6a1eef786"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\F450起飞与飞行操作教程\\YH远航科技-F450无人机PIXHAWK飞控起飞教程(定点+自稳操作）_BV1Cu4m1g7CK_p1_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\F450起飞与飞行操作教程\\YH远航科技-F450无人机PIXHAWK飞控起飞教程(定点+自稳操作）_BV1Cu4m1g7CK_p1_Whisper_medium_原始逐字稿.txt",
+    "size": 10652,
+    "sha256": "a3d234d3650fc19378f6d6341be2183ae2fe59bc474c5e6a8b6dc0b9adc45bb6"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\FYS飞舜极创_PIX飞控F450组装调试试飞教程\\FYS飞舜极创_PIX飞控F450组装调试试飞教程_BV1ZE421M7p7_逐字稿.txt",
+    "relative_path": "02_逐字稿\\FYS飞舜极创_PIX飞控F450组装调试试飞教程\\FYS飞舜极创_PIX飞控F450组装调试试飞教程_BV1ZE421M7p7_逐字稿.txt",
+    "size": 41795,
+    "sha256": "896afd9b1026fe58fac8e9b7001df2339d41ea40e330364a51db0e67f0c5aae8"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\mp地面站航線規劃模擬飛行說明_Whisper原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\mp地面站航線規劃模擬飛行說明_Whisper原始逐字稿.txt",
+    "size": 41958,
+    "sha256": "a51fa9889d4739d08ce9f248db39bae3af028e787259d8c30b66837c3fdd9e53"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\P01_逐字稿.txt",
+    "relative_path": "02_逐字稿\\P01_逐字稿.txt",
+    "size": 19241,
+    "sha256": "93959fc7180c2cc11f32ee586e5c62533af1d5f5efd2bb7e098522fc08d63a5c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P01_Pixhawk基础视频教程全12讲 p01 Pixhawk视频教程 第1讲 PIX飞控布线_BV1Ub411s7N5_p1_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P01_Pixhawk基础视频教程全12讲 p01 Pixhawk视频教程 第1讲 PIX飞控布线_BV1Ub411s7N5_p1_Whisper_medium_原始逐字稿.txt",
+    "size": 14563,
+    "sha256": "be02b2fb79cf326e3241e4428424999c6636b5da147697544f5f48e6b6bb39c7"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P02_Pixhawk基础视频教程全12讲 p02 Pixhawk视频教程 第2讲 PIX固件升级_BV1Ub411s7N5_p2_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P02_Pixhawk基础视频教程全12讲 p02 Pixhawk视频教程 第2讲 PIX固件升级_BV1Ub411s7N5_p2_Whisper_medium_原始逐字稿.txt",
+    "size": 17417,
+    "sha256": "900c64ef5540abecb2201f8cb1d6f68a9c5b3840296eb0eed80dfc7485263877"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P03_Pixhawk基础视频教程全12讲 p03 Pixhawk视频教程 第3讲 PIX初始设置_BV1Ub411s7N5_p3_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P03_Pixhawk基础视频教程全12讲 p03 Pixhawk视频教程 第3讲 PIX初始设置_BV1Ub411s7N5_p3_Whisper_medium_原始逐字稿.txt",
+    "size": 23286,
+    "sha256": "789cdbe4b2a137a99c4cb4145014340dda69a90242c54df7a81142a06d156704"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P04_Pixhawk基础视频教程全12讲 p04 Pixhawk视频教程 第4讲 PIX数传设置及失控保护基本设置_BV1Ub411s7N5_p4_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P04_Pixhawk基础视频教程全12讲 p04 Pixhawk视频教程 第4讲 PIX数传设置及失控保护基本设置_BV1Ub411s7N5_p4_Whisper_medium_原始逐字稿.txt",
+    "size": 29749,
+    "sha256": "a132ad169c3d30802859fb0b4a1d021f3061290cec29f384e135109aec079eb8"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P05_Pixhawk基础视频教程全12讲 p05 Pixhawk视频教程 第5讲 起飞前的检查与注意事项_BV1Ub411s7N5_p5_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P05_Pixhawk基础视频教程全12讲 p05 Pixhawk视频教程 第5讲 起飞前的检查与注意事项_BV1Ub411s7N5_p5_Whisper_medium_原始逐字稿.txt",
+    "size": 23509,
+    "sha256": "f071df6cb6d14d33c2cdadaaadd088a0a1a2b6d3a428ec03fba85803e4c9ea00"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P06_Pixhawk基础视频教程全12讲 p06 Pixhawk视频教程 第6讲 手机地面站与离线地图_BV1Ub411s7N5_p6_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P06_Pixhawk基础视频教程全12讲 p06 Pixhawk视频教程 第6讲 手机地面站与离线地图_BV1Ub411s7N5_p6_Whisper_medium_原始逐字稿.txt",
+    "size": 29877,
+    "sha256": "babc09ee34e85a7c62f218ab3a552ad23642b3973e9b1f6046151b343c4ab9d2"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P07_Pixhawk基础视频教程全12讲 p07 Pixhawk视频教程 第7讲 PIX自动调参_BV1Ub411s7N5_p7_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P07_Pixhawk基础视频教程全12讲 p07 Pixhawk视频教程 第7讲 PIX自动调参_BV1Ub411s7N5_p7_Whisper_medium_原始逐字稿.txt",
+    "size": 15394,
+    "sha256": "c9848b7a3eb02dff12fc2636a5ff1d609e0c5780b0939de63821e20b4b0ef37c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P08_Pixhawk基础视频教程全12讲 p08 Pixhawk视频教程 第8讲 PIX LOG日志的下载与读取_BV1Ub411s7N5_p8_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P08_Pixhawk基础视频教程全12讲 p08 Pixhawk视频教程 第8讲 PIX LOG日志的下载与读取_BV1Ub411s7N5_p8_Whisper_medium_原始逐字稿.txt",
+    "size": 35319,
+    "sha256": "1a70e3a75ee958ef4f6211fcee5fbab280454af5d19335f2cefe2d0e5cd344dd"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P09_Pixhawk基础视频教程全12讲 p09 Pixhawk视频教程 第9讲 PIX微调与自动微调_BV1Ub411s7N5_p9_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P09_Pixhawk基础视频教程全12讲 p09 Pixhawk视频教程 第9讲 PIX微调与自动微调_BV1Ub411s7N5_p9_Whisper_medium_原始逐字稿.txt",
+    "size": 22351,
+    "sha256": "66b043203245fd25d6f2c05436cc40d284fa9ec7bc22523bf0921b835cc4e45c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P10_Pixhawk基础视频教程全12讲 p10 Pixhawk视频教程 第10讲 PIX油门行程统一校准_BV1Ub411s7N5_p10_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P10_Pixhawk基础视频教程全12讲 p10 Pixhawk视频教程 第10讲 PIX油门行程统一校准_BV1Ub411s7N5_p10_Whisper_medium_原始逐字稿.txt",
+    "size": 11165,
+    "sha256": "1d8fb1756bcccb0fdffdac95964a6eca18c204914c17d36df6a94ac35ca1fd89"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P11_Pixhawk基础视频教程全12讲 p11 Pixhawk视频教程 第11讲 PIX电压电流计校准_BV1Ub411s7N5_p11_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P11_Pixhawk基础视频教程全12讲 p11 Pixhawk视频教程 第11讲 PIX电压电流计校准_BV1Ub411s7N5_p11_Whisper_medium_原始逐字稿.txt",
+    "size": 10230,
+    "sha256": "13c373c8edefe9a5f5681853aaf51d963a566c6fd0642e02a7de077705606070"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\P12_Pixhawk基础视频教程全12讲 p12 Pixhawk视频教程 第12讲 PIX双罗盘校准方法_BV1Ub411s7N5_p12_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\P12_Pixhawk基础视频教程全12讲 p12 Pixhawk视频教程 第12讲 PIX双罗盘校准方法_BV1Ub411s7N5_p12_Whisper_medium_原始逐字稿.txt",
+    "size": 13115,
+    "sha256": "05cf818749eb8cdc4f6069a41733de40ef17000bdb9d3b4a8f5fdfbf3066eb15"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\Pixhawk基础视频教程全12讲\\PNA_Pixhawk基础视频教程全12讲 p13 Pixhawk MINI介绍及装机教程_BV1Ub411s7N5_p13_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\Pixhawk基础视频教程全12讲\\PNA_Pixhawk基础视频教程全12讲 p13 Pixhawk MINI介绍及装机教程_BV1Ub411s7N5_p13_Whisper_medium_原始逐字稿.txt",
+    "size": 37749,
+    "sha256": "cf2678a0dfb9cd98eaea266b5e12d28e2e87ddb287c2874a3236ed9e2469be5e"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\YOLO\\01_YOLOv8无人机识别检测系统_BV1mN7P6TEZ4\\YOLOv8目标检测无人机识别检测系统（项目源码+YOLO数据集+模型权重+UI界面+python+深度学习+环境配置+模型训练）_BV1mN7P6TEZ4_逐字稿.txt",
+    "relative_path": "02_逐字稿\\YOLO\\01_YOLOv8无人机识别检测系统_BV1mN7P6TEZ4\\YOLOv8目标检测无人机识别检测系统（项目源码+YOLO数据集+模型权重+UI界面+python+深度学习+环境配置+模型训练）_BV1mN7P6TEZ4_逐字稿.txt",
+    "size": 1321,
+    "sha256": "b94f8d79508d0c9d96cfdbf47f0b2d6f948ef8ca36e75adc70da8a212aabec3b"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\YOLO\\02_YOLO摄像头目标检测系统_BV1wvn2zBEkZ\\手把手带你从0到1实现基于yolo的图像目标检测系统-摄像头功能的目标检测_BV1wvn2zBEkZ_逐字稿.txt",
+    "relative_path": "02_逐字稿\\YOLO\\02_YOLO摄像头目标检测系统_BV1wvn2zBEkZ\\手把手带你从0到1实现基于yolo的图像目标检测系统-摄像头功能的目标检测_BV1wvn2zBEkZ_逐字稿.txt",
+    "size": 6244,
+    "sha256": "147a10b242589ed12926cbbde0310bce74526634dbe2d3b80a229b16ac8fb37c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\抖音_815智飞模型_PIX飞控校准_从校准到解锁飞行\\抖音_815智飞模型_PIX飞控校准_逐字稿_待人工复核.txt",
+    "relative_path": "02_逐字稿\\抖音_815智飞模型_PIX飞控校准_从校准到解锁飞行\\抖音_815智飞模型_PIX飞控校准_逐字稿_待人工复核.txt",
+    "size": 1129,
+    "sha256": "5769c45775743c925fb56c308cc81d56d2ea93f5a99cafec27af097f3abb206c"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p02 第二章 飞控调试 2.1 地面站软件的安装_BV14M4y1C7Cb_p2_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p02 第二章 飞控调试 2.1 地面站软件的安装_BV14M4y1C7Cb_p2_Whisper_medium_原始逐字稿.txt",
+    "size": 22374,
+    "sha256": "1ce1aa2d64663972d57e715df579bc8f90a971d84b77137701b1d638c56dee16"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p09 3.4 乐迪AT9S遥控器设置_BV14M4y1C7Cb_p9_Whisper_medium_原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\无人机组装与调试_F450_F550合集\\无人机组装与调试 - F450、F550无人机硬件组装至飞控调参详细教程合集 p09 3.4 乐迪AT9S遥控器设置_BV14M4y1C7Cb_p9_Whisper_medium_原始逐字稿.txt",
+    "size": 32501,
+    "sha256": "f169d8d7b3bfaed4af355893687d9eae292161ea67216495cbd5173b2853e76b"
+  },
+  {
+    "path": "E:\\F450素材\\02_逐字稿\\無人機充電器使用說明_Whisper原始逐字稿.txt",
+    "relative_path": "02_逐字稿\\無人機充電器使用說明_Whisper原始逐字稿.txt",
+    "size": 11412,
+    "sha256": "5dbdeebb8d9cd47f0085b124f0a6348a5d4776c82f9d6e0c387cca3ff9244c0a"
+  }
+]
