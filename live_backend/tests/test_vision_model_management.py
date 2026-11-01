@@ -50,7 +50,7 @@ class OkHealthInspector:
             "health": HEALTH_OK,
             "reasons": [],
             "map50": 0.9,
-            "nc": 4,
+            "nc": None,
             "names_count": 4,
             "map50_threshold": 0.5,
         }
@@ -62,7 +62,7 @@ class UntrainedHealthInspector:
             "health": HEALTH_UNTRAINED,
             "reasons": ["no_train_args"],
             "map50": None,
-            "nc": 4,
+            "nc": None,
             "names_count": 4,
             "map50_threshold": 0.5,
         }
@@ -74,7 +74,7 @@ class LowQualityHealthInspector:
             "health": HEALTH_LOW_QUALITY,
             "reasons": ["map50_below_threshold"],
             "map50": 0.117,
-            "nc": 4,
+            "nc": None,
             "names_count": 4,
             "map50_threshold": 0.5,
         }

@@ -43,7 +43,7 @@ class HyphenClassValidator:
     """模擬 sub-2f8d（2026-10-18）：數量一致、名稱用連字號——需要類別名對照表。"""
 
     def validate(self, _path: Path, _model_type: str) -> dict:
-        return {"class_names": ["CCW-F", "CCW-B", "CW-F", "CW-B"], "task": "detect", "smoke_inference": True}
+        return {"class_names": ["cw-prop", "ccw-prop"], "task": "detect", "smoke_inference": True}
 
 
 class EmptyClassValidator:
@@ -62,7 +62,7 @@ class OkHealthInspector:
 
     def __call__(self, _path):
         return {
-            "health": HEALTH_OK, "reasons": [], "map50": 0.9, "nc": 4, "names_count": 4,
+            "health": HEALTH_OK, "reasons": [], "map50": 0.9, "nc": None, "names_count": 2,
             "map50_threshold": 0.5,
         }
 
@@ -124,24 +124,24 @@ class VisionCenterTests(unittest.TestCase):
         self.assertEqual(self.center.active_model("PROP_DIRECTION")["model_id"], active["model_id"])
 
     def test_m1_ccw_front_passes(self):
-        result = evaluate_prop([prop_detection("CCW_F", 75, 25)], 100, 100)
+        result = evaluate_prop([prop_detection("CCW", 75, 25)], 100, 100)
         self.assertEqual(result["positions"]["M1"]["result"], "PASS")
 
     def test_m1_clockwise_front_is_rotation_ng(self):
-        result = evaluate_prop([prop_detection("CW_F", 75, 25)], 100, 100)
+        result = evaluate_prop([prop_detection("CW", 75, 25)], 100, 100)
         self.assertEqual(result["positions"]["M1"]["reason_code"], "ROTATION_WRONG")
 
-    def test_m1_ccw_back_is_face_ng(self):
-        result = evaluate_prop([prop_detection("CCW_B", 75, 25)], 100, 100)
-        self.assertEqual(result["positions"]["M1"]["reason_code"], "FACE_WRONG")
+    def test_m1_wrong_rotation_is_ng(self):
+        result = evaluate_prop([prop_detection("CW", 75, 25)], 100, 100)
+        self.assertEqual(result["positions"]["M1"]["reason_code"], "ROTATION_WRONG")
 
     def test_missing_prop_is_insufficient(self):
         self.assertEqual(evaluate_prop([], 100, 100)["final_result"], "INSUFFICIENT_DATA")
 
     def test_low_confidence_cannot_pass(self):
         detections = [
-            prop_detection("CCW_F", 75, 25, 0.2), prop_detection("CCW_F", 25, 75),
-            prop_detection("CW_F", 25, 25), prop_detection("CW_F", 75, 75),
+            prop_detection("CCW", 75, 25, 0.2), prop_detection("CCW", 25, 75),
+            prop_detection("CW", 25, 25), prop_detection("CW", 75, 75),
         ]
         self.assertEqual(evaluate_prop(detections, 100, 100)["final_result"], "INSUFFICIENT_DATA")
 
@@ -197,18 +197,18 @@ class VisionCenterTests(unittest.TestCase):
         self.assertIsNone(result["max_center_offset_m"])
 
     def test_hard_example_can_be_created(self):
-        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "LOW_CONFIDENCE", "input_reference": "frame://1", "prediction": "CW_F", "confidence": .2})
+        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "LOW_CONFIDENCE", "input_reference": "frame://1", "prediction": "CW", "confidence": .2})
         self.assertEqual(sample["review_status"], "PENDING")
 
     def test_teacher_can_confirm_and_correct_hard_example(self):
-        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "TEACHER", "input_reference": "frame://1", "prediction": "CW_B", "confidence": .8})
-        reviewed = self.center.review_hard_example(sample["sample_id"], "CORRECTED", "CW_F", "teacher")
-        self.assertEqual(reviewed["teacher_label"], "CW_F")
+        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "TEACHER", "input_reference": "frame://1", "prediction": "CW", "confidence": .8})
+        reviewed = self.center.review_hard_example(sample["sample_id"], "CORRECTED", "CW", "teacher")
+        self.assertEqual(reviewed["teacher_label"], "CW")
 
     def test_confirmed_examples_join_dataset_v2_with_lineage(self):
         parent = self.dataset()
-        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "TEACHER", "input_reference": "frame://1", "prediction": "CW_F", "confidence": .9})
-        self.center.review_hard_example(sample["sample_id"], "CONFIRMED", "CW_F", "teacher")
+        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "TEACHER", "input_reference": "frame://1", "prediction": "CW", "confidence": .9})
+        self.center.review_hard_example(sample["sample_id"], "CONFIRMED", "CW", "teacher")
         child = self.center.build_next_dataset(parent["dataset_id"], [sample["sample_id"]], [], "teacher")
         self.assertEqual(child["parent_dataset_id"], parent["dataset_id"])
         self.assertEqual(child["dataset_version"], "v2")
@@ -316,7 +316,7 @@ class VisionCenterTests(unittest.TestCase):
         sub = self.center.create_submission(task_id="PROP_DIRECTION", student_id="s1", group_id="G1", original_filename="best.pt", content=b"fixture-pt")
         with self.assertRaises(ModelClassNamesMappingRequiredError) as ctx:
             self.center.import_submission(sub["submission_id"], model_name="imp", version="v1", dataset_id=dataset["dataset_id"], dataset_version=dataset["dataset_version"], rule_version="r1", uploaded_by="teacher")
-        self.assertEqual(ctx.exception.class_names_actual, ["CCW-F", "CCW-B", "CW-F", "CW-B"])
+        self.assertEqual(ctx.exception.class_names_actual, ["cw-prop", "ccw-prop"])
         self.assertEqual(ctx.exception.class_names_expected, list(PROP_CLASSES))
         self.assertEqual(self.center.get_submission(sub["submission_id"])["status"], "SUBMITTED")
         self.assertEqual(self.center.list_models(), [])
@@ -330,11 +330,11 @@ class VisionCenterTests(unittest.TestCase):
         model = self.center.import_submission(
             sub["submission_id"], model_name="imp", version="v1", dataset_id=dataset["dataset_id"],
             dataset_version=dataset["dataset_version"], rule_version="r1", uploaded_by="teacher",
-            class_name_mapping={"CCW-F": "CCW_F", "CCW-B": "CCW_B", "CW-F": "CW_F", "CW-B": "CW_B"},
+            class_name_mapping={"cw-prop": "CW", "ccw-prop": "CCW"},
         )
-        self.assertEqual(model["class_names"], ["CCW_F", "CCW_B", "CW_F", "CW_B"])
+        self.assertEqual(model["class_names"], ["CW", "CCW"])
         self.assertEqual(model["validation_status"], "VALIDATED")
-        self.assertEqual(model["class_name_mapping"]["CCW-F"], "CCW_F")
+        self.assertEqual(model["class_name_mapping"]["ccw-prop"], "CCW")
         self.assertEqual(self.center.get_submission(sub["submission_id"])["status"], "IMPORTED")
 
     def test_import_with_incomplete_mapping_is_rejected_before_any_record(self):
@@ -346,7 +346,7 @@ class VisionCenterTests(unittest.TestCase):
             self.center.import_submission(
                 sub["submission_id"], model_name="imp", version="v1", dataset_id=dataset["dataset_id"],
                 dataset_version=dataset["dataset_version"], rule_version="r1", uploaded_by="teacher",
-                class_name_mapping={"CCW-F": "CCW_F", "CCW-B": "CCW_B"},
+                class_name_mapping={"cw-prop": "CW"},
             )
         self.assertEqual(self.center.get_submission(sub["submission_id"])["status"], "SUBMITTED")
         self.assertEqual(self.center.list_models(), [])
@@ -383,7 +383,7 @@ class VisionCenterTests(unittest.TestCase):
         self.center.model_validator = HyphenClassValidator()
         mapping = self.center.preflight_import(sub["submission_id"])
         self.assertEqual(mapping["outcome"], "mapping_required")
-        self.assertEqual(mapping["class_names_actual"], ["CCW-F", "CCW-B", "CW-F", "CW-B"])
+        self.assertEqual(mapping["class_names_actual"], ["cw-prop", "ccw-prop"])
 
         self.center.model_validator = EmptyClassValidator()
         missing = self.center.preflight_import(sub["submission_id"])
@@ -438,7 +438,7 @@ class VisionCenterTests(unittest.TestCase):
         self.assertEqual(result["status"], "DEMO_SIMULATED")
         self.assertTrue(result["simulation_mode"])
         self.assertEqual(result["model"]["submission_id"], sub["submission_id"])
-        self.assertEqual(result["detections"][0]["class"], "CW_F")
+        self.assertEqual(result["detections"][0]["class"], "CW")
         self.assertEqual(len(result["detections"][0]["bbox"]), 4)
         self.assertIn("confidence", result["detections"][0])
 
@@ -522,7 +522,7 @@ class VisionCenterHealthTests(unittest.TestCase):
         self.assertEqual(center.list_models()[0]["status"], "REJECTED")
 
     def test_nc_mismatch_model_rejected_in_production(self):
-        center = self.make_center(FakeHealthInspector(HEALTH_NC_MISMATCH, nc=80, names_count=4))
+        center = self.make_center(FakeHealthInspector(HEALTH_NC_MISMATCH, nc=80, names_count=2))
         dataset = center.create_dataset({"model_type": "PROP_DIRECTION", "dataset_version": "v1", "total_images": 1, "train_count": 1, "val_count": 0, "test_count": 0, "class_distribution": {}, "source_groups": ["f"], "created_by": "t"})
         with self.assertRaises(ModelValidationError) as ctx:
             center.upload_model(

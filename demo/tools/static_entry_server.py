@@ -39,7 +39,7 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 BIND_ADDR = os.environ.get("FDE_ENTRY_BIND", "192.168.1.114")
 PORT = int(os.environ.get("FDE_ENTRY_PORT", "8112"))
@@ -54,6 +54,15 @@ SITE_DIR = Path(
 UPSTREAM_HOST = os.environ.get("FDE_ENTRY_UPSTREAM_HOST", "192.168.1.114")
 UPSTREAM_PORT = int(os.environ.get("FDE_ENTRY_UPSTREAM_PORT", "8111"))
 UPSTREAM_TIMEOUT = float(os.environ.get("FDE_ENTRY_UPSTREAM_TIMEOUT", "120"))
+
+# Flight Health 同域轉發：/api/flight-health/v1/* → 診斷主機 /api/v1/*。
+# 主機沒有帳號機制，故不轉發 Cookie；X-FDE-Teacher-Mode 由 strip_client_identity_headers
+# 剝除，因此教師視圖（/teacher-result、/diagnosis）對外一律 403。
+FH_HOST = os.environ.get("FDE_ENTRY_FH_HOST", "192.168.1.114")
+FH_PORT = int(os.environ.get("FDE_ENTRY_FH_PORT", "8040"))
+FH_PROXY_PREFIX = "/api/flight-health/v1/"
+# 主機單檔上限 64MB，另留 multipart 邊界的空間；超過者不讀請求體直接拒絕。
+FH_MAX_BODY_BYTES = 65 * 1024 * 1024
 
 
 # ---------------------------------------------------------------- 來源信任白名單
@@ -240,7 +249,7 @@ PUBLIC_SCHEME = _parse_public_scheme(os.environ.get("FDE_ENTRY_PUBLIC_SCHEME", "
 HEALTH_PROBES = {
     "django": (os.environ.get("FDE_ENTRY_DJANGO_HOST", "192.168.1.114"), int(os.environ.get("FDE_ENTRY_DJANGO_PORT", "8110")), "/login/"),
     "live": (UPSTREAM_HOST, UPSTREAM_PORT, "/api/live/health"),
-    "flight_health": (os.environ.get("FDE_ENTRY_FH_HOST", "192.168.1.114"), int(os.environ.get("FDE_ENTRY_FH_PORT", "8040")), "/api/v1/health"),
+    "flight_health": (FH_HOST, FH_PORT, "/api/v1/health"),
 }
 
 HOP_BY_HOP_REQUEST = {
@@ -497,7 +506,18 @@ class EntryHandler(BaseHTTPRequestHandler):
     # ---------------------------------------------------------------- proxy
     def _proxy(self) -> None:
         split = urlsplit(self.path)
+        upstream_host, upstream_port = UPSTREAM_HOST, UPSTREAM_PORT
         upstream_path = split.path or "/"
+        to_flight_health = upstream_path.startswith(FH_PROXY_PREFIX)
+        if to_flight_health:
+            if ".." in unquote(upstream_path):
+                self._send_bytes(404, b'{"detail":"Not Found"}', "application/json; charset=utf-8", close=True)
+                return
+            if int(self.headers.get("Content-Length") or 0) > FH_MAX_BODY_BYTES:
+                self._send_bytes(413, b'{"detail":"file too large"}', "application/json; charset=utf-8", close=True)
+                return
+            upstream_host, upstream_port = FH_HOST, FH_PORT
+            upstream_path = "/api/v1/" + upstream_path[len(FH_PROXY_PREFIX):]
         if split.query:
             upstream_path = f"{upstream_path}?{split.query}"
         body = self._read_body()
@@ -505,14 +525,15 @@ class EntryHandler(BaseHTTPRequestHandler):
         # P6：先丟棄客戶端身分標頭（X-FDE-*、Authorization、轉發類），
         # 再套用 hop-by-hop / X-Forwarded-* 規則；兩者皆為「客戶端不可信」策略。
         # P7-B2：Cookie 依路由分流——Live 自有 API 剝除，Django Portal 保留。
-        headers = strip_client_identity_headers(self.headers.items(), path=split.path or "/")
+        # 空路徑採最嚴格策略（連 Cookie 一起丟棄），Flight Health 主機用不到它。
+        headers = strip_client_identity_headers(self.headers.items(), path="" if to_flight_health else (split.path or "/"))
         headers = {
             key: value
             for key, value in headers.items()
             if key.lower() not in HOP_BY_HOP_REQUEST and key.lower() not in CLIENT_FORWARDED_HEADERS
         }
         headers.pop("X-FDE-Live-Assertion", None)
-        headers["Host"] = f"{UPSTREAM_HOST}:{UPSTREAM_PORT}"
+        headers["Host"] = f"{upstream_host}:{upstream_port}"
         # P3-E：Origin / Referer **原樣轉發**（刻意不改寫）。
         # 若在此改寫成內部位址，Django 的 Origin 比對會恆成立，跨站來源即可通過
         # 第二道防線。入口對外位址請列入 Django 的 DJANGO_CSRF_TRUSTED_ORIGINS。
@@ -524,7 +545,7 @@ class EntryHandler(BaseHTTPRequestHandler):
         headers["Connection"] = "close"
 
         try:
-            conn = http.client.HTTPConnection(UPSTREAM_HOST, UPSTREAM_PORT, timeout=UPSTREAM_TIMEOUT)
+            conn = http.client.HTTPConnection(upstream_host, upstream_port, timeout=UPSTREAM_TIMEOUT)
             try:
                 conn.request(self.command, upstream_path, body=body, headers=headers)
                 resp = conn.getresponse()

@@ -20,8 +20,8 @@
     <li>建立時間：{{ summary.created_at|date:"Y-m-d H:i" }}</li>
     <li>照片總數：{{ summary.sample_count }}</li>
     <li>教師已確認：{{ summary.confirmed_sample_count }}</li>
-    <li>四類分佈：{% for label, count in summary.label_distribution.items %}{{ label }} = {{ count }}{% if not forloop.last %}　{% endif %}{% endfor %}</li>
-    <li>尚缺類別：{% if summary.missing_labels %}{{ summary.missing_labels|join:'、' }}{% else %}無（四類齊備）{% endif %}</li>
+    <li>類別分佈：{% for label, count in summary.label_distribution.items %}{{ label }} = {{ count }}{% if not forloop.last %}　{% endif %}{% endfor %}</li>
+    <li>尚缺類別：{% if summary.missing_labels %}{{ summary.missing_labels|join:'、' }}{% else %}無（兩類齊備）{% endif %}</li>
     <li>完整度：{{ completeness_label }}（{{ completeness_reason }}）</li>
     <li>Manifest SHA256：{% if golden_set.manifest_sha256 %}<code>{{ golden_set.manifest_sha256|slice:":24" }}…</code>（{{ manifest_binding_label }}）{% else %}未綁定（鎖定時寫入）{% endif %}</li>
     <li>Manifest 契約版本：{% if golden_set.manifest_contract_version %}{{ golden_set.manifest_contract_version }}{% else %}—{% endif %}</li>
@@ -97,7 +97,7 @@
 {% if not summary.is_frozen %}
 <section class="section-block">
   <h2>鎖定測試集版本</h2>
-  <p class="muted">鎖定後此版本的樣本不可再新增、修改或刪除，確保評估基準固定、結果可重現。四類標籤必須皆有已確認樣本才可鎖定。</p>
+  <p class="muted">鎖定後此版本的樣本不可再新增、修改或刪除，確保評估基準固定、結果可重現。兩類標籤必須皆有已確認樣本才可鎖定。</p>
   {% if summary.missing_labels %}
   <p class="muted">尚缺類別：{{ summary.missing_labels|join:'、' }}，補齊並確認後才可鎖定。</p>
   <button class="button secondary" type="button" disabled aria-disabled="true">鎖定測試集（尚不可用）</button>

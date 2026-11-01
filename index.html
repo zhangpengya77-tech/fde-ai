@@ -265,7 +265,7 @@
         <div class="section-intro">
           <p class="eyebrow">AI Inspection Center · 測</p>
           <h2>鷹眼 AI 檢測中心</h2>
-          <p>本頁只保留兩個正式檢測入口：F450 槳葉正反及方向檢查、電力巡檢 MP4 影片上傳與分析。四面懸停檢測移至下方「歷史／擴充檢測」區，不再佔用正式入口。</p>
+          <p>本頁只保留兩個正式檢測入口：F450 槳葉正反及方向檢查、電力巡檢影片上傳與分析。四面懸停檢測移至下方「歷史／擴充檢測」區，不再佔用正式入口。</p>
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
         <div class="inspection-layout">
@@ -279,11 +279,11 @@
             <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
           </div>
           <div class="panel upload-panel">
-            <h3>電力巡檢 MP4 影片上傳與分析</h3>
+            <h3>電力巡檢影片上傳與分析</h3>
             <label class="dropzone">
-              <input type="file" id="powerInspectionInput" accept="video/mp4,.mp4" />
-              <span>上傳巡檢 MP4 影片</span>
-              <small>影片只會進入本人的隔離巡檢工作與教師覆核流程；尚未載入真實模型時不會產生任何虛構推論結果。</small>
+              <input type="file" id="powerInspectionInput" accept="video/*,.mp4,.mov,.m4v,.3gp,.3g2,.lrf,.webm,.mkv,.avi,.wmv,.mts,.m2ts,.ts,.mpg,.mpeg" />
+              <span>上傳巡檢影片</span>
+              <small>支援手機、電腦與 DJI 拍攝的 MP4、MOV（含 HEVC）、M4V、3GP、WEBM、MKV、AVI、WMV、MTS、M2TS、TS、MPG、LRF，最大 512 MB。影片只會進入本人的隔離巡檢工作與教師覆核流程；尚未載入真實模型時不會產生任何虛構推論結果。</small>
             </label>
             <button class="primary-action button" id="powerInspectionButton">上傳並建立巡檢工作</button>
           </div>
@@ -353,7 +353,7 @@
 
     <script src="./src/router.js?v=1.2-fde-column"></script>
     <script src="./src/course-definitions.js?v=1.5b-course-sync"></script>
-    <script src="./src/platform-browser.js?v=1.5d-stage-rename"></script>
+    <script src="./src/platform-browser.js?v=1.5e-power-video"></script>
     <script src="./src/data/fdeVideos.js?v=1.2-fde-column-suffix"></script>
     <script src="./src/fde-column.js?v=1.2-fde-column-tags"></script>
     <script>
@@ -361,6 +361,6 @@
     </script>
     <script src="./src/rag-client.js?v=1.2.3-mobile-speech"></script>
     <script src="./src/vision-client.js?v=1.0.3-mobile-speech"></script>
-    <script src="./src/app.js?v=1.2.3-mobile-speech&fde=1.2-fde-column"></script>
+    <script src="./src/app.js?v=1.2.5-power-progress&fde=1.2-fde-column"></script>
   </body>
 </html>

@@ -3,7 +3,7 @@
 {% block content %}
 <main class="container" style="max-width:1000px;margin:2rem auto">
   <h1>POWER_INSPECTION_V1｜教師電力巡檢中心</h1>
-  <p>模型匯入 → MP4 驗證 → 人工覆核 → 指定班級教學試用。{% if not real_model_available %}<strong>目前尚未載入真實模型。</strong>{% endif %}</p>
+  <p>模型匯入 → 影片驗證 → 人工覆核 → 指定班級教學試用。{% if not real_model_available %}<strong>目前尚未載入真實模型。</strong>{% endif %}</p>
   <section><h2>匯入模型</h2>
     <form data-api-form method="post" enctype="multipart/form-data" action="{% url 'learning:power_inspection_model_import' %}">{% csrf_token %}
       <label>模型 <input name="model_file" type="file" accept=".pt,.onnx" required></label>
@@ -19,6 +19,7 @@
   </section>
   <section><h2>模型管理</h2><ul>{% for model in models %}
     <li>{{ model.version }}｜SHA-256：{{ model.sha256|default:"待計算" }}｜{{ model.get_status_display }}｜{{ model.get_inference_mode_display }}｜{{ model.class_contract }}
+      {% if model.status == 'IMPORTED' %}<form data-api-form method="post" action="{% url 'learning:power_inspection_verify' model.model_id %}">{% csrf_token %}<button>執行真實核驗</button></form>{% endif %}
       {% if model.status == 'VALIDATED' or model.status == 'TEACHING_TRIAL' %}{% if model.inference_mode == 'REAL' %}
       <form data-api-form method="post" action="{% url 'learning:power_inspection_deploy' model.model_id %}">{% csrf_token %}<select name="cohort_id">{% for cohort in cohorts %}<option value="{{ cohort.cohort_id }}">{{ cohort.name }}</option>{% endfor %}</select><button>設為班級預設模型</button></form>{% endif %}{% endif %}
     </li>{% empty %}<li>尚未匯入模型。</li>{% endfor %}</ul></section>

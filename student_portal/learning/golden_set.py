@@ -8,7 +8,7 @@
        Django 端只補上教師後台需要的版本、樣本與鎖定能力，
        不建立第二套平行資料來源。
     2. 本輪只支援 PROP_DIRECTION_V1 一個任務類型，其餘一律拒絕。
-    3. 四類標籤固定為 CW_F / CCW_F / CW_B / CCW_B，不得自創類別。
+    3. 兩類標籤固定為 CW / CCW，不得自創類別。
     4. 版本一旦 FROZEN，任何新增、修改、刪除樣本的操作一律拒絕。
     5. **不載入、不推論任何模型檔案**：本模組只處理照片與標籤。
 
@@ -29,15 +29,13 @@ SUPPORTED_TASK_IDS = ("PROP_DIRECTION",)
 # 供教師端統一引用的別名，避免 views 自行硬編碼任務清單。
 SUPPORTED_GOLDEN_TASK_IDS = SUPPORTED_TASK_IDS
 
-# 四類固定標籤；與後端 PROP_CLASSES 完全一致，不得各自為政。
-PROP_LABELS = ("CW_F", "CCW_F", "CW_B", "CCW_B")
+# 兩類固定標籤；與後端 PROP_CLASSES 完全一致，不得各自為政。
+PROP_LABELS = ("CW", "CCW")
 
 # 供教師端顯示用的標籤（值, 說明），與 GoldenSet.Label 保持一致。
 GOLDEN_LABELS = (
-    ("CW_F", "順時針正面"),
-    ("CCW_F", "逆時針正面"),
-    ("CW_B", "順時針背面"),
-    ("CCW_B", "逆時針背面"),
+    ("CW", "順時針"),
+    ("CCW", "逆時針"),
 )
 
 # 單張測試照片的位元組上限（10 MB）；避免誤傳大型檔案拖垮教師後台。
@@ -81,7 +79,7 @@ def validate_task_id(task_id: str) -> str:
 
 
 def validate_label(label: str) -> str:
-    """驗證標籤必須為四類之一。"""
+    """驗證標籤必須為兩類之一。"""
     cleaned = str(label or "").strip()
     if cleaned not in PROP_LABELS:
         raise GoldenSetError(
@@ -281,7 +279,7 @@ def freeze_golden_set(*, golden_set: GoldenSet, teacher) -> GoldenSet:
     """鎖定測試集版本。
 
     鎖定後不得再新增、修改或刪除樣本，確保同一版本可重現。
-    四類標籤必須皆有已確認樣本，否則拒絕鎖定——避免鎖出一份缺類別的測試集。
+    兩類標籤必須皆有已確認樣本，否則拒絕鎖定——避免鎖出一份缺類別的測試集。
     """
     if golden_set.is_frozen:
         raise GoldenSetError("GOLDEN_SET_ALREADY_FROZEN", "此測試集版本已經鎖定。")
@@ -290,7 +288,7 @@ def freeze_golden_set(*, golden_set: GoldenSet, teacher) -> GoldenSet:
     if missing:
         raise GoldenSetError(
             "GOLDEN_SET_INCOMPLETE",
-            f"四類標籤必須皆有已確認樣本才能鎖定；尚缺：{'、'.join(missing)}。",
+            f"兩類標籤必須皆有已確認樣本才能鎖定；尚缺：{'、'.join(missing)}。",
         )
 
     golden_set.status = GoldenSet.Status.FROZEN
@@ -364,7 +362,7 @@ GOLDEN_SET_CONTRACT_VERSION = "GOLDEN_SET_CONTRACT_V1"
 
 # 正式評估的最低樣本數門檻（每類）。
 # 第 24 輪指令「五」要求：本輪先設計規則，**不設定未經驗證的合格分數門檻**。
-# 因此這裡只設定「能讓四類都出現」的結構性下限，不宣稱這是統計上的可靠門檻。
+# 因此這裡只設定「能讓兩類都出現」的結構性下限，不宣稱這是統計上的可靠門檻。
 MIN_SAMPLES_PER_CLASS_FOR_EVALUATION = 2
 
 # 完整度等級。
@@ -467,7 +465,7 @@ def completeness_level(golden_set) -> str:
     """判定 Golden Set 的完整度等級。
 
     A. STRUCTURAL_COMPLETE（結構完整）
-       四類標籤都有已確認樣本。這是「可以鎖定 FROZEN」的條件。
+       兩類標籤都有已確認樣本。這是「可以鎖定 FROZEN」的條件。
 
     B. EVALUATION_READY（可供正式評估）
        在結構完整之上，另外要求：
@@ -481,7 +479,7 @@ def completeness_level(golden_set) -> str:
     if golden_set.missing_labels():
         return COMPLETENESS_INCOMPLETE
     if not golden_set.is_frozen:
-        # 四類齊備但尚未鎖定 → 僅達成結構完整。
+        # 兩類齊備但尚未鎖定 → 僅達成結構完整。
         return COMPLETENESS_STRUCTURAL
 
     distribution = golden_set.label_distribution()
@@ -505,7 +503,7 @@ def completeness_reason(golden_set) -> str:
 
     if level == COMPLETENESS_INCOMPLETE:
         return (
-            "結構未完整：四類標籤尚未齊備，尚缺 "
+            "結構未完整：兩類標籤尚未齊備，尚缺 "
             f"{'、'.join(golden_set.missing_labels())}。"
         )
 
@@ -558,7 +556,7 @@ GOLDEN_TEST_METRIC_FIELDS = (
     ("recall", "Recall", "整體召回率"),
     ("map50", "mAP@50", "IoU 0.5 的平均精度"),
     ("map50_95", "mAP@50-95", "IoU 0.5–0.95 的平均精度"),
-    ("per_class_metrics", "各類別指標", "CW_F / CCW_F / CW_B / CCW_B 逐類指標"),
+    ("per_class_metrics", "各類別指標", "CW / CCW 逐類指標"),
     ("confusion_matrix", "混淆矩陣", "四類互相誤判的分佈"),
     ("error_count", "錯誤數", "預測錯誤的照片張數"),
     ("low_confidence_count", "低信心數", "信心低於門檻的照片張數"),

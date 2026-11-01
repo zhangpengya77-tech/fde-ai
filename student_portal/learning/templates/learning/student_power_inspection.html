@@ -3,7 +3,7 @@
 {% block content %}
 <main class="container" style="max-width:900px;margin:2rem auto">
   <h1>POWER_INSPECTION_V1｜電力巡檢任務</h1>
-  <p>班級：{{ enrollment.cohort.name }}。僅可上傳 MP4；影片與分析紀錄只屬於本人。</p>
+  <p>班級：{{ enrollment.cohort.name }}。支援手機、電腦與 DJI 拍攝的 MP4、MOV（含 HEVC）、M4V、3GP、WEBM、MKV、AVI、WMV、MTS、M2TS、TS、MPG、LRF，最大 512 MB。影片與分析紀錄只屬於本人。</p>
   {% if deployment %}
     <p><strong>班級預設模型已可用。</strong> 版本：{{ deployment.model.version }}。上傳後將排入隔離巡檢程序。</p>
   {% else %}
@@ -11,7 +11,7 @@
   {% endif %}
   <form data-api-form method="post" enctype="multipart/form-data" action="{% url 'learning:power_inspection_upload' enrollment.pk %}">
     {% csrf_token %}
-    <label>巡檢 MP4 <input type="file" name="video" accept="video/mp4,.mp4" required></label>
+    <label>巡檢影片 <input type="file" name="video" accept="video/*,.mp4,.mov,.m4v,.3gp,.3g2,.lrf,.webm,.mkv,.avi,.wmv,.mts,.m2ts,.ts,.mpg,.mpeg" required></label>
     <button type="submit">上傳並建立巡檢工作</button>
   </form>
   <p class="power-api-result" aria-live="polite"></p>

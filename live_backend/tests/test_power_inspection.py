@@ -7,7 +7,7 @@ from app.power_inspection import (
     PowerInspectionValidationError,
     assess_model_delivery,
     build_anomaly_timeline,
-    validate_mp4_upload,
+    validate_video_upload,
     verify_model_manifest,
 )
 from app.power_inspection_worker import serialize_worker_result, validate_worker_frame_results
@@ -44,11 +44,32 @@ class PowerInspectionContractTests(unittest.TestCase):
         with self.assertRaisesRegex(PowerInspectionValidationError, "model_sha256_mismatch"):
             verify_model_manifest(self.manifest(model, "0" * 64), self.root)
 
-    def test_non_mp4_and_fake_mp4_are_rejected(self):
+    def test_unknown_extension_and_fake_video_are_rejected(self):
         with self.assertRaisesRegex(PowerInspectionValidationError, "video_extension_invalid"):
-            validate_mp4_upload("inspection.avi", b"x")
-        with self.assertRaisesRegex(PowerInspectionValidationError, "video_container_invalid"):
-            validate_mp4_upload("inspection.mp4", b"not an mp4")
+            validate_video_upload("inspection.exe", b"x")
+        for name in ("inspection.mp4", "inspection.mov", "inspection.mts"):
+            with self.assertRaisesRegex(PowerInspectionValidationError, "video_container_invalid"):
+                validate_video_upload(name, b"not a real video container" * 20)
+
+    def test_common_phone_computer_and_dji_containers_are_accepted(self):
+        ts_packet = (b"\x47" + b"\x00" * 187) * 2
+        cases = {
+            "iphone.MOV": b"\x00\x00\x00\x14ftypqt  " + b"\x00" * 8,
+            "old-quicktime.mov": b"\x00\x00\x00\x08wide" + b"\x00" * 8,
+            "DJI_0001.MP4": b"\x00\x00\x00\x18ftypisom" + b"\x00" * 8,
+            "DJI_0001.LRF": b"\x00\x00\x00\x18ftypisom" + b"\x00" * 8,
+            "android.3gp": b"\x00\x00\x00\x18ftyp3gp4" + b"\x00" * 8,
+            "screen.webm": b"\x1a\x45\xdf\xa3" + b"\x00" * 12,
+            "clip.mkv": b"\x1a\x45\xdf\xa3" + b"\x00" * 12,
+            "clip.avi": b"RIFF\x00\x00\x00\x00AVI " + b"\x00" * 4,
+            "clip.wmv": b"\x30\x26\xb2\x75\x8e\x66\xcf\x11" + b"\x00" * 8,
+            "clip.mpg": b"\x00\x00\x01\xba" + b"\x00" * 12,
+            "clip.ts": ts_packet,
+            "camcorder.MTS": b"\x00" * 4 + (b"\x47" + b"\x00" * 191) * 2,
+        }
+        for name, content in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(validate_video_upload(name, content)["size_bytes"], len(content))
 
     def test_anomaly_timeline_joins_adjacent_detections_only(self):
         timeline = build_anomaly_timeline(

@@ -39,7 +39,7 @@ class PropScanModelStatusTests(TestCase):
             "model_name": "best.pt",
             "version": "v1",
             "file_path": str(path),
-            "class_names": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "class_names": ["CW", "CCW"],
             "validation_status": "VALIDATED",
             "evaluation_status": "EVALUATED",
             "metrics": dict(QUALIFIED_METRICS),
@@ -124,7 +124,7 @@ class StudentPropScanTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        for label in ("槳葉方向與正反面辨識", "上傳照片", "已確認的安裝規則"):
+        for label in ("螺旋槳旋向辨識", "上傳照片", "已確認的安裝規則"):
             self.assertContains(response, label)
 
     def test_page_has_motor_options_m1_to_m4(self):
@@ -220,22 +220,21 @@ class StudentPropScanTests(TestCase):
         }
         inference.return_value = {
             "detections": [
-                {"class_name": "CCW_F", "confidence": 0.93, "box": [70, 10, 90, 30]},
-                {"class_name": "CW_F", "confidence": 0.92, "box": [10, 10, 30, 30]},
-                {"class_name": "CCW_F", "confidence": 0.91, "box": [10, 70, 30, 90]},
-                {"class_name": "CW_F", "confidence": 0.90, "box": [70, 70, 90, 90]},
+                {"class_name": "CCW", "confidence": 0.93, "box": [70, 10, 90, 30]},
+                {"class_name": "CW", "confidence": 0.92, "box": [10, 10, 30, 30]},
+                {"class_name": "CCW", "confidence": 0.91, "box": [10, 70, 30, 90]},
+                {"class_name": "CW", "confidence": 0.90, "box": [70, 70, 90, 90]},
             ],
             "evaluation": {
                 "status": "PASS",
                 "checks": [
                     {"motor": motor, "position": position, "result": "PASS",
                      "detected_class": expected, "confidence": 0.9,
-                     "expected_direction": expected.split("_")[0],
-                     "expected_face": expected.split("_")[1],
-                     "reason": "方向與槳面正確"}
+                     "expected_direction": expected,
+                     "reason": "旋向正確"}
                     for motor, position, expected in (
-                        ("M1", "右前", "CCW_F"), ("M2", "左後", "CCW_F"),
-                        ("M3", "左前", "CW_F"), ("M4", "右後", "CW_F"),
+                        ("M1", "右前", "CCW"), ("M2", "左後", "CCW"),
+                        ("M3", "左前", "CW"), ("M4", "右後", "CW"),
                     )
                 ],
                 "pass_count": 4,
@@ -249,7 +248,7 @@ class StudentPropScanTests(TestCase):
         response = self.client.post(self.url, {"photo": photo})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "CCW_F")
+        self.assertContains(response, "CCW")
         self.assertContains(response, "0.93")
         self.assertContains(response, "PASS｜安裝正確")
         inference.assert_called_once()
@@ -261,11 +260,11 @@ class StudentPropScanTests(TestCase):
         prop_check.return_value = {
             "model": {"model_id": "PROP_REAL_v1", "model_version": "v1"},
             "detections": [
-                {"class": "CCW_F", "confidence": 0.93, "bbox": [70, 10, 90, 30]},
+                {"class": "CCW", "confidence": 0.93, "bbox": [70, 10, 90, 30]},
             ],
             "positions": {
                 "M1": {
-                    "detected": "CCW_F", "expected": "CCW_F", "blade_face": "F",
+                    "detected": "CCW", "expected": "CCW", "blade_face": "F",
                     "confidence": 0.93, "result": "PASS", "reason": "ok",
                 },
             },
@@ -276,7 +275,7 @@ class StudentPropScanTests(TestCase):
             b"real-image-bytes", "prop.jpg"
         )
 
-        self.assertEqual(result["detections"][0]["class_name"], "CCW_F")
+        self.assertEqual(result["detections"][0]["class_name"], "CCW")
         self.assertEqual(result["detections"][0]["box"], [70, 10, 90, 30])
         self.assertEqual(result["evaluation"]["status"], "INSUFFICIENT_DATA")
         prop_check.assert_called_once_with(
@@ -305,7 +304,7 @@ class StudentPropScanTests(TestCase):
                 "submission_id": "sub-1",
             },
             "detections": [
-                {"class": "CW_F", "confidence": 0.76, "bbox": [10, 10, 70, 70]},
+                {"class": "CW", "confidence": 0.76, "bbox": [10, 10, 70, 70]},
             ],
             "positions": {},
             "final_result": "INSUFFICIENT_DATA",
@@ -319,7 +318,7 @@ class StudentPropScanTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "DEMO 模擬結果")
-        self.assertContains(response, "CW_F")
+        self.assertContains(response, "CW")
         self.assertContains(response, "0.76")
         self.assertContains(response, "AI 解釋（繁體中文）")
         self.assertContains(response, '<img src="data:image/png;base64,', html=False)

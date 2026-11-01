@@ -244,16 +244,9 @@ class ProjectDirectionEnrollmentTests(TestCase):
         self.assertContains(response, "PROP_DIRECTION")
         self.assertNotContains(response, "FOUR_SIDE_HOVER")
 
-    def test_r07_non_ai_direction_does_not_show_model_upload(self):
-        self.enrollment.project_direction = "flight_f450"
-        self.enrollment.save(update_fields=["project_direction"])
-
-        response = self.client.get(
-            reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R07"])
-        )
-
-        self.assertNotContains(response, "上傳 YOLO 模型 best.pt")
-        self.assertNotContains(response, 'accept=".pt"')
+    def test_r07_model_upload_shows_for_every_direction(self):
+        detail_url = reverse("learning:growth_record_detail", args=[self.enrollment.pk, "R07"])
+        self.assertContains(self.client.get(detail_url), "上傳 YOLO 模型 best.pt")
 
     def test_r07_model_upload_reuses_model_evidence_and_links_vision_submission(self):
         self.enrollment.project_direction = "ai_flight_assessment"

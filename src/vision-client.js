@@ -191,7 +191,7 @@
       simulationMode,
       resultLabel: simulationMode ? (payload?.result_label || 'DEMO 模擬結果') : '',
       summary: finalResult === 'PASS'
-        ? '四個槳葉方向與槳面皆與 F450 配置一致。'
+        ? '四個槳葉旋向皆與 F450 配置一致。'
         : '部分槳葉需要確認，請依下方 M1-M4 結果調整後再檢測。',
       motorChecks,
       detections,

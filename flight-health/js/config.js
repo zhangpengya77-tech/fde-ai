@@ -6,9 +6,8 @@ window.FLIGHT_HEALTH_CONFIG = {
   // 本機開發環境：直連教師主機 FastAPI (:8040)
   API_BASE_LOCAL: "http://127.0.0.1:8040/api/v1",
 
-  // 正式環境佔位配置：暫未配置 Cloudflare Tunnel 時保持為空字串
-  // 規範：未來在 Cloudflare 配置同域轉發後，才填寫 "/api/flight-health/v1"
-  API_BASE_PROD: "",
+  // 正式環境：同域轉發，由入口 static_entry_server 轉到診斷主機 :8040
+  API_BASE_PROD: "/api/flight-health/v1",
 
   // 連線健康檢查逾時（毫秒）
   PROBE_TIMEOUT_MS: 2000,

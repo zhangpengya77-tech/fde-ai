@@ -30,7 +30,7 @@
 <a class="back-link" href="{% url 'learning:growth_record_detail' enrollment.pk 'R07' %}">返回 R07 成長紀錄</a>
 <section class="page-heading">
   <p class="eyebrow">R07 · PROP_DIRECTION_V1</p>
-  <h1>槳葉方向與正反面辨識</h1>
+  <h1>螺旋槳旋向辨識</h1>
   <p class="muted">{{ enrollment.student.nickname }} · {{ enrollment.cohort_id }}</p>
 </section>
 
@@ -40,6 +40,7 @@
     <h2>目前狀態</h2>
     {% if gate.can_infer %}
       <div class="scan-state ready"><strong>{% if gate.model.simulation_mode %}DEMO 模擬推論{% else %}可推論{% endif %}</strong>：隔離推論環境已就緒。</div>
+      {% if gate.model.teacher_test %}<div class="scan-state waiting"><strong>教師測試模型</strong>：實驗模型，尚未通過正式評估，辨識結果僅供測試。</div>{% endif %}
     {% elif gate.state == 'WAITING_FOR_MODEL' %}
       <div class="scan-state waiting">
         <strong>WAITING_FOR_MODEL｜等待合格模型</strong>
@@ -94,7 +95,7 @@
     <h2>已確認的安裝規則</h2>
     <ul>
       {% for motor, item in rule_table.expected.items %}
-      <li><strong>{{ motor }}</strong>（{{ item.position }}）：方向 <strong>{{ item.direction }}</strong>、槳面 <strong>{{ item.face }}</strong> 面朝上。</li>
+      <li><strong>{{ motor }}</strong>（{{ item.position }}）：旋向 <strong>{{ item.direction }}</strong>。</li>
       {% endfor %}
     </ul>
     <p class="muted">模型類別契約：{{ rule_table.class_contract|join:'、' }}。規則版本：{{ rule_table.template_id }}。</p>

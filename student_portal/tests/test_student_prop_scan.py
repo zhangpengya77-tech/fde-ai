@@ -11,6 +11,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ import django  # noqa: E402
 django.setup()
 
 from learning import prop_scan  # noqa: E402
+from django.test import override_settings  # noqa: E402
 
 
 class PropScanRuleTests(unittest.TestCase):
@@ -31,15 +33,15 @@ class PropScanRuleTests(unittest.TestCase):
         })
 
     def test_expected_direction_table(self):
-        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M1"], {"direction": "CCW", "face": "F"})
-        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M2"], {"direction": "CCW", "face": "F"})
-        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M3"], {"direction": "CW", "face": "F"})
-        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M4"], {"direction": "CW", "face": "F"})
+        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M1"], {"direction": "CCW"})
+        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M2"], {"direction": "CCW"})
+        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M3"], {"direction": "CW"})
+        self.assertEqual(prop_scan.EXPECTED_BY_MOTOR["M4"], {"direction": "CW"})
 
     def test_model_status_is_waiting_for_model(self):
         status = prop_scan.model_status()
         self.assertEqual(status["status"], "WAITING_FOR_MODEL")
-        self.assertEqual(status["class_contract"], ["CW_F", "CCW_F", "CW_B", "CCW_B"])
+        self.assertEqual(status["class_contract"], ["CW", "CCW"])
 
     def test_no_detection_never_passes(self):
         result = prop_scan.evaluate_motor("M1", None)
@@ -54,28 +56,18 @@ class PropScanRuleTests(unittest.TestCase):
         self.assertEqual(result["reason_code"], "UNKNOWN_CLASS")
 
     def test_low_confidence_never_passes(self):
-        result = prop_scan.evaluate_motor("M1", {"class_name": "CCW_F", "confidence": 0.30})
+        result = prop_scan.evaluate_motor("M1", {"class_name": "CCW", "confidence": 0.30})
         self.assertEqual(result["result"], "INSUFFICIENT_DATA")
         self.assertEqual(result["reason_code"], "LOW_CONFIDENCE")
 
     def test_correct_detection_passes(self):
-        result = prop_scan.evaluate_motor("M1", {"class_name": "CCW_F", "confidence": 0.91})
+        result = prop_scan.evaluate_motor("M1", {"class_name": "CCW", "confidence": 0.91})
         self.assertEqual(result["result"], "PASS")
 
     def test_wrong_direction_is_ng(self):
-        result = prop_scan.evaluate_motor("M1", {"class_name": "CW_F", "confidence": 0.91})
+        result = prop_scan.evaluate_motor("M1", {"class_name": "CW", "confidence": 0.91})
         self.assertEqual(result["result"], "NG")
         self.assertEqual(result["reason_code"], "ROTATION_WRONG")
-
-    def test_wrong_face_is_ng(self):
-        result = prop_scan.evaluate_motor("M1", {"class_name": "CCW_B", "confidence": 0.91})
-        self.assertEqual(result["result"], "NG")
-        self.assertEqual(result["reason_code"], "FACE_WRONG")
-
-    def test_both_wrong_is_ng(self):
-        result = prop_scan.evaluate_motor("M1", {"class_name": "CW_B", "confidence": 0.91})
-        self.assertEqual(result["result"], "NG")
-        self.assertEqual(result["reason_code"], "ROTATION_AND_FACE_WRONG")
 
     def test_selection_without_detections_is_insufficient(self):
         evaluation = prop_scan.evaluate_selection({"M1": None, "M2": None, "M3": None, "M4": None}, [])
@@ -84,10 +76,10 @@ class PropScanRuleTests(unittest.TestCase):
 
     def test_selection_all_correct_passes(self):
         detections = [
-            {"class_name": "CCW_F", "confidence": 0.9, "box": [0, 0, 10, 10]},
-            {"class_name": "CCW_F", "confidence": 0.9, "box": [0, 0, 10, 10]},
-            {"class_name": "CW_F", "confidence": 0.9, "box": [0, 0, 10, 10]},
-            {"class_name": "CW_F", "confidence": 0.9, "box": [0, 0, 10, 10]},
+            {"class_name": "CCW", "confidence": 0.9, "box": [0, 0, 10, 10]},
+            {"class_name": "CCW", "confidence": 0.9, "box": [0, 0, 10, 10]},
+            {"class_name": "CW", "confidence": 0.9, "box": [0, 0, 10, 10]},
+            {"class_name": "CW", "confidence": 0.9, "box": [0, 0, 10, 10]},
         ]
         evaluation = prop_scan.evaluate_selection({"M1": 0, "M2": 1, "M3": 2, "M4": 3}, detections)
         self.assertEqual(evaluation["status"], "PASS")
@@ -102,3 +94,23 @@ class PropScanRuleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TeacherTestModelStatusTests(unittest.TestCase):
+    MODEL = {
+        "status": "ACTIVE", "activation_mode": "TEACHER_TEST", "validation_status": "REVIEW_REQUIRED",
+        "class_names": ["CW", "CCW"], "file_path": __file__, "model_id": "m1", "version": "v5",
+    }
+
+    def _status(self, enabled):
+        with patch("learning.vision_submission.list_models", return_value=[self.MODEL]), \
+                override_settings(VISION_TEACHER_TEST_MODE=enabled, VISION_DEMO_SIMULATION_ENABLED=False):
+            return prop_scan.model_status()
+
+    def test_teacher_test_model_is_ready_and_labelled_when_mode_on(self):
+        status = self._status(True)
+        self.assertEqual(status["status"], "READY")
+        self.assertTrue(status["teacher_test"])
+
+    def test_teacher_test_model_is_blocked_when_mode_off(self):
+        self.assertEqual(self._status(False)["status"], "BLOCKED")

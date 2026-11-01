@@ -60,14 +60,14 @@ class FixtureRunner:
 
     def predict(self, _path, image_bytes):
         if image_bytes == b"match-image":
-            return [{"class": "CW_F", "confidence": .93, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
+            return [{"class": "CW", "confidence": .93, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
         if image_bytes == b"mismatch-image":
-            return [{"class": "CCW_F", "confidence": .88, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
+            return [{"class": "CCW", "confidence": .88, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
         if image_bytes == b"lowconf-image":
-            return [{"class": "CW_F", "confidence": .12, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
+            return [{"class": "CW", "confidence": .12, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
         if image_bytes == b"empty-image":
             return []
-        return [{"class": "CW_F", "confidence": .9, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
+        return [{"class": "CW", "confidence": .9, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20}]
 
 
 class TeacherVisionCenterTests(unittest.TestCase):
@@ -151,14 +151,14 @@ class TeacherVisionCenterTests(unittest.TestCase):
     def test_validate_image_returns_real_detection_facts(self):
         """驗證端點必須回傳真實偵測框、類別與信心值，而非僅 HTTP 200。"""
         model = self.upload()
-        response = self.validate_image(model["model_id"], b"match-image", expected_class="CW_F")
+        response = self.validate_image(model["model_id"], b"match-image", expected_class="CW")
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["detection_count"], 1)
-        self.assertEqual(body["detections"][0]["class"], "CW_F")
+        self.assertEqual(body["detections"][0]["class"], "CW")
         self.assertAlmostEqual(body["detections"][0]["confidence"], .93, places=5)
         self.assertEqual(body["detections"][0]["bbox"], [10, 10, 30, 30])
-        self.assertEqual(body["verdict"]["predicted_class"], "CW_F")
+        self.assertEqual(body["verdict"]["predicted_class"], "CW")
         self.assertEqual(body["verdict"]["decision"], "MATCH")
         self.assertEqual(body["verdict"]["reason_code"], "OK")
         self.assertEqual(body["validated_by"], "teacher-1")
@@ -166,21 +166,21 @@ class TeacherVisionCenterTests(unittest.TestCase):
 
     def test_validate_image_detects_class_mismatch(self):
         model = self.upload()
-        body = self.validate_image(model["model_id"], b"mismatch-image", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"mismatch-image", expected_class="CW").json()
         self.assertEqual(body["verdict"]["decision"], "MISMATCH")
         self.assertEqual(body["verdict"]["reason_code"], "CLASS_MISMATCH")
-        self.assertEqual(body["verdict"]["predicted_class"], "CCW_F")
+        self.assertEqual(body["verdict"]["predicted_class"], "CCW")
 
     def test_validate_image_low_confidence_is_not_a_pass(self):
         """不得只憑信心值判定；低於門檻必須回報資料不足。"""
         model = self.upload()
-        body = self.validate_image(model["model_id"], b"lowconf-image", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"lowconf-image", expected_class="CW").json()
         self.assertEqual(body["verdict"]["decision"], "INSUFFICIENT_DATA")
         self.assertEqual(body["verdict"]["reason_code"], "LOW_CONFIDENCE")
 
     def test_validate_image_without_detection(self):
         model = self.upload()
-        body = self.validate_image(model["model_id"], b"empty-image", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"empty-image", expected_class="CW").json()
         self.assertEqual(body["detection_count"], 0)
         self.assertEqual(body["verdict"]["decision"], "INSUFFICIENT_DATA")
         self.assertEqual(body["verdict"]["reason_code"], "NO_DETECTION")
@@ -189,7 +189,7 @@ class TeacherVisionCenterTests(unittest.TestCase):
         """驗證是唯讀探測，不得影響 ACTIVE。"""
         model = self.upload()
         self.activate(model["model_id"])
-        self.validate_image(model["model_id"], b"match-image", expected_class="CW_F")
+        self.validate_image(model["model_id"], b"match-image", expected_class="CW")
         self.assertEqual(self.center.active_model("PROP_DIRECTION")["model_id"], model["model_id"])
         self.assertEqual(self.center.get_model(model["model_id"])["status"], "ACTIVE")
 

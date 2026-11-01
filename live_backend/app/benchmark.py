@@ -20,8 +20,8 @@ from typing import Any, Callable
 
 from .sessions import utc_now_iso
 
-# PROP 類別契約：槳葉方向與正反面；順序即模型索引，必須嚴格一致。
-PROP_CLASS_CONTRACT: tuple[str, ...] = ("CW_F", "CCW_F", "CW_B", "CCW_B")
+# PROP 類別契約：螺旋槳旋向；順序即模型索引，必須嚴格一致。
+PROP_CLASS_CONTRACT: tuple[str, ...] = ("CW", "CCW")
 CLASS_CONTRACT_VERSION = "PROP_V1"
 
 # HOVER 僅保留介面：本輪禁止載入 / 驗證 / 處理影片。

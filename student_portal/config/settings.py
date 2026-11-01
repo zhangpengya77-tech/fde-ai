@@ -33,6 +33,7 @@ try:
 except ValueError:
     FDE_LIVE_ASSERTION_TTL_SECONDS = 60
 FDE_LIVE_ASSERTION_TTL_SECONDS = min(max(FDE_LIVE_ASSERTION_TTL_SECONDS, 1), 60)
+VISION_TEACHER_TEST_MODE = os.environ.get('FDE_VISION_TEACHER_TEST_MODE', '').strip() == '1'
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or ('local-development-only-not-for-production' if DEBUG else '')
 if not SECRET_KEY:
     raise RuntimeError('DJANGO_SECRET_KEY must be configured when DJANGO_DEBUG is false.')
@@ -341,6 +342,10 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = max(
     int(os.environ.get('DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE', '0') or 0),
     GROWTH_VIDEO_MAX_UPLOAD_BYTES + 2_000_000,
 )
+# POWER_INSPECTION_V1 隔離 worker：需含 ultralytics 的 Python，由子程序執行。
+POWER_INSPECTION_WORKER_PYTHON = os.environ.get('FDE_VISION_PYTHON', '')
+POWER_INSPECTION_LIVE_DIR = BASE_DIR.parent / 'live_backend'
+POWER_INSPECTION_WORKER_TIMEOUT = int(os.environ.get('FDE_POWER_WORKER_TIMEOUT', '3600'))
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG

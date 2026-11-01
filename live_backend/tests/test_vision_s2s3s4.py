@@ -102,20 +102,20 @@ class S2NcLengthMismatchTests(unittest.TestCase):
 
     def test_nc_mismatch_rejected_even_when_inspector_reports_ok(self):
         """S2 核心：inspector 漏判為 OK，但 nc=5 != len(class_names)=4 → 仍須拒絕。"""
-        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.9, nc=5, names_count=4))
+        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.9, nc=5, names_count=2))
         with self.assertRaises(ModelValidationError) as ctx:
             self.upload(center)
         self.assertEqual(str(ctx.exception), "model_nc_mismatch")
         self.assertEqual(center.list_models()[0]["status"], "REJECTED")
 
     def test_nc_matches_length_passes(self):
-        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.9, nc=4, names_count=4))
+        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.9, nc=2, names_count=2))
         model = self.upload(center)
         self.assertEqual(model["validation_status"], "VALIDATED")
 
     def test_nc_mismatch_demo_allowed_but_not_validated(self):
         """DEMO 放寬：nc 不符放行為 DEMO_IMPORTED，仍不得進 VALIDATED／ACTIVE。"""
-        center = self.make_center(FakeHealthInspector(HEALTH_OK, nc=5, names_count=4))
+        center = self.make_center(FakeHealthInspector(HEALTH_OK, nc=5, names_count=2))
         model = self.upload(center, demo_relaxed=True)
         self.assertEqual(model["validation_status"], "DEMO_IMPORTED")
         self.assertFalse(model["pass_eligible"])
@@ -153,12 +153,12 @@ class S3HealthVisibilityTests(unittest.TestCase):
         )
 
     def test_list_models_exposes_health_fields(self):
-        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.85, nc=4, names_count=4))
+        center = self.make_center(FakeHealthInspector(HEALTH_OK, map50=0.85, nc=2, names_count=2))
         self.upload(center)
         listed = center.list_models()[0]
         # S3：nc、mAP50、有無訓練痕跡、pass_eligible 都必須出現在清單回傳。
         self.assertIn("nc", listed)
-        self.assertEqual(listed["nc"], 4)
+        self.assertEqual(listed["nc"], 2)
         self.assertIn("map50", listed)
         self.assertEqual(listed["map50"], 0.85)
         self.assertIn("has_training_trace", listed)
@@ -194,7 +194,7 @@ class S4ValidationDetailTests(unittest.TestCase):
         self.center = VisionCenter(
             self.root,
             model_validator=FixtureValidator(),
-            model_health_inspector=FakeHealthInspector(HEALTH_OK, nc=4, names_count=4),
+            model_health_inspector=FakeHealthInspector(HEALTH_OK, nc=2, names_count=2),
             model_runner=FakeRunner(),
             quality_gate={"require_evaluation": False},
         )
@@ -217,16 +217,16 @@ class S4ValidationDetailTests(unittest.TestCase):
     def test_no_detection_reports_zero_boxes_and_none_confidence(self):
         self.center.model_runner = FakeRunner([])
         model = self.upload()
-        result = self.center.validate_image_with_model(model["model_id"], b"img", expected_class="CW_F")
+        result = self.center.validate_image_with_model(model["model_id"], b"img", expected_class="CW")
         self.assertEqual(result["detection_count"], 0)
         self.assertEqual(result["verdict"]["reason_code"], "NO_DETECTION")
         self.assertIsNone(result["max_confidence"])
         self.assertIn("無框", result["verdict"]["reason"])
 
     def test_low_confidence_reports_specific_number_below_threshold(self):
-        self.center.model_runner = FakeRunner([_detection("CW_F", 0.0088)])
+        self.center.model_runner = FakeRunner([_detection("CW", 0.0088)])
         model = self.upload()
-        result = self.center.validate_image_with_model(model["model_id"], b"img", expected_class="CW_F")
+        result = self.center.validate_image_with_model(model["model_id"], b"img", expected_class="CW")
         self.assertEqual(result["verdict"]["reason_code"], "LOW_CONFIDENCE")
         self.assertAlmostEqual(result["max_confidence"], 0.0088, places=4)
         self.assertIn("0.0088", result["verdict"]["reason"])
@@ -234,9 +234,9 @@ class S4ValidationDetailTests(unittest.TestCase):
         self.assertNotEqual(result["verdict"]["decision"], "MATCH")
 
     def test_above_threshold_match_reports_confidence(self):
-        self.center.model_runner = FakeRunner([_detection("CW_F", 0.93)])
+        self.center.model_runner = FakeRunner([_detection("CW", 0.93)])
         model = self.upload()
-        result = self.center.validate_image_with_model(model["model_id"], b"img", expected_class="CW_F")
+        result = self.center.validate_image_with_model(model["model_id"], b"img", expected_class="CW")
         self.assertEqual(result["verdict"]["reason_code"], "OK")
         self.assertAlmostEqual(result["max_confidence"], 0.93, places=4)
 

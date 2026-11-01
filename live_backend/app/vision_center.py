@@ -6,13 +6,17 @@ import io
 import json
 import math
 import os
+import re
 import shutil
+import subprocess
+import tempfile
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from .rotation_sandbox import RotationSandboxRunner
 from .model_health import (
     ALL_HEALTH_STATES,
     HEALTH_LOW_QUALITY,
@@ -30,7 +34,8 @@ from .model_health import (
 )
 
 
-PROP_CLASSES = ("CW_F", "CCW_F", "CW_B", "CCW_B")
+# 2026-11-02 教師指令：螺旋槳任務只保留旋向兩類，類別順序即模型索引（0=CW、1=CCW）。
+PROP_CLASSES = ("CW", "CCW")
 HOVER_CLASSES = ("FRONT", "RIGHT", "BACK", "LEFT")
 MODEL_TYPES = ("PROP_DIRECTION", "FOUR_SIDE_HOVER")
 MODEL_STATUSES = ("DRAFT", "VALIDATING", "VALIDATED", "CANDIDATE", "REVIEW_REQUIRED", "ACTIVE", "ARCHIVED", "REJECTED", "FAILED")
@@ -61,6 +66,15 @@ CANDIDATE_BOX_MIN_CONF = 0.001
 # 門檻調低不影響此常量。可用環境變數 FDE_ACTIVATION_MIN_CONFIDENCE 覆寫。
 DEFAULT_ACTIVATION_MIN_CONFIDENCE = 0.6
 _ACTIVATION_MIN_CONFIDENCE_ENV = "FDE_ACTIVATION_MIN_CONFIDENCE"
+
+
+def teacher_test_mode() -> bool:
+    """教師測試模式（2026-11-02 教師指令）：僅測試站以環境變數開啟，預設關閉。
+
+    開啟後，缺評估證據或信心未達門檻的模型仍可啟用，但必須有真實圖片驗證通過紀錄，
+    且一律標記 TEACHER_TEST；健康度、類別、隔離與 DEMO 硬攔不放寬。
+    """
+    return os.environ.get("FDE_VISION_TEACHER_TEST_MODE", "").strip() == "1"
 
 
 def activation_min_confidence(explicit: float | None = None) -> float:
@@ -173,7 +187,7 @@ def _demo_normalize_class(name: str) -> str:
     """DEMO 專用：把單一類別名正規化為任務預期風格，並合併筆誤通道。
 
     - 分隔符統一為底線（- / _ 視為相同）。
-    - CCE / CCF 視為 CCW 的筆誤（與 CCW-F / CCW-B 合併為同一預期類別）。
+    - CCE / CCF 視為 CCW 的筆誤；舊模型的 _F／_B 後綴合併為旋向 CW／CCW。
     不改動原模型檔，純前端／匯入層別名。
     """
     s = str(name).strip().upper().replace("-", "_")
@@ -187,8 +201,8 @@ def demo_class_alias_for(actual: list[str], expected: list[str]) -> dict | None:
 
     僅當「每個實際類別都能對應」且「對應後涵蓋全部預期類別」時回傳映射；
     否則回傳 None（不強行放寬）。例如 6 類模型
-    [CCE-F, CCF-b, CCW-F, CCW-B, CW-F, CW-B] 會對應成 4 類
-    [CCW_F, CCW_B, CCW_F, CCW_B, CW_F, CW_B]，去重後恰為預期 4 類。
+    [CCE-F, CCF-b, CCW-F, CCW-B, CW-F, CW-B] 會對應成 2 類
+    [CCW, CCW, CCW, CCW, CW, CW]，去重後恰為預期 2 類。
     """
     expected_set = set(expected)
     mapping: dict[str, str] = {}
@@ -430,6 +444,95 @@ class UltralyticsModelRunner:
             return []
 
 
+class SubprocessModelWorker:
+    """以獨立 Python 子程序載入模型；Live 服務環境不需安裝 ultralytics，也不反序列化 .pt。"""
+
+    def __init__(self, python_executable: str, timeout_seconds: int = 120):
+        self.python_executable = python_executable
+        self.timeout_seconds = int(timeout_seconds)
+        self.worker_path = Path(__file__).with_name("vision_model_worker.py")
+
+    def run(self, mode: str, path: Path, image_bytes: bytes | None = None, confidence: float | None = None) -> dict:
+        with tempfile.TemporaryDirectory(prefix="fde-vision-model-") as temp:
+            root = Path(temp)
+            output = root / "result.json"
+            command = [self.python_executable, "-I", str(self.worker_path), "--mode", mode, "--model", str(path), "--output", str(output)]
+            if image_bytes is not None:
+                image_path = root / "input-image.bin"
+                image_path.write_bytes(image_bytes)
+                command += ["--image", str(image_path), "--confidence", str(confidence)]
+            completed = subprocess.run(
+                command, cwd=str(root), env={**RotationSandboxRunner._safe_environment(), "PYTHONUTF8": "1"}, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=self.timeout_seconds,
+                check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            if completed.returncode != 0 or not output.is_file():
+                raise RuntimeError("vision_worker_failed")
+            return json.loads(output.read_text(encoding="utf-8"))
+
+
+class SubprocessModelValidator(UltralyticsModelValidator):
+    def __init__(self, worker: SubprocessModelWorker):
+        self.worker = worker
+
+    def validate(self, path: Path, _model_type: str) -> dict:
+        self._check_prelude(path)
+        try:
+            result = self.worker.run("validate", path)
+        except Exception as exc:
+            raise ModelValidationError("ultralytics_model_load_or_smoke_inference_failed") from exc
+        if not result.get("class_names"):
+            raise ModelValidationError("model_has_no_classes")
+        if not result.get("has_result"):
+            raise ModelValidationError("smoke_inference_returned_no_result")
+        return {"class_names": result["class_names"], "task": result.get("task", ""), "smoke_inference": True, "result_format": result.get("result_format")}
+
+
+class SubprocessModelRunner:
+    def __init__(self, worker: SubprocessModelWorker):
+        self.worker = worker
+
+    def predict(self, path: Path, image_bytes: bytes) -> list[dict]:
+        try:
+            result = self.worker.run("predict", path, image_bytes, CANDIDATE_BOX_MIN_CONF)
+        except Exception as exc:
+            raise ModelValidationError("active_model_inference_failed") from exc
+        output = []
+        for item in result["detections"]:
+            x1, y1, x2, y2 = item["bbox"]
+            output.append({
+                "class": _CLASS_NAME_CORRECTIONS.get(item["class"], item["class"]), "confidence": item["confidence"],
+                "bbox": item["bbox"], "center_x": (x1 + x2) / 2, "center_y": (y1 + y2) / 2,
+            })
+        return output
+
+    def get_names(self, path: Path) -> list[str]:
+        try:
+            names = self.worker.run("names", path)["class_names"]
+        except Exception:
+            return []
+        return list(dict.fromkeys(_CLASS_NAME_CORRECTIONS.get(name, name) for name in names))
+
+
+class SubprocessHealthInspector:
+    """子程序讀取 checkpoint 事實；以檔案大小與修改時間快取，避免列表頁重複載入。"""
+
+    def __init__(self, worker: SubprocessModelWorker):
+        self.worker = worker
+        self._cache: dict[tuple, dict] = {}
+
+    def __call__(self, path) -> dict:
+        path = Path(path)
+        stat = path.stat()
+        key = (str(path), stat.st_mtime_ns, stat.st_size)
+        if key not in self._cache:
+            try:
+                self._cache[key] = self.worker.run("health", path)
+            except Exception:
+                return inspect_model_health(path)
+        return dict(self._cache[key])
+
+
 class JsonStore:
     def __init__(self, root: Path):
         self.root = Path(root)
@@ -459,12 +562,15 @@ class VisionCenter:
     def __init__(self, root: Path | str, *, model_validator: ModelValidator | None = None, model_runner: ModelRunner | None = None, max_model_bytes: int = 100 * 1024 * 1024, demo_simulation_enabled: bool = False, model_health_inspector=None, quality_gate: dict | None = None):
         self.root = Path(root)
         self.store = JsonStore(self.root)
-        self.model_validator = model_validator or UltralyticsModelValidator()
-        self.model_runner = model_runner or UltralyticsModelRunner()
+        # FDE_VISION_PYTHON 指向已安裝 ultralytics 的 Python；未設定時維持同程序載入。
+        vision_python = os.environ.get("FDE_VISION_PYTHON", "").strip()
+        worker = SubprocessModelWorker(vision_python) if vision_python else None
+        self.model_validator = model_validator or (SubprocessModelValidator(worker) if worker else UltralyticsModelValidator())
+        self.model_runner = model_runner or (SubprocessModelRunner(worker) if worker else UltralyticsModelRunner())
         self.max_model_bytes = max_model_bytes
         self.demo_simulation_enabled = bool(demo_simulation_enabled)
         # 健康度檢查器（D1/D2/D3/D5/D6）：預設為真實 checkpoint 檢查；測試可注入假檢查器。
-        self.model_health_inspector = model_health_inspector or inspect_model_health
+        self.model_health_inspector = model_health_inspector or (SubprocessHealthInspector(worker) if worker else inspect_model_health)
         # 質量證據閘口（2026-10-21）：VALIDATED/ACTIVE 需具備評估證據（golden eval
         # map50≥門檻，或 sandbox benchmark PASS）。門檻取自設定檔，預設 0.5；
         # DEMO 環境可單獨覆寫（demo_quality_gate 區段）。quality_gate 傳入時直接覆寫
@@ -920,6 +1026,7 @@ class VisionCenter:
         record["activation_block_reason"] = block_reason
         record["activation_block_detail"] = block_detail
         record["activation_min_confidence"] = activation_min_confidence()
+        record["activation_teacher_test"] = bool(eligible) and self._activation_is_teacher_test(record)
         record["validation_pass_confidence"] = self.validation_pass_confidence(
             record.get("model_id") or ""
         )
@@ -1202,15 +1309,26 @@ class VisionCenter:
 
     @staticmethod
     def _expected_class_names(model_type: str) -> list[str]:
-        """任務的規範類別名（恰好四個，順序固定）。"""
+        """任務的規範類別名（順序固定）。"""
         return list(PROP_CLASSES if model_type == "PROP_DIRECTION" else HOVER_CLASSES)
+
+    @staticmethod
+    def _needs_review(model: dict) -> bool:
+        return model.get("validation_status") == "REVIEW_REQUIRED" or model.get("status") == "REVIEW_REQUIRED"
+
+    def _activation_is_teacher_test(self, model: dict) -> bool:
+        """此次啟用是否只靠教師測試模式放行（用於標記，不影響資格判定）。"""
+        confidence = self.validation_pass_confidence(model.get("model_id") or "")
+        return teacher_test_mode() and (
+            self._needs_review(model) or confidence is None or confidence < activation_min_confidence()
+        )
 
     def _activation_eligibility(self, model: dict) -> tuple[bool, str, str]:
         """啟用資格（2026-10-23 教師指令）：全部滿足才可啟用，任一不滿足給原因碼。
 
         a. health = OK（nc 與類別名一致、有訓練痕跡、mAP50 ≥ 門檻，門檻不降）
         b. 有真實圖片驗證通過紀錄，且最高信心 ≥ activation_min_confidence()（0.6）
-        c. 類別名恰好為 CW_F / CCW_F / CW_B / CCW_B（FOUR_SIDE_HOVER 為其規範四類）
+        c. 類別名恰好為 CW / CCW（FOUR_SIDE_HOVER 為其規範四類）
         d. 非 DEMO_IMPORTED、非 quarantined、.pt 可讀；REJECTED 一律不得啟用；
            質量證據閘口（2026-10-21）的 REVIEW_REQUIRED 亦不得啟用
 
@@ -1228,11 +1346,11 @@ class VisionCenter:
             return False, "model_rejected", "模型已被駁回，不得啟用。"
         # d-④ DEMO 放寬匯入不得啟用（與正式匯入不同路）
         if model.get("validation_status") == "DEMO_IMPORTED" or model.get("status") == "DEMO_IMPORTED":
-            return False, "model_demo_imported_not_allowed", "DEMO 放寬匯入的模型不得啟用，請用正確四類資料重新訓練後匯入。"
+            return False, "model_demo_imported_not_allowed", "DEMO 放寬匯入的模型不得啟用，請用正確類別資料重新訓練後匯入。"
         # d-⑤ 質量證據閘口（2026-10-21 教師指令）：無評估證據／map50 低於門檻的
         # REVIEW_REQUIRED 一律不得啟用（_apply_quality_gate 亦註明「不得 ACTIVE」）。
         # A 硬規則（2026-10-23）在其之上疊加圖片驗證要求，兩者皆為硬門檻。
-        if model.get("validation_status") == "REVIEW_REQUIRED" or model.get("status") == "REVIEW_REQUIRED":
+        if self._needs_review(model) and not teacher_test_mode():
             return False, "model_review_required", "模型尚無足夠質量證據（REVIEW_REQUIRED：需 golden set 評估達標或 sandbox benchmark PASS），不得啟用。"
         # a. health = OK（優先用匯入時已存事實，缺失時當場檢查）
         health = model.get("health")
@@ -1243,7 +1361,7 @@ class VisionCenter:
             model.update(summarize(facts))
         if health != HEALTH_OK:
             return False, "model_health_not_ok", "模型健康度不是 OK（%s），不滿足啟用條件。" % (health or "無法判定")
-        # c. 類別名恰好為規範四類
+        # c. 類別名恰好為任務規範類別
         expected = self._expected_class_names(model.get("model_type") or "")
         actual = [str(name) for name in (model.get("class_names") or [])]
         if sorted(actual) != sorted(expected):
@@ -1253,7 +1371,7 @@ class VisionCenter:
         confidence = self.validation_pass_confidence(model.get("model_id") or "")
         if confidence is None:
             return False, "model_validation_required", "尚未通過圖片驗證（需有預測相符的真實推論紀錄）。"
-        if confidence < threshold:
+        if confidence < threshold and not teacher_test_mode():
             return False, "model_validation_confidence_too_low", "驗證通過紀錄的最高信心 %.4f 低於啟用門檻 %.2f。" % (confidence, threshold)
         return True, "", ""
 
@@ -1268,7 +1386,7 @@ class VisionCenter:
         啟用資格（2026-10-23 教師指令，「驗證通過才可啟用」硬規則）——全部滿足：
           a. health = OK（nc 與類別名一致、有訓練痕跡、mAP50 ≥ 門檻，門檻不降）
           b. 有真實圖片驗證通過紀錄，且最高信心 ≥ 0.6（ACTIVATION_MIN_CONFIDENCE）
-          c. 類別名恰好為 CW_F / CCW_F / CW_B / CCW_B（HOVER 任務為其規範四類）
+          c. 類別名恰好為 CW / CCW（HOVER 任務為其規範四類）
           d. 非 DEMO_IMPORTED、非 quarantined、.pt 可讀；REJECTED 不得啟用
         任一不滿足 → 拋出可追溯錯誤碼（model_health_not_ok /
         model_validation_required / model_validation_confidence_too_low /
@@ -1304,11 +1422,12 @@ class VisionCenter:
         eligible, reason_code, detail = self._activation_eligibility(model)
         if not eligible:
             raise ValueError(reason_code)
+        activation_mode = "TEACHER_TEST" if self._activation_is_teacher_test(model) else "FORMAL"
         previous = self.active_model(model["model_type"])
         for item in self.store.data["models"]:
             if item["model_type"] == model["model_type"] and item["status"] == "ACTIVE":
                 item.update(status="ARCHIVED", archived_by=activated_by, archived_at=utc_now())
-        model.update(status="ACTIVE", activated_by=activated_by, activated_at=utc_now())
+        model.update(status="ACTIVE", activated_by=activated_by, activated_at=utc_now(), activation_mode=activation_mode)
         self._write_manifest(path.parent, model)
         self.store.save()
         result = dict(model)
@@ -1699,6 +1818,8 @@ class VisionCenter:
         model = self._find("models", "model_id", model_id)
         if model.get("quarantined"):
             raise ModelValidationError("seed_model_quarantined")
+        if model.get("activation_mode") == "TEACHER_TEST":
+            raise ModelValidationError("seed_model_teacher_test")
         path = Path(model.get("file_path") or "")
         if not path.exists() or not os.access(str(path), os.R_OK):
             raise ModelValidationError("seed_model_file_unreadable")
@@ -2033,7 +2154,7 @@ class VisionCenter:
             raise ModelValidationError("image_required")
         width, height = float(image_width), float(image_height)
         detection = {
-            "class": "CW_F",
+            "class": "CW",
             "confidence": 0.76,
             "bbox": [width * 0.25, height * 0.25, width * 0.75, height * 0.75],
             "center_x": width * 0.5,
@@ -2523,8 +2644,8 @@ def _center(detection: dict) -> tuple[float, float]:
 
 def evaluate_prop(detections: list[dict], image_width: float, image_height: float, confidence_threshold: float = 0.5, rule_version: str = PROP_RULE_VERSION) -> dict:
     positions = {
-        "M1": {"expected": "CCW_F", "quadrant": "front_right"}, "M2": {"expected": "CCW_F", "quadrant": "rear_left"},
-        "M3": {"expected": "CW_F", "quadrant": "front_left"}, "M4": {"expected": "CW_F", "quadrant": "rear_right"},
+        "M1": {"expected": "CCW", "quadrant": "front_right"}, "M2": {"expected": "CCW", "quadrant": "rear_left"},
+        "M3": {"expected": "CW", "quadrant": "front_left"}, "M4": {"expected": "CW", "quadrant": "rear_right"},
     }
     buckets = {key: [] for key in positions}
     for detection in detections:
@@ -2533,7 +2654,9 @@ def evaluate_prop(detections: list[dict], image_width: float, image_height: floa
         buckets[key].append(detection)
     results = {}
     for key, definition in positions.items():
-        items = buckets[key]
+        # 模型會輸出大量低信心候選框：只讓達門檻的框參與判定；全未達門檻時保留最高信心一筆回報。
+        strong = [item for item in buckets[key] if float(item.get("confidence", 0)) >= confidence_threshold]
+        items = strong or sorted(buckets[key], key=lambda item: float(item.get("confidence", 0)), reverse=True)[:1]
         result = {"detected": None, "expected": definition["expected"], "blade_face": None, "confidence": None, "result": "INSUFFICIENT_DATA", "reason": "缺少槳葉", "reason_code": "MISSING_TARGET"}
         if len(items) > 1:
             result.update(reason="同一位置出現重複檢測", reason_code="DUPLICATE_DETECTION")
@@ -2541,48 +2664,29 @@ def evaluate_prop(detections: list[dict], image_width: float, image_height: floa
             item = items[0]
             detected = item.get("class") or item.get("className")
             confidence = float(item.get("confidence", 0))
-            result.update(detected=detected, blade_face="FRONT" if str(detected).endswith("_F") else "BACK", confidence=confidence)
+            result.update(detected=detected, confidence=confidence)
             if confidence < confidence_threshold:
                 result.update(reason="信心值過低，無法可靠判斷", reason_code="LOW_CONFIDENCE")
             elif detected == definition["expected"]:
-                result.update(result="PASS", reason="方向與槳面正確", reason_code="OK")
+                result.update(result="PASS", reason="旋向正確", reason_code="OK")
             else:
-                expected_rotation, expected_face = definition["expected"].split("_")
-                actual_rotation, actual_face = str(detected).split("_") if str(detected).count("_") == 1 else ("UNKNOWN", "UNKNOWN")
-                if actual_rotation != expected_rotation and actual_face != expected_face:
-                    code, reason = "ROTATION_AND_FACE_WRONG", "旋向與槳面都錯誤"
-                elif actual_rotation != expected_rotation:
-                    code, reason = "ROTATION_WRONG", "旋向錯誤"
-                else:
-                    code, reason = "FACE_WRONG", "方向正確、槳面錯誤"
-                result.update(result="NG", reason=reason, reason_code=code)
+                result.update(result="NG", reason="旋向錯誤", reason_code="ROTATION_WRONG")
         results[key] = result
     final = "PASS" if all(item["result"] == "PASS" for item in results.values()) else "INSUFFICIENT_DATA" if any(item["result"] == "INSUFFICIENT_DATA" for item in results.values()) else "NG"
     return {"rule_version": rule_version, "positions": results, "final_result": final}
 
 
-# 2026-10-29（接棒驗收）：CW／CCW 兩類對應規則。
-# 現有 PROP_DIRECTION 模型為四類（CW_F/CCW_F/CW_B/CCW_B = 旋向 × 槳面），
-# 但本輪只驗收「順時針 CW／逆時針 CCW」兩類。此對應規則將四類收斂為兩類，
-# 供教師圖片驗證時誠實顯示「原始模型類別 → 轉換後 CW/CCW」，絕不偽裝模型本身是兩類模型。
-#
-# 【語義基礎，P7-C 確認】CW／CCW 是「螺旋槳旋向（規格方向）」，不是「觀察視角方向」：
-#   1. 四類 = 旋向 × 槳面 兩個正交屬性；_F／_B 表示槳面（面向相機的那一面），
-#      CW／CCW 表示該槳葉在機體座標系中的旋轉方向。因此剝離槳面後保留旋向是合法的。
-#   2. 規則引擎 evaluate_prop 要求 M1 右前／M2 左後 = CCW_F、M3 左前／M4 右後 = CW_F；
-#      對角馬達同旋向是機體力矩平衡的機械事實，與相機位置無關。
-#   3. 設計文件明定「畫面解讀以 F450 機頭方向定義為準」，並把「畫面方向無法可靠取得」
-#      列為 REVIEW 條件 → 系統明確分離「旋向屬性」與「視角」，視角不明時拒絕猜測。
-# 因此本對應表【只可用於顯示與統計】，不得用於 PASS／NG 判定；
-# 判定仍必須走 evaluate_prop 的四類規則，否則等於把四類規則靜默降級為兩類。
+# 2026-11-02 教師指令：PROP_DIRECTION 正式改為 CW／CCW 兩類，判定只看旋向，不再判斷槳面。
+# 舊四類模型的歷史紀錄仍可能帶 _F／_B 後綴，此表只用於顯示與統計時收斂成旋向。
 PROP_DIRECTION_TO_CW_CCW = {
+    "CW": "CW", "CCW": "CCW",
     "CW_F": "CW", "CW_B": "CW",
     "CCW_F": "CCW", "CCW_B": "CCW",
 }
 
 
 def map_prop_to_direction(class_name: str | None) -> str | None:
-    """將四類槳葉類別收斂為 CW／CCW 兩類；無法對應（含空值/未知類別）回 None。"""
+    """將槳葉類別收斂為 CW／CCW；無法對應（含空值/未知類別）回 None。"""
     if not class_name:
         return None
     return PROP_DIRECTION_TO_CW_CCW.get(str(class_name).strip().upper())

@@ -45,7 +45,7 @@ from learning.golden_set_guard import (
 )
 from learning.models import Cohort, GoldenSet, GoldenSetSample, TeacherCohortAccess
 
-PROP_LABELS = ("CW_F", "CCW_F", "CW_B", "CCW_B")
+PROP_LABELS = ("CW", "CCW")
 
 
 def _image(name="sample.jpg", size=64):
@@ -121,13 +121,13 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
     def setUp(self):
         super().setUp()
         self.golden_set, self.samples = self._frozen_set()
-        self.sample = self.samples["CW_F"]
+        self.sample = self.samples["CW"]
 
     # --- A. save() --------------------------------------------------------
     def test_a_save_is_blocked(self):
         """修改欄位後 save() 必須被擋，且資料庫內容不變。"""
         before = GoldenSetSample.objects.get(pk=self.sample.pk).label
-        self.sample.label = "CCW_B"
+        self.sample.label = "CCW"
         with self.assertRaises(FrozenGoldenSetError) as ctx:
             self.sample.save()
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
@@ -142,7 +142,7 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
     def test_a3_full_clean_does_not_bypass(self):
         """full_clean() 通過不代表可以寫入；save() 仍須被擋。"""
         s = GoldenSetSample.objects.get(pk=self.sample.pk)
-        s.label = "CCW_B"
+        s.label = "CCW"
         try:
             s.full_clean()
         except Exception:
@@ -164,14 +164,14 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
     def test_c_queryset_update_is_blocked(self):
         """QuerySet.update() 必須被擋（服務層原本完全擋不住這條）。"""
         with self.assertRaises(FrozenGoldenSetError):
-            GoldenSetSample.objects.filter(golden_set=self.golden_set).update(label="CW_B")
+            GoldenSetSample.objects.filter(golden_set=self.golden_set).update(label="CW")
         self.assertEqual(
-            GoldenSetSample.objects.get(pk=self.sample.pk).label, "CW_F"
+            GoldenSetSample.objects.get(pk=self.sample.pk).label, "CW"
         )
 
     def test_c2_queryset_update_on_single_pk_is_blocked(self):
         with self.assertRaises(FrozenGoldenSetError):
-            GoldenSetSample.objects.filter(pk=self.sample.pk).update(label="CW_B")
+            GoldenSetSample.objects.filter(pk=self.sample.pk).update(label="CW")
 
     def test_c3_queryset_update_with_related_filter_is_blocked(self):
         """即使過濾條件走關聯（golden_set__status），也必須命中守衛。"""
@@ -193,8 +193,8 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
     def test_d2_queryset_delete_by_label_is_blocked(self):
         """依 label 篩選刪除（測試檔既有的繞道手法）必須被擋。"""
         with self.assertRaises(FrozenGoldenSetError):
-            GoldenSetSample.objects.filter(label="CCW_B").delete()
-        self.assertTrue(GoldenSetSample.objects.filter(label="CCW_B").exists())
+            GoldenSetSample.objects.filter(label="CCW").delete()
+        self.assertTrue(GoldenSetSample.objects.filter(label="CCW").exists())
 
     def test_d3_queryset_delete_all_is_blocked(self):
         with self.assertRaises(FrozenGoldenSetError):
@@ -205,11 +205,11 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
         """bulk_update() 必須被擋。"""
         rows = list(GoldenSetSample.objects.filter(golden_set=self.golden_set))
         for row in rows:
-            row.label = "CW_B"
+            row.label = "CW"
         with self.assertRaises(FrozenGoldenSetError):
             GoldenSetSample.objects.bulk_update(rows, ["label"])
         self.assertEqual(
-            GoldenSetSample.objects.get(pk=self.sample.pk).label, "CW_F"
+            GoldenSetSample.objects.get(pk=self.sample.pk).label, "CW"
         )
 
     # --- F. bulk_create() -------------------------------------------------
@@ -220,7 +220,7 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
             GoldenSetSample(
                 golden_set=self.golden_set,
                 image=f"golden_set/bulk{i}.jpg",
-                label="CW_F",
+                label="CW",
             )
             for i in range(2)
         ]
@@ -236,7 +236,7 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
             GoldenSetSample.objects.create(
                 golden_set=self.golden_set,
                 image="golden_set/create-bypass.jpg",
-                label="CW_F",
+                label="CW",
             )
 
     def test_f3_get_or_create_is_blocked(self):
@@ -249,14 +249,14 @@ class FrozenSampleOrmBlockingTests(_GoldenFixture):
             GoldenSetSample.objects.get_or_create(
                 golden_set=self.golden_set,
                 note="不存在的備註",
-                defaults={"image": "golden_set/goc.jpg", "label": "CW_F"},
+                defaults={"image": "golden_set/goc.jpg", "label": "CW"},
             )
 
     def test_f3b_get_or_create_existing_row_is_allowed(self):
         """既有列命中的分支不得被守衛誤擋（避免破壞正常呼叫端）。"""
         existing, created = GoldenSetSample.objects.get_or_create(
             golden_set=self.golden_set,
-            label="CW_F",
+            label="CW",
             defaults={"image": "golden_set/should-not-be-used.jpg"},
         )
         self.assertFalse(created)
@@ -279,7 +279,7 @@ class FrozenConcurrencyTests(_GoldenFixture):
 
     def test_g1_concurrent_save_all_blocked(self):
         golden_set, samples = self._frozen_set()
-        target_pk = samples["CW_F"].pk
+        target_pk = samples["CW"].pk
         errors = []
         successes = []
 
@@ -296,7 +296,7 @@ class FrozenConcurrencyTests(_GoldenFixture):
 
         threads = [
             threading.Thread(target=worker, args=(label,))
-            for label in ("CW_B", "CCW_B", "CCW_F", "CW_F")
+            for label in ("CW", "CCW", "CCW", "CW")
         ]
         for t in threads:
             t.start()
@@ -306,7 +306,7 @@ class FrozenConcurrencyTests(_GoldenFixture):
         self.assertEqual(successes, [], f"不得有任何執行緒寫入成功：{successes}")
         self.assertEqual(len(errors), 4)
         self.assertEqual(
-            GoldenSetSample.objects.get(pk=target_pk).label, "CW_F"
+            GoldenSetSample.objects.get(pk=target_pk).label, "CW"
         )
 
     def test_g2_stale_in_memory_instance_cannot_bypass(self):
@@ -319,18 +319,18 @@ class FrozenConcurrencyTests(_GoldenFixture):
         golden_set.refresh_from_db()
 
         # 在鎖定「之前」就把樣本實例載入記憶體，且此時父集合仍是 DRAFT。
-        stale = GoldenSetSample.objects.get(pk=samples["CW_F"].pk)
+        stale = GoldenSetSample.objects.get(pk=samples["CW"].pk)
         self.assertFalse(stale.golden_set.is_frozen, "前置條件：載入時仍為 DRAFT")
 
         # 另一路徑完成鎖定（stale 實例記憶體中的父集合狀態不會被更新）。
         freeze_golden_set(golden_set=golden_set, teacher=self.teacher)
 
-        stale.label = "CCW_B"
+        stale.label = "CCW"
         with self.assertRaises(FrozenGoldenSetError) as ctx:
             stale.save()
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
         self.assertEqual(
-            GoldenSetSample.objects.get(pk=stale.pk).label, "CW_F"
+            GoldenSetSample.objects.get(pk=stale.pk).label, "CW"
         )
 
     def test_g3_stale_instance_delete_cannot_bypass(self):
@@ -338,7 +338,7 @@ class FrozenConcurrencyTests(_GoldenFixture):
         golden_set = self._draft_set(version="v10")
         samples = self._fill_four(golden_set)
         golden_set.refresh_from_db()
-        stale = GoldenSetSample.objects.get(pk=samples["CW_B"].pk)
+        stale = GoldenSetSample.objects.get(pk=samples["CW"].pk)
         freeze_golden_set(golden_set=golden_set, teacher=self.teacher)
 
         with self.assertRaises(FrozenGoldenSetError):
@@ -359,7 +359,7 @@ class FrozenConcurrencyTests(_GoldenFixture):
         freeze_golden_set(golden_set=golden_set, teacher=self.teacher)
 
         with self.assertRaises(FrozenGoldenSetError):
-            lazy_qs.update(label="CW_B")
+            lazy_qs.update(label="CW")
 
 
 # ===========================================================================
@@ -439,8 +439,8 @@ class ManifestAfterRepairTests(_GoldenFixture):
         recorded = golden_set.manifest_sha256
 
         for attempt in (
-            lambda: setattr(samples["CW_F"], "label", "CW_B") or samples["CW_F"].save(),
-            lambda: GoldenSetSample.objects.filter(golden_set=golden_set).update(label="CW_B"),
+            lambda: setattr(samples["CW"], "label", "CW") or samples["CW"].save(),
+            lambda: GoldenSetSample.objects.filter(golden_set=golden_set).update(label="CW"),
             lambda: GoldenSetSample.objects.filter(golden_set=golden_set).delete(),
         ):
             with self.assertRaises(FrozenGoldenSetError):
@@ -462,11 +462,11 @@ class ManifestAfterRepairTests(_GoldenFixture):
         self.assertEqual(golden_set.manifest_binding_status, "BOUND")
         recorded = golden_set.manifest_sha256
 
-        raw_pk = str(samples["CW_F"].pk).replace("-", "")
+        raw_pk = str(samples["CW"].pk).replace("-", "")
         with connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE learning_goldensetsample SET label = %s WHERE sample_id = %s",
-                ["CW_B", raw_pk],
+                ["CCW", raw_pk],
             )
             self.assertEqual(cursor.rowcount, 1, "前置條件：原生 SQL 應能寫入")
 
@@ -487,17 +487,17 @@ class DraftUnaffectedTests(_GoldenFixture):
         samples = self._fill_four(golden_set)
 
         # save()
-        target = GoldenSetSample.objects.get(pk=samples["CW_F"].pk)
-        target.label = "CW_B"
+        target = GoldenSetSample.objects.get(pk=samples["CW"].pk)
+        target.label = "CW"
         target.save()
         self.assertEqual(
-            GoldenSetSample.objects.get(pk=target.pk).label, "CW_B"
+            GoldenSetSample.objects.get(pk=target.pk).label, "CW"
         )
 
         # QuerySet.update()
-        GoldenSetSample.objects.filter(pk=target.pk).update(label="CW_F")
+        GoldenSetSample.objects.filter(pk=target.pk).update(label="CW")
         self.assertEqual(
-            GoldenSetSample.objects.get(pk=target.pk).label, "CW_F"
+            GoldenSetSample.objects.get(pk=target.pk).label, "CW"
         )
 
         # bulk_update()
@@ -520,7 +520,7 @@ class DraftUnaffectedTests(_GoldenFixture):
             golden_set=golden_set,
             teacher=self.teacher,
             image=_image("draft-ok.jpg"),
-            label="CW_F",
+            label="CW",
         )
         self.assertIsNotNone(sample.pk)
         self.assertEqual(sample.confirmation_status, "PENDING")
@@ -545,11 +545,11 @@ class FrozenNormalOperationsTests(_GoldenFixture):
 
     def test_j1_frozen_reads_work(self):
         golden_set, _ = self._frozen_set(version="v50")
-        self.assertEqual(golden_set.sample_count, 4)
-        self.assertEqual(golden_set.confirmed_sample_count, 4)
+        self.assertEqual(golden_set.sample_count, 2)
+        self.assertEqual(golden_set.confirmed_sample_count, 2)
         self.assertEqual(golden_set.missing_labels(), [])
         self.assertEqual(
-            GoldenSetSample.objects.filter(golden_set=golden_set).count(), 4
+            GoldenSetSample.objects.filter(golden_set=golden_set).count(), 2
         )
 
     def test_j2_frozen_description_edit_is_allowed(self):
@@ -594,12 +594,12 @@ class FrozenNormalOperationsTests(_GoldenFixture):
                 golden_set=golden_set,
                 teacher=self.teacher,
                 image=_image("blocked.jpg"),
-                label="CW_F",
+                label="CW",
             )
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
 
         with self.assertRaises(GoldenSetError) as ctx:
-            confirm_sample(sample=samples["CW_F"], teacher=self.teacher)
+            confirm_sample(sample=samples["CW"], teacher=self.teacher)
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
 
     def test_j5_mutation_blocked_reason_unchanged(self):

@@ -40,17 +40,17 @@ class HyphenClassValidator:
     """模擬 sub-2f8d（2026-10-18）：數量一致、名稱用連字號——需要類別名對照表。"""
 
     def validate(self, _path, model_type):
-        return {"class_names": ["CCW-F", "CCW-B", "CW-F", "CW-B"], "task": "detect", "smoke_inference": True}
+        return {"class_names": ["cw-prop", "ccw-prop"], "task": "detect", "smoke_inference": True}
 
 
 class FixtureRunner:
     def predict(self, _path, image_bytes):
         if image_bytes == b"prop-image":
             return [
-                {"class": "CW_F", "confidence": .9, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20},
-                {"class": "CCW_F", "confidence": .9, "bbox": [70, 10, 90, 30], "center_x": 80, "center_y": 20},
-                {"class": "CCW_F", "confidence": .9, "bbox": [10, 70, 30, 90], "center_x": 20, "center_y": 80},
-                {"class": "CW_F", "confidence": .9, "bbox": [70, 70, 90, 90], "center_x": 80, "center_y": 80},
+                {"class": "CW", "confidence": .9, "bbox": [10, 10, 30, 30], "center_x": 20, "center_y": 20},
+                {"class": "CCW", "confidence": .9, "bbox": [70, 10, 90, 30], "center_x": 80, "center_y": 20},
+                {"class": "CCW", "confidence": .9, "bbox": [10, 70, 30, 90], "center_x": 20, "center_y": 80},
+                {"class": "CW", "confidence": .9, "bbox": [70, 70, 90, 90], "center_x": 80, "center_y": 80},
             ]
         return [{"class": "FRONT", "confidence": .9, "bbox": [40, 40, 60, 60], "center_x": 50, "center_y": 50}]
 
@@ -130,7 +130,7 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(self.direct_client.post("/api/v1/vision/models/missing/activate", json={}).status_code, 403)
 
     def test_prop_check_uses_rule_engine_and_records_hard_example(self):
-        detections = [{"class": "CCW_F", "confidence": .2, "bbox": [70, 20, 80, 30]}]
+        detections = [{"class": "CCW", "confidence": .2, "bbox": [70, 20, 80, 30]}]
         response = self.client.post("/api/v1/vision/prop-check", json={"detections": detections, "image_width": 100, "image_height": 100, "input_reference": "frame://1"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["final_result"], "INSUFFICIENT_DATA")
@@ -146,8 +146,8 @@ class VisionApiTests(unittest.TestCase):
 
     def test_hard_example_review_build_next_and_export(self):
         dataset = self.create_dataset()
-        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "LOW_CONFIDENCE", "input_reference": "frame://1", "prediction": "CW_F", "confidence": .2})
-        reviewed = self.client.post(f"/api/v1/vision/hard-examples/{sample['sample_id']}/review", headers=self.teacher, json={"decision": "CONFIRMED", "teacher_label": "CW_F"})
+        sample = self.center.create_hard_example({"model_type": "PROP_DIRECTION", "model_version": "v1", "source": "LOW_CONFIDENCE", "input_reference": "frame://1", "prediction": "CW", "confidence": .2})
+        reviewed = self.client.post(f"/api/v1/vision/hard-examples/{sample['sample_id']}/review", headers=self.teacher, json={"decision": "CONFIRMED", "teacher_label": "CW"})
         self.assertEqual(reviewed.json()["review_status"], "CONFIRMED")
         child = self.client.post(f"/api/v1/vision/datasets/{dataset['dataset_id']}/build-next", headers=self.teacher, json={"hard_example_ids": [sample["sample_id"]], "new_samples": []})
         self.assertEqual(child.json()["dataset_version"], "v2")
@@ -247,7 +247,7 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["outcome"], "mapping_required")
-        self.assertEqual(body["class_names_actual"], ["CCW-F", "CCW-B", "CW-F", "CW-B"])
+        self.assertEqual(body["class_names_actual"], ["cw-prop", "ccw-prop"])
         self.assertEqual(body["class_names_expected"], list(PROP_CLASSES))
         self.assertEqual(self.center.list_models(), [])
 
@@ -263,7 +263,7 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         error = response.json()["error"]
         self.assertEqual(error["message"], "model_class_names_mapping_required")
-        self.assertEqual(error["class_names_actual"], ["CCW-F", "CCW-B", "CW-F", "CW-B"])
+        self.assertEqual(error["class_names_actual"], ["cw-prop", "ccw-prop"])
         self.assertEqual(error["class_names_expected"], list(PROP_CLASSES))
         listed = self.client.get("/api/v1/vision/submissions", headers=self.teacher).json()
         self.assertEqual(listed[0]["status"], "SUBMITTED")
@@ -277,10 +277,10 @@ class VisionApiTests(unittest.TestCase):
         response = self.client.post(f"/api/v1/vision/submissions/{sid}/import", headers=self.teacher, json={
             "model_name": "imp", "version": "v1", "dataset_id": dataset["dataset_id"],
             "dataset_version": "v1", "rule_version": "r1",
-            "class_name_mapping": {"CCW-F": "CCW_F", "CCW-B": "CCW_B", "CW-F": "CW_F", "CW-B": "CW_B"},
+            "class_name_mapping": {"cw-prop": "CW", "ccw-prop": "CCW"},
         })
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["class_names"], ["CCW_F", "CCW_B", "CW_F", "CW_B"])
+        self.assertEqual(response.json()["class_names"], ["CW", "CCW"])
         self.assertEqual(response.json()["validation_status"], "VALIDATED")
         listed = self.client.get("/api/v1/vision/submissions", headers=self.teacher).json()
         self.assertEqual(listed[0]["status"], "IMPORTED")
@@ -316,7 +316,7 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(result.json()["status"], "DEMO_SIMULATED")
         self.assertTrue(result.json()["simulation_mode"])
         self.assertEqual(result.json()["model"]["submission_id"], sid)
-        self.assertEqual(result.json()["detections"][0]["class"], "CW_F")
+        self.assertEqual(result.json()["detections"][0]["class"], "CW")
 
     def test_submission_requires_pt_extension(self):
         bad = self.student.post("/api/v1/vision/submissions", json={

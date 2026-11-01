@@ -31,7 +31,7 @@ class EvidenceType(str, Enum):
 
 class ModelTaskType(str, Enum):
     """AI 目標檢測任務類型；本輪只啟用 PROP_DETECTION，其餘預留。"""
-    PROP_DETECTION = "PROP_DETECTION"       # 槳葉方向與正反面辨識（CW_F / CCW_F / CW_B / CCW_B）
+    PROP_DETECTION = "PROP_DETECTION"       # 螺旋槳旋向辨識（CW / CCW）
     HOVER_DETECTION = "HOVER_DETECTION"     # 四面懸停（預留）
     MOTOR_DETECTION = "MOTOR_DETECTION"     # 馬達檢測（預留）
     GPS_DETECTION = "GPS_DETECTION"         # GPS 檢測（預留）

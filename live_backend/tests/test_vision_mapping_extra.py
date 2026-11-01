@@ -25,12 +25,12 @@ from app.main import create_app
 
 RAW_SIX = ["CCE-F", "CCF-b", "CCW-F", "CCW-B", "CW-F", "CW-B"]
 MAPPING = {
-    "CCE-F": "CCW_F",
-    "CCF-b": "CCW_B",
-    "CCW-F": "CCW_F",
-    "CCW-B": "CCW_B",
-    "CW-F": "CW_F",
-    "CW-B": "CW_B",
+    "CCE-F": "CCW",
+    "CCF-b": "CCW",
+    "CCW-F": "CCW",
+    "CCW-B": "CCW",
+    "CW-F": "CW",
+    "CW-B": "CW",
 }
 TEACHER = {"X-FDE-Role": "teacher", "X-FDE-Teacher-ID": "teacher-1"}
 
@@ -171,7 +171,7 @@ class MappingImportTests(Base):
     def test_registered_mapping_marks_temporary_and_four_classes(self):
         model = self.import_mapped()
         self.assertEqual(model["class_names"], list(vc.PROP_CLASSES))
-        self.assertEqual(model["class_count"], 4)
+        self.assertEqual(model["class_count"], 2)
         self.assertEqual(model["class_count_raw"], 6)
         self.assertTrue(model["temporary_mapping"])
         self.assertEqual(model["temporary_mapping_label"], "映射版·臨時")
@@ -221,7 +221,7 @@ class DedupTests(unittest.TestCase):
         ]
         mapped, removed = vc.apply_mapping_to_detections(detections, MAPPING)
         self.assertEqual(removed, 1)
-        self.assertEqual([item["class"] for item in mapped], ["CCW_F", "CW_F"])
+        self.assertEqual([item["class"] for item in mapped], ["CCW", "CW"])
         self.assertEqual(mapped[0]["confidence"], 0.93)
         self.assertEqual(mapped[0]["class_raw"], "CCW-F")
 
@@ -251,7 +251,7 @@ class PropCheckRealPathTests(Base):
         # 4 筆原始偵測 → 映射後同框合併 1 筆 = 3 筆
         self.assertEqual(len(classes), 3, classes)
         self.assertNotIn("CCE-F", classes)
-        self.assertIn("CCW_F", classes)
+        self.assertIn("CCW", classes)
         # 4 個位置都要有結果，且格式完整
         self.assertEqual(set(body["positions"]), {"M1", "M2", "M3", "M4"})
         self.assertIn(body["final_result"], {"PASS", "NG", "INSUFFICIENT_DATA"})

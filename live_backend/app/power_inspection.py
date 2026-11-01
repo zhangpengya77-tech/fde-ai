@@ -1,4 +1,4 @@
-"""POWER_INSPECTION_V1 的隔離模型與 MP4 巡檢核心。
+"""POWER_INSPECTION_V1 的隔離模型與影片巡檢核心。
 
 此模組只接受已雜湊核驗的模型描述；它不在 Web 程序載入 PyTorch
 checkpoint。實際推論必須由後續的隔離 worker 執行，並把每幀結果交回
@@ -19,6 +19,14 @@ POWER_INSPECTION_V1 = "POWER_INSPECTION_V1"
 TEACHING_TRIAL = "TEACHING_TRIAL"
 MODEL_ARTIFACT_SUFFIXES = {".pt", ".onnx"}
 DATA_YAML_SUFFIXES = {".yaml", ".yml"}
+# 手機、電腦與 DJI 常見拍攝格式；.lrf 是 DJI 低解析度代理檔，內容為 MP4。
+VIDEO_SUFFIXES = {
+    ".mp4", ".mov", ".m4v", ".3gp", ".3g2", ".lrf", ".webm", ".mkv", ".avi",
+    ".wmv", ".mts", ".m2ts", ".ts", ".mpg", ".mpeg",
+}
+VIDEO_HEADER_BYTES = 256
+# MOV 檔不一定以 ftyp 開頭，舊版 QuickTime 可能直接是 moov／mdat／wide。
+ISO_BMFF_BOX_TYPES = {b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip", b"pnot"}
 
 
 class PowerInspectionValidationError(ValueError):
@@ -158,15 +166,26 @@ def assess_model_delivery(manifest: dict, allowed_root: Path) -> dict:
     return {"status": "VALIDATED", "missing": [], "verified": verified}
 
 
-def validate_mp4_upload(filename: str, content: bytes, *, max_bytes: int = 512 * 1024 * 1024) -> dict:
-    """在寫檔前驗證 MP4 基本容器簽章；不把任意檔案當成影片。"""
-    if Path(str(filename)).suffix.lower() != ".mp4":
+def is_video_container(header: bytes) -> bool:
+    """以檔頭辨識常見影片容器；真正可解碼性仍由隔離 worker 確認。"""
+    return (
+        header[4:8] in ISO_BMFF_BOX_TYPES
+        or header[:4] == b"\x1a\x45\xdf\xa3"  # Matroska / WebM
+        or (header[:4] == b"RIFF" and header[8:12] == b"AVI ")
+        or header[:8] == b"\x30\x26\xb2\x75\x8e\x66\xcf\x11"  # ASF / WMV
+        or header[:4] in (b"\x00\x00\x01\xba", b"\x00\x00\x01\xb3")  # MPEG-PS
+        or header[:1] == b"\x47" and header[188:189] == b"\x47"  # MPEG-TS
+        or header[4:5] == b"\x47" and header[196:197] == b"\x47"  # M2TS / AVCHD
+    )
+
+
+def validate_video_upload(filename: str, content: bytes, *, max_bytes: int = 512 * 1024 * 1024) -> dict:
+    """在寫檔前驗證影片基本容器簽章；不把任意檔案當成影片。"""
+    if Path(str(filename)).suffix.lower() not in VIDEO_SUFFIXES:
         raise PowerInspectionValidationError("video_extension_invalid")
     if not content or len(content) > max_bytes:
         raise PowerInspectionValidationError("video_size_invalid")
-    # ISO BMFF/MP4 的 major-brand box 位於 bytes 4..7；這不是完整解碼，
-    # 真正可解碼性仍由隔離 worker 在資源限制下確認。
-    if len(content) < 12 or content[4:8] != b"ftyp":
+    if len(content) < 12 or not is_video_container(content[:VIDEO_HEADER_BYTES]):
         raise PowerInspectionValidationError("video_container_invalid")
     return {"filename": Path(filename).name, "size_bytes": len(content), "sha256": hashlib.sha256(content).hexdigest()}
 

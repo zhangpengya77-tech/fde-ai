@@ -59,7 +59,7 @@ class _FakeBox:
 
 
 class _FakePrediction:
-    names = {0: "CW_F", 1: "CCW_F", 2: "CW_B", 3: "CCW_B"}
+    names = {0: "CW", 1: "CCW", 2: "CW", 3: "CCW"}
 
     def __init__(self, boxes):
         self.boxes = boxes
@@ -223,7 +223,7 @@ class CandidateFloorContractTests(unittest.TestCase):
         self.assertIs(call["verbose"], False)
         # 偵測事實必須原樣流向呼叫端（不被修復改動）。
         self.assertEqual(len(detections), 1)
-        self.assertEqual(detections[0]["class"], "CW_F")
+        self.assertEqual(detections[0]["class"], "CW")
         self.assertAlmostEqual(detections[0]["confidence"], 0.42, places=5)
         self.assertEqual(detections[0]["bbox"], [10, 10, 30, 30])
 
@@ -231,7 +231,7 @@ class CandidateFloorContractTests(unittest.TestCase):
     def test_no_candidate_boxes_reports_no_detection(self):
         model = self.upload()
         RecordingYOLO.boxes = []
-        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW").json()
         self.assertEqual(body["detection_count"], 0)
         self.assertEqual(body["verdict"]["reason_code"], "NO_DETECTION")
         self.assertEqual(body["verdict"]["decision"], "INSUFFICIENT_DATA")
@@ -241,7 +241,7 @@ class CandidateFloorContractTests(unittest.TestCase):
     def test_low_candidate_confidence_is_not_a_pass(self):
         model = self.upload()
         RecordingYOLO.boxes = [_FakeBox([10, 10, 30, 30], 0, 0.0071)]
-        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW").json()
         self.assertEqual(body["detection_count"], 1)
         self.assertEqual(body["verdict"]["reason_code"], "LOW_CONFIDENCE")
         self.assertEqual(body["verdict"]["decision"], "INSUFFICIENT_DATA")
@@ -253,15 +253,15 @@ class CandidateFloorContractTests(unittest.TestCase):
     def test_candidate_meets_teacher_threshold_is_judged(self):
         model = self.upload()
         RecordingYOLO.boxes = [_FakeBox([10, 10, 30, 30], 0, 0.93)]
-        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW").json()
         self.assertEqual(body["verdict"]["reason_code"], "OK")
         self.assertEqual(body["verdict"]["decision"], "MATCH")
-        self.assertEqual(body["verdict"]["predicted_class"], "CW_F")
+        self.assertEqual(body["verdict"]["predicted_class"], "CW")
 
     def test_candidate_meets_threshold_but_wrong_class_is_mismatch(self):
         model = self.upload()
         RecordingYOLO.boxes = [_FakeBox([10, 10, 30, 30], 1, 0.93)]
-        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW_F").json()
+        body = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW").json()
         self.assertEqual(body["verdict"]["reason_code"], "CLASS_MISMATCH")
         self.assertEqual(body["verdict"]["decision"], "MISMATCH")
 
@@ -270,7 +270,7 @@ class CandidateFloorContractTests(unittest.TestCase):
         model = self.upload()
         before = dict(self.center.get_model(model["model_id"]))
         RecordingYOLO.raise_exc = RuntimeError("boom")
-        response = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW_F")
+        response = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW")
         self.assertEqual(response.status_code, 422, response.text)
         body = response.json()
         self.assertEqual(body["error"]["code"], "image_validation_failed")
@@ -282,7 +282,7 @@ class CandidateFloorContractTests(unittest.TestCase):
     def test_api_response_fields_are_consistent(self):
         model = self.upload()
         RecordingYOLO.boxes = [_FakeBox([10, 10, 30, 30], 0, 0.93)]
-        response = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW_F")
+        response = self.validate_image(model["model_id"], b"image-bytes", expected_class="CW")
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["model"]["model_id"], model["model_id"])
@@ -290,14 +290,14 @@ class CandidateFloorContractTests(unittest.TestCase):
         self.assertEqual(body["model"]["file_hash"], model["file_hash"])
         self.assertEqual(body["model"]["class_names"], list(PROP_CLASSES))
         self.assertEqual(body["detection_count"], 1)
-        self.assertEqual(body["detections"][0]["class"], "CW_F")
+        self.assertEqual(body["detections"][0]["class"], "CW")
         self.assertAlmostEqual(body["detections"][0]["confidence"], 0.93, places=5)
         self.assertEqual(
             body["verdict"]["predicted_confidence"],
             round(body["detections"][0]["confidence"], 6),
         )
         self.assertEqual(body["verdict"]["predicted_class"], body["detections"][0]["class"])
-        self.assertEqual(body["verdict"]["expected_class"], "CW_F")
+        self.assertEqual(body["verdict"]["expected_class"], "CW")
         self.assertEqual(body["validated_by"], "teacher-1")
         # 唯讀驗證不得改動 ACTIVE 指標。
         self.assertIsNone(self.center.active_model("PROP_DIRECTION"))

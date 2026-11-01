@@ -25,7 +25,7 @@
 
 <section class="section-block">
   <h2>前置條件</h2>
-  <p class="muted">以下判斷由服務層<strong>自行查詢資料庫</strong>重新驗證（Golden Set 存在、task_id 相容、狀態為 FROZEN、有已確認樣本、四類完整、模型仍為合法候選）；本頁顯示的清單不作為安全判斷依據。</p>
+  <p class="muted">以下判斷由服務層<strong>自行查詢資料庫</strong>重新驗證（Golden Set 存在、task_id 相容、狀態為 FROZEN、有已確認樣本、類別完整、模型仍為合法候選）；本頁顯示的清單不作為安全判斷依據。</p>
   {% if ready_blocked_reason %}
   <p class="muted">{{ ready_blocked_reason }}</p>
   <button class="button secondary" type="button" disabled aria-disabled="true">執行 Golden Test（尚不可用）</button>
@@ -40,14 +40,14 @@
   <h2>測試集完整度</h2>
   <p class="muted">
     共 {{ completeness_rows|length }} 個版本；契約版本 {{ contract_version }}。
-    <strong>結構完整</strong>＝四類皆有已確認樣本；
+    <strong>結構完整</strong>＝兩類皆有已確認樣本；
     <strong>可供正式評估</strong>＝在結構完整之上，另需已鎖定、且每類至少 {{ min_samples_per_class }} 張已確認樣本。
     每類僅一張照片<strong>不得</strong>宣稱為可靠的正式模型評估集。
   </p>
   {% if completeness_rows %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Golden Set</th><th>版本</th><th>狀態</th><th>完整度</th><th>照片 / 已確認</th><th>四類分佈</th><th>Manifest</th><th>說明</th></tr></thead>
+      <thead><tr><th>Golden Set</th><th>版本</th><th>狀態</th><th>完整度</th><th>照片 / 已確認</th><th>類別分佈</th><th>Manifest</th><th>說明</th></tr></thead>
       <tbody>
       {% for row in completeness_rows %}
         <tr>

@@ -4,8 +4,8 @@
 RULE_TEMPLATES = {
     "PROP_DIRECTION": {
         "template_id": "PROP_DIRECTION_V1",
-        "title": "槳葉正反面與方向規則",
-        "model_classes": ("CW_F", "CCW_F", "CW_B", "CCW_B"),
+        "title": "槳葉旋向規則",
+        "model_classes": ("CW", "CCW"),
         # F450 機體位置（教師 2026-10-08 確認）：M1 右前、M2 左後、M3 左前、M4 右後。
         # 必須與 live_backend/app/vision_center.py evaluate_prop 的位置定義一致，不得各自為政。
         "motor_positions": {

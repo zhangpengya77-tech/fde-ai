@@ -552,7 +552,7 @@
       <div class="vc-empty">「{{ task_label }}」目前尚未啟用任何正式模型。</div>
     {% endif %}
 
-    {# ---- 動作一：啟用（健康度 OK＋圖片驗證最高信心≥0.6＋類別規範四類＋非 DEMO 放寬匯入，才可啟用；2026-10-23 恢復硬規則）---- #}
+    {# ---- 動作一：啟用（健康度 OK＋圖片驗證最高信心≥0.6＋類別符合任務＋非 DEMO 放寬匯入，才可啟用；2026-10-23 恢復硬規則）---- #}
     <h3 style="margin:18px 0 8px;font-size:16px">設為正式模型</h3>
     {% if settable_active_models %}
       <div class="vc-sublist">
@@ -560,7 +560,7 @@
         <div class="vc-sub">
           <div class="vc-sub-head">
             <span class="vc-sub-title">{{ m.model_name|default:m.model_id }}（{{ m.version }}）</span>
-            <span class="vc-badge {{ m.eligibility_css }}" title="{{ m.eligibility_title }}">{{ m.eligibility_label }}</span>
+            <span class="vc-badge {{ m.eligibility_css }}" title="{{ m.eligibility_title }}">{% if m.activation_teacher_test %}教師測試（實驗）{% else %}{{ m.eligibility_label }}{% endif %}</span>
           </div>
           <div class="vc-meta">
             來源：{{ m.source_label|default:"—" }}｜上傳：{{ m.uploaded_at_display|default:"—" }}｜最近驗證：{{ m.last_image_validation.predicted_class|default:"—" }}
@@ -571,14 +571,14 @@
               {% csrf_token %}
               <input type="hidden" name="task_id" value="{{ task_id }}">
               <input type="hidden" name="model_id" value="{{ m.model_id }}">
-              <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>設為正式模型</button>
+              <button class="vc-cta primary" type="submit" {% if not api_online %}disabled{% endif %}>{% if m.activation_teacher_test %}啟用為教師測試模型{% else %}設為正式模型{% endif %}</button>
             </form>
           </div>
         </div>
         {% endfor %}
       </div>
     {% else %}
-      <div class="vc-empty">暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻 0.6（需健康度 OK、類別為規範四類、非 DEMO 放寬匯入）。</div>
+      <div class="vc-empty">暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻（需健康度 OK、類別符合任務、非 DEMO 放寬匯入）。</div>
     {% endif %}
 
     {# ---- 動作二：歸檔（每個非 ACTIVE 模型一枚按鈕；原因改由確認框內填寫）---- #}
@@ -801,7 +801,7 @@
       <p class="vc-zone-sub">如實說明各項資源的準備情況。缺少的標示為「尚缺」，需要授權或人工確認的標示為「待確認」。匯出功能<strong>尚未接通</strong>，不會出現假的匯出按鈕。</p>
       <div class="vc-status-grid">
         <div class="vc-status-item"><div class="vc-s-label">可用模型檔案（best.pt）</div><div class="vc-s-value done">{{ resources.model_count }} 個（已備）</div></div>
-        <div class="vc-status-item"><div class="vc-s-label">類別對應（4 類契約）</div><div class="vc-s-value done">已定義</div></div>
+        <div class="vc-status-item"><div class="vc-s-label">類別對應</div><div class="vc-s-value done">已定義</div></div>
         <div class="vc-status-item"><div class="vc-s-label">授權訓練圖片</div><div class="vc-s-value miss">{{ resources.images }}</div></div>
         <div class="vc-status-item"><div class="vc-s-label">YOLO 標註檔</div><div class="vc-s-value miss">{{ resources.labels }}</div></div>
         <div class="vc-status-item"><div class="vc-s-label">本輪驗證報告</div><div class="vc-s-value warn">{{ resources.validation_reports }}（本次登入期間，尚未持久化）</div></div>
@@ -836,7 +836,7 @@
   };
 
   // ---- 場景③ 啟用：驗證通過才可啟用（2026-10-23 教師指令，恢復硬規則）----
-  // 啟用資格（健康度 OK＋圖片驗證最高信心≥0.6＋類別為規範四類＋非 DEMO 放寬匯入）
+  // 啟用資格（健康度 OK＋圖片驗證最高信心≥0.6＋類別符合任務＋非 DEMO 放寬匯入）
   // 由 Live activate_model 硬判定；按鈕僅在 activation_eligible 時渲染，後端亦逐条把關，
   // 不符合一律拒絕（override 路徑已撤銷），無法覆寫。
   window.vcActivate = function (form, modelName, facts) {

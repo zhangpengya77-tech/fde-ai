@@ -1,7 +1,7 @@
 """R6-B「測｜AI 視覺檢測」兩入口契約測試。
 
 2026-11-01 教師指令：正式檢測入口固定為
-① F450 螺旋槳 CW/CCW 方向辨識、② 電力巡檢 MP4 影片上傳與分析；
+① F450 螺旋槳 CW/CCW 方向辨識、② 電力巡檢影片上傳與分析；
 四面懸停保留於「歷史／擴充」區，不得佔用電力巡檢正式入口。
 """
 
@@ -30,7 +30,7 @@ class PowerInspectionEntryContractTests(TestCase):
         self.assertIn('id="powerInspectionInput"', self.page)
         self.assertIn('id="powerInspectionButton"', self.page)
         self.assertIn('id="powerInspectionResult"', self.page)
-        self.assertIn("電力巡檢 MP4 影片上傳與分析", self.page)
+        self.assertIn("電力巡檢影片上傳與分析", self.page)
 
     def test_hover_is_moved_into_legacy_details_block(self):
         self.assertIn('class="inspection-legacy-panel"', self.page)
@@ -78,6 +78,12 @@ class PowerInspectionApiUploadTests(TestCase):
         self.cohort = Cohort.objects.create(cohort_id="2099-PE", name="電力巡檢 E 班")
         self.student = create_student_account("power-e@example.test", "巡檢學員 E")
         self.enrollment = enroll_student(self.student, self.cohort)
+
+    def test_get_reports_denial_before_the_video_is_sent(self):
+        response = self.client.get(reverse("learning:power_inspection_api_upload"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["csrf_token"])
+        self.assertEqual(response.json()["denied"]["code"], "login_required")
 
     def _mp4(self):
         return SimpleUploadedFile(

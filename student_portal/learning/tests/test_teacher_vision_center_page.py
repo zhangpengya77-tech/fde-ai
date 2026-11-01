@@ -179,7 +179,7 @@ class VisionCenterOnlineTests(TestCase):
             "file_size": 5_512_149,
             "uploaded_at": "2026-10-10T02:00:00Z",
             "activated_at": "2026-10-10T03:00:00Z" if status == "ACTIVE" else None,
-            "class_names": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "class_names": ["CW", "CCW"],
         }
 
     def _patch_common(self, models):
@@ -244,12 +244,12 @@ class VisionCenterOnlineTests(TestCase):
         """② 圖片驗證的 AJAX 分支必須回傳 JSON（不整頁重導），供前端即時畫框。"""
         result = {
             "model": {"model_id": "PROP_1", "model_type": self.TASK, "version": "v1", "class_names": []},
-            "detections": [{"class": "CW_F", "confidence": 0.9, "bbox": [10, 10, 30, 30]}],
+            "detections": [{"class": "CW", "confidence": 0.9, "bbox": [10, 10, 30, 30]}],
             "detection_count": 1,
             "verdict": {
-                "decision": "MATCH", "predicted_class": "CW_F", "predicted_confidence": 0.9,
+                "decision": "MATCH", "predicted_class": "CW", "predicted_confidence": 0.9,
                 "max_confidence": 0.9,
-                "expected_class": "CW_F", "reason": "相符", "reason_code": "OK", "rule_version": "v1",
+                "expected_class": "CW", "reason": "相符", "reason_code": "OK", "rule_version": "v1",
                 "confidence_threshold": 0.5,
             },
             "validated_at": "2026-10-10T04:00:00Z",
@@ -262,7 +262,7 @@ class VisionCenterOnlineTests(TestCase):
                 {
                     "task_id": self.TASK,
                     "model_id": "PROP_1",
-                    "expected_class": "CW_F",
+                    "expected_class": "CW",
                     "test_image": SimpleUploadedFile("t.jpg", b"jpegbytes", content_type="image/jpeg"),
                 },
                 HTTP_X_REQUESTED_WITH="XMLHttpRequest",
@@ -357,7 +357,7 @@ class VisionCenterOnlineTests(TestCase):
         # 只以一顆合併狀態徽章標示（細節放 hover）。
         self.assertFalse(models[0]["can_set_active"])
         self.assertEqual(models[0]["eligibility"], "needs_validation")
-        self.assertContains(response, "暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻 0.6")
+        self.assertContains(response, "暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻")
 
     # ---- 區域二：圖片驗證 ----
 
@@ -371,18 +371,18 @@ class VisionCenterOnlineTests(TestCase):
                 "model_type": self.TASK,
                 "model_name": "模型 v1",
                 "version": "v1",
-                "class_names": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+                "class_names": ["CW", "CCW"],
             },
             "detections": [
-                {"class": "CW_F", "confidence": 0.9312, "bbox": [10, 10, 30, 30]},
-                {"class": "CCW_F", "confidence": 0.8877, "bbox": [70, 10, 90, 30]},
+                {"class": "CW", "confidence": 0.9312, "bbox": [10, 10, 30, 30]},
+                {"class": "CCW", "confidence": 0.8877, "bbox": [70, 10, 90, 30]},
             ],
             "detection_count": 2,
             "verdict": {
                 "decision": "MATCH",
-                "predicted_class": "CW_F",
+                "predicted_class": "CW",
                 "predicted_confidence": 0.9312,
-                "expected_class": "CW_F",
+                "expected_class": "CW",
                 "reason": "預測類別與教師標註相符。",
                 "reason_code": "OK",
                 "rule_version": "PROP_RULE_v1",
@@ -398,7 +398,7 @@ class VisionCenterOnlineTests(TestCase):
                 {
                     "task_id": self.TASK,
                     "model_id": "PROP_1",
-                    "expected_class": "CW_F",
+                    "expected_class": "CW",
                     "test_image": SimpleUploadedFile("t.jpg", b"jpegbytes", content_type="image/jpeg"),
                 },
                 follow=True,
@@ -408,7 +408,7 @@ class VisionCenterOnlineTests(TestCase):
         payload = response.context["validation_result"]
         self.assertIsNotNone(payload)
         self.assertEqual(payload["detection_count"], 2)
-        self.assertEqual(payload["predicted_class"], "CW_F")
+        self.assertEqual(payload["predicted_class"], "CW")
         self.assertEqual(payload["verdict"], "MATCH")
         self.assertEqual(len(payload["boxes"]), 2)
         self.assertEqual(payload["boxes"][0]["bbox"], [10, 10, 30, 30])
@@ -420,13 +420,13 @@ class VisionCenterOnlineTests(TestCase):
         """不得只憑信心值判定；低信心必須是「資料不足」。"""
         result = {
             "model": {"model_id": "PROP_1", "model_type": self.TASK, "version": "v1", "class_names": []},
-            "detections": [{"class": "CW_F", "confidence": 0.12, "bbox": [1, 1, 2, 2]}],
+            "detections": [{"class": "CW", "confidence": 0.12, "bbox": [1, 1, 2, 2]}],
             "detection_count": 1,
             "verdict": {
                 "decision": "INSUFFICIENT_DATA",
-                "predicted_class": "CW_F",
+                "predicted_class": "CW",
                 "predicted_confidence": 0.12,
-                "expected_class": "CW_F",
+                "expected_class": "CW",
                 "reason": "信心值低於門檻，不足以判定。",
                 "reason_code": "LOW_CONFIDENCE",
                 "confidence_threshold": 0.5,
@@ -548,7 +548,7 @@ class VisionCenterOnlineTests(TestCase):
 
     # ---- 區域一：導入學員模型 ----
 
-    READY_PREFLIGHT = {"outcome": "ready", "class_names_actual": ["CW_F", "CCW_F", "CW_B", "CCW_B"], "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"]}
+    READY_PREFLIGHT = {"outcome": "ready", "class_names_actual": ["CW", "CCW"], "class_names_expected": ["CW", "CCW"]}
 
     @patch("learning.views.vision_api.create_dataset")
     @patch("learning.views.vision_api.import_submission")
@@ -604,7 +604,7 @@ class VisionCenterOnlineTests(TestCase):
     ):
         """教師指令③：names 為空 → UI 提示「模型缺少類別名稱，請補充」，不駁回。"""
         preflight.return_value = {
-            "outcome": "class_names_missing", "class_names_actual": [], "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "outcome": "class_names_missing", "class_names_actual": [], "class_names_expected": ["CW", "CCW"],
         }
         response = self.client.post(
             reverse("learning:teacher_vision_center_import"),
@@ -629,7 +629,7 @@ class VisionCenterOnlineTests(TestCase):
     ):
         """類別數量不符 → 明確實際/預期數量，不駁回、不對照。"""
         preflight.return_value = {
-            "outcome": "mismatch", "class_names_actual": ["A", "B"], "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "outcome": "mismatch", "class_names_actual": ["A", "B", "C"], "class_names_expected": ["CW", "CCW"],
         }
         response = self.client.post(
             reverse("learning:teacher_vision_center_import"),
@@ -637,7 +637,7 @@ class VisionCenterOnlineTests(TestCase):
             follow=True,
         )
         self.assertContains(response, "導入失敗")
-        self.assertContains(response, "實際 2 類、預期 4 類")
+        self.assertContains(response, "實際 3 類、預期 2 類")
         import_sub.assert_not_called()
         # F-A（2026-10-20）：隔離 Live 呼叫，測試期間不得發出真實 HTTP。
         record_failure.assert_called_once()
@@ -651,8 +651,8 @@ class VisionCenterOnlineTests(TestCase):
         """教師指令③：數量一致名稱不同 → 對照表介面；不建資料集、不動提交。"""
         preflight.return_value = {
             "outcome": "mapping_required",
-            "class_names_actual": ["CCW-F", "CCW-B", "CW-F", "CW-B"],
-            "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "class_names_actual": ["cw-prop", "ccw-prop"],
+            "class_names_expected": ["CW", "CCW"],
         }
         response = self.client.post(
             reverse("learning:teacher_vision_center_import"),
@@ -660,7 +660,7 @@ class VisionCenterOnlineTests(TestCase):
             follow=True,
         )
         self.assertContains(response, "類別名對照")
-        self.assertContains(response, "CCW-F")
+        self.assertContains(response, "ccw-prop")
         self.assertContains(response, "確認對照並導入")
         create_ds.assert_not_called()
         import_sub.assert_not_called()
@@ -675,15 +675,15 @@ class VisionCenterOnlineTests(TestCase):
         session["vision_class_name_mapping"] = {
             "submission_id": "sub-2f8d",
             "task_id": self.TASK,
-            "class_names_actual": ["CCW-F", "CCW-B", "CW-F", "CW-B"],
-            "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "class_names_actual": ["cw-prop", "ccw-prop"],
+            "class_names_expected": ["CW", "CCW"],
         }
         session.save()
         response = self.client.post(
             reverse("learning:teacher_vision_center_apply_mapping"),
             {
                 "task_id": self.TASK,
-                "map_0": "CCW_F", "map_1": "CCW_B", "map_2": "CW_F", "map_3": "CW_B",
+                "map_0": "CW", "map_1": "CCW",
             },
             follow=True,
         )
@@ -691,7 +691,7 @@ class VisionCenterOnlineTests(TestCase):
         called_kwargs = import_sub.call_args.kwargs
         self.assertEqual(
             called_kwargs["class_name_mapping"],
-            {"CCW-F": "CCW_F", "CCW-B": "CCW_B", "CW-F": "CW_F", "CW-B": "CW_B"},
+            {"cw-prop": "CW", "ccw-prop": "CCW"},
         )
 
     @patch("learning.views.vision_api.create_dataset")
@@ -705,8 +705,8 @@ class VisionCenterOnlineTests(TestCase):
         """
         preflight.return_value = {
             "outcome": "mapping_required",
-            "class_names_actual": ["CCW-F", "CCW-B", "CW-F", "CW-B"],
-            "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "class_names_actual": ["cw-prop", "ccw-prop"],
+            "class_names_expected": ["CW", "CCW"],
         }
         create_ds.return_value = {"dataset_id": "ds-1", "dataset_version": "v1"}
         import_sub.return_value = {"model_id": "PROP_mapped"}
@@ -722,7 +722,7 @@ class VisionCenterOnlineTests(TestCase):
             reverse("learning:teacher_vision_center_apply_mapping"),
             {
                 "task_id": self.TASK,
-                "map_0": "CCW_F", "map_1": "CCW_B", "map_2": "CW_F", "map_3": "CW_B",
+                "map_0": "CW", "map_1": "CCW",
             },
             follow=True,
         )
@@ -731,7 +731,7 @@ class VisionCenterOnlineTests(TestCase):
         called_kwargs = import_sub.call_args.kwargs
         self.assertEqual(
             called_kwargs["class_name_mapping"],
-            {"CCW-F": "CCW_F", "CCW-B": "CCW_B", "CW-F": "CW_F", "CW-B": "CW_B"},
+            {"cw-prop": "CW", "ccw-prop": "CCW"},
         )
 
     def test_apply_mapping_rejects_incomplete_mapping_and_keeps_form(self):
@@ -740,13 +740,13 @@ class VisionCenterOnlineTests(TestCase):
         session["vision_class_name_mapping"] = {
             "submission_id": "sub-2f8d",
             "task_id": self.TASK,
-            "class_names_actual": ["CCW-F", "CCW-B", "CW-F", "CW-B"],
-            "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+            "class_names_actual": ["cw-prop", "ccw-prop"],
+            "class_names_expected": ["CW", "CCW"],
         }
         session.save()
         response = self.client.post(
             reverse("learning:teacher_vision_center_apply_mapping"),
-            {"task_id": self.TASK, "map_0": "CCW_F", "map_1": "CCW_B"},
+            {"task_id": self.TASK, "map_0": "CCW", "map_1": "CCW"},
             follow=True,
         )
         self.assertContains(response, "對照表不完整或重複")
@@ -876,7 +876,7 @@ class VisionCenterTaskIsolationTests(TestCase):
         hover = self.client.get(
             reverse("learning:teacher_vision_center"), {"task": "FOUR_SIDE_HOVER"}
         )
-        self.assertEqual(prop.context["class_options"], ["CW_F", "CCW_F", "CW_B", "CCW_B"])
+        self.assertEqual(prop.context["class_options"], ["CW", "CCW"])
         self.assertEqual(hover.context["class_options"], ["FRONT", "RIGHT", "BACK", "LEFT"])
 
     @patch("learning.views.vision_api.rollback_model")
@@ -954,14 +954,14 @@ class VisionSubmissionWrapperTests(TestCase):
             "error": {
                 "code": "import_failed",
                 "message": "model_class_names_mapping_required",
-                "class_names_actual": ["CCW-F", "CCW-B", "CW-F", "CW-B"],
-                "class_names_expected": ["CW_F", "CCW_F", "CW_B", "CCW_B"],
+                "class_names_actual": ["cw-prop", "ccw-prop"],
+                "class_names_expected": ["CW", "CCW"],
             }
         })
         typed = vision_submission._rejected(self._http_error(body))
         self.assertIsInstance(typed, vision_submission.VisionImportClassNamesMappingRequired)
-        self.assertEqual(typed.class_names_actual, ["CCW-F", "CCW-B", "CW-F", "CW-B"])
-        self.assertEqual(typed.class_names_expected, ["CW_F", "CCW_F", "CW_B", "CCW_B"])
+        self.assertEqual(typed.class_names_actual, ["cw-prop", "ccw-prop"])
+        self.assertEqual(typed.class_names_expected, ["CW", "CCW"])
 
     def test_missing_class_names_body_becomes_typed_exception(self):
         from learning import vision_submission
@@ -1343,10 +1343,10 @@ class VisionCenterScene3SlimTests(VisionCenterOnlineTests):
             "task_id": self.TASK,
             "verdict": verdict,
             "evidence_source": "REAL_INFERENCE",
-            "predicted_class": "CW_F" if verdict == "MATCH" else "CCW_B",
+            "predicted_class": "CW" if verdict == "MATCH" else "CCW",
             "predicted_confidence": 0.91 if verdict == "MATCH" else 0.0027,
             "confidence_threshold": 0.5,
-            "expected_class": "CW_F",
+            "expected_class": "CW",
             "validated_at": "2026-10-22T10:00:00Z",
         }
 
@@ -1441,7 +1441,7 @@ class VisionCenterScene3SlimTests(VisionCenterOnlineTests):
         """從未做過圖片驗證：只出現一行提示，不出現任何按鈕。"""
         plain = self._model("PROP_plain", status="VALIDATED")
         response = self._get_scene3([plain])
-        self.assertContains(response, "暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻 0.6")
+        self.assertContains(response, "暫無可啟用的模型，請先完成圖片驗證並達到啟用門檻")
         self.assertEqual(response.context["settable_active_models"], [])
         self.assertNotContains(
             response, reverse("learning:teacher_vision_center_activate")
@@ -1794,7 +1794,7 @@ class VisionCenterScene2PassCtaTests(VisionCenterOnlineTests):
             "model_id": "PROP_1",
             "model_name": "模型 v1",
             "model_version": "v1",
-            "predicted_class": "CW_F",
+            "predicted_class": "CW",
             "predicted_confidence": 0.91,
             "highest_confidence": 0.91,
             "confidence_threshold_used": 0.5,
@@ -1911,12 +1911,12 @@ class VisionCenterScene2PassCtaTests(VisionCenterOnlineTests):
         """AJAX 驗證回應必須帶 verdict_passed，供前端即時顯示／隱藏捷徑。"""
         result = {
             "model": {"model_id": "PROP_1", "model_type": self.TASK, "version": "v1", "class_names": []},
-            "detections": [{"class": "CW_F", "confidence": 0.9, "bbox": [10, 10, 30, 30]}],
+            "detections": [{"class": "CW", "confidence": 0.9, "bbox": [10, 10, 30, 30]}],
             "detection_count": 1,
             "verdict": {
-                "decision": "MATCH", "predicted_class": "CW_F", "predicted_confidence": 0.9,
+                "decision": "MATCH", "predicted_class": "CW", "predicted_confidence": 0.9,
                 "max_confidence": 0.9,
-                "expected_class": "CW_F", "reason": "相符", "reason_code": "OK", "rule_version": "v1",
+                "expected_class": "CW", "reason": "相符", "reason_code": "OK", "rule_version": "v1",
                 "confidence_threshold": 0.5,
             },
             "validated_at": "2026-10-22T10:00:00Z",
@@ -1929,7 +1929,7 @@ class VisionCenterScene2PassCtaTests(VisionCenterOnlineTests):
                 {
                     "task_id": self.TASK,
                     "model_id": "PROP_1",
-                    "expected_class": "CW_F",
+                    "expected_class": "CW",
                     "test_image": SimpleUploadedFile("t.jpg", b"jpegbytes", content_type="image/jpeg"),
                 },
                 HTTP_X_REQUESTED_WITH="XMLHttpRequest",
@@ -1965,7 +1965,7 @@ class VisionCohortGuardTests(TestCase):
         ):
             response = self._post(
                 "learning:teacher_vision_center_validate_submission",
-                {"task_id": self.TASK, "submission_id": "sub-x", "expected_class": "CW_F"},
+                {"task_id": self.TASK, "submission_id": "sub-x", "expected_class": "CW"},
             )
         self.assertEqual(response.status_code, 403)
 
@@ -1977,7 +1977,7 @@ class VisionCohortGuardTests(TestCase):
             validate.side_effect = RuntimeError("vision_api_unavailable")
             response = self._post(
                 "learning:teacher_vision_center_validate_submission",
-                {"task_id": self.TASK, "submission_id": "sub-x", "expected_class": "CW_F"},
+                {"task_id": self.TASK, "submission_id": "sub-x", "expected_class": "CW"},
             )
         # 通過隔離檢查後才由視圖處理；此處 Live 不可用 → 走視圖自身的錯誤路徑（非 403 隔離）
         self.assertNotEqual(response.status_code, 403)

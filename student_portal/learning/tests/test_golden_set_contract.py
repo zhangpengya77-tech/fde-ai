@@ -164,7 +164,7 @@ class GoldenSetContractTests(TestCase):
 
         with self.assertRaises(GoldenSetError) as ctx:
             add_sample(
-                golden_set=golden_set, teacher=self.teacher, image=_image("new.jpg"), label="CW_F"
+                golden_set=golden_set, teacher=self.teacher, image=_image("new.jpg"), label="CW"
             )
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
 
@@ -307,16 +307,16 @@ class GoldenSetContractTests(TestCase):
         # (1) ORM 路徑必須被擋（修復後的預防能力）。
         from learning.golden_set_guard import FrozenGoldenSetError
 
-        sample = golden_set.samples.first()
+        sample = golden_set.samples.filter(label="CW").first()
         with self.assertRaises(FrozenGoldenSetError):
-            GoldenSetSample.objects.filter(pk=sample.pk).update(label="CW_B")
+            GoldenSetSample.objects.filter(pk=sample.pk).update(label="CCW")
 
         # (2) 原生 SQL 屬殘餘風險，不受守衛保護，但仍會被偵測到。
         raw_pk = str(sample.pk).replace("-", "")
         with connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE learning_goldensetsample SET label = %s WHERE sample_id = %s",
-                ["CW_B", raw_pk],
+                ["CCW", raw_pk],
             )
 
         golden_set.refresh_from_db()
@@ -371,7 +371,7 @@ class GoldenSetCompletenessTests(TestCase):
     def test_a_incomplete_when_classes_missing(self):
         """缺類別 → INCOMPLETE。"""
         golden_set = self._set(per_class=1)
-        GoldenSetSample.objects.filter(label="CCW_B").delete()
+        GoldenSetSample.objects.filter(label="CCW").delete()
         golden_set.refresh_from_db()
 
         self.assertEqual(completeness_level(golden_set), COMPLETENESS_INCOMPLETE)

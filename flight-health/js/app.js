@@ -55,7 +55,7 @@ const DEMO_PAYLOAD = {
     health_cards: [
       {
         card_id: "propulsion",
-        title: "01 動力健康",
+        title: "03 馬達動力",
         status: "ABNORMAL",
         display_status: "需要檢查",
         main_finding: "飛控持續要求某一側多出力，飛機動力可能不夠平衡。",
@@ -63,7 +63,7 @@ const DEMO_PAYLOAD = {
       },
       {
         card_id: "battery",
-        title: "02 電池健康",
+        title: "02 電池電源",
         status: "NORMAL",
         display_status: "正常",
         main_finding: "現有數據未發現明顯供電異常。",
@@ -71,15 +71,15 @@ const DEMO_PAYLOAD = {
       },
       {
         card_id: "gps",
-        title: "03 定位健康",
+        title: "06 GPS 定位",
         status: "NORMAL",
         display_status: "正常",
         main_finding: "現有定位數據沒有觸發異常規則。",
         next_action: "按標準飛前檢查繼續觀察。"
       },
       {
-        card_id: "stability",
-        title: "04 姿態穩定",
+        card_id: "attitude",
+        title: "04 姿態控制",
         status: "NOTICE",
         display_status: "注意",
         main_finding: "這一項出現需要留意的變化，目前不能直接認定零件損壞。",
@@ -87,23 +87,23 @@ const DEMO_PAYLOAD = {
       },
       {
         card_id: "rc-signal",
-        title: "05 遙控信號",
+        title: "07 遙控鏈路",
         status: "NORMAL",
         display_status: "正常",
         main_finding: "本次未發現遙控信號相關異常記錄。",
         next_action: "按標準飛前檢查繼續觀察。"
       },
       {
-        card_id: "flight-mode",
-        title: "06 飛行模式",
+        card_id: "safety_events",
+        title: "01 飛行安全事件",
         status: "NOTICE",
         display_status: "注意",
-        main_finding: "飛行模式出現需要留意的變化（含失控保護相關記錄）。",
+        main_finding: "飛行中出現需要留意的事件（含失控保護相關記錄）。",
         next_action: "請老師協助確認當時的操作條件與飛行模式記錄。"
       },
       {
-        card_id: "altitude",
-        title: "07 高度控制",
+        card_id: "vibration",
+        title: "05 機身振動",
         status: "INSUFFICIENT_DATA",
         display_status: "無法判斷",
         main_finding: "本次日誌資料不足，無法評估這一項。",
@@ -111,7 +111,7 @@ const DEMO_PAYLOAD = {
       },
       {
         card_id: "sensors",
-        title: "08 飛控傳感器",
+        title: "08 傳感器與安全設定",
         status: "INSUFFICIENT_DATA",
         display_status: "無法判斷",
         main_finding: "本次日誌資料不足，無法評估這一項。",
@@ -543,6 +543,10 @@ async function startAnalysis() {
 
     // 3. 觸發分析（後端統一解析引擎：教師模型 → 否則內建規則引擎，真實解析 .bin）
     const aResp = await fetch(`${apiBase}/flights/${AppState.flightSessionId}/analyze`, { method: "POST" });
+    // 422 = 後端判定檔案不是可解析的飛控日誌（最常見：下載未完成、內容仍是空白）
+    if (aResp.status === 422) {
+      throw new Error("這份日誌無法讀取，檔案可能尚未下載完成或已損壞。請確認下載已完成，或重新下載後再上傳；建議用 USB 或直接讀取 SD 卡。");
+    }
     if (!aResp.ok) throw new Error("日誌分析處理失敗 (HTTP " + aResp.status + ")");
 
     // 4. 讀取學員安全結果（/result 端點：只含 student_view + ai_diagnosis，不含教師原始證據鏈）
@@ -687,17 +691,16 @@ function renderReportPage() {
   // 八項健康卡：從後端 student_view.health_cards 讀取（固定順序 01→08）。
   // 學員層絕無 PWM / PID / EKF / HDOP / 原始規則編號。
   // 唯一權威映射：後端 builtin_rule_engine.CARD_DEFS 的 card_id → 前端 DOM 卡片 id。
-  //   propulsion / battery / gps / stability / rc-signal / flight-mode / altitude / sensors
-  // 前端不再保留任何歷史別名（positioning / rc_signal / flight_mode / altitude_control），
-  // 以免契約漂移被「雙 key 兼容」掩蓋；未知 card_id 於下方明確記錄，不靜默丟棄。
+  //   safety_events / battery / propulsion / attitude / vibration / gps / rc-signal / sensors
+  // 未知 card_id 於下方明確記錄，不靜默丟棄。
   const cardIdMap = {
-    propulsion: "propulsion-card",
+    safety_events: "safety-events-card",
     battery: "battery-card",
+    propulsion: "propulsion-card",
+    attitude: "attitude-card",
+    vibration: "vibration-card",
     gps: "gps-card",
-    stability: "stability-card",
     "rc-signal": "rc-signal-card",
-    "flight-mode": "flight-mode-card",
-    altitude: "altitude-card",
     sensors: "sensors-card"
   };
 
@@ -865,9 +868,9 @@ function determineStatus(subsystem) {
   // 優先讀取 student_view.health_cards
   const sv = data?.student_view;
   if (sv?.health_cards) {
-    const subMap = { motors: "propulsion", battery: "battery", gps: "gps", vibration: "stability" };
+    const subMap = { motors: "propulsion", battery: "battery", gps: "gps", vibration: "vibration" };
     const cardId = subMap[subsystem];
-    const card = cardId ? sv.health_cards.find((c) => c.card_id === cardId) : null;
+    const card = cardId ? sv.health_cards.find((c) => canonicalCardId(c.card_id) === cardId) : null;
     if (card) {
       // 統一走 normalizeSeverity：同時相容舊枚舉（NORMAL/NOTICE/ABNORMAL/INSUFFICIENT_DATA）
       // 與後端現行枚舉（normal/inspect/danger/unknown）；避免真實日誌一律被誤判為 unassessed。
@@ -932,22 +935,22 @@ function normalizeSeverity(statusStr) {
 }
 
 // ── 2026-10-17 P0 修復：已知兩套後端契約的 card_id 歸一化 ──────────────────────
-// 沙箱內建引擎 / 參考後端（本倉）使用：propulsion|battery|gps|stability|rc-signal|flight-mode|altitude|sensors
-// 教師正式診斷主機（:8040，D:\FDE-Flight-Health-AI）使用：propulsion|battery|positioning|stability|rc_signal|flight_mode|altitude_control|sensors
+// 沙箱內建引擎 / 參考後端（本倉）使用舊八卡：propulsion|battery|gps|stability|rc-signal|flight-mode|altitude|sensors
+// 教師正式診斷主機（:8040，D:\FDE-Flight-Health-AI）使用：safety_events|battery|propulsion|attitude|vibration|positioning|rc_signal|sensors
 // 兩套命名皆為「已知且刻意的契約」，此處僅做顯式橋接（非雙 key 掩蓋漂移）：
 //   未知 id 仍回傳 null 並明確記錄，不靜默丟棄。
 const CARD_ID_CANONICAL = {
+  safety_events: "safety_events",
+  "flight-mode": "safety_events",
   propulsion: "propulsion",
   battery: "battery",
   positioning: "gps",
   gps: "gps",
-  stability: "stability",
+  attitude: "attitude",
+  stability: "attitude",
+  vibration: "vibration",
   "rc-signal": "rc-signal",
   rc_signal: "rc-signal",
-  "flight-mode": "flight-mode",
-  flight_mode: "flight-mode",
-  altitude: "altitude",
-  altitude_control: "altitude",
   sensors: "sensors",
 };
 
@@ -967,10 +970,10 @@ function evaluateCorrelator() {
   const notes = AppState.pilotFeedback.notes || "";
 
   const statusOf = (cid) => {
-    const c = cards.find((x) => x.card_id === cid);
+    const c = cards.find((x) => canonicalCardId(x.card_id) === cid);
     return c ? normalizeSeverity(c.status) : "unknown";
   };
-  const cardOf = (cid) => cards.find((x) => x.card_id === cid) || null;
+  const cardOf = (cid) => cards.find((x) => canonicalCardId(x.card_id) === cid) || null;
   const motorSev = statusOf("propulsion");
   const gpsSev = statusOf("gps");
   const hasMotorIssue = symptoms.some((s) => ["左右漂", "起飛容易翻", "油門很大但飛不起來"].includes(s));

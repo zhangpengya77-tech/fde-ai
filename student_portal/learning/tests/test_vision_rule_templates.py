@@ -8,7 +8,7 @@ class VisionRuleTemplateTests(SimpleTestCase):
         template = template_for_task("PROP_DIRECTION")
 
         self.assertEqual(template["template_id"], "PROP_DIRECTION_V1")
-        self.assertEqual(template["model_classes"], ("CW_F", "CCW_F", "CW_B", "CCW_B"))
+        self.assertEqual(template["model_classes"], ("CW", "CCW"))
         # F450 機體位置（教師 2026-10-08 確認），需與 evaluate_prop 位置定義一致。
         self.assertEqual(template["motor_positions"], {
             "M1": "右前",

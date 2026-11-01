@@ -52,7 +52,7 @@ class P1ModelSubmissionTests(unittest.TestCase):
         ev = resp.json()["evidence"]
         self.assertEqual(ev["evidence_type"], "YOLO_MODEL")
         self.assertEqual(ev["metadata"]["model_status"], "UPLOADED")
-        self.assertEqual(ev["metadata"]["expected_classes"], ["CW_F", "CCW_F", "CW_B", "CCW_B"])
+        self.assertEqual(ev["metadata"]["expected_classes"], ["CW", "CCW"])
         self.assertEqual(ev["metadata"]["model_filename"], "best.pt")
 
     # 2. 非 .pt 主模型被拒絕

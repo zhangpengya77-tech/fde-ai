@@ -2,7 +2,7 @@
 
 安全立場（2026-10-10 教師指令）：
     1. 沒有真實推論結果時，不得顯示假檢測框、假可信度或假 PASS。
-    2. 未找到符合 CW_F／CCW_F／CW_B／CCW_B 的真實模型時，標示 WAITING_FOR_MODEL。
+    2. 未找到符合 CW／CCW 的真實模型時，標示 WAITING_FOR_MODEL。
     3. 本輪不使用 RAG；大模型只能根據「真實檢測結果 + 已確認安裝規則」提供繁中建議。
     4. 沒有真實辨識結果時，不呼叫大模型編造結論。
 
@@ -16,8 +16,8 @@ from django.conf import settings
 
 from .vision_rule_templates import template_for_task
 
-# 本輪承認的 PROP 四類契約（順序即模型索引，必須嚴格一致）。
-PROP_CLASS_CONTRACT = ("CW_F", "CCW_F", "CW_B", "CCW_B")
+# 本輪承認的 PROP 兩類契約（順序即模型索引，必須嚴格一致）。
+PROP_CLASS_CONTRACT = ("CW", "CCW")
 
 # 馬達位置（教師 2026-08-30／2026-10-08 確認）：M1 右前、M2 左後、M3 左前、M4 右後。
 MOTOR_POSITIONS = {
@@ -27,12 +27,12 @@ MOTOR_POSITIONS = {
     "M4": "右後",
 }
 
-# 每個馬達「預期」的方向與槳面；與 vision_rule_templates / vision_center.evaluate_prop 一致。
+# 每個馬達「預期」的旋向；與 vision_rule_templates / vision_center.evaluate_prop 一致。
 EXPECTED_BY_MOTOR = {
-    "M1": {"direction": "CCW", "face": "F"},
-    "M2": {"direction": "CCW", "face": "F"},
-    "M3": {"direction": "CW", "face": "F"},
-    "M4": {"direction": "CW", "face": "F"},
+    "M1": {"direction": "CCW"},
+    "M2": {"direction": "CCW"},
+    "M3": {"direction": "CW"},
+    "M4": {"direction": "CW"},
 }
 
 # 學員頁面可選的馬達清單（保持固定順序）。
@@ -122,9 +122,10 @@ def model_status() -> dict:
             **base,
             "status": "BLOCKED",
             "label": "類別契約不符",
-            "reason": "ACTIVE 模型類別必須依序為 CW_F、CCW_F、CW_B、CCW_B。",
+            "reason": "ACTIVE 模型類別必須依序為 CW、CCW。",
         }
-    if model.get("validation_status") != "VALIDATED":
+    teacher_test = settings.VISION_TEACHER_TEST_MODE and model.get("activation_mode") == "TEACHER_TEST"
+    if not teacher_test and model.get("validation_status") != "VALIDATED":
         return {
             **base,
             "status": "BLOCKED",
@@ -152,7 +153,7 @@ def model_status() -> dict:
         "confusion_matrix", "error_count", "low_confidence_count",
     }
     metrics = model.get("metrics") or {}
-    if model.get("evaluation_status") != "EVALUATED" or not required_metrics.issubset(metrics):
+    if not teacher_test and (model.get("evaluation_status") != "EVALUATED" or not required_metrics.issubset(metrics)):
         return {
             **base,
             "status": "BLOCKED",
@@ -168,6 +169,7 @@ def model_status() -> dict:
         "model_id": model.get("model_id"),
         "model_version": model.get("version"),
         "file_hash": model.get("file_hash"),
+        "teacher_test": bool(teacher_test),
     }
 
 
@@ -181,7 +183,6 @@ def rule_table() -> dict:
             motor: {
                 "position": MOTOR_POSITIONS[motor],
                 "direction": EXPECTED_BY_MOTOR[motor]["direction"],
-                "face": EXPECTED_BY_MOTOR[motor]["face"],
             }
             for motor in MOTOR_IDS
         },
@@ -190,15 +191,14 @@ def rule_table() -> dict:
 
 
 def classify_class_name(class_name: str) -> dict:
-    """把模型輸出的類別名解析為方向與槳面。
+    """把模型輸出的類別名解析為旋向。
 
-    只接受四類契約中的精確名稱；其餘一律視為未知，不做模糊對應。
+    只接受兩類契約中的精確名稱；其餘一律視為未知，不做模糊對應。
     """
     name = str(class_name or "").strip().upper()
     if name not in PROP_CLASS_CONTRACT:
-        return {"known": False, "class_name": name, "direction": None, "face": None}
-    direction, face = name.split("_", 1)
-    return {"known": True, "class_name": name, "direction": direction, "face": face}
+        return {"known": False, "class_name": name, "direction": None}
+    return {"known": True, "class_name": name, "direction": name}
 
 
 def evaluate_motor(motor: str, detection: dict | None, confidence_threshold: float = 0.55) -> dict:
@@ -217,10 +217,8 @@ def evaluate_motor(motor: str, detection: dict | None, confidence_threshold: flo
         "motor": motor,
         "position": MOTOR_POSITIONS[motor],
         "expected_direction": expected["direction"],
-        "expected_face": expected["face"],
         "detected_class": None,
         "detected_direction": None,
-        "detected_face": None,
         "confidence": None,
     }
     if detection is None:
@@ -231,28 +229,20 @@ def evaluate_motor(motor: str, detection: dict | None, confidence_threshold: flo
     confidence = detection.get("confidence")
     base["detected_class"] = parsed["class_name"] or None
     base["detected_direction"] = parsed["direction"]
-    base["detected_face"] = parsed["face"]
     base["confidence"] = confidence
 
     if not parsed["known"]:
         return {**base, "result": "INSUFFICIENT_DATA", "reason_code": "UNKNOWN_CLASS",
-                "reason": f"偵測到的類別「{detection.get('class_name')}」不在四類契約中。"}
+                "reason": f"偵測到的類別「{detection.get('class_name')}」不在 CW／CCW 兩類契約中。"}
     if not isinstance(confidence, (int, float)) or confidence < confidence_threshold:
         return {**base, "result": "INSUFFICIENT_DATA", "reason_code": "LOW_CONFIDENCE",
                 "reason": f"可信度 {confidence} 低於門檻 {confidence_threshold}，無法判定。"}
 
-    direction_ok = parsed["direction"] == expected["direction"]
-    face_ok = parsed["face"] == expected["face"]
-    if direction_ok and face_ok:
+    if parsed["direction"] == expected["direction"]:
         return {**base, "result": "PASS", "reason_code": "OK",
-                "reason": f"{motor}（{MOTOR_POSITIONS[motor]}）方向與槳面皆正確。"}
-    if not direction_ok and not face_ok:
-        code, reason = "ROTATION_AND_FACE_WRONG", "槳葉方向與正反面皆相反。"
-    elif not direction_ok:
-        code, reason = "ROTATION_WRONG", f"槳葉方向錯誤（偵測 {parsed['direction']}，應為 {expected['direction']}）。"
-    else:
-        code, reason = "FACE_WRONG", f"槳葉正反面錯誤（偵測 {parsed['face']} 面，應為 {expected['face']} 面）。"
-    return {**base, "result": "NG", "reason_code": code, "reason": reason}
+                "reason": f"{motor}（{MOTOR_POSITIONS[motor]}）旋向正確。"}
+    return {**base, "result": "NG", "reason_code": "ROTATION_WRONG",
+            "reason": f"槳葉旋向錯誤（偵測 {parsed['direction']}，應為 {expected['direction']}）。"}
 
 
 def evaluate_selection(selection: dict, detections: list, confidence_threshold: float = 0.55) -> dict:
@@ -297,17 +287,17 @@ def build_explanation(motor_checks: list, status: str) -> dict:
     elif status == "NG":
         headline = "槳葉安裝有誤，請依下列說明調整後重新拍照。"
     else:
-        headline = "四顆馬達槳葉方向與正反面皆符合 F450 安裝規則。"
+        headline = "四顆馬達槳葉旋向皆符合 F450 安裝規則。"
 
     details = []
     for item in motor_checks:
         motor = item["motor"]
         position = item.get("position") or MOTOR_POSITIONS.get(motor, "")
         if item["result"] == "PASS":
-            details.append(f"{motor}（{position}）：正確，方向 {item['expected_direction']}、槳面 {item['expected_face']} 面。")
+            details.append(f"{motor}（{position}）：正確，旋向 {item['expected_direction']}。")
             continue
         if item["result"] == "NG":
-            details.append(f"{motor}（{position}）：錯誤。{item['reason']}請更換為 {item['expected_direction']} 槳，並讓 {item['expected_face']} 面朝上。")
+            details.append(f"{motor}（{position}）：錯誤。{item['reason']}請更換為 {item['expected_direction']} 槳。")
             continue
         details.append(f"{motor}（{position}）：資料不足，{item['reason']}")
 

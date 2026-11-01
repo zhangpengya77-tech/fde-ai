@@ -561,10 +561,10 @@ const assessmentWorkflows = [
   },
   {
     key: 'power-inspection',
-    title: '電力巡檢 MP4 影片上傳與分析',
+    title: '電力巡檢影片上傳與分析',
     engine: 'POWER_INSPECTION_V1 isolated worker',
-    acceptedEvidence: ['mp4-video'],
-    checks: ['學生上傳巡檢 MP4 後建立隔離巡檢工作', '未載入真實模型時維持 WAITING_FOR_REAL_MODEL，不產生虛構推論', '異常時間軸與截圖保存於本人紀錄', '教師覆核結果回寫學生巡檢紀錄']
+    acceptedEvidence: ['video'],
+    checks: ['學生上傳巡檢影片後建立隔離巡檢工作', '未載入真實模型時維持 WAITING_FOR_REAL_MODEL，不產生虛構推論', '異常時間軸與截圖保存於本人紀錄', '教師覆核結果回寫學生巡檢紀錄']
   },
   {
     key: 'hover-scoring',

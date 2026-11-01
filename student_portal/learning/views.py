@@ -3,6 +3,7 @@ import csv
 import datetime
 import hmac
 import hashlib
+import subprocess
 import uuid
 import json
 import logging
@@ -76,6 +77,7 @@ from .forms import (
     TeacherLoginForm,
     TeacherReviewForm,
 )
+from .power_inspection_runner import PowerWorkerError, verify_model as verify_power_model
 from .vision_submission import submit_model_evidence_to_vision
 from .live_assertions import LiveAssertionError, issue_assertion
 from . import vision_submission as vision_api
@@ -871,20 +873,41 @@ def teacher_cohorts(user):
 POWER_INSPECTION_MAX_VIDEO_BYTES = 512 * 1024 * 1024
 POWER_INSPECTION_MAX_MODEL_BYTES = 1024 * 1024 * 1024
 POWER_INSPECTION_MAX_DATA_YAML_BYTES = 1024 * 1024
+# 手機、電腦與 DJI 常見拍攝格式；.lrf 是 DJI 低解析度代理檔，內容為 MP4。
+# 須與 live_backend/app/power_inspection.py 的 VIDEO_SUFFIXES 一致。
+POWER_INSPECTION_VIDEO_SUFFIXES = {
+    ".mp4", ".mov", ".m4v", ".3gp", ".3g2", ".lrf", ".webm", ".mkv", ".avi",
+    ".wmv", ".mts", ".m2ts", ".ts", ".mpg", ".mpeg",
+}
+POWER_INSPECTION_VIDEO_FORMAT_LABEL = "MP4、MOV、M4V、3GP、WEBM、MKV、AVI、WMV、MTS、M2TS、TS、MPG 或 DJI LRF"
+POWER_INSPECTION_ISO_BMFF_BOX_TYPES = {b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip", b"pnot"}
 
 
 def _power_teacher_cohort_or_404(request, cohort_id):
     return get_object_or_404(teacher_cohorts(request.user), cohort_id=cohort_id)
 
 
-def _power_mp4_content(upload):
-    if upload is None or Path(str(upload.name)).suffix.lower() != ".mp4":
-        raise ValidationError("僅接受 MP4 影片。")
+def _power_is_video_container(header):
+    """以檔頭辨識常見影片容器；真正可解碼性仍由隔離 worker 確認。"""
+    return (
+        header[4:8] in POWER_INSPECTION_ISO_BMFF_BOX_TYPES
+        or header[:4] == b"\x1a\x45\xdf\xa3"  # Matroska / WebM
+        or (header[:4] == b"RIFF" and header[8:12] == b"AVI ")
+        or header[:8] == b"\x30\x26\xb2\x75\x8e\x66\xcf\x11"  # ASF / WMV
+        or header[:4] in (b"\x00\x00\x01\xba", b"\x00\x00\x01\xb3")  # MPEG-PS
+        or header[:1] == b"\x47" and header[188:189] == b"\x47"  # MPEG-TS
+        or header[4:5] == b"\x47" and header[196:197] == b"\x47"  # M2TS / AVCHD
+    )
+
+
+def _power_video_content(upload):
+    if upload is None or Path(str(upload.name)).suffix.lower() not in POWER_INSPECTION_VIDEO_SUFFIXES:
+        raise ValidationError(f"影片格式不支援，請上傳 {POWER_INSPECTION_VIDEO_FORMAT_LABEL} 影片。")
     if upload.size <= 0 or upload.size > POWER_INSPECTION_MAX_VIDEO_BYTES:
-        raise ValidationError("MP4 影片大小不符合限制。")
+        raise ValidationError("影片大小不符合限制，最大 512 MB。")
     content = upload.read()
-    if len(content) < 12 or content[4:8] != b"ftyp":
-        raise ValidationError("MP4 容器格式無效。")
+    if len(content) < 12 or not _power_is_video_container(content[:256]):
+        raise ValidationError("檔案內容不是有效的影片。")
     return content
 
 
@@ -1198,7 +1221,7 @@ def _power_active_enrollment(request):
 def _power_create_job(enrollment, upload, content):
     """建立巡檢工作；沒有 REAL 試用模型時明確維持 BLOCKED。
 
-    回傳 (job, None)；若 MP4 不合法則回傳 (None, detail)。
+    回傳 (job, None)；若影片不合法則回傳 (None, detail)。
     """
     # 學員不得提交 model/cohort 參數；僅從已驗證 Enrollment 的班級解析預設模型。
     deployment = PowerInspectionCohortDeployment.objects.filter(
@@ -1233,7 +1256,7 @@ def _power_create_job(enrollment, upload, content):
 @csrf_protect
 @require_POST
 def student_power_inspection_upload(request, enrollment_id):
-    """儲存學員 MP4；沒有 REAL 試用模型時明確維持 BLOCKED。"""
+    """儲存學員影片；沒有 REAL 試用模型時明確維持 BLOCKED。"""
     enrollment = get_object_or_404(
         Enrollment.objects.select_related("cohort", "student"),
         pk=enrollment_id,
@@ -1242,7 +1265,7 @@ def student_power_inspection_upload(request, enrollment_id):
     )
     try:
         upload = request.FILES.get("video")
-        content = _power_mp4_content(upload)
+        content = _power_video_content(upload)
     except ValidationError as exc:
         return JsonResponse({"ok": False, "code": "invalid_video", "detail": str(exc)}, status=422)
 
@@ -1256,6 +1279,35 @@ def student_power_inspection_upload(request, enrollment_id):
     }, status=201)
 
 
+def _power_api_enrollment(request):
+    """回傳 (enrollment, None)；不可上傳時回傳 (None, (HTTP 狀態, 內容))。"""
+    if not request.user.is_authenticated:
+        return None, (401, {
+            "ok": False,
+            "code": "login_required",
+            "detail": "請先以學員身分登入，再上傳電力巡檢影片。",
+            "login_url": reverse("learning:student_login"),
+        })
+    profile = getattr(request.user, "student_profile", None)
+    if profile is None or not profile.active:
+        return None, (403, {
+            "ok": False,
+            "code": "login_required",
+            "detail": "此帳號尚未啟用學員權限。",
+            "login_url": reverse("learning:student_login"),
+        })
+    request.student_profile = profile
+    enrollment = _power_active_enrollment(request)
+    if enrollment is None:
+        return None, (409, {
+            "ok": False,
+            "code": "enrollment_required",
+            "detail": "找不到唯一有效的課程，請先加入課程或改由課程頁進入巡檢。",
+            "task_url": reverse("learning:student_dashboard"),
+        })
+    return enrollment, None
+
+
 @require_http_methods(["GET", "POST"])
 @csrf_protect
 def student_power_inspection_api_upload(request):
@@ -1264,36 +1316,19 @@ def student_power_inspection_api_upload(request):
     課程由登入學員身分在後端唯一解析；未登入回 401 JSON（不跳轉），
     讓 SPA 能顯示「請先登入」的明確提示而不是拿到登入頁 HTML。
     """
+    enrollment, denied = _power_api_enrollment(request)
     if request.method == "GET":
-        # 讓 SPA 可先取得 CSRF token（get_token 會一併寫入 csrftoken cookie）。
-        return JsonResponse({"ok": True, "method": "POST", "csrf_token": get_token(request)})
-    if not request.user.is_authenticated:
+        # 讓 SPA 可先取得 CSRF token（get_token 會一併寫入 csrftoken cookie），
+        # 並在傳送整支影片前就知道是否會被拒絕。
         return JsonResponse({
-            "ok": False,
-            "code": "login_required",
-            "detail": "請先以學員身分登入，再上傳電力巡檢影片。",
-            "login_url": reverse("learning:student_login"),
-        }, status=401)
-    profile = getattr(request.user, "student_profile", None)
-    if profile is None or not profile.active:
-        return JsonResponse({
-            "ok": False,
-            "code": "login_required",
-            "detail": "此帳號尚未啟用學員權限。",
-            "login_url": reverse("learning:student_login"),
-        }, status=403)
-    request.student_profile = profile
-    enrollment = _power_active_enrollment(request)
-    if enrollment is None:
-        return JsonResponse({
-            "ok": False,
-            "code": "enrollment_required",
-            "detail": "找不到唯一有效的課程，請先加入課程或改由課程頁進入巡檢。",
-            "task_url": reverse("learning:student_dashboard"),
-        }, status=409)
+            "ok": True, "method": "POST", "csrf_token": get_token(request),
+            "denied": denied[1] if denied else None,
+        })
+    if denied:
+        return JsonResponse(denied[1], status=denied[0])
     try:
         upload = request.FILES.get("video")
-        content = _power_mp4_content(upload)
+        content = _power_video_content(upload)
     except ValidationError as exc:
         return JsonResponse({"ok": False, "code": "invalid_video", "detail": str(exc)}, status=422)
 
@@ -1455,6 +1490,24 @@ def teacher_power_inspection_retry(request, job_id):
         return JsonResponse({"ok": False, "code": "retry_not_available"}, status=409)
     job.refresh_from_db()
     return JsonResponse({"ok": True, "status": job.status, "retry_count": job.retry_count})
+
+
+@teacher_required
+@csrf_protect
+@require_POST
+def teacher_power_inspection_verify(request, model_id):
+    """由隔離 worker 核驗 SHA-256、類別契約與實際載入，通過才可部署。"""
+    model = get_object_or_404(PowerInspectionModel, model_id=model_id, imported_by=request.user)
+    if model.status != PowerInspectionModel.Status.IMPORTED:
+        return JsonResponse({"ok": False, "code": "model_not_ready_for_verification", "detail": "模型交付資料不齊全，不能核驗。"}, status=409)
+    try:
+        verify_power_model(model)
+    except (PowerWorkerError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        return JsonResponse({"ok": False, "code": "model_verification_failed", "detail": f"核驗未通過：{exc}"}, status=422)
+    model.status = PowerInspectionModel.Status.VALIDATED
+    model.inference_mode = PowerInspectionModel.InferenceMode.REAL
+    model.save(update_fields=["status", "inference_mode", "updated_at"])
+    return JsonResponse({"ok": True, "model_id": str(model.model_id), "status": model.status, "detail": "模型已通過真實隔離核驗。"})
 
 
 @teacher_required
@@ -2025,7 +2078,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
     # 數據飛輪 B-5：學員上傳頁顯示「上期基礎模型」（當前推薦種子），
     # 供下載 .pt 當作下一期訓練起點。僅 R07 AI 視覺方向提供。
     recommended_seed_model = None
-    if submission.definition.slot_id == "R07" and enrollment.project_direction == "ai_flight_assessment":
+    if submission.definition.slot_id == "R07":
         try:
             rec = vision_api.recommended_seed(model_type="PROP_DIRECTION", student_id=enrollment.student.public_user_id)
             recommended_seed_model = rec.get("recommended_seed")
@@ -2045,17 +2098,13 @@ def growth_record_detail(request, enrollment_id, slot_id):
             "videos": videos,
             "documents": documents,
             "model_evidence": model_evidence,
-            "model_upload_allowed": (
-                submission.definition.slot_id == "R07"
-                and enrollment.project_direction == "ai_flight_assessment"
-            ),
+            "model_upload_allowed": submission.definition.slot_id == "R07",
             # --- M5（2026-10-21）：教師歸檔／刪除模型後，學員可重傳 ---
             # 模型證據被標記「已被取代」時，即使成長記錄本身已送審／已通過，
             # 仍重新開放 best.pt 上傳入口（只放寬重傳，不放寬任何健康度檢查）。
             "has_removed_model": _model_evidence_removed(model_evidence),
             "model_upload_open": (
                 submission.definition.slot_id == "R07"
-                and enrollment.project_direction == "ai_flight_assessment"
                 and (editable or _model_evidence_superseded(model_evidence))
             ),
             "image_count": images.count(),
@@ -2131,8 +2180,8 @@ def growth_model_upload(request, enrollment_id):
     submissions = ensure_growth_submissions(enrollment)
     submission = next((item for item in submissions if item.definition.slot_id == "R07"), None)
     redirect_url = reverse("learning:growth_record_detail", args=[enrollment.pk, "R07"])
-    if submission is None or enrollment.project_direction != "ai_flight_assessment":
-        messages.error(request, "此專業方向不開放模型成果上傳。")
+    if submission is None:
+        messages.error(request, "找不到 R07 成長記錄。")
         return redirect(redirect_url)
     if submission.status not in {
         GrowthRecordSubmission.Status.NOT_STARTED,
@@ -2573,7 +2622,7 @@ def teacher_vision_inspection_detail(request, record_id):
 @student_required
 @require_http_methods(["GET", "POST"])
 def student_rotation_v5_scan(request, enrollment_id):
-    """CW／CCW 雙類 V5 教學試用入口；不取代既有四類槳葉方向任務。"""
+    """CW／CCW 雙類 V5 教學試用入口。"""
     enrollment = get_object_or_404(
         Enrollment.objects.select_related("cohort", "student"),
         pk=enrollment_id, student=request.student_profile, active=True,
@@ -2706,7 +2755,7 @@ def _run_prop_inference(image_bytes: bytes, file_name: str, enrollment=None) -> 
         confidence = item.get("confidence")
         if class_name not in prop_scan.PROP_CLASS_CONTRACT:
             raise prop_scan.PropScanBlocked(
-                "CLASS_CONTRACT_MISMATCH", "推論結果包含不符合四類契約的類別。"
+                "CLASS_CONTRACT_MISMATCH", "推論結果包含不符合 CW／CCW 契約的類別。"
             )
         if not isinstance(box, list) or len(box) != 4 or not isinstance(confidence, (int, float)):
             raise prop_scan.PropScanBlocked(
@@ -3800,7 +3849,7 @@ def teacher_delete_image_evidence(request, evidence_id):
 #
 # 設計邊界：
 #   1. 重用既有 vision_center 的 golden set 概念，不建立第二套平行來源。
-#   2. 僅支援 PROP_DIRECTION_V1，四類標籤 CW_F / CCW_F / CW_B / CCW_B。
+#   2. 僅支援 PROP_DIRECTION_V1，兩類標籤 CW / CCW。
 #   3. FROZEN 版本不得再新增、修改、刪除樣本。
 #   4. 本輪只建框架：不執行推論、不載入 .pt、不啟用 ACTIVE。
 # =====================================================================
@@ -3815,7 +3864,7 @@ def _teacher_golden_set_or_404(request, golden_set_id):
 
 @teacher_required
 def teacher_golden_set_list(request):
-    """Golden Set 清單：顯示版本、照片數、四類分佈與鎖定狀態。"""
+    """Golden Set 清單：顯示版本、照片數、類別分佈與鎖定狀態。"""
     golden_sets = golden_sets_for_teacher(request.user).select_related(
         "created_by", "cohort", "frozen_by"
     )
@@ -3865,7 +3914,7 @@ def teacher_golden_set_create(request):
 
 @teacher_required
 def teacher_golden_set_detail(request, golden_set_id):
-    """單一 Golden Set 版本詳情：樣本清單、四類分佈、鎖定狀態。"""
+    """單一 Golden Set 版本詳情：樣本清單、類別分佈、鎖定狀態。"""
     golden_set = _teacher_golden_set_or_404(request, golden_set_id)
     samples = golden_set.samples.select_related("confirmed_by").order_by("label", "created_at")
     return render(
@@ -3898,7 +3947,7 @@ def teacher_golden_set_detail(request, golden_set_id):
 @teacher_required
 @require_POST
 def teacher_golden_set_add_sample(request, golden_set_id):
-    """上傳教師確認的測試照片並記錄四類標籤。"""
+    """上傳教師確認的測試照片並記錄類別標籤。"""
     golden_set = _teacher_golden_set_or_404(request, golden_set_id)
     image = request.FILES.get("image")
     label = request.POST.get("label", "").strip()
@@ -4313,6 +4362,7 @@ def _vision_model_row(model, *, validation_records=None, recommended_seed_id=Non
         # 與後端 activate_model 同一套標準（health OK＋驗證通過且信心≥0.6＋類別四類＋
         # 非 DEMO_IMPORTED／隔離／.pt 可讀），前端不渲染＝後端拒絕，從不靜音放行。
         "can_set_active": bool(model.get("activation_eligible")),
+        "activation_teacher_test": bool(model.get("activation_teacher_test")),
         # 單一狀態徽章（可啟用／需驗證／不可用／種子）；健康度與 mAP50 細節改由 title 提示，
         # 不再並列多枚徽章。
         "eligibility": _vision_eligibility(model, status, evidence_state),
@@ -4644,7 +4694,7 @@ def teacher_vision_center(request):
 
     resources = {
         "model_count": len(history_models),
-        "class_mapping": "已定義（4 類）",
+        "class_mapping": "已定義",
         "data_yaml": "匯出訓練包時產生",
         "images": "缺少" if not hard_examples else f"{len(hard_examples)} 筆待確認",
         "labels": "缺少（需人工確認標註）",
@@ -5408,6 +5458,8 @@ def teacher_vision_center_activate(request):
 
     activation = result.get("activation") or {}
     source = activation.get("inference_source") or {}
+    if result.get("activation_mode") == "TEACHER_TEST":
+        messages.warning(request, "注意：剛啟用的是「教師測試模型」，尚未通過正式評估，學員端會標示為實驗模型。")
     # 受控放寬（2026-10-19）：映射版模型啟用後必須留下明確警示，避免被誤認為正式模型。
     if result.get("temporary_mapping") is True:
         messages.warning(

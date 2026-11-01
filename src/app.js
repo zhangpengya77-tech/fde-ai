@@ -927,7 +927,6 @@ function renderPropellerInspectionResult(result, includeVisual = false) {
         <p>${escapeHtml(result.summary)}</p>
         <div class="inspection-hints">
           <small>M1 = CCW、M2 = CCW、M3 = CW、M4 = CW。</small>
-          <small>Blade Face 若模型沒有可靠正反面資料，會顯示 CHECK，不硬猜。</small>
         </div>
         ${renderMotorChecks(result)}
         <div class="inspection-final-result ${statusClass(finalResult.status)}">
@@ -1345,40 +1344,119 @@ function bindActions() {
   // POWER_INSPECTION_V1：正式走 Django /student/power-inspection/upload/（JSON）。
   // 沒有真實模型時後端會回 WAITING_FOR_REAL_MODEL / BLOCKED，前端如實顯示，
   // 絕不顯示任何模擬異常結果。
+  const POWER_UPLOAD_STALL_MS = 90000;
+  const POWER_SERVER_WAIT_MS = 180000;
+
+  const powerLoginCard = (detail, loginUrl) => `
+    <article class="result-card local-service-note">
+      <h3>請先以學員身分登入</h3>
+      <p>${escapeHtml(detail || '登入後才能上傳電力巡檢影片。')}</p>
+      <p><a class="primary-action button" href="${escapeHtml(loginUrl || '/login/')}?next=%2Fstudent%2Fpower-inspection%2F">前往學員登入</a></p>
+    </article>
+  `;
+
+  // fetch 沒有上傳進度，大影片在手機網路上會像當機，因此改用 XHR；
+  // 超過時間沒有進度就中止，不讓畫面停在上傳中。
+  const uploadPowerVideo = (file, csrfToken, onProgress) => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let watchdog;
+    let stalled = false;
+    const arm = (ms) => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        stalled = true;
+        xhr.abort();
+      }, ms);
+    };
+    const body = new FormData();
+    body.append('video', file, file.name);
+    xhr.open('POST', '/student/power-inspection/upload/');
+    xhr.withCredentials = true;
+    if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
+    xhr.upload.onprogress = (event) => {
+      arm(POWER_UPLOAD_STALL_MS);
+      onProgress(event.loaded, event.total || file.size);
+    };
+    xhr.upload.onload = () => {
+      arm(POWER_SERVER_WAIT_MS);
+      onProgress(file.size, file.size);
+    };
+    xhr.onload = () => {
+      clearTimeout(watchdog);
+      let payload = {};
+      try {
+        payload = JSON.parse(xhr.responseText);
+      } catch {
+        payload = {};
+      }
+      resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, payload });
+    };
+    xhr.onerror = () => {
+      clearTimeout(watchdog);
+      reject(new Error('network_error'));
+    };
+    xhr.onabort = () => {
+      clearTimeout(watchdog);
+      reject(new Error(stalled ? 'upload_stalled' : 'upload_aborted'));
+    };
+    arm(POWER_UPLOAD_STALL_MS);
+    xhr.send(body);
+  });
+
   $('#powerInspectionButton').addEventListener('click', async () => {
     const file = $('#powerInspectionInput').files[0];
     const target = $('#powerInspectionResult');
     if (!file) {
-      target.innerHTML = missingFileCard('請先上傳巡檢 MP4 影片，再點擊「上傳並建立巡檢工作」。');
+      target.innerHTML = missingFileCard('請先上傳巡檢影片，再點擊「上傳並建立巡檢工作」。');
       return;
     }
-    if (!/\.mp4$/i.test(file.name)) {
-      target.innerHTML = missingFileCard('電力巡檢僅接受 MP4 影片格式。');
+    if (!/\.(mp4|mov|m4v|3gp|3g2|lrf|webm|mkv|avi|wmv|mts|m2ts|ts|mpg|mpeg)$/i.test(file.name)) {
+      target.innerHTML = missingFileCard('影片格式不支援，請上傳 MP4、MOV、M4V、3GP、WEBM、MKV、AVI、WMV、MTS、M2TS、TS、MPG 或 DJI LRF 影片。');
+      return;
+    }
+    if (file.size > 512 * 1024 * 1024) {
+      target.innerHTML = missingFileCard('影片超過 512 MB，請裁短或降低畫質後再上傳。');
       return;
     }
 
-    target.innerHTML = '<article class="result-card"><p>正在上傳巡檢影片並建立隔離工作...</p></article>';
+    const sizeMb = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
+    target.innerHTML = '<article class="result-card"><p>正在確認上傳權限...</p></article>';
     try {
-      const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
-      const body = new FormData();
-      body.append('video', file, file.name);
-      const response = await fetch('/student/power-inspection/upload/', {
-        method: 'POST',
-        headers: csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {},
-        credentials: 'same-origin',
-        body,
-      });
-      const payload = await response.json().catch(() => ({}));
+      // 先確認身分與 CSRF，避免整支影片傳完才被拒絕。
+      const check = await fetch('/student/power-inspection/upload/', { credentials: 'same-origin' });
+      const access = await check.json().catch(() => ({}));
+      if (access.denied?.code === 'login_required') {
+        target.innerHTML = powerLoginCard(access.denied.detail, access.denied.login_url);
+        return;
+      }
+      if (access.denied) {
+        target.innerHTML = unavailableCard(access.denied.detail || '目前無法上傳巡檢影片，請聯絡教師。');
+        return;
+      }
+
+      const startedAt = Date.now();
+      const showProgress = (loaded, total) => {
+        const percent = total ? Math.min(100, Math.floor((loaded / total) * 100)) : 0;
+        const seconds = (Date.now() - startedAt) / 1000;
+        const speed = seconds > 1 ? ` ｜ ${(loaded * 8 / 1000000 / seconds).toFixed(1)} Mbps` : '';
+        target.innerHTML = percent >= 100
+          ? '<article class="result-card"><p>影片已傳送完成，正在建立巡檢工作...</p></article>'
+          : `<article class="result-card">
+              <p>正在上傳 ${percent}%（${sizeMb(loaded)} / ${sizeMb(total)} MB${speed}）</p>
+              <progress max="100" value="${percent}" style="width:100%"></progress>
+              <p>上傳期間請保持此頁開啟，不要鎖定手機。</p>
+            </article>`;
+      };
+      showProgress(0, file.size);
+      const { status, ok, payload } = await uploadPowerVideo(file, access.csrf_token, showProgress);
+      const response = { status, ok };
       if (!response.ok || !payload.ok) {
+        if (response.status === 413) {
+          target.innerHTML = missingFileCard('影片超過目前網址允許的上傳大小，請裁短或降低畫質後再上傳。');
+          return;
+        }
         if (payload.code === 'login_required') {
-          const loginUrl = payload.login_url || '/login/';
-          target.innerHTML = `
-            <article class="result-card local-service-note">
-              <h3>請先以學員身分登入</h3>
-              <p>${escapeHtml(payload.detail || '登入後才能上傳電力巡檢影片。')}</p>
-              <p><a class="primary-action button" href="${escapeHtml(loginUrl)}?next=%2Fstudent%2Fpower-inspection%2F">前往學員登入</a></p>
-            </article>
-          `;
+          target.innerHTML = powerLoginCard(payload.detail, payload.login_url);
           return;
         }
         target.innerHTML = unavailableCard(payload.detail || '巡檢影片上傳未完成，請稍後再試或聯絡教師。');
@@ -1396,6 +1474,10 @@ function bindActions() {
         </article>
       `;
     } catch (error) {
+      if (error.message === 'upload_stalled') {
+        target.innerHTML = unavailableCard('上傳已超過 90 秒沒有進度，已自動中止。請改用較穩定的 Wi-Fi，或裁短影片後再試。');
+        return;
+      }
       target.innerHTML = unavailableCard('巡檢影片上傳失敗（連線異常），未確認建立任何工作。', error.message);
     }
   });

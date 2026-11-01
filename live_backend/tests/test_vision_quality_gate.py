@@ -11,11 +11,14 @@
 7. 無 golden set / 未評估時，原因要明確點名 golden set，不是無聲失敗。
 8. require_evaluation=False 時，類別名吻合即 VALIDATED（閘門關閉的合法設定）。
 """
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.vision_center import (
+    ModelValidationError,
     HEALTH_OK,
     PROP_CLASSES,
     VisionCenter,
@@ -43,7 +46,7 @@ class FixtureValidator:
 
 class OkHealthInspector:
     def __call__(self, _path):
-        return {"health": HEALTH_OK, "reasons": [], "map50": 0.9, "nc": 4, "names_count": 4, "map50_threshold": 0.5}
+        return {"health": HEALTH_OK, "reasons": [], "map50": 0.9, "nc": 2, "names_count": 2, "map50_threshold": 0.5}
 
 
 class QualityGateTests(unittest.TestCase):
@@ -142,6 +145,39 @@ class QualityGateTests(unittest.TestCase):
         activated = center.activate_model(model["model_id"], "teacher")
         self.assertEqual(activated["status"], "ACTIVE")
         self.assertEqual(activated["validation_status"], "VALIDATED")
+
+    def _remember_match(self, center, model, confidence):
+        center._remember_validation(
+            model_id=model["model_id"], model_type=model["model_type"], decision="MATCH",
+            max_confidence=confidence, expected_class=None, confidence_threshold=0.3,
+            validated_by="teacher", reason_code="OK",
+        )
+
+    def test_teacher_test_mode_is_off_by_default(self):
+        center = self.center()
+        model = self.import_model(center)
+        self._remember_match(center, model, 0.4)
+        with self.assertRaises(ValueError):
+            center.activate_model(model["model_id"], "teacher")
+
+    def test_teacher_test_mode_activates_and_marks_experimental_model(self):
+        center = self.center()
+        model = self.import_model(center)
+        self._remember_match(center, model, 0.4)
+        with patch.dict(os.environ, {"FDE_VISION_TEACHER_TEST_MODE": "1"}):
+            activated = center.activate_model(model["model_id"], "teacher")
+        self.assertEqual(activated["status"], "ACTIVE")
+        self.assertEqual(activated["activation_mode"], "TEACHER_TEST")
+        self.assertEqual(activated["validation_status"], "REVIEW_REQUIRED")
+        with self.assertRaises(ModelValidationError):
+            center.seed_model(model["model_id"], "teacher")
+
+    def test_teacher_test_mode_still_requires_real_image_validation(self):
+        center = self.center()
+        model = self.import_model(center)
+        with patch.dict(os.environ, {"FDE_VISION_TEACHER_TEST_MODE": "1"}):
+            with self.assertRaisesRegex(ValueError, "model_validation_required"):
+                center.activate_model(model["model_id"], "teacher")
 
     # 7. 無 golden set / 未評估 → 原因明確點名 golden set
     def test_missing_evaluation_reason_names_golden_set(self):

@@ -90,8 +90,8 @@ def _validate_model_submission(metadata: dict) -> dict:
         "size_bytes": size,
     }
     if task_type == ModelTaskType.PROP_DETECTION.value:
-        # PROP Contract：槳葉方向與正反面辨識。
-        clean["expected_classes"] = ["CW_F", "CCW_F", "CW_B", "CCW_B"]
+        # PROP Contract：螺旋槳旋向辨識。
+        clean["expected_classes"] = ["CW", "CCW"]
     return clean
 
 

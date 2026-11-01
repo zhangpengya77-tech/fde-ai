@@ -952,12 +952,10 @@ class GoldenSet(models.Model):
         FROZEN = "FROZEN", "已鎖定（不可覆寫樣本）"
 
     class Label(models.TextChoices):
-        """PROP_DIRECTION_V1 的四個固定類別；與後端 PROP_CLASSES 一致。"""
+        """PROP_DIRECTION_V1 的兩個固定類別；與後端 PROP_CLASSES 一致。"""
 
-        CW_F = "CW_F", "順時針正面"
-        CCW_F = "CCW_F", "逆時針正面"
-        CW_B = "CW_B", "順時針背面"
-        CCW_B = "CCW_B", "逆時針背面"
+        CW = "CW", "順時針"
+        CCW = "CCW", "逆時針"
 
     class AnnotationSource(models.TextChoices):
         """標註來源，用於追溯標籤是怎麼來的。"""
@@ -1129,7 +1127,7 @@ class GoldenSetSample(models.Model):
         upload_to="golden_set/", help_text="教師確認的測試照片；只做檔案保存，不執行推論。"
     )
     label = models.CharField(
-        max_length=8, choices=GoldenSet.Label.choices, help_text="四類標籤之一。"
+        max_length=8, choices=GoldenSet.Label.choices, help_text="兩類標籤之一。"
     )
     annotation_source = models.CharField(
         max_length=32,
@@ -1264,7 +1262,7 @@ class PowerInspectionCohortDeploymentEvent(models.Model):
 
 
 class PowerInspectionJob(models.Model):
-    """學員 MP4 巡檢工作與時間軸；真實推論前不能被標成成功。"""
+    """學員影片巡檢工作與時間軸；真實推論前不能被標成成功。"""
 
     class Status(models.TextChoices):
         WAITING_FOR_REAL_MODEL = "WAITING_FOR_REAL_MODEL", "等待真實模型"

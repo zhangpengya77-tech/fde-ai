@@ -5,12 +5,12 @@
 <section class="page-heading">
   <p class="eyebrow">教師後台 · Golden Test Center</p>
   <h1>Golden Set 管理中心</h1>
-  <p class="muted">黃金測試集版本管理。本輪僅支援 <strong>{{ supported_task_id }}</strong>，四類標籤固定為 CW_F、CCW_F、CW_B、CCW_B。鎖定（FROZEN）後的版本不得再新增、修改或刪除樣本。</p>
+  <p class="muted">黃金測試集版本管理。本輪僅支援 <strong>{{ supported_task_id }}</strong>，兩類標籤固定為 CW、CCW。鎖定（FROZEN）後的版本不得再新增、修改或刪除樣本。</p>
 </section>
 
 <section class="section-block">
   <h2>建立測試集版本</h2>
-  <p class="muted">建立後為草稿（DRAFT），四類標籤皆有已確認樣本後才可鎖定。</p>
+  <p class="muted">建立後為草稿（DRAFT），兩類標籤皆有已確認樣本後才可鎖定。</p>
   <form method="post" action="{% url 'learning:teacher_golden_set_create' %}">
     {% csrf_token %}
     <label>測試集名稱<input name="name" required placeholder="例如 F450 槳葉方向黃金集"></label>
@@ -31,7 +31,7 @@
   {% if rows %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Golden Set ID</th><th>名稱</th><th>版本</th><th>狀態</th><th>照片數</th><th>已確認</th><th>四類分佈</th><th>缺類別</th><th>建立時間</th><th>操作</th></tr></thead>
+      <thead><tr><th>Golden Set ID</th><th>名稱</th><th>版本</th><th>狀態</th><th>照片數</th><th>已確認</th><th>類別分佈</th><th>缺類別</th><th>建立時間</th><th>操作</th></tr></thead>
       <tbody>
       {% for row in rows %}
         <tr>

@@ -144,14 +144,14 @@ class GoldenSetServiceTests(TestCase):
             golden_set=golden_set,
             teacher=self.teacher,
             image=_image("cw_f.jpg"),
-            label="CW_F",
+            label="CW",
             annotation_source=GoldenSet.AnnotationSource.TEACHER_PHOTO,
             note="教師實拍正面順時針",
             confirm_now=True,
         )
 
         golden_set.refresh_from_db()
-        self.assertEqual(sample.label, "CW_F")
+        self.assertEqual(sample.label, "CW")
         self.assertEqual(sample.annotation_source, "TEACHER_PHOTO")
         self.assertEqual(sample.confirmation_status, "CONFIRMED")
         self.assertEqual(sample.confirmed_by_id, self.teacher.pk)
@@ -160,8 +160,8 @@ class GoldenSetServiceTests(TestCase):
         self.assertEqual(sample.note, "教師實拍正面順時針")
         self.assertEqual(golden_set.sample_count, 1)
         self.assertEqual(golden_set.confirmed_sample_count, 1)
-        self.assertEqual(golden_set.label_distribution()["CW_F"], 1)
-        self.assertEqual(golden_set.missing_labels(), ["CCW_F", "CW_B", "CCW_B"])
+        self.assertEqual(golden_set.label_distribution()["CW"], 1)
+        self.assertEqual(golden_set.missing_labels(), ["CCW"])
 
     def test_b2_invalid_label_is_rejected(self):
         """標籤必須為四類之一，不得自創類別。"""
@@ -178,8 +178,8 @@ class GoldenSetServiceTests(TestCase):
         self.assertEqual(ctx.exception.code, "LABEL_INVALID")
         self.assertEqual(golden_set.sample_count, 0)
 
-        self.assertEqual(validate_label("CCW_B"), "CCW_B")
-        self.assertEqual(PROP_LABELS, ("CW_F", "CCW_F", "CW_B", "CCW_B"))
+        self.assertEqual(validate_label("CCW"), "CCW")
+        self.assertEqual(PROP_LABELS, ("CW", "CCW"))
 
     def test_b3_invalid_annotation_source_is_rejected(self):
         """標註來源須為既有三種之一。"""
@@ -190,7 +190,7 @@ class GoldenSetServiceTests(TestCase):
                 golden_set=golden_set,
                 teacher=self.teacher,
                 image=_image(),
-                label="CW_F",
+                label="CW",
                 annotation_source="MODEL_GUESS",
             )
 
@@ -205,7 +205,7 @@ class GoldenSetServiceTests(TestCase):
                 golden_set=golden_set,
                 teacher=self.teacher,
                 image=SimpleUploadedFile("best.pt", b"pickle-bytes", content_type="application/octet-stream"),
-                label="CW_F",
+                label="CW",
             )
 
         self.assertEqual(ctx.exception.code, "SAMPLE_IMAGE_TYPE_INVALID")
@@ -220,7 +220,7 @@ class GoldenSetServiceTests(TestCase):
                 golden_set=golden_set,
                 teacher=self.teacher,
                 image=SimpleUploadedFile("empty.jpg", b"", content_type="image/jpeg"),
-                label="CW_F",
+                label="CW",
             )
 
         self.assertEqual(ctx.exception.code, "SAMPLE_IMAGE_EMPTY")
@@ -234,7 +234,7 @@ class GoldenSetServiceTests(TestCase):
                 golden_set=golden_set,
                 teacher=self.teacher,
                 image=_big_upload(),
-                label="CW_F",
+                label="CW",
             )
 
         self.assertEqual(ctx.exception.code, "SAMPLE_IMAGE_TOO_LARGE")
@@ -248,15 +248,15 @@ class GoldenSetServiceTests(TestCase):
             golden_set=golden_set,
             teacher=self.teacher,
             image=_image(),
-            label="CW_F",
+            label="CW",
             confirm_now=False,
         )
 
         golden_set.refresh_from_db()
         self.assertEqual(golden_set.sample_count, 1)
         self.assertEqual(golden_set.confirmed_sample_count, 0)
-        self.assertEqual(golden_set.label_distribution()["CW_F"], 0)
-        self.assertIn("CW_F", golden_set.missing_labels())
+        self.assertEqual(golden_set.label_distribution()["CW"], 0)
+        self.assertIn("CW", golden_set.missing_labels())
 
     # ---------- confirm / reject ----------
 
@@ -264,7 +264,7 @@ class GoldenSetServiceTests(TestCase):
         """教師可確認或退回樣本，皆留下確認人與時間。"""
         golden_set = self._golden_set()
         sample = add_sample(
-            golden_set=golden_set, teacher=self.teacher, image=_image(), label="CCW_F"
+            golden_set=golden_set, teacher=self.teacher, image=_image(), label="CCW"
         )
         self.assertEqual(sample.confirmation_status, "PENDING")
         self.assertIsNone(sample.confirmed_at)
@@ -288,14 +288,14 @@ class GoldenSetServiceTests(TestCase):
         """缺任何一類都不得鎖定，避免鎖出無法評估的測試集。"""
         golden_set = self._golden_set()
         self._fill_four_labels(golden_set)
-        GoldenSetSample.objects.filter(label="CCW_B").delete()
+        GoldenSetSample.objects.filter(label="CCW").delete()
         golden_set.refresh_from_db()
 
         with self.assertRaises(GoldenSetError) as ctx:
             freeze_golden_set(golden_set=golden_set, teacher=self.teacher)
 
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_INCOMPLETE")
-        self.assertIn("CCW_B", ctx.exception.message)
+        self.assertIn("CCW", ctx.exception.message)
         golden_set.refresh_from_db()
         self.assertFalse(golden_set.is_frozen)
 
@@ -319,7 +319,7 @@ class GoldenSetServiceTests(TestCase):
                 golden_set=golden_set,
                 teacher=self.teacher,
                 image=_image("new.jpg"),
-                label="CW_F",
+                label="CW",
             )
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
 
@@ -334,8 +334,8 @@ class GoldenSetServiceTests(TestCase):
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
 
         golden_set.refresh_from_db()
-        self.assertEqual(golden_set.sample_count, 4)
-        self.assertEqual(golden_set.confirmed_sample_count, 4)
+        self.assertEqual(golden_set.sample_count, 2)
+        self.assertEqual(golden_set.confirmed_sample_count, 2)
 
     def test_d3_double_freeze_is_rejected(self):
         """重複鎖定必須被拒，避免覆蓋原鎖定時間。"""
@@ -364,12 +364,12 @@ class GoldenSetServiceTests(TestCase):
 
         self.assertEqual(summary["golden_set_id"], "PROP_GOLDEN_v1")
         self.assertTrue(summary["is_frozen"])
-        self.assertEqual(summary["sample_count"], 4)
-        self.assertEqual(summary["confirmed_sample_count"], 4)
+        self.assertEqual(summary["sample_count"], 2)
+        self.assertEqual(summary["confirmed_sample_count"], 2)
         self.assertEqual(summary["missing_labels"], [])
         self.assertEqual(
             summary["label_distribution"],
-            {"CW_F": 1, "CCW_F": 1, "CW_B": 1, "CCW_B": 1},
+            {"CW": 1, "CCW": 1},
         )
         self.assertIsNotNone(summary["frozen_at"])
 
@@ -384,9 +384,9 @@ class GoldenSetServiceTests(TestCase):
 
         self.assertEqual(v2.golden_set_id, "PROP_GOLDEN_v2")
         self.assertFalse(v2.is_frozen)
-        add_sample(golden_set=v2, teacher=self.teacher, image=_image("v2.jpg"), label="CW_F")
+        add_sample(golden_set=v2, teacher=self.teacher, image=_image("v2.jpg"), label="CW")
         v1.refresh_from_db()
-        self.assertEqual(v1.sample_count, 4)
+        self.assertEqual(v1.sample_count, 2)
         self.assertTrue(v1.is_frozen)
 
     # ---------- golden_test_blocked_reason ----------
@@ -618,7 +618,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
 
         response = self.client.get(reverse("learning:teacher_golden_set_list"))
         self.assertEqual(response.status_code, 200)
-        for column in ("Golden Set ID", "名稱", "版本", "狀態", "照片數", "四類分佈", "建立時間"):
+        for column in ("Golden Set ID", "名稱", "版本", "狀態", "照片數", "類別分佈", "建立時間"):
             self.assertContains(response, column)
         self.assertContains(response, "PROP_GOLDEN_v1")
         self.assertContains(response, "DRAFT")
@@ -643,7 +643,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        for label in ("照片總數", "教師已確認", "四類分佈", "尚缺類別", "鎖定測試集"):
+        for label in ("照片總數", "教師已確認", "類別分佈", "尚缺類別", "鎖定測試集"):
             self.assertContains(response, label)
         self.assertContains(response, "DRAFT（草稿，可調整）")
 
@@ -656,8 +656,8 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
             self.assertEqual(response.status_code, 302)
 
         golden_set = GoldenSet.objects.get()
-        self.assertEqual(golden_set.sample_count, 4)
-        self.assertEqual(golden_set.confirmed_sample_count, 4)
+        self.assertEqual(golden_set.sample_count, 2)
+        self.assertEqual(golden_set.confirmed_sample_count, 2)
         self.assertEqual(golden_set.missing_labels(), [])
 
     def test_f5_upload_non_image_through_http_shows_error_and_keeps_set_empty(self):
@@ -667,7 +667,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
         self.client.post(
             reverse("learning:teacher_golden_set_add_sample", args=["PROP_GOLDEN_v1"]),
             {
-                "label": "CW_F",
+                "label": "CW",
                 "annotation_source": "TEACHER_PHOTO",
                 "image": SimpleUploadedFile("best.pt", b"x", content_type="application/octet-stream"),
             },
@@ -687,14 +687,14 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
         golden_set = GoldenSet.objects.get()
         self.assertEqual(golden_set.status, "FROZEN")
 
-        self._upload("PROP_GOLDEN_v1", "CW_F", filename="after-freeze.jpg")
+        self._upload("PROP_GOLDEN_v1", "CW", filename="after-freeze.jpg")
         golden_set.refresh_from_db()
-        self.assertEqual(golden_set.sample_count, 4)
+        self.assertEqual(golden_set.sample_count, 2)
 
     def test_f7_freeze_through_http_blocked_when_incomplete(self):
         """四類未滿時鎖定不得生效。"""
         self._create_via_http()
-        self._upload("PROP_GOLDEN_v1", "CW_F", filename="only-cw-f.jpg")
+        self._upload("PROP_GOLDEN_v1", "CW", filename="only-cw-f.jpg")
 
         self.client.post(reverse("learning:teacher_golden_set_freeze", args=["PROP_GOLDEN_v1"]))
 
@@ -705,7 +705,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
     def test_f8_sample_confirm_and_reject_routes(self):
         """樣本確認 / 退回路由可正常改變狀態。"""
         self._create_via_http()
-        self._upload("PROP_GOLDEN_v1", "CW_F", filename="pending.jpg", confirm_now=False)
+        self._upload("PROP_GOLDEN_v1", "CW", filename="pending.jpg", confirm_now=False)
         sample = GoldenSetSample.objects.get()
 
         self.client.post(
@@ -772,7 +772,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
         self.client.post(
             reverse("learning:teacher_golden_set_add_sample", args=["PROP_GOLDEN_v1"]),
             {
-                "label": "CW_F",
+                "label": "CW",
                 "annotation_source": "TEACHER_PHOTO",
                 "image": _big_upload(),
             },
@@ -788,7 +788,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
         self.client.post(
             reverse("learning:teacher_golden_set_add_sample", args=["PROP_GOLDEN_v1"]),
             {
-                "label": "CW_F",
+                "label": "CW",
                 "annotation_source": "TEACHER_PHOTO",
                 "image": SimpleUploadedFile("empty.jpg", b"", content_type="image/jpeg"),
             },
@@ -807,7 +807,7 @@ class GoldenSetHttpVerticalSliceTests(TestCase):
         )
         self.client.post(
             reverse("learning:teacher_golden_set_add_sample", args=["PROP_GOLDEN_v1"]),
-            {"label": "CW_F", "annotation_source": "MODEL_GUESS", "image": _image()},
+            {"label": "CW", "annotation_source": "MODEL_GUESS", "image": _image()},
         )
 
         golden_set = GoldenSet.objects.get()
@@ -1060,7 +1060,7 @@ class GoldenTestCenterIsolationTests(TestCase):
             GoldenSetSample.objects.create(
                 golden_set=self.golden_set,
                 image=_image("bypass.jpg"),
-                label="CW_F",
+                label="CW",
             )
 
         # (2) 服務層既有的拒絕行為必須保持不變。
@@ -1069,7 +1069,7 @@ class GoldenTestCenterIsolationTests(TestCase):
                 golden_set=self.golden_set,
                 teacher=self.teacher,
                 image=_image("bypass2.jpg"),
-                label="CW_F",
+                label="CW",
             )
         self.assertEqual(ctx.exception.code, "GOLDEN_SET_FROZEN")
 
@@ -1097,7 +1097,7 @@ class GoldenSetImageReadEdgeCaseTests(TestCase):
                 golden_set=self.golden_set,
                 teacher=self.teacher,
                 image=SimpleUploadedFile("noext", b"GGGG", content_type="application/octet-stream"),
-                label="CW_F",
+                label="CW",
             )
 
         self.assertEqual(ctx.exception.code, "SAMPLE_IMAGE_TYPE_INVALID")
@@ -1118,11 +1118,11 @@ class GoldenSetImageReadEdgeCaseTests(TestCase):
             golden_set=self.golden_set,
             teacher=self.teacher,
             image=_image("PHOTO.JPG"),
-            label="CW_B",
+            label="CW",
             confirm_now=True,
         )
 
-        self.assertEqual(sample.label, "CW_B")
+        self.assertEqual(sample.label, "CW")
 
     def test_i4_upload_over_10mb_boundary_is_rejected(self):
         """大小上限邊界：剛好超標即拒絕。"""
@@ -1133,7 +1133,7 @@ class GoldenSetImageReadEdgeCaseTests(TestCase):
                 image=SimpleUploadedFile(
                     "boundary.jpg", b"G" * (MAX_SAMPLE_BYTES + 1), content_type="image/jpeg"
                 ),
-                label="CW_F",
+                label="CW",
             )
 
         self.assertEqual(ctx.exception.code, "SAMPLE_IMAGE_TOO_LARGE")
@@ -1160,11 +1160,11 @@ class GoldenSetImageReadEdgeCaseTests(TestCase):
             golden_set=self.golden_set,
             teacher=self.teacher,
             image=_NoSeek(b"\xff\xd8\xff\xe0G" * 8),
-            label="CCW_B",
+            label="CCW",
             confirm_now=True,
         )
 
-        self.assertEqual(sample.label, "CCW_B")
+        self.assertEqual(sample.label, "CCW")
         # 無法 seek 時仍應完成寫入；雜湊可為空，但不得拋出例外。
         self.assertTrue(sample.image.name)
         self.assertEqual(len(sample.content_sha256 or ""), 64)
@@ -1198,9 +1198,9 @@ class GoldenSetImageReadEdgeCaseTests(TestCase):
             golden_set=self.golden_set,
             teacher=self.teacher,
             image=_LateSeek(b"\xff\xd8\xff\xe0G" * 8),
-            label="CW_B",
+            label="CW",
             confirm_now=True,
         )
 
-        self.assertEqual(sample.label, "CW_B")
+        self.assertEqual(sample.label, "CW")
         self.assertTrue(sample.image.name)

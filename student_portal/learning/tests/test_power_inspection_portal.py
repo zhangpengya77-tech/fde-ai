@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -17,6 +18,7 @@ from learning.models import (
     PowerInspectionModel,
     TeacherCohortAccess,
 )
+from learning.power_inspection_runner import PowerWorkerError
 from learning.tests.helpers import create_student_account, enroll_student
 
 
@@ -99,6 +101,30 @@ class PowerInspectionPortalTests(TestCase):
         self.assertEqual(model.status, "PENDING_REAL_MODEL_VALIDATION")
         self.assertEqual(model.inference_mode, "BLOCKED")
 
+    def _imported_model(self, status):
+        return PowerInspectionModel.objects.create(
+            version="r6", sha256="a" * 64, class_contract=["foreign_object"], status=status, imported_by=self.teacher_a,
+        )
+
+    def test_verify_marks_model_real_only_after_worker_passes(self):
+        model = self._imported_model(PowerInspectionModel.Status.IMPORTED)
+        client = Client(); client.force_login(self.teacher_a)
+        url = reverse("learning:power_inspection_verify", args=[model.model_id])
+        with patch("learning.views.verify_power_model", side_effect=PowerWorkerError("model_classes_mismatch")):
+            self.assertEqual(client.post(url).status_code, 422)
+        model.refresh_from_db()
+        self.assertEqual(model.inference_mode, "BLOCKED")
+        with patch("learning.views.verify_power_model", return_value={}):
+            self.assertEqual(client.post(url).status_code, 200)
+        model.refresh_from_db()
+        self.assertEqual((model.status, model.inference_mode), ("VALIDATED", "REAL"))
+
+    def test_verify_rejects_incomplete_delivery(self):
+        model = self._imported_model(PowerInspectionModel.Status.PENDING_REAL_MODEL_VALIDATION)
+        client = Client(); client.force_login(self.teacher_a)
+        response = client.post(reverse("learning:power_inspection_verify", args=[model.model_id]))
+        self.assertEqual(response.status_code, 409)
+
     def test_complete_delivery_is_imported_but_not_validated_or_trial_ready(self):
         client = Client(enforce_csrf_checks=True); client.force_login(self.teacher_a)
         client.get(reverse("learning:power_inspection_teacher"))
@@ -127,6 +153,29 @@ class PowerInspectionPortalTests(TestCase):
         self.assertEqual(model.delivery_manifest["metrics"]["map50"], 0.90)
         self.assertEqual(model.status, "IMPORTED")
         self.assertEqual(model.inference_mode, "BLOCKED")
+
+    def test_mov_and_dji_video_create_jobs(self):
+        client = self._student(self.student_a)
+        for name in ("IMG_8770.mov", "DJI_0001.MP4", "DJI_0001.LRF"):
+            response = client.post(
+                reverse("learning:power_inspection_upload", args=[self.enrollment_a.pk]),
+                {"video": SimpleUploadedFile(name, b"\x00\x00\x00\x18ftypqt  payload", content_type="video/quicktime")},
+                HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
+                HTTP_ORIGIN="http://testserver",
+            )
+            self.assertEqual(response.status_code, 201, name)
+        self.assertEqual(PowerInspectionJob.objects.count(), 3)
+
+    def test_unsupported_extension_leaves_no_partial_job(self):
+        client = self._student(self.student_a)
+        response = client.post(
+            reverse("learning:power_inspection_upload", args=[self.enrollment_a.pk]),
+            {"video": SimpleUploadedFile("tower.exe", b"\x00\x00\x00\x18ftypisompayload", content_type="video/mp4")},
+            HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value,
+            HTTP_ORIGIN="http://testserver",
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(PowerInspectionJob.objects.count(), 0)
 
     def test_invalid_mp4_leaves_no_partial_job(self):
         client = self._student(self.student_a)

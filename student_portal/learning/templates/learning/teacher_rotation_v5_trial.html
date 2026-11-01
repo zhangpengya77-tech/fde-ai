@@ -3,7 +3,7 @@
 {% block content %}
 <a class="back-link" href="{% url 'learning:teacher_vision_center' %}">返回視覺模型中心</a>
 <p><a class="button secondary" href="{% url 'learning:teacher_vision_inspections' %}">學員檢測紀錄與覆核</a></p>
-<section class="page-heading"><p class="eyebrow">PROP_ROTATION_V5 · 隔離教學試用</p><h1>CW／CCW 螺旋槳模型驗證</h1><p class="muted">模型僅含 CW、CCW 兩類；不會取代四類 PROP_DIRECTION。</p></section>
+<section class="page-heading"><p class="eyebrow">PROP_ROTATION_V5 · 隔離教學試用</p><h1>CW／CCW 螺旋槳模型驗證</h1><p class="muted">模型僅含 CW、CCW 兩類。</p></section>
 {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
 <section class="section-block"><h2>模型狀態</h2><p><strong>{{ status.model.model_name|default:'F450 CW／CCW V5' }}</strong> · {{ status.model.version|default:'v5_finetune_20261027_101500' }}</p><p>類別：CW、CCW　目前狀態：<strong>{{ status.model.status|default:'未設定' }}</strong></p><p class="muted">未完成獨立 Golden Test 前只能啟用為 TEACHING_TRIAL，不能視為正式 ACTIVE。</p></section>
 <section class="section-block"><h2>1. 上傳真實 F450 槳葉照片</h2><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="validate"><label>預期結果（選填）<select name="expected_class"><option value="">不預先指定</option><option value="CW">CW</option><option value="CCW">CCW</option></select></label><input type="file" name="photo" accept="image/*" required><button class="button primary" type="submit">開始 AI 辨識</button></form>{% if uploaded_data_url %}<img src="{{ uploaded_data_url }}" alt="教師上傳的槳葉照片" style="max-width:100%;margin-top:12px">{% endif %}</section>

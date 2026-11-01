@@ -1,15 +1,30 @@
 """POWER_INSPECTION_V1 背景影片工作：不得由 Django request 同步處理。"""
 
 import base64
+import json
+import subprocess
 
+from pathlib import Path
 from unittest.mock import patch
 
 from django.core.files.base import ContentFile
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from learning.models import Cohort, PowerInspectionJob
-from learning.power_inspection_jobs import build_timeline, process_next_job, retry_job
+from learning.power_inspection_jobs import build_timeline, probe_video, process_next_job, retry_job
 from learning.tests.helpers import create_student_account, enroll_student
+
+
+class ProbeVideoTests(SimpleTestCase):
+    def test_container_duration_is_used_when_stream_has_none(self):
+        output = json.dumps({
+            "streams": [{"width": 1920, "height": 1080, "r_frame_rate": "30/1"}],
+            "format": {"duration": "2.5"},
+        })
+        completed = subprocess.CompletedProcess([], 0, stdout=output, stderr="")
+        with patch("learning.power_inspection_jobs.subprocess.run", return_value=completed):
+            metadata = probe_video(Path("clip.mkv"))
+        self.assertEqual(metadata, {"duration_ms": 2500, "width": 1920, "height": 1080, "fps": 30.0})
 
 
 class PowerInspectionJobTests(TestCase):
@@ -92,6 +107,17 @@ class PowerInspectionJobTests(TestCase):
         self.assertEqual(job.retry_count, 1)
 
     @override_settings(MEDIA_ROOT="/tmp/fde-power-inspection-test-media")
+    def test_real_job_runs_without_ffprobe_on_the_host(self):
+        job = PowerInspectionJob.objects.create(
+            enrollment=self.enrollment, status=PowerInspectionJob.Status.QUEUED,
+            inference_mode=PowerInspectionJob.InferenceMode.REAL,
+        )
+        job.video.save("tower.mov", ContentFile(b"\x00\x00\x00\x18ftypqt  payload"), save=True)
+        with patch("learning.power_inspection_jobs.probe_video", side_effect=FileNotFoundError):
+            processed = process_next_job(real_runner=lambda _job: {"frame_results": [], "metadata": {"fps": 30.0}})
+        self.assertEqual(processed.status, PowerInspectionJob.Status.COMPLETED)
+        self.assertEqual(processed.video_metadata, {"fps": 30.0})
+
     def test_real_job_probes_metadata_before_isolated_runner(self):
         job = PowerInspectionJob.objects.create(
             enrollment=self.enrollment, status=PowerInspectionJob.Status.QUEUED,

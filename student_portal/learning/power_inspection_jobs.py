@@ -87,21 +87,24 @@ def build_timeline(
 
 
 def probe_video(video_path: Path, *, ffprobe_binary: str = "ffprobe") -> dict:
-    """由外部 ffprobe 讀取 MP4 metadata；失敗由 caller 記錄，不猜測數值。"""
+    """由外部 ffprobe 讀取影片 metadata；失敗由 caller 記錄，不猜測數值。"""
     command = [
         ffprobe_binary, "-v", "error", "-select_streams", "v:0",
-        "-show_entries", "stream=width,height,r_frame_rate,duration",
+        "-show_entries", "stream=width,height,r_frame_rate,duration:format=duration",
         "-of", "json", str(video_path),
     ]
     completed = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
     if completed.returncode != 0:
         raise RuntimeError("video_probe_failed")
     try:
-        stream = json.loads(completed.stdout).get("streams", [])[0]
+        payload = json.loads(completed.stdout)
+        stream = payload.get("streams", [])[0]
         numerator, denominator = str(stream["r_frame_rate"]).split("/", 1)
         fps = float(numerator) / float(denominator)
+        # MKV、WebM、TS 的影片串流常沒有 duration，改用容器層的長度。
+        duration = stream.get("duration") or payload["format"]["duration"]
         return {
-            "duration_ms": int(float(stream["duration"]) * 1000),
+            "duration_ms": int(float(duration) * 1000),
             "width": int(stream["width"]), "height": int(stream["height"]), "fps": fps,
         }
     except (IndexError, KeyError, TypeError, ValueError, ZeroDivisionError) as exc:
@@ -205,7 +208,11 @@ def process_next_job(*, allow_mock_test: bool = False, mock_frame_results: list[
     try:
         # 先由獨立 probe 取得影片事實資料，再交給隔離 YOLO runner；不猜測
         # 長度、解析度或 FPS，probe 失敗會落入 FAILED 分支。
-        metadata = probe_video(Path(job.video.path))
+        try:
+            metadata = probe_video(Path(job.video.path))
+        except FileNotFoundError:
+            # 主機沒有 ffprobe 時改用 worker 解碼器回報的 FPS，不猜測長度與解析度。
+            metadata = {}
         result = real_runner(job)
         if not isinstance(result, dict):
             raise RuntimeError("worker_result_invalid")

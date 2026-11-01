@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "note": "受控放寬登記表（2026-10-19）：只有在此登記的提交，才允許 6→4 的 many-to-one 筆誤映射。未登記的提交仍走原本硬拒邏輯（model_class_names_mismatch），閘門原邏輯不刪除。",
+  "note": "受控放寬登記表（2026-10-19）：只有在此登記的提交，才允許 6→2 的 many-to-one 筆誤映射。未登記的提交仍走原本硬拒邏輯（model_class_names_mismatch），閘門原邏輯不刪除。",
   "dedup": {
     "mode": "highest_confidence",
     "iou_threshold": 0.5,
@@ -15,20 +15,20 @@
       "reason": "6 類模型為筆誤命名：CCE-F 應為 CCW-F、CCF-b 應為 CCW-B；同一實體槳葉在兩個通道重複出現，需 many-to-one 對照。僅為臨時驗證用途，非正式模型。",
       "class_names": ["CCE-F", "CCF-b", "CCW-F", "CCW-B", "CW-F", "CW-B"],
       "index_mapping": {
-        "0": "CCW_F",
-        "1": "CCW_B",
-        "2": "CCW_F",
-        "3": "CCW_B",
-        "4": "CW_F",
-        "5": "CW_B"
+        "0": "CCW",
+        "1": "CCW",
+        "2": "CCW",
+        "3": "CCW",
+        "4": "CW",
+        "5": "CW"
       },
       "name_mapping": {
-        "CCE-F": "CCW_F",
-        "CCF-b": "CCW_B",
-        "CCW-F": "CCW_F",
-        "CCW-B": "CCW_B",
-        "CW-F": "CW_F",
-        "CW-B": "CW_B"
+        "CCE-F": "CCW",
+        "CCF-b": "CCW",
+        "CCW-F": "CCW",
+        "CCW-B": "CCW",
+        "CW-F": "CW",
+        "CW-B": "CW"
       }
     }
   }
