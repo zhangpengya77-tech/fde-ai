@@ -137,7 +137,7 @@ def _caller_cohort_ids(teacher_id):
         return []
 
 
-def _get(path, timeout=None, *, teacher_id=""):
+def _get(path, timeout=None, *, teacher_id="", student_id=""):
     base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
     headers = {}
     if teacher_id:
@@ -148,8 +148,8 @@ def _get(path, timeout=None, *, teacher_id=""):
         "GET",
         path.split("?")[0],
         headers,
-        subject_id=str(teacher_id or ""),
-        role="teacher" if teacher_id else "",
+        subject_id=str(teacher_id or student_id or ""),
+        role="teacher" if teacher_id else ("student" if student_id else ""),
         cohort_ids=_caller_cohort_ids(teacher_id),
         body=b"",
     )
@@ -298,6 +298,10 @@ def rotation_v5_enable_trial(*, cohort_id, teacher_id):
         "/api/v1/vision/rotation-v5/teacher/enable-trial",
         {"cohort_id": str(cohort_id)}, teacher_id=teacher_id,
     )
+
+
+def rotation_v5_withdraw_trial(*, teacher_id):
+    return _post("/api/v1/vision/rotation-v5/teacher/withdraw-trial", {}, teacher_id=teacher_id)
 
 
 def rotation_v5_activate_isolated(*, teacher_id):
@@ -614,11 +618,11 @@ def unseed_model(*, model_id, teacher_id, reason=""):
     )
 
 
-def recommended_seed(*, model_type, teacher_id=""):
+def recommended_seed(*, model_type, teacher_id="", student_id=""):
     """讀取該任務的「當前推薦基礎模型」（學員下一期訓練起點）。"""
     return _get(
         f"/api/v1/vision/tasks/{model_type}/recommended-seed",
-        teacher_id=teacher_id,
+        teacher_id=teacher_id, student_id=student_id,
     )
 
 
@@ -645,7 +649,11 @@ def download_seed(*, model_id=None, model_type=None, student_id=""):
     headers = {"Content-Type": "application/json"}
     if student_id:
         headers["X-FDE-Student-ID"] = str(student_id)
-    headers = internal_auth.signed_headers("GET", "/api/v1/vision/seed/download", headers)
+    # 2026-11-01 整合：Live 只信任 Assertion，下載者身分必須簽進 claims。
+    headers = internal_auth.signed_headers(
+        "GET", "/api/v1/vision/seed/download", headers,
+        subject_id=str(student_id or ""), role="student" if student_id else "", body=b"",
+    )
     request = Request(
         f"{base}/api/v1/vision/seed/download{query}",
         headers=headers,

@@ -125,7 +125,6 @@ async def _any_identity(request: Request) -> tuple[dict | None, Response | None]
     return identity, None
 
 
-def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
 async def _safe_json(request: Request) -> dict:
     """寬鬆解析 JSON body（模型管理用）：無 body／非物件時回退空 dict。
 
@@ -139,7 +138,7 @@ async def _safe_json(request: Request) -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def vision_routes(center: VisionCenter) -> list[Route]:
+def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
     async def models(request: Request):
         if request.method == "GET":
             return json_response(center.list_models(request.query_params.get("model_type")))
@@ -624,6 +623,14 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         except (ValueError, PropRotationServiceError) as exc:
             return error_response("rotation_trial_enable_failed", str(exc), 422)
 
+    async def rotation_withdraw_trial(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        if rotation_trial is None:
+            return rotation_unavailable()
+        return json_response(rotation_trial.withdraw_teaching_trial(teacher_id=teacher_id))
+
     async def rotation_activate_isolated(request: Request):
         teacher_id, denied = await _teacher(request)
         if denied:
@@ -756,6 +763,10 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("unseed_failed", str(exc), 422)
 
     async def recommended_seed(request: Request):
+        # 2026-11-01 整合：回傳完整模型紀錄（含來源資訊），只給已驗證身分。
+        _identity, denied = await _any_identity(request)
+        if denied:
+            return denied
         model_type = request.path_params["model_type"]
         seed = center.recommended_seed(model_type)
         return json_response({
@@ -764,6 +775,9 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         })
 
     async def seed_version_chain(request: Request):
+        _identity, denied = await _any_identity(request)
+        if denied:
+            return denied
         model_type = request.path_params["model_type"]
         return json_response({
             "model_type": model_type,
@@ -829,6 +843,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         Route("/api/v1/vision/rotation-v5/teacher/validate-image", rotation_teacher_validate, methods=["POST"]),
         Route("/api/v1/vision/rotation-v5/teacher/validations/{validation_id}/confirm", rotation_teacher_confirm, methods=["POST"]),
         Route("/api/v1/vision/rotation-v5/teacher/enable-trial", rotation_enable_trial, methods=["POST"]),
+        Route("/api/v1/vision/rotation-v5/teacher/withdraw-trial", rotation_withdraw_trial, methods=["POST"]),
         Route("/api/v1/vision/rotation-v5/teacher/activate-isolated", rotation_activate_isolated, methods=["POST"]),
         Route("/api/v1/vision/rotation-v5/infer", rotation_student_infer, methods=["POST"]),
         Route("/api/v1/vision/models", models, methods=["GET", "POST"]),

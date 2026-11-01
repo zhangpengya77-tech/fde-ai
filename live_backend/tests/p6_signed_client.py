@@ -9,6 +9,7 @@ P6 之後 Live 不再信任 ``X-FDE-Role`` / ``X-FDE-Teacher-ID``，教師身分
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -51,6 +52,45 @@ def signed_teacher_client(
         }
         request.headers["X-FDE-Live-Assertion"] = live_assertions.issue_live_assertion(claims, key)
         return original_send(request, **kwargs)
+
+    client.send = send
+    return client
+
+
+def legacy_header_client(app, **kwargs):
+    """取代 TestClient：把舊測試的教師標頭換成 Assertion，無標頭的請求維持未授權。
+
+    2026-11-01 整合：主樹的模型管理測試以 ``X-FDE-Role`` 表達「這是教師請求」。
+    Live 已不信任該標頭，因此這裡只把它當測試內的意圖，轉成真正的簽章；
+    刻意不帶標頭的負向測試不簽章，仍須被 fail closed 拒絕。
+    """
+    from starlette.testclient import TestClient
+
+    install_identity_env()
+    client = TestClient(app, **kwargs)
+    original_send = client.send
+
+    def send(request, **send_kwargs):
+        path = request.url.path
+        if request.method == "POST" and path in ("/api/v1/vision/submissions", "/api/v1/vision/prop-check"):
+            # 這兩個端點的正常呼叫者是 Django 代學員送出，身分同樣改由 Assertion 表達。
+            body = request.read()
+            student = json.loads(body or b"{}").get("student_id") or "s1"
+            claims = {
+                "sub": f"student:{student}", "role": "student", "enrollment_id": 21,
+                "cohort_ids": ["cohort-a"], "method": "POST", "path": path,
+                "body_sha256": live_assertions.body_sha256(body),
+            }
+            request.headers["X-FDE-Live-Assertion"] = live_assertions.issue_live_assertion(claims, DEFAULT_KEY)
+        elif request.headers.get("X-FDE-Role", "").casefold() == "teacher":
+            claims = {
+                "sub": f"teacher:{request.headers.get('X-FDE-Teacher-ID', 'teacher-1')}",
+                "role": "teacher", "enrollment_id": 0, "cohort_ids": ["cohort-a"],
+                "method": request.method.upper(), "path": request.url.path,
+                "body_sha256": live_assertions.body_sha256(request.read()),
+            }
+            request.headers["X-FDE-Live-Assertion"] = live_assertions.issue_live_assertion(claims, DEFAULT_KEY)
+        return original_send(request, **send_kwargs)
 
     client.send = send
     return client

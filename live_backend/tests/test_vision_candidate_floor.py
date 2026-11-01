@@ -26,7 +26,7 @@ import types
 import unittest
 from pathlib import Path
 
-from starlette.testclient import TestClient
+from p6_signed_client import legacy_header_client as TestClient
 
 from app.main import create_app
 from app.vision_center import (

@@ -1,0 +1,9 @@
+{% extends 'learning/base.html' %}
+{% block title %}檢測覆核｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_vision_inspections' %}">返回檢測紀錄</a>
+<section class="page-heading"><p class="eyebrow">{{ record.get_task_type_display }}</p><h1>{{ record.enrollment.student }}</h1><p class="muted">{{ record.enrollment.cohort }} · {{ record.created_at|date:"Y-m-d H:i" }}</p></section>
+<section class="section-block"><h2>AI 結果</h2><p>模型 {{ record.model_id }} · 版本 {{ record.model_version }} · 狀態 {{ record.model_status }}</p><p>模型 SHA-256 {{ record.model_sha256|default:'—' }}</p><p>圖片 SHA-256 {{ record.image_sha256 }}</p><p><strong>{{ record.best_class|default:'未偵測' }}</strong>{% if record.best_confidence is not None %} · 信心值 {{ record.best_confidence|floatformat:2 }}{% endif %}</p>{% include 'learning/_vision_overlay.html' %}</section>
+<section class="section-block"><h2>教師覆核</h2><p>目前：<strong>{{ record.get_review_status_display }}</strong></p><form method="post">{% csrf_token %}<label>備註<input name="note" maxlength="500" value="{{ record.review_note }}"></label><button class="button primary" name="decision" value="PASS">PASS</button> <button class="button" name="decision" value="NG">NG</button> <button class="button" name="decision" value="RESUBMIT">要求重傳</button></form></section>
+<section class="section-block"><h2>覆核歷程</h2><ul>{% for event in events %}<li>{{ event.created_at|date:"Y-m-d H:i" }} · {{ event.reviewer }} · {{ event.get_decision_display }}{% if event.note %} · {{ event.note }}{% endif %}</li>{% empty %}<li>尚未覆核。</li>{% endfor %}</ul></section>
+{% endblock %}

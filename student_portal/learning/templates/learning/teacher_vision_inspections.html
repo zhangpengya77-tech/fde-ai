@@ -1,0 +1,8 @@
+{% extends 'learning/base.html' %}
+{% block title %}學員檢測紀錄｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_rotation_v5_trial' %}">返回 CW／CCW 模型驗證</a>
+<section class="page-heading"><p class="eyebrow">真實 YOLO 檢測</p><h1>學員檢測紀錄與覆核</h1></section>
+<section class="section-block"><form method="get"><label>覆核狀態<select name="status"><option value="">全部</option>{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><label>學員編號<input name="student" value="{{ student }}"></label><label><input type="checkbox" name="failure" value="1"{% if failure %} checked{% endif %}> 只看失敗樣本</label><button class="button" type="submit">查詢</button></form></section>
+<section class="section-block"><h2>紀錄（{{ records|length }}）</h2><ul>{% for record in records %}<li><a href="{% url 'learning:teacher_vision_inspection_detail' record.pk %}">{{ record.created_at|date:"Y-m-d H:i" }} · {{ record.enrollment.student }} · {{ record.get_task_type_display }} · {{ record.best_class|default:'未偵測' }}</a> · {{ record.model_version }} · {{ record.get_review_status_display }}{% if record.failure_sample %} · 失敗樣本{% endif %}</li>{% empty %}<li>目前沒有檢測紀錄。</li>{% endfor %}</ul></section>
+{% endblock %}

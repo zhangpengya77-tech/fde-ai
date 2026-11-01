@@ -147,6 +147,8 @@ from .models import (
     PowerInspectionJob,
     PowerInspectionModel,
     PowerInspectionReview,
+    VisionInspectionRecord,
+    VisionInspectionReviewEvent,
     StudentProfile,
     StudentSurvey,
     StudentTaskProgress,
@@ -2013,7 +2015,7 @@ def growth_record_detail(request, enrollment_id, slot_id):
     recommended_seed_model = None
     if submission.definition.slot_id == "R07" and enrollment.project_direction == "ai_flight_assessment":
         try:
-            rec = vision_api.recommended_seed(model_type="PROP_DIRECTION")
+            rec = vision_api.recommended_seed(model_type="PROP_DIRECTION", student_id=enrollment.student.public_user_id)
             recommended_seed_model = rec.get("recommended_seed")
         except RuntimeError:
             recommended_seed_model = None
@@ -2169,7 +2171,7 @@ def growth_model_upload(request, enrollment_id):
     chosen_parent = (request.POST.get("parent_model_id") or "").strip()
     if not chosen_parent:
         try:
-            rec = vision_api.recommended_seed(model_type="PROP_DIRECTION")
+            rec = vision_api.recommended_seed(model_type="PROP_DIRECTION", student_id=enrollment.student.public_user_id)
             chosen_parent = (rec.get("recommended_seed") or {}).get("model_id") or ""
         except RuntimeError:
             chosen_parent = ""
@@ -2401,6 +2403,132 @@ def student_prop_scan(request, enrollment_id):
     return render(request, "learning/student_prop_scan.html", context)
 
 
+INSPECTION_IMAGE_SIGNATURES = {
+    b"\xff\xd8\xff": {"jpg", "jpeg"},
+    b"\x89PNG\r\n\x1a\n": {"png"},
+}
+
+
+def _validated_inspection_image(upload):
+    """只接受 JPG／JPEG／PNG；副檔名與檔案標頭必須相符。回傳 (bytes, 錯誤訊息)。"""
+    if upload is None:
+        return None, "請選擇一張 JPG 或 PNG 圖片。"
+    if upload.size > PROP_SCAN_MAX_IMAGE_BYTES:
+        return None, "照片超過 8 MB，請縮小後再上傳。"
+    suffix = upload.name.rsplit(".", 1)[-1].lower() if "." in upload.name else ""
+    content = upload.read()
+    for signature, suffixes in INSPECTION_IMAGE_SIGNATURES.items():
+        if content.startswith(signature) and suffix in suffixes:
+            return content, ""
+    return None, "只接受 JPG、JPEG、PNG 圖片。"
+
+
+def _save_inspection_record(enrollment, task_type, upload, content, result):
+    """把 Live 的真實推論結果與圖片保存成一筆可覆核紀錄。"""
+    detections = result.get("detections") or []
+    best = result.get("best_detection") or {}
+    record = VisionInspectionRecord(
+        enrollment=enrollment, task_type=task_type, original_filename=upload.name[:255],
+        image_sha256=hashlib.sha256(content).hexdigest(),
+        image_width=int(result.get("image_width") or 0), image_height=int(result.get("image_height") or 0),
+        model_id=str(result.get("model_id") or ""), model_version=str(result.get("model_version") or ""),
+        model_status=str(result.get("model_status") or ""), model_sha256=str(result.get("model_sha256") or ""),
+        detections=detections, best_class=str(best.get("class") or ""),
+        best_confidence=best.get("confidence"), learning_event_id=str(result.get("learning_event_id") or ""),
+    )
+    record.image.save(upload.name, ContentFile(content), save=False)
+    record.save()
+    return record
+
+
+def _vision_overlay(record):
+    """把像素框換算成畫面疊加用的 SVG 矩形；缺尺寸時不畫，避免畫錯位置。"""
+    if record is None or not record.image_width or not record.image_height:
+        return []
+    boxes = []
+    for detection in record.detections:
+        x1, y1, x2, y2 = [float(value) for value in detection.get("bbox", (0, 0, 0, 0))]
+        boxes.append({
+            "x": x1, "y": y1, "width": max(x2 - x1, 0), "height": max(y2 - y1, 0),
+            "label": f"{detection.get('class')} {float(detection.get('confidence', 0)):.2f}",
+            "css": "cw" if detection.get("class") == "CW" else "ccw",
+        })
+    return boxes
+
+
+def _teacher_inspection_records(user):
+    return VisionInspectionRecord.objects.filter(enrollment__cohort__in=teacher_cohorts(user))
+
+
+@login_required
+@never_cache
+@require_http_methods(["GET"])
+def vision_inspection_image(request, record_id):
+    """私有圖片：只有學員本人或該班教師可讀，其餘一律 404。"""
+    record = get_object_or_404(VisionInspectionRecord.objects.select_related("enrollment__student"), pk=record_id)
+    profile = getattr(request.user, "student_profile", None)
+    owner = profile is not None and record.enrollment.student_id == profile.pk
+    teacher = request.user.is_staff and _teacher_inspection_records(request.user).filter(pk=record.pk).exists()
+    if not owner and not teacher:
+        raise Http404
+    response = FileResponse(record.image.open("rb"), content_type="image/png" if record.image.name.endswith(".png") else "image/jpeg")
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Disposition"] = "inline"
+    return response
+
+
+@teacher_required
+@require_http_methods(["GET"])
+def teacher_vision_inspections(request):
+    """教師檢測紀錄：可依狀態、失敗樣本或學員查詢成長歷程。"""
+    records = _teacher_inspection_records(request.user).select_related("enrollment__student", "enrollment__cohort", "reviewed_by")
+    status = request.GET.get("status", "")
+    if status in VisionInspectionRecord.ReviewStatus.values:
+        records = records.filter(review_status=status)
+    if request.GET.get("failure") == "1":
+        records = records.filter(failure_sample=True)
+    student = request.GET.get("student", "").strip()
+    if student:
+        records = records.filter(enrollment__student__public_user_id=student)
+    return render(request, "learning/teacher_vision_inspections.html", {
+        "records": records[:200], "status": status, "student": student,
+        "failure": request.GET.get("failure") == "1",
+        "statuses": VisionInspectionRecord.ReviewStatus.choices,
+    })
+
+
+@teacher_required
+@require_http_methods(["GET", "POST"])
+def teacher_vision_inspection_detail(request, record_id):
+    """單筆覆核；NG 與要求重傳會回收為失敗樣本候選。"""
+    record = get_object_or_404(
+        _teacher_inspection_records(request.user).select_related("enrollment__student", "enrollment__cohort"),
+        pk=record_id,
+    )
+    if request.method == "POST":
+        decision = str(request.POST.get("decision") or "")
+        reviewable = {
+            VisionInspectionRecord.ReviewStatus.PASS,
+            VisionInspectionRecord.ReviewStatus.NG,
+            VisionInspectionRecord.ReviewStatus.RESUBMIT,
+        }
+        if decision not in reviewable:
+            return HttpResponse("無效的覆核決定。", status=422, content_type="text/plain; charset=utf-8")
+        note = str(request.POST.get("note") or "").strip()[:500]
+        with transaction.atomic():
+            record.review_status = decision
+            record.review_note = note
+            record.reviewed_by = request.user
+            record.reviewed_at = timezone.now()
+            record.failure_sample = decision != VisionInspectionRecord.ReviewStatus.PASS
+            record.save(update_fields=["review_status", "review_note", "reviewed_by", "reviewed_at", "failure_sample"])
+            VisionInspectionReviewEvent.objects.create(record=record, decision=decision, note=note, reviewer=request.user)
+        return redirect("learning:teacher_vision_inspection_detail", record_id=record.pk)
+    return render(request, "learning/teacher_vision_inspection_detail.html", {
+        "record": record, "overlay": _vision_overlay(record), "events": record.review_events.select_related("reviewer"),
+    })
+
+
 @student_required
 @require_http_methods(["GET", "POST"])
 def student_rotation_v5_scan(request, enrollment_id):
@@ -2409,28 +2537,39 @@ def student_rotation_v5_scan(request, enrollment_id):
         Enrollment.objects.select_related("cohort", "student"),
         pk=enrollment_id, student=request.student_profile, active=True,
     )
-    context = {"enrollment": enrollment, "result": None, "error": "", "uploaded_data_url": ""}
+    records = enrollment.vision_inspection_records.filter(
+        task_type=VisionInspectionRecord.TaskType.PROP_ROTATION_V5,
+    ).prefetch_related("review_events")
+    context = {"enrollment": enrollment, "record": None, "records": records[:20], "error": ""}
+    selected = request.GET.get("record")
     if request.method == "GET":
+        if selected:
+            try:
+                context["record"] = records.filter(pk=selected).first()
+            except (ValidationError, ValueError):
+                raise Http404
+        if context["record"] is None:
+            context["record"] = records.first()
+        context["overlay"] = _vision_overlay(context["record"])
         return render(request, "learning/student_rotation_v5_scan.html", context)
     upload = request.FILES.get("photo")
-    if upload is None or not (getattr(upload, "content_type", "") or "").lower().startswith("image/"):
-        context["error"] = "請選擇一張有效的螺旋槳圖片。"
-        return render(request, "learning/student_rotation_v5_scan.html", context)
-    if upload.size > PROP_SCAN_MAX_IMAGE_BYTES:
-        context["error"] = "照片超過 8 MB，請縮小後再上傳。"
-        return render(request, "learning/student_rotation_v5_scan.html", context)
-    content = upload.read()
-    context["uploaded_data_url"] = "data:{};base64,{}".format(
-        (getattr(upload, "content_type", "") or "image/jpeg").lower(), base64.b64encode(content).decode("ascii"),
-    )
+    content, error = _validated_inspection_image(upload)
+    if error:
+        context["error"] = error
+        return render(request, "learning/student_rotation_v5_scan.html", context, status=422)
     try:
-        context["result"] = vision_api.rotation_v5_student_infer(
+        result = vision_api.rotation_v5_student_infer(
             image_bytes=content, student_id=enrollment.student.public_user_id,
             enrollment_id=enrollment.pk, cohort_ids=[enrollment.cohort_id],
         )
     except RuntimeError as exc:
-        context["error"] = "CW／CCW 教學試用目前不可用：{}".format(str(exc))
-    return render(request, "learning/student_rotation_v5_scan.html", context)
+        # 推論失敗不建立紀錄：沒有真實結果就沒有檢測紀錄。
+        context["error"] = "CW／CCW 檢測目前不可用：{}".format(str(exc))
+        return render(request, "learning/student_rotation_v5_scan.html", context, status=503)
+    record = _save_inspection_record(
+        enrollment, VisionInspectionRecord.TaskType.PROP_ROTATION_V5, upload, content, result,
+    )
+    return redirect(f"{reverse('learning:student_rotation_v5_scan', args=[enrollment.pk])}?record={record.pk}")
 
 
 @teacher_required
@@ -2471,6 +2610,9 @@ def teacher_rotation_v5_trial(request):
             context["result"] = vision_api.rotation_v5_enable_trial(
                 cohort_id=str(request.POST.get("cohort_id") or ""), teacher_id=request.user.pk,
             )
+            context["status"] = vision_api.rotation_v5_status(teacher_id=request.user.pk)
+        elif action == "withdraw_trial":
+            context["result"] = vision_api.rotation_v5_withdraw_trial(teacher_id=request.user.pk)
             context["status"] = vision_api.rotation_v5_status(teacher_id=request.user.pk)
         elif action == "activate":
             # 服務端仍會因缺少獨立 Golden Test 拒絕，畫面僅如實呈現原因。

@@ -65,6 +65,20 @@ MATRIX = {
     ("/api/v1/vision/golden-sets", "GET"): "teacher",
     ("/api/v1/vision/golden-sets", "POST"): "teacher",
     ("/api/v1/vision/golden-sets/{golden_set_id}", "GET"): "teacher",
+    ("/api/v1/vision/models/{model_id}/restore", "POST"): "teacher",
+    ("/api/v1/vision/models/{model_id}/delete", "POST"): "teacher",
+    ("/api/v1/vision/models/{model_id}/seed", "POST"): "teacher",
+    ("/api/v1/vision/models/{model_id}/unseed", "POST"): "teacher",
+    ("/api/v1/vision/tasks/{model_type}/recommended-seed", "GET"): "student_or_teacher",
+    ("/api/v1/vision/tasks/{model_type}/seed-version-chain", "GET"): "student_or_teacher",
+    ("/api/v1/vision/seed/download", "GET"): "student_or_teacher",
+    ("/api/v1/vision/rotation-v5/status", "GET"): "student_or_teacher",
+    ("/api/v1/vision/rotation-v5/infer", "POST"): "student_or_teacher",
+    ("/api/v1/vision/rotation-v5/teacher/validate-image", "POST"): "teacher",
+    ("/api/v1/vision/rotation-v5/teacher/validations/{validation_id}/confirm", "POST"): "teacher",
+    ("/api/v1/vision/rotation-v5/teacher/enable-trial", "POST"): "teacher_cohort",
+    ("/api/v1/vision/rotation-v5/teacher/withdraw-trial", "POST"): "teacher",
+    ("/api/v1/vision/rotation-v5/teacher/activate-isolated", "POST"): "teacher",
 }
 
 # 「會建立／修改／導入／刪除／審核／啟用資料」的方法：一律不得是 public_read。

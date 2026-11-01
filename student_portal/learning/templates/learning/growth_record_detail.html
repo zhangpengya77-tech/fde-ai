@@ -44,7 +44,7 @@
 <section class="section-block growth-upload-section" aria-labelledby="r07-model-title">
   <h2 id="r07-model-title">上傳 YOLO 模型 best.pt</h2>
   <p class="muted">任務類型：<strong>PROP_DIRECTION</strong>。模型會作為既有 MODEL / YOLO_MODEL 證據送交教師審核，不會自動啟用。</p>
-  <p><a class="button secondary" href="{% url 'learning:student_prop_scan' enrollment.pk %}">槳葉方向辨識（手機拍照檢測）</a></p>
+  <p><a class="button secondary" href="{% url 'learning:student_prop_scan' enrollment.pk %}">槳葉方向辨識（手機拍照檢測）</a> <a class="button secondary" href="{% url 'learning:student_rotation_v5_scan' enrollment.pk %}">CW／CCW 螺旋槳檢測（V5）</a></p>
   {# 數據飛輪 B-5：上期基礎模型（當前推薦種子），學員可下載 .pt 作為下一期訓練起點 #}
   {% if recommended_seed_model %}
   <section class="growth-seed-block" aria-labelledby="r07-seed-title">

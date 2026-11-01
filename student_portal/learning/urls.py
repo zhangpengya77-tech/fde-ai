@@ -43,6 +43,7 @@ urlpatterns = [
     ),
     path("student/courses/<int:enrollment_id>/prop-scan/", views.student_prop_scan, name="student_prop_scan"),
     path("student/courses/<int:enrollment_id>/rotation-v5/", views.student_rotation_v5_scan, name="student_rotation_v5_scan"),
+    path("vision-inspections/<uuid:record_id>/image/", views.vision_inspection_image, name="vision_inspection_image"),
     # POWER_INSPECTION_V1：獨立 MP4 巡檢任務，不影響既有 R07／V5。
     path("student/power-inspection/", views.student_power_inspection_entry, name="power_inspection_entry"),
     path("student/power-inspection/upload/", views.student_power_inspection_api_upload, name="power_inspection_api_upload"),
@@ -119,6 +120,8 @@ urlpatterns = [
     # --- AI 視覺模型中心（2026-10-10 指令 P）：單一教師入口、四個區域 ---
     path("teacher/vision-center/", views.teacher_vision_center, name="teacher_vision_center"),
     path("teacher/vision-center/rotation-v5/", views.teacher_rotation_v5_trial, name="teacher_rotation_v5_trial"),
+    path("teacher/vision-inspections/", views.teacher_vision_inspections, name="teacher_vision_inspections"),
+    path("teacher/vision-inspections/<uuid:record_id>/", views.teacher_vision_inspection_detail, name="teacher_vision_inspection_detail"),
     # POWER_INSPECTION_V1：教師端模型匯入／試用／部署／停用／回退與工作覆核。
     path("teacher/power-inspection/", views.teacher_power_inspection, name="power_inspection_teacher"),
     path("teacher/power-inspection/models/import/", views.teacher_power_inspection_model_import, name="power_inspection_model_import"),

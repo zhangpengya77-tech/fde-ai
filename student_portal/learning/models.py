@@ -28,6 +28,12 @@ def power_inspection_upload_path(instance, filename):
     return f"power_inspection/{instance.pk or uuid.uuid4().hex}/{uuid.uuid4().hex}.{suffix}"
 
 
+def vision_inspection_upload_path(instance, filename):
+    """學員檢測圖片只存私有媒體；檔名由伺服器產生，不沿用使用者輸入。"""
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    return f"vision_inspection/{instance.pk or uuid.uuid4().hex}/{uuid.uuid4().hex}.{suffix}"
+
+
 def validate_evidence_size(file_obj):
     if file_obj.size > 100 * 1024 * 1024:
         from django.core.exceptions import ValidationError
@@ -1348,3 +1354,68 @@ class PowerInspectionReview(models.Model):
 from . import golden_set_guard as _golden_set_guard  # noqa: E402
 
 _golden_set_guard.install(sys.modules[__name__])
+
+
+class VisionInspectionRecord(models.Model):
+    """學員單張圖片的真實 YOLO 檢測與教師覆核紀錄。
+
+    只有 Live 回傳真實推論後才建立；推論失敗不留紀錄，也就不會出現假結果。
+    模型版本與偵測框在建立時複製保存，之後換模型不會改寫歷史。
+    """
+
+    class TaskType(models.TextChoices):
+        PROP_ROTATION_V5 = "PROP_ROTATION_V5", "F450 螺旋槳方向（CW／CCW）"
+        POWER_INSPECTION_V1 = "POWER_INSPECTION_V1", "AI 電力巡檢"
+
+    class ReviewStatus(models.TextChoices):
+        PENDING = "PENDING", "等待教師覆核"
+        PASS = "PASS", "PASS"
+        NG = "NG", "NG"
+        RESUBMIT = "RESUBMIT", "要求重傳"
+
+    record_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name="vision_inspection_records")
+    task_type = models.CharField(max_length=32, choices=TaskType.choices)
+    image = models.FileField(upload_to=vision_inspection_upload_path)
+    original_filename = models.CharField(max_length=255, blank=True)
+    image_sha256 = models.CharField(max_length=64)
+    image_width = models.PositiveIntegerField(default=0)
+    image_height = models.PositiveIntegerField(default=0)
+    model_id = models.CharField(max_length=128)
+    model_version = models.CharField(max_length=128)
+    model_status = models.CharField(max_length=32)
+    model_sha256 = models.CharField(max_length=64, blank=True)
+    detections = models.JSONField(default=list, blank=True)
+    best_class = models.CharField(max_length=64, blank=True)
+    best_confidence = models.FloatField(null=True, blank=True)
+    learning_event_id = models.CharField(max_length=128, blank=True)
+    review_status = models.CharField(max_length=16, choices=ReviewStatus.choices, default=ReviewStatus.PENDING)
+    review_note = models.CharField(max_length=500, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="vision_inspection_reviews",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    # NG／要求重傳的圖片回收為下一輪資料候選；只做標記，不自動進訓練集。
+    failure_sample = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["review_status", "-created_at"], name="vision_insp_review_idx")]
+
+    def __str__(self):
+        return f"{self.task_type}:{self.record_id}"
+
+
+class VisionInspectionReviewEvent(models.Model):
+    """教師每次覆核都追加一筆，改判不覆蓋舊決定。"""
+
+    record = models.ForeignKey(VisionInspectionRecord, on_delete=models.CASCADE, related_name="review_events")
+    decision = models.CharField(max_length=16, choices=VisionInspectionRecord.ReviewStatus.choices)
+    note = models.CharField(max_length=500, blank=True)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="vision_inspection_review_events")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

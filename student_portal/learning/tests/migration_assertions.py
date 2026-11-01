@@ -53,6 +53,7 @@ EXPECTED_CHAIN: tuple[str, ...] = (
     "0024_power_inspection_cohort_default",
     "0025_power_inspection_rule_metadata",
     "0026_power_inspection_deployment_events",
+    "0027_vision_inspection_records",
 )
 
 

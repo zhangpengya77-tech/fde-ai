@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from starlette.testclient import TestClient
+from p6_signed_client import legacy_header_client as TestClient
 
 from app import vision_center as vc
 from app.main import create_app

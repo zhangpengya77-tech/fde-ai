@@ -168,6 +168,15 @@ class PropRotationTrialRegistry:
         self._save()
         return dict(model)
 
+    def withdraw_teaching_trial(self, model_id: str, teacher_id: str) -> dict:
+        """回到待驗證；學員推論立即停用，既有紀錄全部保留。"""
+        self._refresh()
+        model = self._find(model_id)
+        model.update(status="PENDING_TEACHER_VALIDATION", active_isolated_at=None, trial_cohort_ids=[])
+        self.data["audit"].append({"event": "TEACHING_TRIAL_WITHDRAWN", "model_id": model_id, "at": _utc_now(), "teacher_id": str(teacher_id)})
+        self._save()
+        return dict(model)
+
     def activate_isolated(self, model_id: str, teacher_id: str) -> dict:
         """隔離 ACTIVE 也必須有獨立 Golden Test，絕不以人工單張確認取代。"""
         self._refresh()

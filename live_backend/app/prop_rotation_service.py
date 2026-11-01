@@ -90,6 +90,10 @@ class PropRotationTrialService:
         except PropRotationTrialError as exc:
             raise PropRotationServiceError(str(exc)) from exc
 
+    def withdraw_teaching_trial(self, *, teacher_id: str) -> dict:
+        model = self._model()
+        return self.registry.withdraw_teaching_trial(model["model_id"], str(teacher_id))
+
     def activate_isolated(self, *, teacher_id: str) -> dict:
         model = self._model()
         try:
@@ -113,8 +117,8 @@ class PropRotationTrialService:
         )
         return {
             "task_id": model["task_id"], "model_id": model["model_id"], "model_version": model["version"],
-            "model_status": model["status"], "class_names": list(V5_CLASS_NAMES),
-            "detections": detections, "best_detection": detections[0] if detections else None,
+            "model_status": model["status"], "model_sha256": model["file_hash"],
+            "class_names": list(V5_CLASS_NAMES), "detections": detections, "best_detection": detections[0] if detections else None,
             "learning_event_id": event["event_id"],
             "image_width": int(result.get("image_width") or 0), "image_height": int(result.get("image_height") or 0),
         }

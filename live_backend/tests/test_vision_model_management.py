@@ -24,7 +24,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from starlette.testclient import TestClient
+from p6_signed_client import legacy_header_client as TestClient
 
 from app.main import create_app
 from app.vision_center import (
@@ -243,7 +243,7 @@ class ModelManagementTests(unittest.TestCase):
         for call in (self.archive, self.restore, self.delete_model):
             response = call(model["model_id"], headers={})
             self.assertEqual(response.status_code, 403, response.text)
-            self.assertEqual(response.json()["error"]["code"], "teacher_required")
+            self.assertEqual(response.json()["error"]["code"], "internal_auth_rejected")
         # 被拒的請求不得留下任何改動
         self.assertEqual(self.center.get_model(model["model_id"])["status"], "VALIDATED")
         self.assertEqual(self.audit_events(), [])
