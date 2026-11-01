@@ -1065,11 +1065,22 @@ def _guard_resource_id(request, kwargs, key):
     return str(raw).strip()
 
 
+LIVE_GUARD_EXEMPT_PREFIXES = (
+    "/teacher/power-inspection/",
+    "/teacher/growth-reviews/",
+    "/teacher/vision-repository/",
+)
+
+
 def _vision_resource_guard_impl(request, kwargs):
     # POWER_INSPECTION_V1 使用獨立的 Django 模型倉庫（非 Live Vision Registry），
     # 其教師視圖已自行以 teacher_cohorts(request.user) 做班級隔離，比對基準
     # 也不同（PowerInspectionModel 而非 Live 端 model_id），因此不套用本守衛。
-    if request.path.startswith("/teacher/power-inspection/"):
+    #
+    # 2026-11-01 整合：growth-reviews 的 submission_id 是成長紀錄主鍵、vision-repository
+    # 的 model_id 是 Django VisionModelRecord，同名但都不是 Live 資源；拿去 Live 查一定
+    # 查不到而被 fail-closed 擋成 403。兩者的視圖各自以授權班級過濾（未授權回 404）。
+    if request.path.startswith(LIVE_GUARD_EXEMPT_PREFIXES):
         return None
     submission_id = _guard_resource_id(request, kwargs, "submission_id")
     model_id = _guard_resource_id(request, kwargs, "model_id")

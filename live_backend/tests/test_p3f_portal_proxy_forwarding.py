@@ -15,6 +15,8 @@ accept-encoding，其餘標頭原樣傳給 Django —— 客戶端自帶的 `X-F
 """
 
 import unittest
+import os
+from unittest import mock
 from unittest.mock import patch
 
 import httpx
@@ -86,3 +88,18 @@ class PortalProxyForwardedHeaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PortalProxyTimeoutTests(unittest.TestCase):
+    def test_default_outlasts_inference_budget(self):
+        from app.main import portal_proxy_timeout_seconds
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FDE_PORTAL_PROXY_TIMEOUT_SECONDS", None)
+            self.assertGreater(portal_proxy_timeout_seconds(), 120)
+
+    def test_invalid_value_falls_back(self):
+        from app.main import portal_proxy_timeout_seconds
+
+        with mock.patch.dict(os.environ, {"FDE_PORTAL_PROXY_TIMEOUT_SECONDS": "bad"}):
+            self.assertEqual(portal_proxy_timeout_seconds(), 125.0)

@@ -556,9 +556,6 @@ class ShowcaseRegressionTests(P7Base):
             self.assertIn(key, report, key)
 
     def test_no_new_migration_added(self):
-        """P7 未新增任何 Migration。"""
-        migrations = sorted(
-            path.name
-            for path in (Path(__file__).resolve().parent.parent / "migrations").glob("0*.py")
-        )
-        self.assertEqual(migrations[-1], "0019_golden_set_manifest_contract.py")
+        from learning.tests.migration_assertions import assert_migration_chain
+
+        assert_migration_chain(self)

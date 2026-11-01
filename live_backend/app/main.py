@@ -103,6 +103,18 @@ def _default_session_store_path() -> "Path | None":
     return Path(raw)
 
 
+def portal_proxy_timeout_seconds() -> float:
+    """Portal 代理等待上限。
+
+    2026-11-01：學員與教師的 YOLO 推論走這條代理，CPU 推論負載高時超過原本的
+    15 秒，瀏覽器收到 503，後端卻已寫入紀錄。預設值須大於 V5 推論的 120 秒預算。
+    """
+    try:
+        return max(1.0, float(os.environ.get("FDE_PORTAL_PROXY_TIMEOUT_SECONDS", "125")))
+    except ValueError:
+        return 125.0
+
+
 def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None, live_assertion_key=None, trusted_proxy_key=None, require_live_auth=None) -> Starlette:
     config = LiveConfig.from_environment()
     adapter = vision_adapter or VisionAdapter(config.yolo_base_url, timeout_seconds=config.vision_request_timeout_seconds)
@@ -631,7 +643,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         headers["x-forwarded-proto"] = request.url.scheme
         headers["x-forwarded-for"] = request.client.host if request.client else ""
         try:
-            async with httpx.AsyncClient(follow_redirects=False, timeout=15.0) as client:
+            async with httpx.AsyncClient(follow_redirects=False, timeout=portal_proxy_timeout_seconds()) as client:
                 upstream = await client.request(request.method, upstream_url, headers=headers, content=await request.body())
         except httpx.HTTPError:
             return Response("Student Portal is temporarily unavailable.", status_code=503, media_type="text/plain")
