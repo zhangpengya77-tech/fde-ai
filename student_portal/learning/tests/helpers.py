@@ -1,4 +1,6 @@
+import io
 import uuid
+import zipfile
 
 from django.contrib.auth import get_user_model
 
@@ -24,3 +26,12 @@ def create_student_account(email="student@example.com", nickname="Eagle", passwo
 
 def enroll_student(profile, cohort):
     return Enrollment.objects.create(student=profile, cohort=cohort)
+
+
+def valid_pt_bytes(payload=b"weights"):
+    """通過容器預檢的最小 .pt（zip 內含 data.pkl）；不是可載入的模型。"""
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("model/data.pkl", b"\x80\x02}q\x00.")
+        archive.writestr("model/data/0", payload)
+    return stream.getvalue()

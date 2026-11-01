@@ -2448,8 +2448,30 @@ def _save_inspection_record(enrollment, task_type, upload, content, result):
         best_confidence=best.get("confidence"), learning_event_id=str(result.get("learning_event_id") or ""),
     )
     record.image.save(upload.name, ContentFile(content), save=False)
-    record.save()
+    try:
+        with transaction.atomic():
+            record.save()
+    except IntegrityError:
+        # 雙擊或重試同時送達：保留先寫入的紀錄，移除這次多存的圖片。
+        record.image.delete(save=False)
+        return _pending_inspection_record(enrollment, task_type, content)
     return record
+
+
+def _pending_inspection_record(enrollment, task_type, content):
+    """同一張圖已有待覆核紀錄時直接沿用；已覆核的圖片可重新檢測。"""
+    return enrollment.vision_inspection_records.filter(
+        task_type=task_type, image_sha256=hashlib.sha256(content).hexdigest(),
+        review_status=VisionInspectionRecord.ReviewStatus.PENDING,
+    ).first()
+
+
+def _inspection_error_message(exc):
+    """把推論失敗轉成使用者看得懂的說明，不外露內部錯誤碼。"""
+    text = str(exc)
+    if "rotation_inference_unavailable" in text or "vision_api_unavailable" in text or "vision_submission_unavailable" in text:
+        return "AI 檢測逾時或暫時無法使用，本次沒有產生結果，請稍後再重新上傳。"
+    return "CW／CCW 檢測目前不可用：{}".format(text)
 
 
 def _vision_overlay(record):
@@ -2568,6 +2590,10 @@ def student_rotation_v5_scan(request, enrollment_id):
     if error:
         context["error"] = error
         return render(request, "learning/student_rotation_v5_scan.html", context, status=422)
+    task_type = VisionInspectionRecord.TaskType.PROP_ROTATION_V5
+    pending = _pending_inspection_record(enrollment, task_type, content)
+    if pending is not None:
+        return redirect(f"{reverse('learning:student_rotation_v5_scan', args=[enrollment.pk])}?record={pending.pk}")
     try:
         result = vision_api.rotation_v5_student_infer(
             image_bytes=content, student_id=enrollment.student.public_user_id,
@@ -2575,7 +2601,7 @@ def student_rotation_v5_scan(request, enrollment_id):
         )
     except RuntimeError as exc:
         # 推論失敗不建立紀錄：沒有真實結果就沒有檢測紀錄。
-        context["error"] = "CW／CCW 檢測目前不可用：{}".format(str(exc))
+        context["error"] = _inspection_error_message(exc)
         return render(request, "learning/student_rotation_v5_scan.html", context, status=503)
     record = _save_inspection_record(
         enrollment, VisionInspectionRecord.TaskType.PROP_ROTATION_V5, upload, content, result,
@@ -2631,7 +2657,7 @@ def teacher_rotation_v5_trial(request):
         else:
             raise RuntimeError("未知操作。")
     except RuntimeError as exc:
-        context["error"] = str(exc)
+        context["error"] = _inspection_error_message(exc) if action == "validate" else str(exc)
     return render(request, "learning/teacher_rotation_v5_trial.html", context)
 
 

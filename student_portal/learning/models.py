@@ -1403,6 +1403,14 @@ class VisionInspectionRecord(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["review_status", "-created_at"], name="vision_insp_review_idx")]
+        # 同一學員同一張圖只留一筆待覆核：回應遺失後重傳不得讓教師看到兩筆。
+        constraints = [
+            models.UniqueConstraint(
+                fields=["enrollment", "task_type", "image_sha256"],
+                condition=models.Q(review_status="PENDING"),
+                name="vision_insp_one_pending_per_image",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.task_type}:{self.record_id}"

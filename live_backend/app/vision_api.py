@@ -17,6 +17,7 @@ from .vision_center import (
     evaluate_prop,
 )
 from .prop_rotation_service import PropRotationServiceError
+from .rotation_sandbox import RotationSandboxError
 
 
 async def _teacher(request: Request) -> tuple[str | None, Response | None]:
@@ -589,6 +590,8 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
                 image_bytes=content, teacher_id=teacher_id,
                 expected_class=payload.get("expected_class") or None,
             ))
+        except RotationSandboxError as exc:
+            return error_response("rotation_inference_unavailable", str(exc), 503)
         except (ValueError, binascii.Error, PropRotationServiceError) as exc:
             return error_response("rotation_validation_failed", str(exc), 422)
 
@@ -657,6 +660,9 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
                 image_bytes=content, student_id=str(identity.get("student_id") or ""),
                 cohort_ids=list(identity.get("cohort_ids") or []),
             ))
+        except RotationSandboxError as exc:
+            # 逾時或推論失敗：不寫學習事件，由上層明確告知，不回未處理的 500。
+            return error_response("rotation_inference_unavailable", str(exc), 503)
         except (ValueError, binascii.Error, PropRotationServiceError) as exc:
             return error_response("rotation_inference_failed", str(exc), 422)
 

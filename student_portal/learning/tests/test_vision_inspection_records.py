@@ -117,3 +117,42 @@ class VisionInspectionRecordTests(TestCase):
         self.assertContains(self._client(self.teacher_a).get(url), "學員 A")
         self.assertNotContains(self._client(self.teacher_b).get(url), "學員 A")
         self.assertNotContains(self._client(self.teacher_a).get(url, {"status": "PASS"}), "學員 A")
+
+    def test_retry_of_same_image_keeps_one_pending_record(self):
+        first = self._record()
+        with mock.patch("learning.views.vision_api.rotation_v5_student_infer") as infer:
+            response = self._client(self.student_a.user).post(
+                reverse("learning:student_rotation_v5_scan", args=[self.enrollment_a.pk]),
+                {"photo": SimpleUploadedFile("again.jpg", JPEG)},
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(str(first.pk), response["Location"])
+        infer.assert_not_called()
+        self.assertEqual(VisionInspectionRecord.objects.count(), 1)
+
+    def test_concurrent_duplicate_save_returns_existing_record(self):
+        from learning import views
+
+        first = self._record()
+        upload = SimpleUploadedFile("b.jpg", JPEG)
+        with mock.patch("learning.views._pending_inspection_record", side_effect=[first]):
+            saved = views._save_inspection_record(self.enrollment_a, first.task_type, upload, JPEG, INFERENCE)
+        self.assertEqual(saved.pk, first.pk)
+        self.assertEqual(VisionInspectionRecord.objects.count(), 1)
+
+    def test_reviewed_image_can_be_inspected_again(self):
+        record = self._record()
+        self._client(self.teacher_a).post(
+            reverse("learning:teacher_vision_inspection_detail", args=[record.pk]), {"decision": "RESUBMIT"},
+        )
+        self.assertEqual(self._upload().status_code, 302)
+        self.assertEqual(VisionInspectionRecord.objects.count(), 2)
+        record.refresh_from_db()
+        self.assertEqual(record.review_status, "RESUBMIT")
+
+    def test_real_timeout_shows_clear_message(self):
+        response = self._upload(side_effect=RuntimeError("vision_api_rejected:503:rotation_inference_unavailable:sandbox_timeout"))
+        self.assertEqual(response.status_code, 503)
+        self.assertContains(response, "AI 檢測逾時或暫時無法使用", status_code=503)
+        self.assertNotContains(response, "sandbox_timeout", status_code=503)
+        self.assertFalse(VisionInspectionRecord.objects.exists())

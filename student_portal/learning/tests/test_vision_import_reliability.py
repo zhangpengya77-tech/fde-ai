@@ -35,6 +35,12 @@ class VisionImportReliabilityTests(TestCase):
         TeacherCohortAccess.objects.create(teacher=self.teacher, cohort=self.cohort)
         self.client.force_login(self.teacher)
         self.submission_id = "sub-00000000-0000-0000-0000-000000000001"
+        # 班級守衛會向 Live 查資源歸屬；本檔測匯入流程，歸屬以替身回傳本班學員。
+        # 守衛的拒絕行為由 VisionImportGuardTests 與 test_teacher_guard_security 驗證。
+        for name in ("_vision_lookup_submission_student", "_vision_lookup_model_student"):
+            stub = patch.object(views, name, return_value=(True, self.student.public_user_id))
+            stub.start()
+            self.addCleanup(stub.stop)
 
     def _post_import(self):
         return self.client.post(
@@ -184,3 +190,21 @@ class VisionImportReliabilityTests(TestCase):
         self.assertIn("此模型已隔離，無法啟用。", joined)
         self.assertIn("原本的正式模型未變更", joined)
         self.assertNotIn("vision_api_rejected", joined)
+
+
+class VisionImportGuardTests(TestCase):
+    """未替身守衛時，無法確認歸屬的匯入必須被拒絕，且不得呼叫 Live 匯入。"""
+
+    def test_import_is_refused_when_live_lookup_is_unavailable(self):
+        cohort = Cohort.objects.create(cohort_id="P1-G", name="守衛班")
+        teacher = get_user_model().objects.create_user(username="p1-guard@example.test", password="x", is_staff=True)
+        TeacherCohortAccess.objects.create(teacher=teacher, cohort=cohort)
+        self.client.force_login(teacher)
+        with patch.object(views.vision_api, "list_submissions", side_effect=RuntimeError("vision_api_unavailable")), \
+                patch.object(views.vision_api, "import_submission") as import_submission:
+            response = self.client.post(
+                reverse("learning:teacher_vision_center_import"),
+                {"submission_id": "sub-unknown", "task_id": "PROP_DIRECTION"},
+            )
+        self.assertEqual(response.status_code, 403)
+        import_submission.assert_not_called()

@@ -22,7 +22,7 @@ from django.urls import reverse
 
 from learning.growth_records import ensure_growth_submissions
 from learning.models import Cohort, Evidence, GrowthRecordSubmission
-from learning.tests.helpers import create_student_account, enroll_student
+from learning.tests.helpers import create_student_account, enroll_student, valid_pt_bytes
 from learning.views import (
     _vision_clear_submission_superseded,
     _vision_mark_submission_superseded,
@@ -148,7 +148,7 @@ class VisionModelReuploadTests(TestCase):
     def test_upload_endpoint_accepts_resubmit_after_archive(self):
         self.make_evidence(submission_id="sub-mg-5", status="SUPERSEDED")
         self.set_status(GrowthRecordSubmission.Status.APPROVED)
-        content = b"PT-NEW-WEIGHTS-" * 2048
+        content = valid_pt_bytes(b"PT-NEW-WEIGHTS-" * 2048)
         upload = SimpleUploadedFile("best-v2.pt", content, content_type="application/octet-stream")
 
         with patch("learning.views.submit_model_evidence_to_vision") as forward:
