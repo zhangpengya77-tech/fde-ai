@@ -1,0 +1,2355 @@
+diff --git a/cloudflare/dev-phase1a/worker.mjs b/cloudflare/dev-phase1a/worker.mjs
+index efea1b7..c6015f8 100644
+--- a/cloudflare/dev-phase1a/worker.mjs
++++ b/cloudflare/dev-phase1a/worker.mjs
+@@ -23,6 +23,28 @@ function isLivePath(pathname) {
+   return pathname === '/live' || pathname.startsWith('/live/') || pathname.startsWith('/api/live/');
+ }
+ 
++// P6（2026-10-28）：客戶端送來的身分標頭一律不得進入 Live 上游。
++//   * `X-FDE-*`：舊的 X-FDE-Role / X-FDE-Teacher-ID / X-FDE-Student-ID，
++//     以及任何客戶端自帶的 X-FDE-Live-Assertion（Assertion 只能由 Django 簽發）。
++//   * Cookie / Authorization：外部瀏覽器憑證不得轉發給內部服務。
++//   * X-Forwarded-* / X-Real-IP / X-Original-* / X-Client-* / X-Auth-* / Forwarded。
++const STRIPPED_EXACT = ['cookie', 'authorization', 'forwarded', 'x-real-ip'];
++const STRIPPED_PREFIX = ['x-fde-', 'x-forwarded-', 'x-original-', 'x-client-', 'x-auth-'];
++
++function shouldStripHeader(name) {
++  const lower = String(name).toLowerCase();
++  return STRIPPED_EXACT.includes(lower) || STRIPPED_PREFIX.some((prefix) => lower.startsWith(prefix));
++}
++
++function stripClientIdentityHeaders(headers) {
++  const clean = new Headers();
++  for (const [name, value] of headers.entries()) {
++    if (shouldStripHeader(name)) continue;
++    clean.append(name, value);
++  }
++  return clean;
++}
++
+ async function handler(request, env, context = {}) {
+   const incoming = new URL(request.url);
+   if (!isLivePath(incoming.pathname)) {
+@@ -37,8 +59,9 @@ async function handler(request, env, context = {}) {
+   const target = new URL(liveOrigin);
+   target.pathname = incoming.pathname;
+   target.search = incoming.search;
+-  const headers = new Headers(request.headers);
++  const headers = stripClientIdentityHeaders(request.headers);
+   headers.delete('host');
++  headers.delete('X-FDE-Live-Assertion');
+   const init = {
+     method: request.method,
+     headers,
+@@ -65,4 +88,4 @@ async function handler(request, env, context = {}) {
+ }
+ 
+ export default { fetch: handler };
+-export { handler, isLivePath };
++export { handler, isLivePath, stripClientIdentityHeaders };
+diff --git a/demo/tools/static_entry_server.py b/demo/tools/static_entry_server.py
+index 4e15233..2cae947 100644
+--- a/demo/tools/static_entry_server.py
++++ b/demo/tools/static_entry_server.py
+@@ -11,7 +11,16 @@
+ 安全設計：
+   * 同源（單一主機：連接埠）提供頁面與 API，Session Cookie / CSRF / CORS
+     機制完全沿用 Django 既有設定，不開啟萬用 CORS、不關閉任何安全驗證。
++  * **Origin / Referer 原樣轉發，不改寫**（P3-E 2026-10-25）。入口對外位址必須以
++    `DJANGO_CSRF_TRUSTED_ORIGINS` 明確列入 Django 白名單；本代理另以
++    `FDE_ENTRY_TRUSTED_ORIGINS` 做最外層前置攔截（可留空，留空時由 Django 決定）。
+   * 只綁 192.168.1.114（與 DEMO 其他服務一致，不綁 0.0.0.0）。
++  * **Host 明確白名單**（P3-F 2026-10-25）：本代理會把 `Host` 改寫成上游位址，
++    上游 `ALLOWED_HOSTS` 因此看不到瀏覽器送來的 Host。合法性在本層判定，
++    未授權 Host 一律回 400；白名單以 `FDE_ENTRY_ALLOWED_HOSTS` 明確列出。
++  * **轉發標頭不採信客戶端**（P3-F 2026-10-25）：客戶端自帶的 `X-Forwarded-*`／
++    `Forwarded` 一律丟棄，`X-Forwarded-Proto` 由本層依 `FDE_ENTRY_PUBLIC_SCHEME`
++    決定（預設 `http`，因本代理無 TLS）；純 HTTP 部署不再被誤標為 HTTPS。
+   * 靜態檔僅允許讀取 public-site 目錄，禁止目錄穿越。
+   * 本檔為「新增的部署基礎設施」，不修改任何既有程式碼、資料或審核規則。
+ 
+@@ -46,6 +55,143 @@ UPSTREAM_HOST = os.environ.get("FDE_ENTRY_UPSTREAM_HOST", "192.168.1.114")
+ UPSTREAM_PORT = int(os.environ.get("FDE_ENTRY_UPSTREAM_PORT", "8111"))
+ UPSTREAM_TIMEOUT = float(os.environ.get("FDE_ENTRY_UPSTREAM_TIMEOUT", "120"))
+ 
++
++# ---------------------------------------------------------------- 來源信任白名單
++# P3-E（2026-10-25）安全收斂：本代理**不再改寫** Origin / Referer。
++#
++# 2026-10-23 曾以「把 Origin 改寫成內部 Django 位址」的方式繞過 CSRF 403，但這會讓
++# Django 的 Origin 比對恆成立 —— 等於把第二道防線整條中和，任何跨站來源都能通過
++# Origin 檢查（只剩 CSRF token 一道）。本版改為：
++#   1. Origin / Referer 原樣轉發，瀏覽器送什麼就是什麼；
++#   2. Django 端以 `DJANGO_CSRF_TRUSTED_ORIGINS` **明確列出**入口的對外位址；
++#   3. 本代理在最外層做一次「來源是否在白名單內」的前置攔截（縱深防禦）。
++#
++# `FDE_ENTRY_TRUSTED_ORIGINS`：逗號分隔的完整來源（scheme://host[:port]）。
++#   * 不允許萬用字元（含 `*`）—— 出現即啟動失敗（fail closed），不做靜默降級。
++#   * 未設定時本層不攔截，完全交由 Django 的 CSRF 檢查決定（Django 仍是權威）。
++#   * 例：FDE_ENTRY_TRUSTED_ORIGINS=https://demo.example.edu.tw,http://127.0.0.1:8112
++UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
++
++
++def _parse_trusted_origins(raw: str) -> frozenset:
++    """解析並嚴格驗證來源白名單；任何不合規格即拋 SystemExit（啟動失敗）。"""
++    parsed = set()
++    for item in (raw or "").split(","):
++        origin = item.strip().rstrip("/")
++        if not origin:
++            continue
++        if "*" in origin:
++            raise SystemExit(
++                "[entry] FDE_ENTRY_TRUSTED_ORIGINS 不允許萬用字元；請逐一列出完整來源（fail closed）。"
++            )
++        parts = urlsplit(origin)
++        if parts.scheme not in ("http", "https") or not parts.netloc:
++            raise SystemExit(f"[entry] FDE_ENTRY_TRUSTED_ORIGINS 項目無法解析：{origin!r}")
++        if parts.path or parts.query or parts.fragment:
++            raise SystemExit(f"[entry] FDE_ENTRY_TRUSTED_ORIGINS 項目不可帶路徑／查詢：{origin!r}")
++        parsed.add(f"{parts.scheme}://{parts.netloc}".lower())
++    return frozenset(parsed)
++
++
++TRUSTED_ORIGINS = _parse_trusted_origins(os.environ.get("FDE_ENTRY_TRUSTED_ORIGINS", ""))
++
++
++# ---------------------------------------------------------------- Host 白名單
++# P3-F（2026-10-25）安全收斂：本代理在轉發前會把 `Host` 改寫成上游位址，因此
++# 瀏覽器送來的 Host **永遠不會**到達上游的 `ALLOWED_HOSTS` 檢查。若不在這一層
++# 判定，偽造 Host 等於無人把關。故本層自帶明確白名單：
++#   * `FDE_ENTRY_ALLOWED_HOSTS`：逗號分隔的 `host` 或 `host:port`（可含 IPv6 方括號）。
++#     設定後**完全取代**預設值；不允許萬用字元，出現即啟動失敗（fail closed）。
++#   * 未設定時採預設值：loopback（含 IPv6）與本代理實際綁定位址，各自帶/不帶本埠。
++#   * 未帶埠的 Host 與帶埠的 Host 視為不同項目，需分別列出（HTTP/1.1 預設埠除外）。
++def _parse_allowed_hosts(raw: str) -> frozenset:
++    parsed = set()
++    for item in (raw or "").split(","):
++        host = item.strip().lower().rstrip(".")
++        if not host:
++            continue
++        if "*" in host:
++            raise SystemExit(
++                "[entry] FDE_ENTRY_ALLOWED_HOSTS 不允許萬用字元；請逐一列出完整主機（fail closed）。"
++            )
++        parsed.add(host)
++    return frozenset(parsed)
++
++
++def _default_allowed_hosts() -> frozenset:
++    base = {"127.0.0.1", "localhost", "[::1]", BIND_ADDR.strip().lower()}
++    hosts = set(base)
++    for host in base:
++        hosts.add(f"{host}:{PORT}")
++    return frozenset(hosts)
++
++
++ALLOWED_HOSTS = _parse_allowed_hosts(os.environ.get("FDE_ENTRY_ALLOWED_HOSTS", "")) or _default_allowed_hosts()
++
++
++# ---------------------------------------------------------------- 轉發標頭策略
++# P3-F（2026-10-25）：`X-Forwarded-*` 一律由本代理自行決定，**不採信客戶端送來的值**。
++# 舊行為是 `X-Forwarded-Proto = 客戶端自帶值 or "https"`，等同：
++#   1. 任何客戶端自帶 `X-Forwarded-Proto: https` 就能把純 HTTP 連線偽造成 HTTPS；
++#   2. 沒帶時預設成 `https`，使非 DEBUG 的純 HTTP 部署被誤標為 HTTPS，
++#      `SECURE_SSL_REDIRECT` 因此不再生效。
++# 新行為：客戶端提供的轉發標頭全部丟棄，改由本層設定；HTTPS 只在運維明確聲明
++# 「本入口位於可信 TLS 終結器之後」時才標記。
++CLIENT_FORWARDED_HEADERS = frozenset(
++    {
++        "x-forwarded-proto",
++        "x-forwarded-host",
++        "x-forwarded-for",
++        "x-forwarded-port",
++        "x-forwarded-server",
++        "x-real-ip",
++        "forwarded",
++    }
++)
++
++# ---------------------------------------------------------------- 身分標頭策略
++# P6（2026-10-28）：Live Backend 只信任 Django 簽發的短效 Assertion，客戶端送來的
++# 任何身分標頭一律在入口丟棄，避免瀏覽器／本機程序偽造身分直通上游。
++#   * `X-FDE-*`：包含舊的 X-FDE-Role / X-FDE-Teacher-ID / X-FDE-Student-ID，
++#     以及任何客戶端自帶的 X-FDE-Live-Assertion（Assertion 只能由 Django 產生）。
++#   * Cookie / Authorization：上游不得看到外部瀏覽器的憑證。
++#   * X-Forwarded-* / X-Real-IP / Forwarded / X-Original-* / X-Client-* / X-Auth-*：
++#     一律由本層決定或根本不應存在於客戶端請求。
++CLIENT_IDENTITY_HEADERS = frozenset({"cookie", "authorization", "forwarded", "x-real-ip"})
++CLIENT_IDENTITY_PREFIXES = (
++    "x-fde-",
++    "x-forwarded-",
++    "x-original-",
++    "x-client-",
++    "x-auth-",
++)
++
++
++def strip_client_identity_headers(headers) -> dict:
++    """丟棄所有客戶端身分／轉發標頭，回傳可安全轉發給上游的 dict。
++
++    接受 mapping（dict / email.message.Message）或 (name, value) 序列。
++    """
++    pairs = headers.items() if hasattr(headers, "items") else headers
++    clean = {}
++    for key, value in pairs:
++        lower = str(key).lower()
++        if lower in CLIENT_IDENTITY_HEADERS or lower.startswith(CLIENT_IDENTITY_PREFIXES):
++            continue
++        clean[key] = value
++    return clean
++
++
++def _parse_public_scheme(raw: str) -> str:
++    scheme = (raw or "").strip().lower()
++    if scheme not in ("http", "https"):
++        raise SystemExit(f"[entry] FDE_ENTRY_PUBLIC_SCHEME 只接受 http 或 https：{raw!r}")
++    return scheme
++
++
++# 本代理是純 HTTP 監聽（ThreadingHTTPServer，無 TLS），因此預設對外 scheme 為 http。
++PUBLIC_SCHEME = _parse_public_scheme(os.environ.get("FDE_ENTRY_PUBLIC_SCHEME", "http"))
++
+ # 上游健康檢查目標（本機探測，僅供狀態燈顯示；不對外暴露內部錯誤細節）。
+ # 注意：/api/live/health 實測延遲約 2~3 秒，探測逾時預設 6 秒。
+ HEALTH_PROBES = {
+@@ -125,16 +271,38 @@ class EntryHandler(BaseHTTPRequestHandler):
+     server_version = "FDE-Entry/1.0"
+ 
+     # ---------------------------------------------------------------- helpers
+-    def _send_bytes(self, status: int, body: bytes, content_type: str, extra_headers=None) -> None:
++    def handle(self) -> None:
++        """客戶端在 keep-alive 期間直接斷線屬正常情形，不留下堆疊噪音。
++
++        `BaseHTTPRequestHandler.handle()` 不捕捉 `ConnectionError`，瀏覽器切頁或
++        取消請求時會在日誌留下整段 traceback，遮蔽真正的錯誤。
++        """
++        try:
++            super().handle()
++        except ConnectionError:
++            self.close_connection = True
++
++    def _send_bytes(self, status: int, body: bytes, content_type: str, extra_headers=None, *, close: bool = False) -> None:
+         self.send_response(status)
+         self.send_header("Content-Type", content_type)
+         self.send_header("Content-Length", str(len(body)))
+         self.send_header("Cache-Control", "no-store")
++        if close:
++            # 拒絕類回應**不讀取請求體**（避免為攻擊者白讀大量位元組）。HTTP/1.1
++            # keep-alive 下若不關閉連線，殘留的請求體會被當成下一個請求的開頭，
++            # 造成連線內請求錯位（實測：同一條連線上的下一個 POST 被誤判為 501）。
++            self.close_connection = True
++            self.send_header("Connection", "close")
+         for key, value in (extra_headers or []):
+             self.send_header(key, value)
+         self.end_headers()
+         if self.command != "HEAD":
+-            self.wfile.write(body)
++            try:
++                self.wfile.write(body)
++            except ConnectionError:
++                # 客戶端提前斷線（瀏覽器取消、健康探測讀完即關）屬正常情形，
++                # 不應在日誌留下整段堆疊噪音。
++                pass
+ 
+     def _read_body(self) -> bytes:
+         if "chunked" in (self.headers.get("Transfer-Encoding") or "").lower():
+@@ -184,6 +352,90 @@ class EntryHandler(BaseHTTPRequestHandler):
+         body = json.dumps(report, ensure_ascii=False).encode("utf-8")
+         self._send_bytes(200, body, "application/json; charset=utf-8")
+ 
++    # ---------------------------------------------------------------- host gate
++    def _host_gate(self) -> bool:
++        """Host 白名單前置檢查（所有方法、所有路徑，含靜態檔）。
++
++        理由：本代理會把 `Host` 改寫成上游位址，上游的 `ALLOWED_HOSTS` 看不到
++        瀏覽器送來的 Host。若不在此攔截，偽造 Host 不會被任何一層拒絕。
++        """
++        raw = (self.headers.get("Host") or "").strip().lower().rstrip(".")
++        if raw and raw in ALLOWED_HOSTS:
++            return True
++        return self._reject_host(raw)
++
++    def _reject_host(self, candidate: str) -> bool:
++        """Host 不合格：回 400 且不轉發。回應不得包含白名單內容或內部位址。"""
++        sys.stderr.write(f"[entry] host rejected: {candidate!r} {self.command}\n")
++        sys.stderr.flush()
++        body = json.dumps(
++            {
++                "error": {
++                    "code": "host_not_allowed",
++                    "message": "Request host is not in the configured allowlist.",
++                }
++            },
++            ensure_ascii=False,
++        ).encode("utf-8")
++        self._send_bytes(400, body, "application/json; charset=utf-8", close=True)
++        return False
++
++    # ---------------------------------------------------------------- origin gate
++    @staticmethod
++    def _normalize_origin(value: str) -> str:
++        """把 Origin/Referer 正規化為 scheme://host[:port]（去路徑、轉小寫）。"""
++        parts = urlsplit(value.strip())
++        if not parts.scheme or not parts.netloc:
++            return ""
++        return f"{parts.scheme}://{parts.netloc}".lower()
++
++    def _origin_gate(self) -> bool:
++        """不安全方法的前置來源檢查。回傳 True 表示放行。
++
++        語意刻意與 Django 一致，但**不取代** Django：
++          * 只比對「瀏覽器自己送來的」Origin／Referer，不改寫、不合成。
++          * 白名單未設定 → 放行（由 Django 的 CSRF_TRUSTED_ORIGINS 決定）。
++          * 兩者皆缺 → 放行（Django 仍會要求 CSRF token，缺 token 必被拒）。
++          * 有值但不在白名單 → 立即 403，不轉發給上游。
++          * 有值但無法解析（如 `Origin: null`，來自沙箱 iframe / file://）
++            → 一律拒絕，不當成「沒有來源」放行。
++        """
++        if not TRUSTED_ORIGINS or self.command not in UNSAFE_METHODS:
++            return True
++        origin = (self.headers.get("Origin") or "").strip()
++        referer = (self.headers.get("Referer") or "").strip()
++        if origin:
++            candidate = self._normalize_origin(origin)
++            if not candidate:
++                # Origin 存在但不可解析（null / 畸形）：fail closed。
++                return self._reject_origin(origin)
++        elif referer:
++            candidate = self._normalize_origin(referer)
++            if not candidate:
++                return self._reject_origin(referer)
++        else:
++            # 完全沒有來源資訊：不以此放行，交由 Django 的 token 檢查把關。
++            return True
++        if candidate in TRUSTED_ORIGINS:
++            return True
++        return self._reject_origin(candidate)
++
++    def _reject_origin(self, candidate: str) -> bool:
++        """來源不合格：回 403 且不轉發。回應不得包含任何內部位址或埠。"""
++        sys.stderr.write(f"[entry] origin rejected: {candidate!r} {self.command} {self.path}\n")
++        sys.stderr.flush()
++        body = json.dumps(
++            {
++                "error": {
++                    "code": "origin_not_allowed",
++                    "message": "Request origin is not in the configured allowlist.",
++                }
++            },
++            ensure_ascii=False,
++        ).encode("utf-8")
++        self._send_bytes(403, body, "application/json; charset=utf-8", close=True)
++        return False
++
+     # ---------------------------------------------------------------- proxy
+     def _proxy(self) -> None:
+         split = urlsplit(self.path)
+@@ -192,14 +444,22 @@ class EntryHandler(BaseHTTPRequestHandler):
+             upstream_path = f"{upstream_path}?{split.query}"
+         body = self._read_body()
+ 
+-        headers = {}
+-        for key, value in self.headers.items():
+-            if key.lower() in HOP_BY_HOP_REQUEST:
+-                continue
+-            headers[key] = value
++        # P6：先丟棄客戶端身分標頭（X-FDE-*、Cookie、Authorization、轉發類），
++        # 再套用 hop-by-hop / X-Forwarded-* 規則；兩者皆為「客戶端不可信」策略。
++        headers = strip_client_identity_headers(self.headers.items())
++        headers = {
++            key: value
++            for key, value in headers.items()
++            if key.lower() not in HOP_BY_HOP_REQUEST and key.lower() not in CLIENT_FORWARDED_HEADERS
++        }
++        headers.pop("X-FDE-Live-Assertion", None)
+         headers["Host"] = f"{UPSTREAM_HOST}:{UPSTREAM_PORT}"
++        # P3-E：Origin / Referer **原樣轉發**（刻意不改寫）。
++        # 若在此改寫成內部位址，Django 的 Origin 比對會恆成立，跨站來源即可通過
++        # 第二道防線。入口對外位址請列入 Django 的 DJANGO_CSRF_TRUSTED_ORIGINS。
+         headers["Content-Length"] = str(len(body))
+-        headers["X-Forwarded-Proto"] = self.headers.get("X-Forwarded-Proto", "https")
++        # P3-F：轉發標頭由本層決定，不採信客戶端（見 CLIENT_FORWARDED_HEADERS 註解）。
++        headers["X-Forwarded-Proto"] = PUBLIC_SCHEME
+         headers["X-Forwarded-Host"] = self.headers.get("Host", "")
+         headers["X-Forwarded-For"] = self.client_address[0]
+         headers["Connection"] = "close"
+@@ -231,10 +491,19 @@ class EntryHandler(BaseHTTPRequestHandler):
+         self.send_header("Content-Length", str(len(data)))
+         self.end_headers()
+         if self.command != "HEAD":
+-            self.wfile.write(data)
++            try:
++                self.wfile.write(data)
++            except ConnectionError:
++                pass
+ 
+     # ---------------------------------------------------------------- routes
+     def _route(self) -> None:
++        # Host 檢查最先：它與方法無關，且靜態檔分支也必須受同一白名單約束。
++        if not self._host_gate():
++            return
++        # 來源檢查必須先於任何回應分支（含靜態檔），否則 POST 到 "/" 會繞過。
++        if not self._origin_gate():
++            return
+         path = urlsplit(self.path).path
+         if path == "/favicon.ico":
+             self._send_bytes(204, b"", "image/x-icon")
+@@ -300,6 +569,10 @@ def main() -> int:
+     print(f"[entry] static site : {SITE_DIR}", flush=True)
+     print(f"[entry] listening   : http://{BIND_ADDR}:{PORT}", flush=True)
+     print(f"[entry] upstream    : http://{UPSTREAM_HOST}:{UPSTREAM_PORT} (Live Backend)", flush=True)
++    if TRUSTED_ORIGINS:
++        print(f"[entry] trusted origin: {', '.join(sorted(TRUSTED_ORIGINS))}", flush=True)
++    else:
++        print("[entry] trusted origin: (未設定；由 Django CSRF_TRUSTED_ORIGINS 決定)", flush=True)
+     try:
+         server.serve_forever()
+     except KeyboardInterrupt:
+diff --git a/live_backend/_run_unittests.py b/live_backend/_run_unittests.py
+new file mode 100644
+index 0000000..7630c2d
+--- /dev/null
++++ b/live_backend/_run_unittests.py
+@@ -0,0 +1,15 @@
++"""Run live_backend unittest modules without pytest (no tests/__init__.py)."""
++import sys
++import unittest
++from pathlib import Path
++
++LIVE = Path(__file__).resolve().parent
++sys.path.insert(0, str(LIVE / "tests"))
++sys.path.insert(0, str(LIVE))
++
++loader = unittest.TestLoader()
++suite = unittest.TestSuite()
++for name in sys.argv[1:]:
++    suite.addTests(loader.loadTestsFromName(name))
++result = unittest.TextTestRunner(verbosity=1).run(suite)
++sys.exit(0 if result.wasSuccessful() else 1)
+diff --git a/live_backend/app/gateway.py b/live_backend/app/gateway.py
+new file mode 100644
+index 0000000..3ac6799
+--- /dev/null
++++ b/live_backend/app/gateway.py
+@@ -0,0 +1,224 @@
++"""P3-D 最小身分閘道：以 Django Session 換取短效 Assertion 後轉送 Live。
++
++設計邊界：
++- 只處理 `/api/live/` 受保護路徑，其餘請求原樣轉送，不新增業務邏輯。
++- 瀏覽器自帶的身分標頭一律剝除，角色與班級只採用 Django 簽發的 Assertion。
++- 缺少任何一把金鑰、或 Django 不可用時一律 Fail Closed，不回退到信任標頭。
++- 本模組不簽發任何 Assertion；簽發權僅在 Django。
++"""
++
++from __future__ import annotations
++
++import json
++import os
++from dataclasses import dataclass
++
++import httpx
++from starlette.responses import Response
++
++
++PROTECTED_PREFIX = "/api/live/"
++EXEMPT_PATHS = frozenset({"/api/live/health"})
++ASSERTION_PATH = "/api/live/auth/assertion/"
++
++# 瀏覽器可能自行偽造的身分標頭；進入 Live 前必須全部剝除。
++# `x-fde-gateway-auth` 也列入：它只屬於「閘道 → Django」這一段，絕不可由瀏覽器帶進
++# 下游（否則內部金鑰有機會被當成一般標頭轉送到 Live 或寫進日誌）。
++CLIENT_IDENTITY_HEADERS = frozenset(
++    {
++        "x-fde-proxy-auth",
++        "x-fde-live-assertion",
++        "x-fde-role",
++        "x-fde-teacher-id",
++        "x-fde-gateway-auth",
++    }
++)
++
++
++@dataclass(frozen=True)
++class GatewayConfig:
++    """閘道執行期設定；任一必要值為空即視為不可用。"""
++
++    django_origin: str
++    gateway_key: str
++    proxy_key: str
++    timeout_seconds: float = 5.0
++
++    @property
++    def usable(self) -> bool:
++        return bool(self.django_origin and self.gateway_key and self.proxy_key)
++
++    @classmethod
++    def from_environment(cls) -> "GatewayConfig":
++        def read(name: str, default: str = "") -> str:
++            return str(os.environ.get(name, default) or "").strip()
++
++        try:
++            timeout = float(read("FDE_GATEWAY_UPSTREAM_TIMEOUT_SECONDS", "5") or "5")
++        except ValueError:
++            timeout = 5.0
++        return cls(
++            django_origin=read("FDE_GATEWAY_DJANGO_ORIGIN", "http://127.0.0.1:8022").rstrip("/"),
++            gateway_key=read("FDE_GATEWAY_INTERNAL_AUTH_KEY"),
++            proxy_key=read("FDE_LIVE_PROXY_KEY"),
++            timeout_seconds=max(0.5, min(timeout, 30.0)),
++        )
++
++
++def _json_response(status_code: int, code: str, message: str) -> Response:
++    """與 Live 既有 `error_response` 相同的錯誤信封，前端不需分支處理。"""
++    response = Response(
++        json.dumps({"error": {"code": code, "message": message}}, ensure_ascii=False),
++        status_code=status_code,
++        media_type="application/json",
++    )
++    response.headers["Cache-Control"] = "no-store"
++    return response
++
++
++def _header_value(headers: list[tuple[bytes, bytes]], name: bytes) -> str:
++    for header_name, value in headers:
++        if header_name == name:
++            return value.decode("latin-1")
++    return ""
++
++
++def _csrf_from_cookie(cookie_header: str) -> str:
++    """Django 的 double-submit 契約：把 csrftoken cookie 回填到 X-CSRFToken。"""
++    for chunk in cookie_header.split(";"):
++        name, _, value = chunk.strip().partition("=")
++        if name == "csrftoken" and value:
++            return value
++    return ""
++
++
++def _read_payload(response: httpx.Response) -> dict:
++    try:
++        payload = response.json()
++    except ValueError:
++        return {}
++    return payload if isinstance(payload, dict) else {}
++
++
++def _failure(response: httpx.Response) -> tuple[int, str, str]:
++    """把 Django 的回應映射成閘道對外錯誤，不洩漏上游細節。"""
++    payload = _read_payload(response)
++    upstream_code = payload.get("error") if isinstance(payload.get("error"), str) else ""
++    if response.status_code == 401:
++        return 401, "live_session_required", "An authenticated session is required."
++    if response.status_code == 403:
++        return 403, upstream_code or "live_identity_forbidden", "Live identity is not authorized."
++    if response.status_code == 409:
++        return 409, upstream_code or "live_identity_ambiguous", "Live identity requires an explicit scope."
++    return 503, "gateway_identity_unavailable", "Identity provider rejected the request."
++
++
++class IdentityGateway:
++    """包在 Live ASGI app 外層的最小身分閘道。"""
++
++    def __init__(self, app, *, config: GatewayConfig, transport: httpx.AsyncBaseTransport | None = None) -> None:
++        self.app = app
++        self.config = config
++        self.transport = transport
++
++    def _is_protected(self, path: str) -> bool:
++        return path.startswith(PROTECTED_PREFIX) and path not in EXEMPT_PATHS
++
++    async def _reject(self, scope, receive, send, status_code: int, code: str, message: str) -> None:
++        await _json_response(status_code, code, message)(scope, receive, send)
++
++    async def __call__(self, scope, receive, send) -> None:
++        if scope["type"] != "http":
++            await self.app(scope, receive, send)
++            return
++
++        path = str(scope.get("path") or "")
++        if not self._is_protected(path):
++            await self.app(scope, receive, send)
++            return
++
++        incoming = list(scope.get("headers") or [])
++        stripped = [
++            (name, value)
++            for name, value in incoming
++            if name.decode("latin-1").lower() not in CLIENT_IDENTITY_HEADERS
++        ]
++
++        if not self.config.usable:
++            await self._reject(
++                scope,
++                receive,
++                send,
++                503,
++                "gateway_misconfigured",
++                "Gateway identity settings are unavailable.",
++            )
++            return
++
++        cookie = _header_value(stripped, b"cookie")
++        upstream_headers = {
++            "X-FDE-Gateway-Auth": self.config.gateway_key,
++            "Origin": self.config.django_origin,
++            "Accept": "application/json",
++        }
++        if cookie:
++            upstream_headers["Cookie"] = cookie
++        csrf_token = _csrf_from_cookie(cookie)
++        if csrf_token:
++            upstream_headers["X-CSRFToken"] = csrf_token
++
++        try:
++            async with httpx.AsyncClient(
++                transport=self.transport,
++                timeout=self.config.timeout_seconds,
++                follow_redirects=False,
++            ) as client:
++                upstream = await client.post(
++                    self.config.django_origin + ASSERTION_PATH,
++                    headers=upstream_headers,
++                    json={},
++                )
++        except httpx.HTTPError:
++            await self._reject(
++                scope,
++                receive,
++                send,
++                503,
++                "gateway_upstream_unavailable",
++                "Identity provider is unavailable.",
++            )
++            return
++
++        if upstream.status_code != 200:
++            status_code, code, message = _failure(upstream)
++            await self._reject(scope, receive, send, status_code, code, message)
++            return
++
++        assertion = _read_payload(upstream).get("assertion")
++        if not isinstance(assertion, str) or not assertion.strip():
++            await self._reject(
++                scope,
++                receive,
++                send,
++                503,
++                "gateway_identity_unavailable",
++                "Identity provider returned no assertion.",
++            )
++            return
++
++        forwarded = list(stripped)
++        forwarded.append((b"x-fde-proxy-auth", self.config.proxy_key.encode("latin-1")))
++        forwarded.append((b"x-fde-live-assertion", assertion.strip().encode("latin-1")))
++
++        forwarded_scope = dict(scope)
++        forwarded_scope["headers"] = forwarded
++        await self.app(forwarded_scope, receive, send)
++
++
++def create_gateway_app(*, live_app=None, config: GatewayConfig | None = None, transport=None):
++    """建立閘道 app；未提供 live_app 時以正式設定建立 Live。"""
++    if live_app is None:
++        from .main import create_app
++
++        live_app = create_app()
++    return IdentityGateway(live_app, config=config or GatewayConfig.from_environment(), transport=transport)
+diff --git a/live_backend/app/live_assertions.py b/live_backend/app/live_assertions.py
+new file mode 100644
+index 0000000..b95208c
+--- /dev/null
++++ b/live_backend/app/live_assertions.py
+@@ -0,0 +1,316 @@
++"""P6：Django 簽發、Live 驗證的短效內部身分 Assertion。
++
++Token 格式（compact、三段的 base64url，無 padding）::
++
++    v1.<b64url(canonical_payload_json)>.<b64url(hmac_sha256)>
++
++簽章輸入為 ``v1.<payload 段>``（版本前綴 + payload 段），密鑰為
++``FDE_INTERNAL_SHARED_SECRET``。Canonical payload 為
++``json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)``
++的 UTF-8 bytes。
++
++Payload 必備欄位（缺任一欄即拒絕）::
++
++    v            整數版本，固定 1
++    iss          簽發者，固定 "fde-django"
++    aud          接收者，固定 "fde-live"
++    sub          主體字串，例如 "teacher:1" / "student:7"
++    role         "teacher" / "student"
++    enrollment_id  整數，不適用時為 0
++    cohort_ids  字串（或 Django Cohort 主鍵整數）清單，簽發時排序
++    method       大寫 HTTP method
++    path         請求路徑（不含 query string）
++    body_sha256  raw request body 的 hex sha256；空 body 為 sha256(b"")
++    iat          簽發時間（epoch 秒）
++    exp          到期時間（epoch 秒），exp - iat <= 60
++    jti          uuid4 hex（32 字元），供 replay ledger 單次使用
++
++任何驗證失敗都拋出 :class:`LiveAssertionError`（``ValueError`` 子類），
++錯誤字串為穩定的 reason code，供 Live 直接回報給呼叫端。
++"""
++
++from __future__ import annotations
++
++import base64
++import hashlib
++import hmac
++import json
++import os
++import sqlite3
++import time
++import uuid
++from pathlib import Path
++
++ASSERTION_HEADER = "X-FDE-Live-Assertion"
++
++ASSERTION_VERSION = 1
++ASSERTION_VERSION_PREFIX = "v1"
++ASSERTION_ISSUER = "fde-django"
++ASSERTION_AUDIENCE = "fde-live"
++MAX_TTL_SECONDS = 60
++MAX_FUTURE_SKEW_SECONDS = 5
++EMPTY_BODY_SHA256 = hashlib.sha256(b"").hexdigest()
++
++REQUIRED_CLAIMS = (
++    "v",
++    "iss",
++    "aud",
++    "sub",
++    "role",
++    "enrollment_id",
++    "cohort_ids",
++    "method",
++    "path",
++    "body_sha256",
++    "iat",
++    "exp",
++    "jti",
++)
++
++ROLES = ("teacher", "student")
++
++REASON_MALFORMED = "malformed_assertion"
++REASON_VERSION = "unsupported_version"
++REASON_ISSUER = "bad_issuer"
++REASON_AUDIENCE = "bad_audience"
++REASON_SIGNATURE = "bad_signature"
++REASON_EXPIRED = "expired_assertion"
++REASON_FUTURE = "future_assertion"
++REASON_TTL = "ttl_too_long"
++REASON_MISSING = "missing_claim"
++REASON_INVALID = "invalid_claim"
++REASON_NO_KEY = "assertion_key_missing"
++
++
++class LiveAssertionError(ValueError):
++    """Assertion 缺失、過期、簽章無效或欄位不合法時拋出。"""
++
++
++def body_sha256(data: bytes = b"") -> str:
++    """回傳 request body 的 hex sha256；未給資料時等同 sha256(b"")。"""
++    return hashlib.sha256(data or b"").hexdigest()
++
++
++def canonical_payload(payload: dict) -> bytes:
++    """Canonical JSON：sort_keys、無多餘空白、UTF-8。"""
++    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
++
++
++def _encode(value: bytes) -> str:
++    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
++
++
++def _decode(value: str) -> bytes:
++    if not value or any(char.isspace() for char in value):
++        raise LiveAssertionError(REASON_MALFORMED)
++    try:
++        return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
++    except (ValueError, TypeError) as error:  # pragma: no cover - b64 容錯
++        raise LiveAssertionError(REASON_MALFORMED) from error
++
++
++def _signing_input(payload_segment: str) -> str:
++    return f"{ASSERTION_VERSION_PREFIX}.{payload_segment}"
++
++
++def _signature(payload_segment: str, key: str) -> str:
++    if not isinstance(key, str) or not key:
++        raise LiveAssertionError(REASON_NO_KEY)
++    digest = hmac.new(key.encode("utf-8"), _signing_input(payload_segment).encode("ascii"), hashlib.sha256).digest()
++    return _encode(digest)
++
++
++def _sorted_cohort_ids(values) -> list:
++    """排序班級清單。
++
++    P3-D 起 Django 以 Cohort 主鍵（整數）表示班級，Live 端班級比對必須維持
++    相同型別，因此這裡只排序、不轉型；key=str 讓混和型別也能決定性排序。
++    """
++    return sorted(list(values), key=str)
++
++
++def _validate_shape(payload: dict) -> None:
++    for name in REQUIRED_CLAIMS:
++        if name not in payload:
++            raise LiveAssertionError(REASON_MISSING)
++    if payload["v"] != ASSERTION_VERSION:
++        raise LiveAssertionError(REASON_VERSION)
++    if payload["iss"] != ASSERTION_ISSUER:
++        raise LiveAssertionError(REASON_ISSUER)
++    if payload["aud"] != ASSERTION_AUDIENCE:
++        raise LiveAssertionError(REASON_AUDIENCE)
++    role = payload["role"]
++    subject = payload["sub"]
++    if role not in ROLES or not isinstance(subject, str) or not subject.startswith(f"{role}:"):
++        raise LiveAssertionError(REASON_INVALID)
++    cohort_ids = payload["cohort_ids"]
++    if not isinstance(cohort_ids, list):
++        raise LiveAssertionError(REASON_INVALID)
++    for item in cohort_ids:
++        if isinstance(item, bool) or not isinstance(item, (str, int)):
++            raise LiveAssertionError(REASON_INVALID)
++        if isinstance(item, str) and not item:
++            raise LiveAssertionError(REASON_INVALID)
++    enrollment_id = payload["enrollment_id"]
++    if isinstance(enrollment_id, bool) or not isinstance(enrollment_id, int):
++        raise LiveAssertionError(REASON_INVALID)
++    if role == "student" and enrollment_id <= 0:
++        raise LiveAssertionError(REASON_INVALID)
++    for name in ("method", "path", "body_sha256", "jti"):
++        if not isinstance(payload[name], str) or not payload[name]:
++            raise LiveAssertionError(REASON_INVALID)
++    for name in ("iat", "exp"):
++        if isinstance(payload[name], bool) or not isinstance(payload[name], int):
++            raise LiveAssertionError(REASON_INVALID)
++
++
++def issue_live_assertion(claims: dict, key: str, now: int | None = None) -> str:
++    """簽發一個短效 Assertion。
++
++    ``claims`` 覆寫下列預設值：method="GET"、path="/"、body_sha256=sha256(b"")、
++    enrollment_id=0、cohort_ids=[]、iss/aud/v 固定值。``now`` 預設為目前 epoch 秒，
++    ``exp`` 預設 ``now + 60``；``exp - iat`` 超過 60 秒一律 ValueError（拒絕簽發）。
++    """
++    if not isinstance(claims, dict):
++        raise LiveAssertionError(REASON_INVALID)
++    issued_at = int(time.time()) if now is None else int(now)
++    payload = {
++        "v": ASSERTION_VERSION,
++        "iss": ASSERTION_ISSUER,
++        "aud": ASSERTION_AUDIENCE,
++        "sub": "",
++        "role": "",
++        "enrollment_id": 0,
++        "cohort_ids": [],
++        "method": "GET",
++        "path": "/",
++        "body_sha256": EMPTY_BODY_SHA256,
++        "iat": issued_at,
++        "exp": issued_at + MAX_TTL_SECONDS,
++        "jti": uuid.uuid4().hex,
++    }
++    payload.update(claims)
++    if "cohort_ids" in payload:
++        payload["cohort_ids"] = _sorted_cohort_ids(payload["cohort_ids"] or [])
++    if isinstance(payload.get("method"), str):
++        payload["method"] = payload["method"].upper()
++    if payload.get("exp") is not None and payload.get("iat") is not None:
++        if int(payload["exp"]) - int(payload["iat"]) > MAX_TTL_SECONDS:
++            raise LiveAssertionError(REASON_TTL)
++    payload["cohort_ids"] = _sorted_cohort_ids(payload["cohort_ids"])
++    segment = _encode(canonical_payload(payload))
++    return f"{ASSERTION_VERSION_PREFIX}.{segment}.{_signature(segment, key)}"
++
++
++def verify_live_assertion(token: str, key: str, now: int | None = None) -> dict:
++    """驗證 Assertion；任何一項不符都拋出 LiveAssertionError（stable reason）。"""
++    checked_at = int(time.time()) if now is None else int(now)
++    if not isinstance(token, str) or not token:
++        raise LiveAssertionError(REASON_MALFORMED)
++    parts = token.split(".")
++    if len(parts) != 3:
++        raise LiveAssertionError(REASON_MALFORMED)
++    version_segment, payload_segment, signature_segment = parts
++    if version_segment != ASSERTION_VERSION_PREFIX:
++        raise LiveAssertionError(REASON_VERSION)
++    if signature_segment != _signature(payload_segment, key):
++        raise LiveAssertionError(REASON_SIGNATURE)
++    if not hmac.compare_digest(signature_segment, _signature(payload_segment, key)):
++        raise LiveAssertionError(REASON_SIGNATURE)
++    try:
++        payload = json.loads(_decode(payload_segment).decode("utf-8"))
++    except (UnicodeDecodeError, json.JSONDecodeError) as error:
++        raise LiveAssertionError(REASON_MALFORMED) from error
++    if not isinstance(payload, dict):
++        raise LiveAssertionError(REASON_MALFORMED)
++    _validate_shape(payload)
++    if payload["exp"] <= checked_at:
++        raise LiveAssertionError(REASON_EXPIRED)
++    if payload["iat"] > checked_at + MAX_FUTURE_SKEW_SECONDS:
++        raise LiveAssertionError(REASON_FUTURE)
++    if payload["exp"] - payload["iat"] > MAX_TTL_SECONDS:
++        raise LiveAssertionError(REASON_TTL)
++    return payload
++
++
++def default_ledger_path() -> str:
++    """預設 replay ledger 位置：Live 資料目錄下方（候選根目錄內）。"""
++    configured = (os.environ.get("FDE_REPLAY_LEDGER_PATH") or "").strip()
++    if configured:
++        return configured
++    root = Path(__file__).resolve().parents[2]
++    return str(root / "live_backend" / "var" / "p6_replay_ledger.sqlite3")
++
++
++class SqliteReplayLedger:
++    """單次使用 jti 的 SQLite 帳本。
++
++    以 ``BEGIN IMMEDIATE`` + 主鍵唯一插入實作：兩個行程共用同一個檔案時，
++    第二個使用同一 jti 的行程一定拿到 IntegrityError（= replay）。
++    """
++
++    def __init__(self, path: str | os.PathLike, *, cleanup_every: int = 64, timeout: float = 30.0):
++        self.path = str(path)
++        self.cleanup_every = max(1, int(cleanup_every))
++        self.timeout = timeout
++        self._inserts = 0
++        parent = Path(self.path).parent
++        if str(parent):
++            parent.mkdir(parents=True, exist_ok=True)
++        self._ensure_schema()
++
++    def _connect(self) -> sqlite3.Connection:
++        connection = sqlite3.connect(self.path, timeout=self.timeout, isolation_level=None)
++        return connection
++
++    def _ensure_schema(self) -> None:
++        connection = self._connect()
++        try:
++            connection.execute("BEGIN IMMEDIATE")
++            connection.execute("CREATE TABLE IF NOT EXISTS replay (jti TEXT PRIMARY KEY, exp INTEGER NOT NULL)")
++            connection.execute("COMMIT")
++        finally:
++            connection.close()
++
++    def check_and_record(self, jti: str, exp: int) -> bool:
++        """回傳 True 表示 jti 首次使用（並已記錄）；False 表示重放。"""
++        if not jti:
++            return False
++        connection = self._connect()
++        try:
++            connection.execute("BEGIN IMMEDIATE")
++            connection.execute("INSERT INTO replay(jti, exp) VALUES (?, ?)", (str(jti), int(exp)))
++            connection.execute("COMMIT")
++            fresh = True
++        except sqlite3.IntegrityError:
++            try:
++                connection.execute("ROLLBACK")
++            except sqlite3.Error:  # pragma: no cover - 連線已壞則忽略
++                pass
++            fresh = False
++        finally:
++            connection.close()
++        if fresh:
++            self._inserts += 1
++            if self._inserts % self.cleanup_every == 0:
++                self.cleanup()
++        return fresh
++
++    def cleanup(self, now: int | None = None) -> int:
++        """刪除已過期的 jti，避免帳本無限成長。回傳刪除筆數。"""
++        checked_at = int(time.time()) if now is None else int(now)
++        connection = self._connect()
++        try:
++            connection.execute("BEGIN IMMEDIATE")
++            cursor = connection.execute("DELETE FROM replay WHERE exp <= ?", (checked_at,))
++            removed = int(cursor.rowcount or 0)
++            connection.execute("COMMIT")
++        except sqlite3.Error:  # pragma: no cover - 帳本清理失敗不影響拒絕決策
++            return 0
++        finally:
++            connection.close()
++        return removed
++
++    def close(self) -> None:
++        """保留給呼叫端明確關閉；目前每次操作都自行開關連線。"""
++        return None
+diff --git a/live_backend/app/main.py b/live_backend/app/main.py
+index 3a4a6de..a22a1ab 100644
+--- a/live_backend/app/main.py
++++ b/live_backend/app/main.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ import asyncio
+ import base64
+ import binascii
++import hmac
+ import json
+ import time
+ import os
+@@ -12,6 +13,7 @@ from pathlib import Path
+ from uuid import uuid4
+ 
+ from starlette.applications import Starlette
++from starlette.middleware.base import BaseHTTPMiddleware
+ from starlette.requests import Request
+ from starlette.routing import Mount, Route
+ from starlette.responses import FileResponse, Response
+@@ -25,7 +27,9 @@ from .download_center import (
+ )
+ from .config import LiveConfig
+ from .errors import error_response, json_response
++from . import internal_auth
+ from .guidance import DeterministicGuidanceProvider
++from .live_assertions import LiveAssertionError, verify_live_assertion
+ from .mock_vision import MockVision
+ from .orchestrator import CoachOrchestrator
+ from .rag import RAGAdapter
+@@ -97,12 +101,32 @@ def _default_session_store_path() -> "Path | None":
+     return Path(raw)
+ 
+ 
+-def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None) -> Starlette:
++def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None, live_assertion_key=None, trusted_proxy_key=None, require_live_auth=None) -> Starlette:
+     config = LiveConfig.from_environment()
+     adapter = vision_adapter or VisionAdapter(config.yolo_base_url, timeout_seconds=config.vision_request_timeout_seconds)
+     store_path = session_store_path if session_store_path is not None else _default_session_store_path()
+     sessions = session_store or InMemorySessionStore(persistence_path=store_path)
+     development = config.dev_mode if dev_mode is None else bool(dev_mode)
++    # 正式模式永遠 Fail Closed；僅明確隔離的開發環境可關閉 Assertion。
++    require_identity = not development if require_live_auth is None else bool(require_live_auth)
++    if not development:
++        require_identity = True
++    assertion_key = str(live_assertion_key if live_assertion_key is not None else os.environ.get("FDE_LIVE_ASSERTION_KEY", "")).strip()
++    proxy_key = str(trusted_proxy_key if trusted_proxy_key is not None else os.environ.get("FDE_LIVE_PROXY_KEY", "")).strip()
++
++    def trusted_role(request):
++        """安全模式只採用 Middleware 驗證後的角色。"""
++        identity = getattr(request.state, "live_identity", None)
++        if require_identity:
++            return str((identity or {}).get("role") or "")
++        return request.headers.get("X-FDE-Role", "student")
++
++    def trusted_teacher_id(request):
++        """安全模式由簽章 subject 提供教師身分。"""
++        identity = getattr(request.state, "live_identity", None)
++        if require_identity:
++            return str((identity or {}).get("sub") or "") if (identity or {}).get("role") == "teacher" else ""
++        return request.headers.get("X-FDE-Teacher-ID", "")
+     rag_client = rag_adapter or RAGAdapter(config.rag_base_url, timeout_seconds=config.rag_timeout_seconds)
+     rag_coordinator = ContextualGuidanceCoordinator(
+         sessions, RAGContextBuilder(), RAGGuidanceProvider(rag_client)
+@@ -137,7 +161,13 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+         components = {"live_backend": "online", "vision": "online" if vision_online else "offline"}
+         if general_ai_provider is not None and hasattr(general_ai_provider, "health_status"):
+             components["general_ai"] = general_ai_provider.health_status()
+-        return json_response({"status": "online" if vision_online else "degraded", "components": components})
++        return json_response({
++            "status": "online" if vision_online else "degraded",
++            "components": components,
++            # 2026-10-28：讓運維一眼看出內部呼叫是否已啟用簽章驗證。
++            # unsigned_legacy 代表任何本機程序都能偽造 X-FDE-Role，正式環境不得停留此狀態。
++            "internal_auth": internal_auth.auth_mode(),
++        })
+ 
+     async def downloads_manifest(request):
+         return await manifest_endpoint(request, downloads_root, downloads_manifest_file)
+@@ -157,7 +187,19 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+         if source == "MOCK_VISION" and not development: return error_response("dev_only", "Mock Vision is disabled.", 404)
+         training_track = payload.get("training_track")
+         if training_track not in {None, "F450_TWELVE_TASK"}: return error_response("invalid_training_track", "Unknown training track.", 400)
+-        created = sessions.create(vision_source=source, training_track=training_track).as_dict()
++        identity = getattr(request.state, "live_identity", None)
++        if require_identity:
++            if not identity or identity.get("role") != "student":
++                return error_response("live_student_required", "Student identity is required.", 403)
++            created = sessions.create(
++                vision_source=source,
++                training_track=training_track,
++                owner_subject=identity["sub"],
++                owner_enrollment_id=identity["enrollment_id"],
++                owner_cohort_id=identity["cohort_ids"][0],
++            ).as_dict()
++        else:
++            created = sessions.create(vision_source=source, training_track=training_track).as_dict()
+         created["dev_mode"] = development
+         return json_response(created, status_code=201)
+ 
+@@ -243,7 +285,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+     # P1-1：教師收件匣（AI 模型提交）
+     async def training_model_submissions(request):
+         sid = request.path_params["session_id"]
+-        role = request.headers.get("X-FDE-Role", "student")
++        role = trusted_role(request)
+         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+         try: return json_response({"model_submissions": sessions.list_model_submissions(sid)})
+         except KeyError: return error_response("session_not_found", "Training session was not found.", 404)
+@@ -251,9 +293,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+     # P1-1：教師審核（通過進入 Benchmark / 退回）
+     async def training_model_submission_review(request):
+         sid = request.path_params["session_id"]
+-        role = request.headers.get("X-FDE-Role", "student")
++        role = trusted_role(request)
+         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "MOCK_TEACHER")
++        teacher_id = trusted_teacher_id(request) or "MOCK_TEACHER"
+         try: payload = await request.json()
+         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+         try:
+@@ -265,9 +307,9 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+     # P1-2：教師主動觸發 PROP Sandbox Benchmark（僅 APPROVED_FOR_BENCHMARK）
+     async def training_model_submission_benchmark(request):
+         sid = request.path_params["session_id"]
+-        role = request.headers.get("X-FDE-Role", "student")
++        role = trusted_role(request)
+         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "MOCK_TEACHER")
++        teacher_id = trusted_teacher_id(request) or "MOCK_TEACHER"
+         try: submission = sessions.get_model_submission(sid, request.path_params["evidence_id"])
+         except KeyError: return error_response("model_submission_not_found", "Model submission was not found.", 404)
+         # 僅 APPROVED_FOR_BENCHMARK 可進入 Benchmark；上傳階段仍禁止執行模型。
+@@ -282,7 +324,7 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+     # P1-2：Benchmark 歷史（同一 submission 可重複驗證）
+     async def training_model_submission_benchmarks(request):
+         sid = request.path_params["session_id"]
+-        role = request.headers.get("X-FDE-Role", "student")
++        role = trusted_role(request)
+         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+         evidence_id = request.path_params["evidence_id"]
+         try: sessions.get_model_submission(sid, evidence_id)
+@@ -305,10 +347,10 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+ 
+     async def training_teacher_review(request):
+         sid = request.path_params["session_id"]
+-        role = request.headers.get("X-FDE-Role", "student")
+-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "")
++        role = trusted_role(request)
++        teacher_id = trusted_teacher_id(request)
+         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+-        if development and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
++        if development and not require_identity and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
+         try: payload = await request.json()
+         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+         if payload.get("step_id"):
+@@ -345,10 +387,10 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+ 
+     async def training_mp12_teacher_review(request):
+         sid, subtask_id = request.path_params["session_id"], request.path_params["subtask_id"]
+-        role = request.headers.get("X-FDE-Role", "student")
+-        teacher_id = request.headers.get("X-FDE-Teacher-ID", "")
++        role = trusted_role(request)
++        teacher_id = trusted_teacher_id(request)
+         if role != "teacher": return error_response("teacher_authority_required", "Teacher permission is required.", 403)
+-        if development and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
++        if development and not require_identity and teacher_id != "MOCK_TEACHER": return error_response("invalid_dev_teacher", "Use the explicit development teacher identity.", 403)
+         if not teacher_id: return error_response("teacher_id_required", "Teacher identity is required.", 400)
+         try: payload = await request.json()
+         except (ValueError, UnicodeDecodeError): return error_response("invalid_json", "Request body must be JSON.", 400)
+@@ -560,11 +602,30 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+         upstream_url = f"{django_origin}{request.url.path}"
+         if request.url.query:
+             upstream_url = f"{upstream_url}?{request.url.query}"
+-        excluded_headers = {"host", "connection", "content-length", "accept-encoding"}
++        # P3-F（2026-10-25）：轉發標頭一律由本層重建，**不採信客戶端自帶值**。
++        # 舊版只排除 host/connection/content-length/accept-encoding，客戶端自帶的
++        # `X-Forwarded-For`／`Forwarded`／`X-Real-IP` 會原樣傳給 Django，等於讓
++        # 外部決定上游看到的來源位址與協定。此處全部丟棄後再自行設定。
++        excluded_headers = {
++            "host",
++            "connection",
++            "content-length",
++            "accept-encoding",
++            "x-forwarded-proto",
++            "x-forwarded-host",
++            "x-forwarded-for",
++            "x-forwarded-port",
++            "x-real-ip",
++            "forwarded",
++        }
+         headers = {key: value for key, value in request.headers.items() if key.lower() not in excluded_headers}
+         headers["host"] = "127.0.0.1:8022"
+         headers["x-forwarded-host"] = request.headers.get("host", "")
++        # `request.url.scheme` 由 ASGI 伺服器決定（uvicorn 預設只信任來自
++        # 127.0.0.1 的 `X-Forwarded-Proto`，即本機的公開入口），不會被遠端客戶端
++        # 直接操控。純 HTTP 入口送來的就是 `http`，不會被預設標記成 `https`。
+         headers["x-forwarded-proto"] = request.url.scheme
++        headers["x-forwarded-for"] = request.client.host if request.client else ""
+         try:
+             async with httpx.AsyncClient(follow_redirects=False, timeout=15.0) as client:
+                 upstream = await client.request(request.method, upstream_url, headers=headers, content=await request.body())
+@@ -659,6 +720,36 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
+         Mount("/downloads", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "downloads"), html=True), name="downloads"),
+     ]
+     app = Starlette(routes=routes)
++
++    async def trusted_live_identity(request, call_next):
++        """所有受保護 Live Session 路徑先驗證 Gateway 與短效 Assertion。"""
++        path = request.url.path
++        protected_live = path.startswith("/api/live/") and path != "/api/live/health"
++        if not require_identity or not protected_live:
++            return await call_next(request)
++        if not assertion_key or not proxy_key:
++            return error_response("live_authorization_unavailable", "Live authorization is unavailable.", 503)
++        supplied_proxy_key = request.headers.get("X-FDE-Proxy-Auth", "")
++        if not hmac.compare_digest(supplied_proxy_key, proxy_key):
++            return error_response("live_proxy_required", "Trusted proxy authentication is required.", 403)
++        try:
++            identity = verify_live_assertion(request.headers.get("X-FDE-Live-Assertion", ""), assertion_key)
++        except LiveAssertionError:
++            return error_response("live_identity_required", "A valid live identity is required.", 401)
++        request.state.live_identity = identity
++        segments = [item for item in path.split("/") if item]
++        if len(segments) >= 4 and segments[:3] == ["api", "live", "sessions"]:
++            session = sessions.get(segments[3])
++            if session is not None:
++                if not session.owner_subject or not session.owner_cohort_id:
++                    return error_response("legacy_session_unowned", "Legacy sessions cannot be claimed.", 403)
++                if identity["role"] == "student" and identity["sub"] != session.owner_subject:
++                    return error_response("session_owner_required", "Session ownership is required.", 403)
++                if identity["role"] == "teacher" and session.owner_cohort_id not in identity["cohort_ids"]:
++                    return error_response("session_cohort_forbidden", "Teacher cohort permission is required.", 403)
++        return await call_next(request)
++
++    app.add_middleware(BaseHTTPMiddleware, dispatch=trusted_live_identity)
+     app.state.vision_adapter = adapter
+     app.state.session_store = sessions
+     app.state.dev_mode = development
+diff --git a/live_backend/app/sessions.py b/live_backend/app/sessions.py
+index 06619d4..e2d05a4 100644
+--- a/live_backend/app/sessions.py
++++ b/live_backend/app/sessions.py
+@@ -55,6 +55,10 @@ class LiveSession:
+     teacher_review_state: str | None = None
+     evidence_count: int = 0
+     reflection_state: str = "missing"
++    # 僅由已驗證 Assertion 建立，禁止瀏覽器變更 Session 所有者。
++    owner_subject: str | None = None
++    owner_enrollment_id: str | None = None
++    owner_cohort_id: str | None = None
+     rag_explanation: dict = field(default_factory=lambda: {
+         "status": "idle",
+         "explanation": None,
+@@ -175,7 +179,7 @@ class InMemorySessionStore:
+         except (KeyError, OSError, ValueError):
+             return "PENDING"
+ 
+-    def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo", training_track: str | None = None) -> LiveSession:
++    def create(self, *, vision_source: str = "REAL_VISION", mode: str = "demo", training_track: str | None = None, owner_subject: str | None = None, owner_enrollment_id: str | None = None, owner_cohort_id: str | None = None) -> LiveSession:
+         now = utc_now_iso()
+         first = self.task.steps[0]
+         session = LiveSession(
+@@ -197,6 +201,9 @@ class InMemorySessionStore:
+             prerequisite_state="READY" if training_track == "F450_TWELVE_TASK" else None,
+             safety_state="ADVISORY" if training_track == "F450_TWELVE_TASK" else None,
+             teacher_review_state="NOT_REQUIRED" if training_track == "F450_TWELVE_TASK" else None,
++            owner_subject=owner_subject,
++            owner_enrollment_id=owner_enrollment_id,
++            owner_cohort_id=owner_cohort_id,
+         )
+         with self._lock:
+             self._sessions[session.session_id] = session
+diff --git a/live_backend/app/vision_api.py b/live_backend/app/vision_api.py
+index d9e8d4c..e4d3197 100644
+--- a/live_backend/app/vision_api.py
++++ b/live_backend/app/vision_api.py
+@@ -8,6 +8,7 @@ from starlette.responses import Response
+ from starlette.routing import Route
+ 
+ from .errors import error_response, json_response
++from . import internal_auth
+ from .vision_center import (
+     ModelClassNamesMappingRequiredError,
+     ModelValidationError,
+@@ -17,10 +18,21 @@ from .vision_center import (
+ )
+ 
+ 
+-def _teacher(request: Request) -> tuple[str | None, Response | None]:
+-    if request.headers.get("X-FDE-Role", "").casefold() != "teacher":
++async def _teacher(request: Request) -> tuple[str | None, Response | None]:
++    """教師身分驗證（P6）。
++
++    2026-10-28（P6）：``X-FDE-Role`` / ``X-FDE-Teacher-ID`` 標頭可被任意本機程序
++    偽造，因此**完全不採用**。身分一律來自 Django 簽發、且綁定本次 method / path /
++    body 的短效 Assertion（見 app/internal_auth.py 與 app/live_assertions.py）；
++    未設定密鑰或驗證失敗一律 403（fail closed）。
++    """
++    trusted, reason = await internal_auth.verify_async(request)
++    if not trusted:
++        return None, error_response("internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403)
++    identity = internal_auth.identity_from_request(request)
++    if not identity or identity.get("role") != "teacher":
+         return None, error_response("teacher_required", "This action requires a teacher.", 403)
+-    teacher_id = request.headers.get("X-FDE-Teacher-ID", "").strip()
++    teacher_id = str(identity.get("teacher_id") or "").strip()
+     if not teacher_id:
+         return None, error_response("teacher_id_required", "Teacher identity is required.", 403)
+     return teacher_id, None
+@@ -37,7 +49,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+     async def models(request: Request):
+         if request.method == "GET":
+             return json_response(center.list_models(request.query_params.get("model_type")))
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -64,7 +76,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("model_not_found", "Model was not found.", 404)
+ 
+     async def evaluate(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -73,7 +85,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("evaluation_failed", str(exc), 422)
+ 
+     async def activate(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -84,7 +96,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("activation_failed", str(exc), 422)
+ 
+     async def archive(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -146,7 +158,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+     async def datasets(request: Request):
+         if request.method == "GET":
+             return json_response(center.list_datasets(request.query_params.get("model_type")))
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -157,7 +169,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("dataset_create_failed", str(exc), 422)
+ 
+     async def build_next(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -167,7 +179,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("dataset_build_failed", str(exc), 422)
+ 
+     async def export_dataset(request: Request):
+-        _teacher_id, denied = _teacher(request)
++        _teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -177,13 +189,13 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("dataset_not_found", "Dataset was not found.", 404)
+ 
+     async def hard_examples(request: Request):
+-        _teacher_id, denied = _teacher(request)
++        _teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         return json_response(center.list_hard_examples(request.query_params.get("status")))
+ 
+     async def review_hard_example(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -195,7 +207,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("hard_example_review_failed", str(exc), 422)
+ 
+     async def camera_profiles(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -211,7 +223,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+ 
+     async def submissions(request: Request):
+         if request.method == "GET":
+-            teacher_id, denied = _teacher(request)
++            teacher_id, denied = await _teacher(request)
+             if denied:
+                 return denied
+             return json_response(center.list_submissions(request.query_params.get("task_id"), request.query_params.get("status")))
+@@ -239,7 +251,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+         Refuses with a traceable 422 when any model depends on the submission, and
+         always writes a timestamped backup before mutating the store.
+         """
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -253,7 +265,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("submission_delete_failed", str(exc), 422)
+ 
+     async def import_submission(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -280,7 +292,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+ 
+     async def import_preflight(request: Request):
+         """導入前唯讀預檢：回報類別名結局，供教師頁決定顯示對照表／補充提示／錯誤。"""
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -295,7 +307,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+ 
+         只寫入既有 import_last_error 欄位與其代碼，不改動提交狀態。
+         """
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -316,7 +328,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+ 
+         供 Django 匯入封裝層在補償時呼叫；已被模型引用的資料集會拒絕隔離。
+         """
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -335,7 +347,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+     async def golden_sets(request: Request):
+         if request.method == "GET":
+             return json_response(center.list_golden_sets(request.query_params.get("model_type")))
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -379,7 +391,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+         Read-only with respect to model status: it neither activates nor archives. The
+         teacher page uses the returned detections as validation evidence.
+         """
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -412,7 +424,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+         teacher verify a student submission (e.g. ``sub-5d87f027``) before enabling it,
+         which is the gap that previously blocked the teacher review flow.
+         """
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+@@ -439,7 +451,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+ 
+     # ---- Version history & rollback ----
+     async def model_history(request: Request):
+-        _teacher_id, denied = _teacher(request)
++        _teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         model_type = request.path_params["model_type"]
+@@ -454,7 +466,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
+             return error_response("model_history_failed", str(exc), 422)
+ 
+     async def rollback(request: Request):
+-        teacher_id, denied = _teacher(request)
++        teacher_id, denied = await _teacher(request)
+         if denied:
+             return denied
+         try:
+diff --git a/live_backend/gateway_main.py b/live_backend/gateway_main.py
+new file mode 100644
+index 0000000..64a5c2e
+--- /dev/null
++++ b/live_backend/gateway_main.py
+@@ -0,0 +1,10 @@
++"""以獨立程序啟動 P3-D 身分閘道。
++
++僅在明確指定本模組時生效；既有 `app.main:create_app` 行為不受影響。
++缺少 `FDE_GATEWAY_INTERNAL_AUTH_KEY` 或 `FDE_LIVE_PROXY_KEY` 時，閘道對所有
++`/api/live/` 請求回 503（Fail Closed），不會回退成信任瀏覽器標頭。
++"""
++
++from app.gateway import create_gateway_app
++
++app = create_gateway_app()
+diff --git a/student_portal/config/settings.py b/student_portal/config/settings.py
+index f28078e..c08d820 100644
+--- a/student_portal/config/settings.py
++++ b/student_portal/config/settings.py
+@@ -24,23 +24,66 @@ BASE_DIR = Path(__file__).resolve().parent.parent
+ 
+ # SECURITY WARNING: keep the secret key used in production secret!
+ DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
++
++# Django 與 Live 的短效身分 Assertion 使用獨立環境金鑰，絕不重用 Django SECRET_KEY。
++FDE_LIVE_ASSERTION_KEY = os.environ.get('FDE_LIVE_ASSERTION_KEY', '').strip()
++FDE_GATEWAY_INTERNAL_AUTH_KEY = os.environ.get('FDE_GATEWAY_INTERNAL_AUTH_KEY', '').strip()
++try:
++    FDE_LIVE_ASSERTION_TTL_SECONDS = int(os.environ.get('FDE_LIVE_ASSERTION_TTL_SECONDS', '60'))
++except ValueError:
++    FDE_LIVE_ASSERTION_TTL_SECONDS = 60
++FDE_LIVE_ASSERTION_TTL_SECONDS = min(max(FDE_LIVE_ASSERTION_TTL_SECONDS, 1), 60)
+ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or ('local-development-only-not-for-production' if DEBUG else '')
+ if not SECRET_KEY:
+     raise RuntimeError('DJANGO_SECRET_KEY must be configured when DJANGO_DEBUG is false.')
+ 
+-default_allowed_hosts = '127.0.0.1,localhost,.trycloudflare.com' if DEBUG else '127.0.0.1,localhost'
++# P3-F（2026-10-25）安全收斂：DEBUG **不代表接受任意 Host**。
++#   * 移除原本 DEBUG 下的 `.trycloudflare.com` 前導點預設 —— 那等於信任「任何」
++#     trycloudflare 隧道主機名，任何人開一條隧道就能把請求打進本服務，且該預設
++#     同時是 Django 的子網域萬用字元，與「明確白名單」原則相衝。
++#   * `*` 一律拒絕並讓啟動失敗（fail closed）；不以放寬 ALLOWED_HOSTS 讓測試通過。
++#   * 需要測試／隧道主機時，請以 `DJANGO_ALLOWED_HOSTS` **逐條明確列出**完整主機。
++#   * 未授權 Host 由 Django 既有機制回 400（DisallowedHost），本檔不另做降級。
++default_allowed_hosts = '127.0.0.1,localhost,[::1]'
+ ALLOWED_HOSTS = [
+     host.strip()
+     for host in os.environ.get('DJANGO_ALLOWED_HOSTS', default_allowed_hosts).split(',')
+     if host.strip()
+ ]
++_wildcard_hosts = [host for host in ALLOWED_HOSTS if '*' in host]
++if _wildcard_hosts:
++    raise RuntimeError(
++        'DJANGO_ALLOWED_HOSTS must list explicit hosts; '
++        f'wildcards are not allowed: {_wildcard_hosts}'
++    )
++del _wildcard_hosts
++# 前導點（`.example.com`）在 Django 中是「整個子網域」的萬用字元。正式模式要求
++# 明確白名單，因此一律拒絕；開發模式保留容忍度，僅為既有本機隧道流程不被中斷。
++if not DEBUG:
++    _suffix_hosts = [host for host in ALLOWED_HOSTS if host.startswith('.')]
++    if _suffix_hosts:
++        raise RuntimeError(
++            'DJANGO_ALLOWED_HOSTS must not use leading-dot subdomain wildcards '
++            f'in production: {_suffix_hosts}'
++        )
++    del _suffix_hosts
+ CSRF_TRUSTED_ORIGINS = [
+-    origin.strip()
++    origin.strip().rstrip('/')
+     for origin in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
+     if origin.strip()
+ ]
+-if DEBUG and not CSRF_TRUSTED_ORIGINS:
+-    CSRF_TRUSTED_ORIGINS = ['https://*.trycloudflare.com']
++# P3-E（2026-10-25）安全收斂：CSRF 信任來源只接受「明確列出的完整來源」。
++#   * 出現萬用字元（`*`）即啟動失敗 —— Django 會把 `https://*.example.com` 當成
++#     整個子網域信任，等於把 CSRF 第二道防線放寬到不可控範圍。
++#   * 移除原本 DEBUG 下的 `https://*.trycloudflare.com` 萬用字元預設。需要隧道
++#     驗收時，請把當時的隧道主機名逐條寫進 DJANGO_CSRF_TRUSTED_ORIGINS。
++_wildcard_origins = [origin for origin in CSRF_TRUSTED_ORIGINS if '*' in origin]
++if _wildcard_origins:
++    raise RuntimeError(
++        'DJANGO_CSRF_TRUSTED_ORIGINS must list explicit origins; '
++        f'wildcards are not allowed: {_wildcard_origins}'
++    )
++del _wildcard_origins
+ if not DEBUG:
+     if not ALLOWED_HOSTS:
+         raise RuntimeError('DJANGO_ALLOWED_HOSTS must be configured when DJANGO_DEBUG is false.')
+@@ -301,7 +344,19 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = max(
+ SESSION_COOKIE_SECURE = not DEBUG
+ CSRF_COOKIE_SECURE = not DEBUG
+ SECURE_SSL_REDIRECT = not DEBUG
+-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if not DEBUG else None
++# P3-F（2026-10-25）：`X-Forwarded-Proto` 只作為「已明確設定且可信的反向代理」的依據。
++#   * 舊行為：非 DEBUG 一律信任 —— 任何能直連本服務的客戶端只要自帶
++#     `X-Forwarded-Proto: https`，就能讓一條純 HTTP 連線被當成 HTTPS。
++#   * 新行為：必須由運維明確設定 `DJANGO_TRUST_PROXY_SSL_HEADER=true` 才啟用；
++#     未設定時 Django 完全忽略該標頭（不新增任何可由外部操控的信任路徑）。
++#   * 純 HTTP 部署因此不會被誤標為 HTTPS；正式 HTTPS 部署的 Secure Cookie／
++#     CSRF 保護維持不變（該開關只影響「如何判定是否為 HTTPS」，不放寬任何檢查）。
++TRUST_PROXY_SSL_HEADER = os.environ.get(
++    'DJANGO_TRUST_PROXY_SSL_HEADER', ''
++).strip().lower() in ('1', 'true', 'yes', 'on')
++SECURE_PROXY_SSL_HEADER = (
++    ('HTTP_X_FORWARDED_PROTO', 'https') if (not DEBUG and TRUST_PROXY_SSL_HEADER) else None
++)
+ SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '3600' if not DEBUG else '0'))
+ SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'false').lower() == 'true'
+ SECURE_HSTS_PRELOAD = os.environ.get('DJANGO_SECURE_HSTS_PRELOAD', 'false').lower() == 'true'
+diff --git a/student_portal/learning/live_assertions.py b/student_portal/learning/live_assertions.py
+new file mode 100644
+index 0000000..9da4c1c
+--- /dev/null
++++ b/student_portal/learning/live_assertions.py
+@@ -0,0 +1,188 @@
++"""Django 與 Live Backend 間的短效可信身分 Assertion（P6 合約）。
++
++與 ``live_backend/app/live_assertions.py`` 使用**完全相同**的 token 格式與
++欄位定義，兩邊任何一處改動都必須同步，否則跨元件驗證會失敗
++（見 live_backend/tests/test_p3d_gateway_identity.py 的跨元件契約測試）。
++
++格式：``v1.<b64url(canonical_payload_json)>.<b64url(hmac_sha256)>``
++必備欄位：v / iss / aud / sub / role / enrollment_id / cohort_ids /
++method / path / body_sha256 / iat / exp / jti（exp - iat <= 60）。
++"""
++
++import base64
++import hashlib
++import hmac
++import json
++import secrets
++import time
++import uuid
++
++
++ASSERTION_VERSION = 1
++ASSERTION_VERSION_PREFIX = "v1"
++ASSERTION_ISSUER = "fde-django"
++ASSERTION_AUDIENCE = "fde-live"
++MAX_TTL_SECONDS = 60
++MAX_FUTURE_SKEW_SECONDS = 5
++EMPTY_BODY_SHA256 = hashlib.sha256(b"").hexdigest()
++
++REQUIRED_CLAIMS = (
++    "v",
++    "iss",
++    "aud",
++    "sub",
++    "role",
++    "enrollment_id",
++    "cohort_ids",
++    "method",
++    "path",
++    "body_sha256",
++    "iat",
++    "exp",
++    "jti",
++)
++
++ROLES = ("teacher", "student")
++
++REASON_MALFORMED = "malformed_assertion"
++REASON_VERSION = "unsupported_version"
++REASON_ISSUER = "bad_issuer"
++REASON_AUDIENCE = "bad_audience"
++REASON_SIGNATURE = "bad_signature"
++REASON_EXPIRED = "expired_assertion"
++REASON_FUTURE = "future_assertion"
++REASON_TTL = "ttl_too_long"
++REASON_MISSING = "missing_claim"
++REASON_INVALID = "invalid_claim"
++REASON_NO_KEY = "assertion_key_missing"
++
++
++class LiveAssertionError(ValueError):
++    """Assertion 缺欄位、簽章錯誤或已過期時使用。"""
++
++
++def body_sha256(data=b"") -> str:
++    return hashlib.sha256(data or b"").hexdigest()
++
++
++def canonical_payload(payload: dict) -> bytes:
++    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
++
++
++def _encode(value):
++    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
++
++
++def _decode(value):
++    if not isinstance(value, str) or not value or any(char.isspace() for char in value):
++        raise LiveAssertionError(REASON_MALFORMED)
++    try:
++        return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
++    except (ValueError, TypeError) as error:
++        raise LiveAssertionError(REASON_MALFORMED) from error
++
++
++def _secret_bytes(secret):
++    if not isinstance(secret, str) or not secret.strip():
++        raise LiveAssertionError(REASON_NO_KEY)
++    return secret.encode("utf-8")
++
++
++def _sorted_cohort_ids(values):
++    return sorted(list(values), key=str)
++
++
++def _validate_shape(payload, now):
++    for name in REQUIRED_CLAIMS:
++        if name not in payload:
++            raise LiveAssertionError(REASON_MISSING)
++    if payload["v"] != ASSERTION_VERSION:
++        raise LiveAssertionError(REASON_VERSION)
++    if payload["iss"] != ASSERTION_ISSUER:
++        raise LiveAssertionError(REASON_ISSUER)
++    if payload["aud"] != ASSERTION_AUDIENCE:
++        raise LiveAssertionError(REASON_AUDIENCE)
++    role = payload["role"]
++    subject = payload["sub"]
++    if role not in ROLES or not isinstance(subject, str) or not subject.startswith(f"{role}:"):
++        raise LiveAssertionError(REASON_INVALID)
++    cohort_ids = payload["cohort_ids"]
++    if not isinstance(cohort_ids, list):
++        raise LiveAssertionError(REASON_INVALID)
++    for item in cohort_ids:
++        if isinstance(item, bool) or not isinstance(item, (str, int)):
++            raise LiveAssertionError(REASON_INVALID)
++        if isinstance(item, str) and not item:
++            raise LiveAssertionError(REASON_INVALID)
++    enrollment_id = payload["enrollment_id"]
++    if isinstance(enrollment_id, bool) or not isinstance(enrollment_id, int):
++        raise LiveAssertionError(REASON_INVALID)
++    if role == "student" and enrollment_id <= 0:
++        raise LiveAssertionError(REASON_INVALID)
++    for name in ("method", "path", "body_sha256", "jti"):
++        if not isinstance(payload[name], str) or not payload[name]:
++            raise LiveAssertionError(REASON_INVALID)
++    for name in ("iat", "exp"):
++        if isinstance(payload[name], bool) or not isinstance(payload[name], int):
++            raise LiveAssertionError(REASON_INVALID)
++    if payload["exp"] <= now:
++        raise LiveAssertionError(REASON_EXPIRED)
++    if payload["iat"] > now + MAX_FUTURE_SKEW_SECONDS:
++        raise LiveAssertionError(REASON_FUTURE)
++    if payload["exp"] - payload["iat"] > MAX_TTL_SECONDS:
++        raise LiveAssertionError(REASON_TTL)
++
++
++def _signature(secret, payload_segment):
++    return _encode(hmac.new(_secret_bytes(secret), f"{ASSERTION_VERSION_PREFIX}.{payload_segment}".encode("ascii"), hashlib.sha256).digest())
++
++
++def issue_assertion(claims, secret, *, now=None, ttl_seconds=MAX_TTL_SECONDS):
++    """簽發最多 60 秒、固定 issuer 與 audience 的 P6 compact Assertion。"""
++    issued_at = int(time.time() if now is None else now)
++    ttl = int(ttl_seconds)
++    if ttl < 1 or ttl > MAX_TTL_SECONDS:
++        raise LiveAssertionError(REASON_TTL)
++    payload = {
++        "v": ASSERTION_VERSION,
++        "iss": ASSERTION_ISSUER,
++        "aud": ASSERTION_AUDIENCE,
++        "sub": "",
++        "role": "",
++        "enrollment_id": 0,
++        "cohort_ids": [],
++        "method": "GET",
++        "path": "/",
++        "body_sha256": EMPTY_BODY_SHA256,
++        "iat": issued_at,
++        "exp": issued_at + ttl,
++        "jti": uuid.uuid4().hex,
++    }
++    payload.update(claims)
++    payload["cohort_ids"] = _sorted_cohort_ids(payload.get("cohort_ids") or [])
++    if isinstance(payload.get("method"), str):
++        payload["method"] = payload["method"].upper()
++    if int(payload["exp"]) - int(payload["iat"]) > MAX_TTL_SECONDS:
++        raise LiveAssertionError(REASON_TTL)
++    segment = _encode(canonical_payload(payload))
++    return f"{ASSERTION_VERSION_PREFIX}.{segment}.{_signature(secret, segment)}"
++
++
++def verify_assertion(token, secret, *, now=None):
++    """驗證 HMAC、版本、issuer、audience、短效期限與必備欄位。"""
++    if not isinstance(token, str) or token.count(".") != 2:
++        raise LiveAssertionError(REASON_MALFORMED)
++    version_segment, payload_segment, provided_signature = token.split(".", 2)
++    if version_segment != ASSERTION_VERSION_PREFIX:
++        raise LiveAssertionError(REASON_VERSION)
++    expected_signature = _signature(secret, payload_segment)
++    if not hmac.compare_digest(expected_signature, provided_signature):
++        raise LiveAssertionError(REASON_SIGNATURE)
++    try:
++        payload = json.loads(_decode(payload_segment).decode("utf-8"))
++    except (UnicodeDecodeError, json.JSONDecodeError) as error:
++        raise LiveAssertionError(REASON_MALFORMED) from error
++    if not isinstance(payload, dict):
++        raise LiveAssertionError(REASON_MALFORMED)
++    _validate_shape(payload, int(time.time() if now is None else now))
++    return payload
+diff --git a/student_portal/learning/urls.py b/student_portal/learning/urls.py
+index 3d22ec0..2b7dcb4 100644
+--- a/student_portal/learning/urls.py
++++ b/student_portal/learning/urls.py
+@@ -13,6 +13,10 @@ urlpatterns = [
+     path("api/public/inspection/detect/", public_ai.public_inspection_detect, name="public_inspection_detect"),
+     path("api/public/inspection/hover/", public_ai.public_inspection_hover, name="public_inspection_hover"),
+     path("api/public/voice/ask/", public_ai.public_voice_ask, name="public_voice_ask"),
++    # Gateway 使用既有 Django Session／CSRF 驗證 Live API 請求。
++    path("api/live/auth/session/", views.live_session_auth, name="live_session_auth"),
++    # 僅供 Gateway 內部鏈路取得短效、已簽章 Assertion。
++    path("api/live/auth/assertion/", views.live_identity_assertion, name="live_identity_assertion"),
+     path("register/", views.register, name="register"),
+     path("activate/<str:public_user_id>/", views.activate, name="activate"),
+     path("activate/<str:public_user_id>/resend/", views.resend_activation, name="resend_activation"),
+diff --git a/student_portal/learning/views.py b/student_portal/learning/views.py
+index ea3d237..cbbc705 100644
+--- a/student_portal/learning/views.py
++++ b/student_portal/learning/views.py
+@@ -1,6 +1,8 @@
+ import base64
+ import csv
+ import datetime
++import hmac
++import json
+ import logging
+ import mimetypes
+ import re
+@@ -37,6 +39,8 @@ from django.utils import timezone
+ from django.utils.http import url_has_allowed_host_and_scheme
+ from django.contrib.auth.views import redirect_to_login
+ from django.views.decorators.http import require_http_methods, require_POST
++from django.views.decorators.cache import never_cache
++from django.views.decorators.csrf import csrf_protect
+ 
+ from .forms import (
+     EvidenceForm,
+@@ -70,7 +74,9 @@ from .forms import (
+     TeacherReviewForm,
+ )
+ from .vision_submission import submit_model_evidence_to_vision
++from .live_assertions import LiveAssertionError, issue_assertion
+ from . import vision_submission as vision_api
++from . import vision_preflight
+ from .vision_rule_templates import template_choices_for_task, template_for_task
+ from . import prop_scan
+ from .vision_verification import runner_state
+@@ -417,6 +423,74 @@ def _platform_identity_context(request):
+     }
+ 
+ 
++# Gateway 驗證既有 Django Session 的最小端點；不回傳帳號或 Session 機密。
++@never_cache
++@require_http_methods(["GET", "POST"])
++@csrf_protect
++def live_session_auth(request):
++    get_token(request)
++    if not request.user.is_authenticated:
++        return JsonResponse({"authenticated": False}, status=401)
++    role = "teacher" if request.user.is_staff else "student"
++    if role == "student":
++        profile = getattr(request.user, "student_profile", None)
++        if profile is None or not profile.active:
++            return JsonResponse({"authenticated": True, "authorized": False, "role": "unverified"}, status=403)
++    payload = {"authenticated": True, "role": role}
++    if request.method == "POST":
++        payload["csrf_valid"] = True
++    return JsonResponse(payload)
++
++
++# 僅受信 Gateway 可取得短效 Assertion；瀏覽器 supplied ID、角色或 Cohort 一律不採用。
++@never_cache
++@require_POST
++@csrf_protect
++def live_identity_assertion(request):
++    expected_gateway_key = str(getattr(settings, "FDE_GATEWAY_INTERNAL_AUTH_KEY", "") or "")
++    signing_key = str(getattr(settings, "FDE_LIVE_ASSERTION_KEY", "") or "")
++    if not expected_gateway_key or not signing_key:
++        return JsonResponse({"error": "live_assertion_unavailable"}, status=503)
++    if not hmac.compare_digest(request.headers.get("X-FDE-Gateway-Auth", ""), expected_gateway_key):
++        return JsonResponse({"error": "live_assertion_forbidden"}, status=403)
++    if not request.user.is_authenticated:
++        return JsonResponse({"authenticated": False}, status=401)
++    try:
++        body = json.loads(request.body.decode("utf-8") or "{}")
++    except (UnicodeDecodeError, json.JSONDecodeError):
++        return JsonResponse({"error": "invalid_assertion_request"}, status=400)
++    if not isinstance(body, dict):
++        return JsonResponse({"error": "invalid_assertion_request"}, status=400)
++    if request.user.is_staff:
++        cohort_ids = list(TeacherCohortAccess.objects.filter(teacher=request.user, cohort__active=True).order_by("cohort_id").values_list("cohort_id", flat=True))
++        if not cohort_ids:
++            return JsonResponse({"error": "live_teacher_scope_required"}, status=403)
++        claims = {"sub": f"teacher:{request.user.pk}", "role": "teacher", "cohort_ids": cohort_ids}
++    else:
++        profile = getattr(request.user, "student_profile", None)
++        if profile is None or not profile.active:
++            return JsonResponse({"error": "live_student_profile_required"}, status=403)
++        enrollments = Enrollment.objects.filter(student=profile, active=True).select_related("cohort")
++        selected_id = body.get("enrollment_id")
++        if selected_id is None:
++            if enrollments.count() == 0:
++                return JsonResponse({"error": "live_enrollment_required"}, status=403)
++            if enrollments.count() != 1:
++                return JsonResponse({"error": "live_enrollment_selection_required"}, status=409)
++            enrollment = enrollments.first()
++        else:
++            try:
++                enrollment = enrollments.get(pk=selected_id)
++            except (Enrollment.DoesNotExist, ValueError, TypeError):
++                return JsonResponse({"error": "live_enrollment_forbidden"}, status=403)
++        claims = {"sub": f"student:{profile.pk}", "role": "student", "enrollment_id": enrollment.pk, "cohort_ids": [enrollment.cohort_id]}
++    try:
++        assertion = issue_assertion(claims, signing_key, ttl_seconds=getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60))
++    except LiveAssertionError:
++        return JsonResponse({"error": "live_assertion_unavailable"}, status=503)
++    return JsonResponse({"assertion": assertion, "expires_in": getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60)})
++
++
+ def _platform_response(file_path, *, html=False, request=None):
+     if not file_path.is_file():
+         raise Http404
+@@ -725,6 +799,11 @@ def teacher_required(view_func):
+             return redirect_to_login(request.get_full_path(), reverse("learning:teacher_login"))
+         if not request.user.is_staff:
+             return render(request, "learning/role_denied.html", {"required_role": "教師"}, status=403)
++        # 2026-10-28（階段四 C）：資源級班級隔離。所有教師視圖共用同一道檢查，
++        # 避免逐個視圖漏加，也不依賴前端隱藏按鈕。URL 路徑上的 id 同樣要比對。
++        denied = vision_resource_guard(request, kwargs)
++        if denied is not None:
++            return denied
+         return view_func(request, *args, **kwargs)
+ 
+     return wrapped
+@@ -737,6 +816,153 @@ def teacher_cohorts(user):
+     return cohorts.filter(teacher_accesses__teacher=user)
+ 
+ 
++# ---------------------------------------------------------------------------
++# 班級隔離（2026-10-28 上線收尾第四階段 C）
++#
++# 背景：teacher_vision_center 及相關操作原本只檢查「是否為教師」，未檢查「是否為
++# 該學員所屬班級的教師」，因此任何教師（含異班教師）只要知道 submission_id 或
++# model_id，就能查看、驗證、匯入甚至啟用他班模型。
++#
++# 設計：以 Live Registry 的 student_id（= Django 的 public_user_id）為橋樑，
++# 對照「教師被授權班級內的 active enrollment」，得到可見學員集合。
++#   * superuser → 不受限（沿用既有角色契約；models.TeacherCohortAccess.clean
++#     也要求只有 is_staff 才能被指派班級）。
++#   * 一般教師 → 只看得到 teacher_accesses 指向的 active 班級。
++#   * 無班級關聯 → 集合為空 → 一律拒絕（不因「沒有資料」而放行）。
++# ---------------------------------------------------------------------------
++def vision_visible_student_ids(user):
++    """回傳此教師可見的學員 public_user_id 集合；None 代表不受限（superuser）。"""
++    if user.is_superuser:
++        return None
++    return set(
++        Enrollment.objects.filter(cohort__in=teacher_cohorts(user), active=True)
++        .values_list("student__public_user_id", flat=True)
++    )
++
++
++def vision_can_see_student(user, public_user_id) -> bool:
++    allowed = vision_visible_student_ids(user)
++    if allowed is None:
++        return True
++    if not public_user_id:
++        return False
++    return str(public_user_id) in allowed
++
++
++def vision_cohort_denied(request):
++    return render(
++        request,
++        "learning/role_denied.html",
++        {"required_role": "所屬班級（此資源不屬於您被授權的班級）"},
++        status=403,
++    )
++
++
++def vision_resource_guard(request, path_kwargs=None):
++    """若請求帶 submission_id / model_id，驗證該資源是否屬於教師被授權班級。
++
++    id 來源有三處，全部都要看，否則只要換一種傳遞方式就能繞過：
++      1. POST 表單
++      2. GET 查詢字串
++      3. URL 路徑參數（例如 /teacher/vision-repository/<model_id>/integrity-check/）
++
++    回傳 None 表示通過（或本次請求不需檢查），否則回傳 403 回應。
++    由 teacher_required 統一呼叫，確保所有教師視圖都經過同一道檢查。
++
++    效能：一次請求只查一次（結果快取在 request 上），避免同一請求內重複打 Live。
++    """
++    cached = getattr(request, "_vision_guard_checked", None)
++    if cached is not None:
++        return cached
++
++    result = _vision_resource_guard_impl(request, path_kwargs or {})
++    request._vision_guard_checked = result
++    return result
++
++
++def _vision_lookup_submission_student(submission_id, *, teacher_id):
++    """回傳 (是否找到, 該提交的學員 public_user_id)。
++
++    找不到 → (False, None)；Live 不可用 → 拋 RuntimeError（由呼叫端 fail-closed）。
++    獨立成小函式是為了讓單元測試能以可控 stub 取代實際跨進程呼叫。
++    """
++    items = vision_api.list_submissions(teacher_id=teacher_id)
++    items = items if isinstance(items, list) else (items.get("submissions") or [])
++    target = next(
++        (item for item in items if str(item.get("submission_id")) == str(submission_id)), None
++    )
++    if target is None:
++        return False, None
++    return True, target.get("student_id")
++
++
++def _vision_lookup_model_student(model_id, *, teacher_id, preferred_task):
++    """回傳 (是否找到, 該模型的來源學員 public_user_id)。
++
++    先查 preferred_task，找不到再查另一個任務，避免任務類型不符造成誤判 403。
++    教師自行上傳的模型 source_student_id 為空字串，代表不屬於任何班級。
++    """
++    order = [preferred_task] + [
++        meta["id"] for meta in VISION_CENTER_TASKS if meta["id"] != preferred_task
++    ]
++    for model_type in order:
++        history = vision_api.task_model_history(model_type=model_type, teacher_id=teacher_id)
++        rows = (history or {}).get("history") or []
++        target = next(
++            (item for item in rows if str(item.get("model_id")) == str(model_id)), None
++        )
++        if target is not None:
++            return True, target.get("source_student_id")
++    return False, None
++
++
++def _vision_resource_guard_impl(request, kwargs):
++    submission_id = (
++        request.POST.get("submission_id")
++        or request.GET.get("submission_id")
++        or kwargs.get("submission_id")
++        or ""
++    ).strip()
++    model_id = (
++        request.POST.get("model_id")
++        or request.GET.get("model_id")
++        or kwargs.get("model_id")
++        or ""
++    ).strip()
++    if not submission_id and not model_id:
++        return None
++
++    allowed = vision_visible_student_ids(request.user)
++    if allowed is None:
++        return None  # superuser：沿用既有不受限契約
++
++    try:
++        if submission_id:
++            # 不帶 task_id：一次取回全部提交，避免「任務類型猜錯 → 合法請求被誤判 403」，
++            # 也避免攻擊者用 task 參數把查詢導向其他任務而閃過比對。
++            found, source_student = _vision_lookup_submission_student(
++                submission_id, teacher_id=request.user.pk
++            )
++        else:
++            found, source_student = _vision_lookup_model_student(
++                model_id, teacher_id=request.user.pk, preferred_task=_vision_task_id(request)
++            )
++    except RuntimeError:
++        # 取不到清單時 fail-closed：寧可拒絕，也不放行未經確認的資源。
++        return vision_cohort_denied(request)
++
++    if not found:
++        # 查不到就代表無法確認歸屬 → 拒絕（不做「查不到就放行」）。
++        return vision_cohort_denied(request)
++    if not source_student:
++        # 教師自行上傳的模型不屬於任何班級（無 source_student_id），
++        # 依既有契約允許教師管理；由 submission 匯入的模型一律有 source_student_id。
++        return None
++    if not vision_can_see_student(request.user, source_student):
++        return vision_cohort_denied(request)
++    return None
++
++
+ def ordered_phase_progress(enrollment):
+     progress = {item.phase: item for item in PhaseProgress.objects.filter(enrollment=enrollment)}
+     return [progress[phase] for phase, _ in TaskDefinition.Stage.choices if phase in progress]
+@@ -1184,6 +1410,46 @@ def growth_record_detail(request, enrollment_id, slot_id):
+     )
+ 
+ 
++_MODEL_UPLOAD_REJECT_TEXT = {
++    "empty_file": "檔案是空的",
++    "file_too_large": "檔案超過 100 MB",
++    "extension_not_allowed": "副檔名不是 .pt",
++    "unsafe_pickle_format": "舊式純 pickle 格式無法安全驗證",
++    "not_a_torch_archive": "不是 PyTorch 權重容器（缺少 ZIP 結構）",
++    "corrupt_archive": "壓縮容器損壞",
++    "torch_payload_missing": "容器內缺少模型權重資料（data.pkl）",
++    "unsafe_archive_entry": "壓縮容器內含不安全路徑",
++    "archive_expansion_too_large": "解壓後體積異常（疑似 ZIP 炸彈）",
++    "preflight_timeout": "結構檢查逾時",
++    "preflight_failed": "結構檢查無法完成",
++}
++
++
++def _record_model_upload_rejection(*, request, enrollment, filename, result):
++    """把拒絕事件寫入審計（append-only），但不建立任何可被誤認為合法候選的紀錄。"""
++    try:
++        audit_path = getattr(
++            settings,
++            "VISION_UPLOAD_AUDIT_PATH",
++            str(Path(settings.MEDIA_ROOT) / "vision_upload_audit.jsonl"),
++        )
++        Path(audit_path).parent.mkdir(parents=True, exist_ok=True)
++        record = {
++            "event": "model_upload_rejected",
++            "at": timezone.now().isoformat(),
++            "user_id": getattr(request.user, "pk", None),
++            "enrollment_id": getattr(enrollment, "pk", None),
++            "cohort_id": getattr(getattr(enrollment, "cohort", None), "cohort_id", ""),
++            "filename": filename,
++            "reason": result.get("reason"),
++            "details": result.get("details") or {},
++        }
++        with open(audit_path, "a", encoding="utf-8") as handle:
++            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
++    except Exception:  # noqa: BLE001 - 審計失敗不得阻斷拒絕流程
++        pass
++
++
+ @student_required
+ @require_POST
+ def growth_model_upload(request, enrollment_id):
+@@ -1216,6 +1482,27 @@ def growth_model_upload(request, enrollment_id):
+     upload = form.cleaned_data["model_file"]
+     original_name = Path(str(upload.name)).name
+     content = upload.read()
++
++    # 2026-10-28（階段四 D）：結構預檢。只檢查容器結構，不反序列化、不載入模型。
++    # 失敗時只寫審計事件，不建立 Evidence、不進教師待審佇列。
++    preflight = vision_preflight.inspect_bytes(content, original_name)
++    if not preflight.get("ok"):
++        _record_model_upload_rejection(
++            request=request,
++            enrollment=enrollment,
++            filename=original_name,
++            result=preflight,
++        )
++        messages.error(
++            request,
++            "模型檔案未通過安全檢查，已拒絕且不會進入待審佇列（原因：{}）。".format(
++                _MODEL_UPLOAD_REJECT_TEXT.get(
++                    preflight.get("reason"), preflight.get("reason") or "unknown"
++                )
++            ),
++        )
++        return redirect(redirect_url)
++
+     evidence = None
+     stored_name = ""
+     storage = None
+@@ -1881,7 +2168,7 @@ def teacher_vision_model_list(request):
+     registry_models = []
+     if api_online:
+         try:
+-            registry_models = [_vision_model_row(item) for item in (vision_api.list_models() or [])]
++            registry_models = [_vision_model_row(item) for item in (vision_api.list_models(teacher_id=request.user.pk) or [])]
+         except RuntimeError as exc:
+             api_online = False
+             api_detail = str(exc)
+@@ -3030,13 +3317,22 @@ def teacher_vision_center(request):
+                 {
+                     "label": meta["label"],
+                     "active": history.get("active"),
+-                    "history_count": len(history.get("history") or []),
++                    # 階段四 C：計數也要按班級過濾，否則異班教師可從「有幾筆」推測他班活動量。
++                    "history_count": sum(
++                        1
++                        for item in (history.get("history") or [])
++                        if vision_can_see_student(request.user, item.get("source_student_id"))
++                        or not item.get("source_student_id")
++                    ),
+                 }
+             )
+             if meta["id"] == task_id:
++                # 階段四 C：只保留本教師被授權班級的模型（superuser 不受限）。
+                 history_models = [
+                     _vision_model_row(item, validation_records=history_records)
+                     for item in (history.get("history") or [])
++                    if vision_can_see_student(request.user, item.get("source_student_id"))
++                    or not item.get("source_student_id")
+                 ]
+                 inference_source = history.get("inference_source") or {}
+ 
+@@ -3047,6 +3343,13 @@ def teacher_vision_center(request):
+         except RuntimeError:
+             raw_submissions = []
+ 
++        # 階段四 C：提交列表同樣只保留本教師被授權班級的學員。
++        raw_submissions = [
++            item
++            for item in (raw_submissions or [])
++            if vision_can_see_student(request.user, item.get("student_id"))
++        ]
++
+         models_by_submission = {
+             item["model_id"]: item
+             for item in history_models
+@@ -3920,7 +4223,7 @@ def teacher_vision_center_upload(request):
+         )
+     except RuntimeError:
+         try:
+-            existing = vision_api.list_datasets(model_type=task_id) or []
++            existing = vision_api.list_datasets(model_type=task_id, teacher_id=request.user.pk) or []
+             dataset = existing[0] if existing else None
+         except RuntimeError:
+             dataset = None
+diff --git a/student_portal/learning/vision_submission.py b/student_portal/learning/vision_submission.py
+index 0a06d1d..b56cb16 100644
+--- a/student_portal/learning/vision_submission.py
++++ b/student_portal/learning/vision_submission.py
+@@ -5,6 +5,8 @@ from urllib.request import Request, urlopen
+ 
+ from django.conf import settings
+ 
++from . import internal_auth
++
+ 
+ class VisionImportClassNamesMappingRequired(RuntimeError):
+     """Live 回報：模型類別名與任務預期不同但數量一致，需要教師提供對照表。"""
+@@ -71,13 +73,26 @@ def _post(path, payload, timeout=None, *, teacher_id=""):
+     本模組只負責安全地跨進程轉發請求與解讀結果。
+     """
+     base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
++    # 2026-10-28（P6）：先序列化一次，讓簽章的 body hash 與實際送出的 bytes 完全一致。
++    body = json.dumps(payload).encode("utf-8")
+     headers = {"Content-Type": "application/json"}
+     if teacher_id:
+         headers["X-FDE-Role"] = "teacher"
+         headers["X-FDE-Teacher-ID"] = str(teacher_id)
++    # 2026-10-28（P6）：身分來自 Django 簽發的短效 Assertion（綁定 method/path/body），
++    # 不再依賴可被偽造的 X-FDE-Role / X-FDE-Teacher-ID。
++    headers = internal_auth.signed_headers(
++        "POST",
++        path.split("?")[0],
++        headers,
++        subject_id=str(teacher_id or ""),
++        role="teacher" if teacher_id else "",
++        cohort_ids=_caller_cohort_ids(teacher_id),
++        body=body,
++    )
+     request = Request(
+         f"{base}{path}",
+-        data=json.dumps(payload).encode("utf-8"),
++        data=body,
+         headers=headers,
+         method="POST",
+     )
+@@ -87,16 +102,46 @@ def _post(path, payload, timeout=None, *, teacher_id=""):
+             return json.loads(response.read().decode("utf-8"))
+     except HTTPError as exc:
+         raise _rejected(exc) from exc
+-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
++    # P3-E（2026-10-25）：補上 OSError。Windows 對端無監聽時偶發 WinError 10054
++    # （ConnectionResetError）或 10060，兩者皆為 OSError 子類，原本不在清單內會直接
++    # 逸出，使視圖回 500 而非契約定義的 vision_api_unavailable。HTTPError 仍優先於此
++    # 捕捉（它同時是 URLError / OSError 子類），因此拒絕契約不被放寬。
++    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+         raise RuntimeError("vision_api_unavailable") from exc
+ 
+ 
++def _caller_cohort_ids(teacher_id):
++    """教師被授權的班級（來自資料庫關係，不是瀏覽器輸入）。"""
++    if not teacher_id:
++        return []
++    try:
++        from .models import TeacherCohortAccess
++
++        return list(
++            TeacherCohortAccess.objects.filter(teacher_id=teacher_id, cohort__active=True)
++            .order_by("cohort_id")
++            .values_list("cohort_id", flat=True)
++        )
++    except Exception:  # pragma: no cover - 查不到就維持最小權限
++        return []
++
++
+ def _get(path, timeout=None, *, teacher_id=""):
+     base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
+     headers = {}
+     if teacher_id:
+         headers["X-FDE-Role"] = "teacher"
+         headers["X-FDE-Teacher-ID"] = str(teacher_id)
++    # 2026-10-28（P6）：GET 也要帶身分 Assertion（空 body）。
++    headers = internal_auth.signed_headers(
++        "GET",
++        path.split("?")[0],
++        headers,
++        subject_id=str(teacher_id or ""),
++        role="teacher" if teacher_id else "",
++        cohort_ids=_caller_cohort_ids(teacher_id),
++        body=b"",
++    )
+     request = Request(f"{base}{path}", headers=headers, method="GET")
+     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
+     try:
+@@ -104,7 +149,7 @@ def _get(path, timeout=None, *, teacher_id=""):
+             return json.loads(response.read().decode("utf-8"))
+     except HTTPError as exc:
+         raise _rejected(exc) from exc
+-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
++    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+         raise RuntimeError("vision_api_unavailable") from exc
+ 
+ 
+@@ -210,6 +255,16 @@ def _delete(path, timeout=None, *, teacher_id=""):
+     if teacher_id:
+         headers["X-FDE-Role"] = "teacher"
+         headers["X-FDE-Teacher-ID"] = str(teacher_id)
++    # 2026-10-28（P6）：DELETE 同樣要帶身分 Assertion（空 body）。
++    headers = internal_auth.signed_headers(
++        "DELETE",
++        path.split("?")[0],
++        headers,
++        subject_id=str(teacher_id or ""),
++        role="teacher" if teacher_id else "",
++        cohort_ids=_caller_cohort_ids(teacher_id),
++        body=b"",
++    )
+     request = Request(f"{base}{path}", headers=headers, method="DELETE")
+     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
+     try:
+@@ -217,7 +272,7 @@ def _delete(path, timeout=None, *, teacher_id=""):
+             return json.loads(response.read().decode("utf-8"))
+     except HTTPError as exc:
+         raise _rejected(exc) from exc
+-    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
++    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+         raise RuntimeError("vision_api_unavailable") from exc
+ 
+ 
+@@ -277,14 +332,14 @@ def upload_teacher_model(
+     )
+ 
+ 
+-def list_models(*, model_type=None):
++def list_models(*, model_type=None, teacher_id=""):
+     suffix = f"?model_type={model_type}" if model_type else ""
+-    return _get(f"/api/v1/vision/models{suffix}")
++    return _get(f"/api/v1/vision/models{suffix}", teacher_id=teacher_id)
+ 
+ 
+-def list_datasets(*, model_type=None):
++def list_datasets(*, model_type=None, teacher_id=""):
+     suffix = f"?model_type={model_type}" if model_type else ""
+-    return _get(f"/api/v1/vision/datasets{suffix}")
++    return _get(f"/api/v1/vision/datasets{suffix}", teacher_id=teacher_id)
+ 
+ 
+ def list_submissions(*, task_id=None, teacher_id=""):
+@@ -401,7 +456,7 @@ def submit_model_evidence_to_vision(
+     try:
+         with urlopen(request, timeout=settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS) as response:
+             result = json.loads(response.read().decode("utf-8"))
+-    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
++    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+         raise RuntimeError("vision_submission_unavailable") from exc
+     if result.get("status") != "SUBMITTED" or not result.get("submission_id"):
+         raise RuntimeError("vision_submission_rejected")

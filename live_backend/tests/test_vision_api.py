@@ -7,6 +7,7 @@ from starlette.testclient import TestClient
 
 from app.main import create_app
 from app.vision_center import HOVER_CLASSES, PROP_CLASSES, VisionCenter
+from p6_signed_client import signed_teacher_client
 
 
 class OfflineVision:
@@ -44,8 +45,25 @@ class VisionApiTests(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=root)
         self.center = VisionCenter(self.temp.name, model_validator=FixtureValidator(), model_runner=FixtureRunner())
-        self.client = TestClient(create_app(vision_adapter=OfflineVision(), vision_center=self.center, dev_mode=True))
+        # P6：Live 只接受綁定 method/path/body 的 Assertion；client 會自動簽發。
+        # self.teacher 保留舊的偽造標頭，正好證明它們不再影響身分。
+        app = create_app(vision_adapter=OfflineVision(), vision_center=self.center, dev_mode=True)
+        self.client = signed_teacher_client(TestClient(app), subject="teacher-1")
+        # 沒有 Assertion 的直接呼叫（瀏覽器／本機程序）：P6 一律拒絕。
+        self.direct_client = TestClient(app)
         self.teacher = {"X-FDE-Role": "teacher", "X-FDE-Teacher-ID": "teacher-1"}
+        # P7-B6（2026-10-29）：建立提交需要**已驗證的學員身分**，教師身分不再能建提交
+        # （教師的上傳契約是 POST /api/v1/vision/models，可帶 source_student_id）。
+        self.student = signed_teacher_client(
+            TestClient(app), subject="s1", role="student", enrollment_id=21, cohort_ids=("2026-01",)
+        )
+        self.student_r07 = signed_teacher_client(
+            TestClient(app),
+            subject="FDE-2026-001",
+            role="student",
+            enrollment_id=22,
+            cohort_ids=("2026-01",),
+        )
 
     def tearDown(self):
         self.temp.cleanup()
@@ -75,8 +93,8 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(active.json()["status"], "ACTIVE")
 
     def test_student_cannot_upload_or_activate(self):
-        self.assertEqual(self.client.post("/api/v1/vision/models", json={}).status_code, 403)
-        self.assertEqual(self.client.post("/api/v1/vision/models/missing/activate", json={}).status_code, 403)
+        self.assertEqual(self.direct_client.post("/api/v1/vision/models", json={}).status_code, 403)
+        self.assertEqual(self.direct_client.post("/api/v1/vision/models/missing/activate", json={}).status_code, 403)
 
     def test_prop_check_uses_rule_engine_and_records_hard_example(self):
         detections = [{"class": "CCW_F", "confidence": .2, "bbox": [70, 20, 80, 30]}]
@@ -126,7 +144,7 @@ class VisionApiTests(unittest.TestCase):
 
     # ---- Student submission + teacher import ----
     def submit(self):
-        return self.client.post("/api/v1/vision/submissions", json={
+        return self.student.post("/api/v1/vision/submissions", json={
             "task_id": "PROP_DIRECTION", "student_id": "s1", "group_id": "G1",
             "original_filename": "best.pt", "file_base64": base64.b64encode(b"fixture").decode(), "notes": "hw",
         })
@@ -155,7 +173,7 @@ class VisionApiTests(unittest.TestCase):
             json={},
         )
 
-        response = self.client.post("/api/v1/vision/submissions", json={
+        response = self.student_r07.post("/api/v1/vision/submissions", json={
             "task_id": "PROP_DIRECTION",
             "student_id": "FDE-2026-001",
             "group_id": "G1",
@@ -183,7 +201,7 @@ class VisionApiTests(unittest.TestCase):
 
     def test_student_cannot_import_submission(self):
         sid = self.submit().json()["submission_id"]
-        self.assertEqual(self.client.post(f"/api/v1/vision/submissions/{sid}/import", json={}).status_code, 403)
+        self.assertEqual(self.direct_client.post(f"/api/v1/vision/submissions/{sid}/import", json={}).status_code, 403)
 
     def test_import_preflight_reports_mapping_required_without_side_effects(self):
         """教師指令③：預檢唯讀回報對照表需求，不建立任何模型。"""
@@ -233,7 +251,7 @@ class VisionApiTests(unittest.TestCase):
 
     def test_teacher_can_approve_demo_submission_and_prop_check_uses_adapter(self):
         self.center.demo_simulation_enabled = True
-        submitted = self.client.post("/api/v1/vision/submissions", json={
+        submitted = self.student.post("/api/v1/vision/submissions", json={
             "task_id": "PROP_DIRECTION", "student_id": "s1", "group_id": "G1",
             "growth_record_id": "77", "growth_record_slot": "R07",
             "evidence_reference": "evidence-77", "evidence_type": "YOLO_MODEL",
@@ -265,7 +283,7 @@ class VisionApiTests(unittest.TestCase):
         self.assertEqual(result.json()["detections"][0]["class"], "CW_F")
 
     def test_submission_requires_pt_extension(self):
-        bad = self.client.post("/api/v1/vision/submissions", json={
+        bad = self.student.post("/api/v1/vision/submissions", json={
             "task_id": "PROP_DIRECTION", "student_id": "s1", "group_id": "G1",
             "original_filename": "model.txt", "file_base64": base64.b64encode(b"x").decode(),
         })

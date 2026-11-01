@@ -149,6 +149,81 @@ CLIENT_FORWARDED_HEADERS = frozenset(
     }
 )
 
+# ---------------------------------------------------------------- 身分標頭策略
+# P6（2026-10-28）：Live Backend 只信任 Django 簽發的短效 Assertion，客戶端送來的
+# 任何身分標頭一律在入口丟棄，避免瀏覽器／本機程序偽造身分直通上游。
+#   * `X-FDE-*`：包含舊的 X-FDE-Role / X-FDE-Teacher-ID / X-FDE-Student-ID，
+#     以及任何客戶端自帶的 X-FDE-Live-Assertion（Assertion 只能由 Django 產生）。
+#   * Authorization / X-Forwarded-* / X-Real-IP / Forwarded / X-Original-* /
+#     X-Client-* / X-Auth-*：一律由本層決定或根本不應存在於客戶端請求。
+#
+# P7-B2（2026-10-29）：**Cookie 不再全域剝除**。P6 的實作把 Cookie 一律丟棄，導致
+# 瀏覽器 Session Cookie 到不了 Django Portal（登入、CSRF、教師後台全部斷鏈）。
+# 現在改為依實際路由分流：
+#   * Django Portal／靜態／首頁 → **保留** Cookie（合法瀏覽器 Session 的唯一用途）；
+#   * Live 自有 API（`/api/live/`、`/api/v1/vision/`、`/api/rc/`）→ 剝除 Cookie，
+#     這些端點只認 Django 簽發的 Assertion，永遠不需要瀏覽器憑證。
+# Live 側另有一道同樣規則的中介層（app/credential_isolation.py）作為縱深防禦。
+CLIENT_IDENTITY_HEADERS = frozenset({"authorization", "forwarded", "x-real-ip"})
+CLIENT_IDENTITY_PREFIXES = (
+    "x-fde-",
+    "x-forwarded-",
+    "x-original-",
+    "x-client-",
+    "x-auth-",
+)
+
+# 這些前綴屬於 Live 自有 API：只需要 Assertion，不需要（也不允許）瀏覽器 Cookie。
+LIVE_API_PREFIXES = ("/api/live/", "/api/v1/vision/", "/api/rc/")
+
+# P7-B2（2026-10-29 修正）：Cookie 是否可通過入口，取決於「上游是誰」，不是取決於
+# 路徑本身。
+#
+#   gateway（預設）：入口的單一上游是身分仲介（閘道）。閘道**必須**拿到瀏覽器
+#       Session Cookie 才能向 Django 換取綁定本次操作的短效 Assertion；若入口在
+#       這裡就丟掉 Cookie，合法學員／教師的每一個受保護 API 呼叫都會變成 403
+#       （2026-10-29 以 HTTPS 全鏈路實測：POST /api/v1/vision/submissions -> 403
+#       internal_auth_rejected）。真正的界線是「Cookie 絕不抵達 Live」，由閘道在
+#       轉發前剝除，並由 Live 端 `credential_isolation` 再剝一次（兩層）。
+#
+#   live：上游直接就是 Live，沒有仲介可以換票，Cookie 對它毫無用處且屬憑證外洩，
+#       因此對 Live API 前綴一律丟棄。
+UPSTREAM_ROLE = (os.environ.get("FDE_ENTRY_UPSTREAM_ROLE") or "gateway").strip().lower()
+
+
+def _should_drop_cookie(path: str, upstream_role: str | None = None) -> bool:
+    """決定這次轉發是否丟棄 Cookie。未給路徑時採最嚴格策略。"""
+    if not path:
+        return True
+    role = (upstream_role or UPSTREAM_ROLE).strip().lower()
+    if role == "live":
+        return path.startswith(LIVE_API_PREFIXES)
+    return False
+
+
+def strip_client_identity_headers(headers, *, path: str = "", upstream_role: str | None = None) -> dict:
+    """丟棄所有客戶端身分／轉發標頭，回傳可安全轉發給上游的 dict。
+
+    接受 mapping（dict / email.message.Message）或 (name, value) 序列。
+
+    ``path`` 為本次請求的上游路徑；未提供時採最嚴格策略（連 Cookie 一起丟棄）。
+    ``upstream_role`` 預設取模組層的 :data:`UPSTREAM_ROLE`。
+    """
+    drop_cookie = _should_drop_cookie(path, upstream_role)
+    pairs = headers.items() if hasattr(headers, "items") else headers
+    clean = {}
+    for key, value in pairs:
+        lower = str(key).lower()
+        if lower == "cookie":
+            if drop_cookie:
+                continue
+            clean[key] = value
+            continue
+        if lower in CLIENT_IDENTITY_HEADERS or lower.startswith(CLIENT_IDENTITY_PREFIXES):
+            continue
+        clean[key] = value
+    return clean
+
 
 def _parse_public_scheme(raw: str) -> str:
     scheme = (raw or "").strip().lower()
@@ -412,12 +487,16 @@ class EntryHandler(BaseHTTPRequestHandler):
             upstream_path = f"{upstream_path}?{split.query}"
         body = self._read_body()
 
-        headers = {}
-        for key, value in self.headers.items():
-            lower = key.lower()
-            if lower in HOP_BY_HOP_REQUEST or lower in CLIENT_FORWARDED_HEADERS:
-                continue
-            headers[key] = value
+        # P6：先丟棄客戶端身分標頭（X-FDE-*、Authorization、轉發類），
+        # 再套用 hop-by-hop / X-Forwarded-* 規則；兩者皆為「客戶端不可信」策略。
+        # P7-B2：Cookie 依路由分流——Live 自有 API 剝除，Django Portal 保留。
+        headers = strip_client_identity_headers(self.headers.items(), path=split.path or "/")
+        headers = {
+            key: value
+            for key, value in headers.items()
+            if key.lower() not in HOP_BY_HOP_REQUEST and key.lower() not in CLIENT_FORWARDED_HEADERS
+        }
+        headers.pop("X-FDE-Live-Assertion", None)
         headers["Host"] = f"{UPSTREAM_HOST}:{UPSTREAM_PORT}"
         # P3-E：Origin / Referer **原樣轉發**（刻意不改寫）。
         # 若在此改寫成內部位址，Django 的 Origin 比對會恆成立，跨站來源即可通過

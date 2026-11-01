@@ -907,6 +907,7 @@ class VisionCenter:
         original_filename: str, content: bytes, notes: str = "",
         growth_record_id: str = "", growth_record_slot: str = "",
         evidence_reference: str = "", evidence_type: str = "",
+        enrollment_id: int = 0, cohort_ids: list[str] | None = None,
     ) -> dict:
         if task_id not in MODEL_TYPES:
             raise ValueError("unsupported_submission_task")
@@ -929,6 +930,10 @@ class VisionCenter:
             "notes": notes, "growth_record_id": str(growth_record_id),
             "growth_record_slot": str(growth_record_slot),
             "evidence_reference": str(evidence_reference), "evidence_type": str(evidence_type),
+            # P7-B6（2026-10-29）：身分只來自已驗證的 Assertion，一併落盤供事後稽核與
+            # 跨 Cohort 檢查；不從請求本文取值。
+            "enrollment_id": int(enrollment_id or 0),
+            "cohort_ids": [str(item) for item in (cohort_ids or [])],
         }
         self.store.data["submissions"].append(record)
         self.store.save()
@@ -1556,6 +1561,33 @@ def evaluate_prop(detections: list[dict], image_width: float, image_height: floa
         results[key] = result
     final = "PASS" if all(item["result"] == "PASS" for item in results.values()) else "INSUFFICIENT_DATA" if any(item["result"] == "INSUFFICIENT_DATA" for item in results.values()) else "NG"
     return {"rule_version": rule_version, "positions": results, "final_result": final}
+
+
+# 2026-10-29（接棒驗收）：CW／CCW 兩類對應規則。
+# 現有 PROP_DIRECTION 模型為四類（CW_F/CCW_F/CW_B/CCW_B = 旋向 × 槳面），
+# 但本輪只驗收「順時針 CW／逆時針 CCW」兩類。此對應規則將四類收斂為兩類，
+# 供教師圖片驗證時誠實顯示「原始模型類別 → 轉換後 CW/CCW」，絕不偽裝模型本身是兩類模型。
+#
+# 【語義基礎，P7-C 確認】CW／CCW 是「螺旋槳旋向（規格方向）」，不是「觀察視角方向」：
+#   1. 四類 = 旋向 × 槳面 兩個正交屬性；_F／_B 表示槳面（面向相機的那一面），
+#      CW／CCW 表示該槳葉在機體座標系中的旋轉方向。因此剝離槳面後保留旋向是合法的。
+#   2. 規則引擎 evaluate_prop 要求 M1 右前／M2 左後 = CCW_F、M3 左前／M4 右後 = CW_F；
+#      對角馬達同旋向是機體力矩平衡的機械事實，與相機位置無關。
+#   3. 設計文件明定「畫面解讀以 F450 機頭方向定義為準」，並把「畫面方向無法可靠取得」
+#      列為 REVIEW 條件 → 系統明確分離「旋向屬性」與「視角」，視角不明時拒絕猜測。
+# 因此本對應表【只可用於顯示與統計】，不得用於 PASS／NG 判定；
+# 判定仍必須走 evaluate_prop 的四類規則，否則等於把四類規則靜默降級為兩類。
+PROP_DIRECTION_TO_CW_CCW = {
+    "CW_F": "CW", "CW_B": "CW",
+    "CCW_F": "CCW", "CCW_B": "CCW",
+}
+
+
+def map_prop_to_direction(class_name: str | None) -> str | None:
+    """將四類槳葉類別收斂為 CW／CCW 兩類；無法對應（含空值/未知類別）回 None。"""
+    if not class_name:
+        return None
+    return PROP_DIRECTION_TO_CW_CCW.get(str(class_name).strip().upper())
 
 
 def _solve_linear(matrix: list[list[float]], values: list[float]) -> list[float]:

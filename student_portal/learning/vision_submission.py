@@ -5,6 +5,8 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 
+from . import internal_auth
+
 
 class VisionImportClassNamesMappingRequired(RuntimeError):
     """Live 回報：模型類別名與任務預期不同但數量一致，需要教師提供對照表。"""
@@ -62,22 +64,46 @@ def _rejected(exc) -> RuntimeError:
     return RuntimeError(f"vision_api_rejected:{exc.code}:{message}")
 
 
-def _post(path, payload, timeout=None, *, teacher_id=""):
+def _post(
+    path, payload, timeout=None, *, teacher_id="",
+    student_id="", enrollment_id=0, cohort_ids=(),
+):
     """呼叫既有 Live Backend 的視覺 API。
 
     真實推論（載入 .pt）一律由 Live Backend 執行：本機 Django 環境沒有
     ultralytics / torch / cv2 / numpy，且學生 .pt 為 PyTorch pickle，
     載入即執行任意程式碼 —— 禁止在 Django 服務進程內載入。
     本模組只負責安全地跨進程轉發請求與解讀結果。
+
+    P7-B5（2026-10-29）：身分一律來自 Django 簽發、綁定 method / path / body 的
+    短效 Assertion。`teacher_id` 與 `student_id` 互斥；兩者皆空時不簽任何身分
+    （Live 端會 fail closed）。**不再送出 `X-FDE-Role` 等可被偽造的舊標頭**——
+    舊版雖然被 Assertion 覆蓋，但仍會被原樣轉發到上游，屬多餘的攻擊面。
     """
     base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
-    headers = {"Content-Type": "application/json"}
+    # 2026-10-28（P6）：先序列化一次，讓簽章的 body hash 與實際送出的 bytes 完全一致。
+    body = json.dumps(payload).encode("utf-8")
     if teacher_id:
-        headers["X-FDE-Role"] = "teacher"
-        headers["X-FDE-Teacher-ID"] = str(teacher_id)
+        subject, role, cohorts = str(teacher_id), "teacher", _caller_cohort_ids(teacher_id)
+        enrollment = 0
+    elif student_id:
+        subject, role, cohorts = str(student_id), "student", list(cohort_ids or ())
+        enrollment = int(enrollment_id or 0)
+    else:
+        subject, role, cohorts, enrollment = "", "", [], 0
+    headers = internal_auth.signed_headers(
+        "POST",
+        path.split("?")[0],
+        {"Content-Type": "application/json"},
+        subject_id=subject,
+        role=role,
+        enrollment_id=enrollment,
+        cohort_ids=cohorts,
+        body=body,
+    )
     request = Request(
         f"{base}{path}",
-        data=json.dumps(payload).encode("utf-8"),
+        data=body,
         headers=headers,
         method="POST",
     )
@@ -95,12 +121,38 @@ def _post(path, payload, timeout=None, *, teacher_id=""):
         raise RuntimeError("vision_api_unavailable") from exc
 
 
+def _caller_cohort_ids(teacher_id):
+    """教師被授權的班級（來自資料庫關係，不是瀏覽器輸入）。"""
+    if not teacher_id:
+        return []
+    try:
+        from .models import TeacherCohortAccess
+
+        return list(
+            TeacherCohortAccess.objects.filter(teacher_id=teacher_id, cohort__active=True)
+            .order_by("cohort_id")
+            .values_list("cohort_id", flat=True)
+        )
+    except Exception:  # pragma: no cover - 查不到就維持最小權限
+        return []
+
+
 def _get(path, timeout=None, *, teacher_id=""):
     base = settings.VISION_SUBMISSION_API_BASE_URL.rstrip("/")
     headers = {}
     if teacher_id:
         headers["X-FDE-Role"] = "teacher"
         headers["X-FDE-Teacher-ID"] = str(teacher_id)
+    # 2026-10-28（P6）：GET 也要帶身分 Assertion（空 body）。
+    headers = internal_auth.signed_headers(
+        "GET",
+        path.split("?")[0],
+        headers,
+        subject_id=str(teacher_id or ""),
+        role="teacher" if teacher_id else "",
+        cohort_ids=_caller_cohort_ids(teacher_id),
+        body=b"",
+    )
     request = Request(f"{base}{path}", headers=headers, method="GET")
     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
     try:
@@ -180,8 +232,16 @@ def validate_image_with_submission(
     )
 
 
-def prop_check(*, image_bytes, input_reference="", confidence_threshold=0.5):
-    """使用既有 ACTIVE PROP_DIRECTION 模型執行學員圖片辨識。"""
+def prop_check(
+    *, image_bytes, input_reference="", confidence_threshold=0.5,
+    student_id="", enrollment_id=0, cohort_ids=(),
+):
+    """使用既有 ACTIVE PROP_DIRECTION 模型執行學員圖片辨識。
+
+    P7-B5（2026-10-29）：`POST /api/v1/vision/prop-check` 在結果非 PASS 時會建立
+    hard example（等於建立資料），因此必須帶已驗證的學員身分。身分由呼叫端從
+    資料庫關係（request.user → StudentProfile → Enrollment）取得，不是瀏覽器輸入。
+    """
     if not image_bytes:
         raise RuntimeError("image_required")
     try:
@@ -204,6 +264,54 @@ def prop_check(*, image_bytes, input_reference="", confidence_threshold=0.5):
             "input_reference": str(input_reference or ""),
         },
         timeout=max(settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS, 120),
+        student_id=student_id,
+        enrollment_id=enrollment_id,
+        cohort_ids=cohort_ids,
+    )
+
+
+# PROP_ROTATION_V5 與既有四類 PROP_DIRECTION 完全分離；以下只轉送已由
+# Django Session/Enrollment 推導的 Assertion，不接收瀏覽器宣稱的身分或班級。
+def rotation_v5_status(*, teacher_id):
+    return _get("/api/v1/vision/rotation-v5/status", teacher_id=teacher_id)
+
+
+def rotation_v5_teacher_validate(*, image_bytes, teacher_id, expected_class=""):
+    if not image_bytes:
+        raise RuntimeError("image_required")
+    return _post(
+        "/api/v1/vision/rotation-v5/teacher/validate-image",
+        {"image_base64": base64.b64encode(image_bytes).decode("ascii"), "expected_class": str(expected_class or "")},
+        timeout=max(settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS, 120), teacher_id=teacher_id,
+    )
+
+
+def rotation_v5_teacher_confirm(*, validation_id, decision, teacher_id):
+    return _post(
+        f"/api/v1/vision/rotation-v5/teacher/validations/{validation_id}/confirm",
+        {"decision": str(decision)}, teacher_id=teacher_id,
+    )
+
+
+def rotation_v5_enable_trial(*, cohort_id, teacher_id):
+    return _post(
+        "/api/v1/vision/rotation-v5/teacher/enable-trial",
+        {"cohort_id": str(cohort_id)}, teacher_id=teacher_id,
+    )
+
+
+def rotation_v5_activate_isolated(*, teacher_id):
+    return _post("/api/v1/vision/rotation-v5/teacher/activate-isolated", {}, teacher_id=teacher_id)
+
+
+def rotation_v5_student_infer(*, image_bytes, student_id, enrollment_id, cohort_ids):
+    if not image_bytes:
+        raise RuntimeError("image_required")
+    return _post(
+        "/api/v1/vision/rotation-v5/infer",
+        {"image_base64": base64.b64encode(image_bytes).decode("ascii")},
+        timeout=max(settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS, 120),
+        student_id=student_id, enrollment_id=enrollment_id, cohort_ids=cohort_ids,
     )
 
 
@@ -214,6 +322,16 @@ def _delete(path, timeout=None, *, teacher_id=""):
     if teacher_id:
         headers["X-FDE-Role"] = "teacher"
         headers["X-FDE-Teacher-ID"] = str(teacher_id)
+    # 2026-10-28（P6）：DELETE 同樣要帶身分 Assertion（空 body）。
+    headers = internal_auth.signed_headers(
+        "DELETE",
+        path.split("?")[0],
+        headers,
+        subject_id=str(teacher_id or ""),
+        role="teacher" if teacher_id else "",
+        cohort_ids=_caller_cohort_ids(teacher_id),
+        body=b"",
+    )
     request = Request(f"{base}{path}", headers=headers, method="DELETE")
     seconds = timeout or settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS
     try:
@@ -281,14 +399,14 @@ def upload_teacher_model(
     )
 
 
-def list_models(*, model_type=None):
+def list_models(*, model_type=None, teacher_id=""):
     suffix = f"?model_type={model_type}" if model_type else ""
-    return _get(f"/api/v1/vision/models{suffix}")
+    return _get(f"/api/v1/vision/models{suffix}", teacher_id=teacher_id)
 
 
-def list_datasets(*, model_type=None):
+def list_datasets(*, model_type=None, teacher_id=""):
     suffix = f"?model_type={model_type}" if model_type else ""
-    return _get(f"/api/v1/vision/datasets{suffix}")
+    return _get(f"/api/v1/vision/datasets{suffix}", teacher_id=teacher_id)
 
 
 def list_submissions(*, task_id=None, teacher_id=""):
@@ -381,8 +499,18 @@ def list_hard_examples(*, teacher_id, status=None):
 def submit_model_evidence_to_vision(
     *, task_type, student_id, group_id, growth_record_id, growth_record_slot,
     evidence_reference, evidence_type, original_filename, content, notes="",
+    enrollment_id=0, cohort_ids=(),
 ):
-    """將 R07 模型證據送入既有 Vision Submission，且不自動啟用模型。"""
+    """將 R07 模型證據送入既有 Vision Submission，且不自動啟用模型。
+
+    P7-B6（2026-10-29）：本函式原本**完全沒有送出任何憑證**，Live 端的
+    ``POST /api/v1/vision/submissions`` 也沒有驗證，因此任何本機程序都能建立正式
+    提交。現在改為簽發綁定 method / path / body 的學員 Assertion：
+
+    * 身分（``sub`` / ``enrollment_id`` / ``cohort_ids``）由呼叫端從資料庫關係取得，
+      不是瀏覽器輸入；
+    * 送出的 bytes 先序列化一次，簽章用的 body hash 與實際送出的內容完全一致。
+    """
     payload = {
         "task_id": task_type,
         "student_id": student_id,
@@ -395,13 +523,20 @@ def submit_model_evidence_to_vision(
         "file_base64": base64.b64encode(content).decode("ascii"),
         "notes": notes,
     }
-    url = f"{settings.VISION_SUBMISSION_API_BASE_URL.rstrip('/')}/api/v1/vision/submissions"
-    request = Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    body = json.dumps(payload).encode("utf-8")
+    path = "/api/v1/vision/submissions"
+    headers = internal_auth.signed_headers(
+        "POST",
+        path,
+        {"Content-Type": "application/json"},
+        subject_id=str(student_id or ""),
+        role="student",
+        enrollment_id=int(enrollment_id or 0),
+        cohort_ids=list(cohort_ids or []),
+        body=body,
     )
+    url = f"{settings.VISION_SUBMISSION_API_BASE_URL.rstrip('/')}{path}"
+    request = Request(url, data=body, headers=headers, method="POST")
     try:
         with urlopen(request, timeout=settings.VISION_SUBMISSION_API_TIMEOUT_SECONDS) as response:
             result = json.loads(response.read().decode("utf-8"))

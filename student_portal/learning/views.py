@@ -76,6 +76,7 @@ from .forms import (
 from .vision_submission import submit_model_evidence_to_vision
 from .live_assertions import LiveAssertionError, issue_assertion
 from . import vision_submission as vision_api
+from . import vision_preflight
 from .vision_rule_templates import template_choices_for_task, template_for_task
 from . import prop_scan
 from .vision_verification import runner_state
@@ -442,6 +443,36 @@ def live_session_auth(request):
 
 
 # 僅受信 Gateway 可取得短效 Assertion；瀏覽器 supplied ID、角色或 Cohort 一律不採用。
+# P7-B4（2026-10-29）：Assertion 必須綁定這次真實操作的 method / path / body hash。
+#   * 只接受這幾種方法；其餘一律拒絕（避免用奇怪的 verb 繞過下游比對）。
+#   * path 必須是受保護的內部 API 前綴，且不得含 scheme/host/query（杜絕把票
+#     拿去打別的端點，例如用 "/" 或外部網址充數）。
+#   * body_sha256 必須是 64 位小寫十六進位。
+ASSERTION_ALLOWED_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+ASSERTION_ALLOWED_PREFIXES = ("/api/live/", "/api/v1/vision/", "/api/rc/")
+_SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _assertion_target(body):
+    """從 Gateway 的請求本文取出真實操作描述；不合法就回 400 錯誤回應。"""
+    method = str(body.get("method") or "").strip().upper()
+    path = str(body.get("path") or "").strip()
+    body_sha256 = str(body.get("body_sha256") or "").strip().lower()
+    if method not in ASSERTION_ALLOWED_METHODS:
+        return None, JsonResponse({"error": "assertion_target_method_invalid"}, status=400)
+    if (
+        not path.startswith("/")
+        or "://" in path
+        or "?" in path
+        or "#" in path
+        or not path.startswith(ASSERTION_ALLOWED_PREFIXES)
+    ):
+        return None, JsonResponse({"error": "assertion_target_path_invalid"}, status=400)
+    if not _SHA256_HEX.match(body_sha256):
+        return None, JsonResponse({"error": "assertion_target_body_invalid"}, status=400)
+    return {"method": method, "path": path, "body_sha256": body_sha256}, None
+
+
 @never_cache
 @require_POST
 @csrf_protect
@@ -460,6 +491,12 @@ def live_identity_assertion(request):
         return JsonResponse({"error": "invalid_assertion_request"}, status=400)
     if not isinstance(body, dict):
         return JsonResponse({"error": "invalid_assertion_request"}, status=400)
+    # P7-B4（2026-10-29）：Assertion 必須綁定**真實操作**的 method / path / body hash。
+    # 舊版忽略這三個欄位，於是 issue_assertion 的預設值（GET / 空 body）被簽進去，
+    # 拿這張票去打任何真實端點都必然 method_mismatch / path_mismatch。
+    target, error = _assertion_target(body)
+    if error is not None:
+        return error
     if request.user.is_staff:
         cohort_ids = list(TeacherCohortAccess.objects.filter(teacher=request.user, cohort__active=True).order_by("cohort_id").values_list("cohort_id", flat=True))
         if not cohort_ids:
@@ -484,7 +521,11 @@ def live_identity_assertion(request):
                 return JsonResponse({"error": "live_enrollment_forbidden"}, status=403)
         claims = {"sub": f"student:{profile.pk}", "role": "student", "enrollment_id": enrollment.pk, "cohort_ids": [enrollment.cohort_id]}
     try:
-        assertion = issue_assertion(claims, signing_key, ttl_seconds=getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60))
+        assertion = issue_assertion(
+            {**claims, **target},
+            signing_key,
+            ttl_seconds=getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60),
+        )
     except LiveAssertionError:
         return JsonResponse({"error": "live_assertion_unavailable"}, status=503)
     return JsonResponse({"assertion": assertion, "expires_in": getattr(settings, "FDE_LIVE_ASSERTION_TTL_SECONDS", 60)})
@@ -798,6 +839,11 @@ def teacher_required(view_func):
             return redirect_to_login(request.get_full_path(), reverse("learning:teacher_login"))
         if not request.user.is_staff:
             return render(request, "learning/role_denied.html", {"required_role": "教師"}, status=403)
+        # 2026-10-28（階段四 C）：資源級班級隔離。所有教師視圖共用同一道檢查，
+        # 避免逐個視圖漏加，也不依賴前端隱藏按鈕。URL 路徑上的 id 同樣要比對。
+        denied = vision_resource_guard(request, kwargs)
+        if denied is not None:
+            return denied
         return view_func(request, *args, **kwargs)
 
     return wrapped
@@ -808,6 +854,153 @@ def teacher_cohorts(user):
     if user.is_superuser:
         return cohorts
     return cohorts.filter(teacher_accesses__teacher=user)
+
+
+# ---------------------------------------------------------------------------
+# 班級隔離（2026-10-28 上線收尾第四階段 C）
+#
+# 背景：teacher_vision_center 及相關操作原本只檢查「是否為教師」，未檢查「是否為
+# 該學員所屬班級的教師」，因此任何教師（含異班教師）只要知道 submission_id 或
+# model_id，就能查看、驗證、匯入甚至啟用他班模型。
+#
+# 設計：以 Live Registry 的 student_id（= Django 的 public_user_id）為橋樑，
+# 對照「教師被授權班級內的 active enrollment」，得到可見學員集合。
+#   * superuser → 不受限（沿用既有角色契約；models.TeacherCohortAccess.clean
+#     也要求只有 is_staff 才能被指派班級）。
+#   * 一般教師 → 只看得到 teacher_accesses 指向的 active 班級。
+#   * 無班級關聯 → 集合為空 → 一律拒絕（不因「沒有資料」而放行）。
+# ---------------------------------------------------------------------------
+def vision_visible_student_ids(user):
+    """回傳此教師可見的學員 public_user_id 集合；None 代表不受限（superuser）。"""
+    if user.is_superuser:
+        return None
+    return set(
+        Enrollment.objects.filter(cohort__in=teacher_cohorts(user), active=True)
+        .values_list("student__public_user_id", flat=True)
+    )
+
+
+def vision_can_see_student(user, public_user_id) -> bool:
+    allowed = vision_visible_student_ids(user)
+    if allowed is None:
+        return True
+    if not public_user_id:
+        return False
+    return str(public_user_id) in allowed
+
+
+def vision_cohort_denied(request):
+    return render(
+        request,
+        "learning/role_denied.html",
+        {"required_role": "所屬班級（此資源不屬於您被授權的班級）"},
+        status=403,
+    )
+
+
+def vision_resource_guard(request, path_kwargs=None):
+    """若請求帶 submission_id / model_id，驗證該資源是否屬於教師被授權班級。
+
+    id 來源有三處，全部都要看，否則只要換一種傳遞方式就能繞過：
+      1. POST 表單
+      2. GET 查詢字串
+      3. URL 路徑參數（例如 /teacher/vision-repository/<model_id>/integrity-check/）
+
+    回傳 None 表示通過（或本次請求不需檢查），否則回傳 403 回應。
+    由 teacher_required 統一呼叫，確保所有教師視圖都經過同一道檢查。
+
+    效能：一次請求只查一次（結果快取在 request 上），避免同一請求內重複打 Live。
+    """
+    cached = getattr(request, "_vision_guard_checked", None)
+    if cached is not None:
+        return cached
+
+    result = _vision_resource_guard_impl(request, path_kwargs or {})
+    request._vision_guard_checked = result
+    return result
+
+
+def _vision_lookup_submission_student(submission_id, *, teacher_id):
+    """回傳 (是否找到, 該提交的學員 public_user_id)。
+
+    找不到 → (False, None)；Live 不可用 → 拋 RuntimeError（由呼叫端 fail-closed）。
+    獨立成小函式是為了讓單元測試能以可控 stub 取代實際跨進程呼叫。
+    """
+    items = vision_api.list_submissions(teacher_id=teacher_id)
+    items = items if isinstance(items, list) else (items.get("submissions") or [])
+    target = next(
+        (item for item in items if str(item.get("submission_id")) == str(submission_id)), None
+    )
+    if target is None:
+        return False, None
+    return True, target.get("student_id")
+
+
+def _vision_lookup_model_student(model_id, *, teacher_id, preferred_task):
+    """回傳 (是否找到, 該模型的來源學員 public_user_id)。
+
+    先查 preferred_task，找不到再查另一個任務，避免任務類型不符造成誤判 403。
+    教師自行上傳的模型 source_student_id 為空字串，代表不屬於任何班級。
+    """
+    order = [preferred_task] + [
+        meta["id"] for meta in VISION_CENTER_TASKS if meta["id"] != preferred_task
+    ]
+    for model_type in order:
+        history = vision_api.task_model_history(model_type=model_type, teacher_id=teacher_id)
+        rows = (history or {}).get("history") or []
+        target = next(
+            (item for item in rows if str(item.get("model_id")) == str(model_id)), None
+        )
+        if target is not None:
+            return True, target.get("source_student_id")
+    return False, None
+
+
+def _vision_resource_guard_impl(request, kwargs):
+    submission_id = (
+        request.POST.get("submission_id")
+        or request.GET.get("submission_id")
+        or kwargs.get("submission_id")
+        or ""
+    ).strip()
+    model_id = (
+        request.POST.get("model_id")
+        or request.GET.get("model_id")
+        or kwargs.get("model_id")
+        or ""
+    ).strip()
+    if not submission_id and not model_id:
+        return None
+
+    allowed = vision_visible_student_ids(request.user)
+    if allowed is None:
+        return None  # superuser：沿用既有不受限契約
+
+    try:
+        if submission_id:
+            # 不帶 task_id：一次取回全部提交，避免「任務類型猜錯 → 合法請求被誤判 403」，
+            # 也避免攻擊者用 task 參數把查詢導向其他任務而閃過比對。
+            found, source_student = _vision_lookup_submission_student(
+                submission_id, teacher_id=request.user.pk
+            )
+        else:
+            found, source_student = _vision_lookup_model_student(
+                model_id, teacher_id=request.user.pk, preferred_task=_vision_task_id(request)
+            )
+    except RuntimeError:
+        # 取不到清單時 fail-closed：寧可拒絕，也不放行未經確認的資源。
+        return vision_cohort_denied(request)
+
+    if not found:
+        # 查不到就代表無法確認歸屬 → 拒絕（不做「查不到就放行」）。
+        return vision_cohort_denied(request)
+    if not source_student:
+        # 教師自行上傳的模型不屬於任何班級（無 source_student_id），
+        # 依既有契約允許教師管理；由 submission 匯入的模型一律有 source_student_id。
+        return None
+    if not vision_can_see_student(request.user, source_student):
+        return vision_cohort_denied(request)
+    return None
 
 
 def ordered_phase_progress(enrollment):
@@ -1257,6 +1450,46 @@ def growth_record_detail(request, enrollment_id, slot_id):
     )
 
 
+_MODEL_UPLOAD_REJECT_TEXT = {
+    "empty_file": "檔案是空的",
+    "file_too_large": "檔案超過 100 MB",
+    "extension_not_allowed": "副檔名不是 .pt",
+    "unsafe_pickle_format": "舊式純 pickle 格式無法安全驗證",
+    "not_a_torch_archive": "不是 PyTorch 權重容器（缺少 ZIP 結構）",
+    "corrupt_archive": "壓縮容器損壞",
+    "torch_payload_missing": "容器內缺少模型權重資料（data.pkl）",
+    "unsafe_archive_entry": "壓縮容器內含不安全路徑",
+    "archive_expansion_too_large": "解壓後體積異常（疑似 ZIP 炸彈）",
+    "preflight_timeout": "結構檢查逾時",
+    "preflight_failed": "結構檢查無法完成",
+}
+
+
+def _record_model_upload_rejection(*, request, enrollment, filename, result):
+    """把拒絕事件寫入審計（append-only），但不建立任何可被誤認為合法候選的紀錄。"""
+    try:
+        audit_path = getattr(
+            settings,
+            "VISION_UPLOAD_AUDIT_PATH",
+            str(Path(settings.MEDIA_ROOT) / "vision_upload_audit.jsonl"),
+        )
+        Path(audit_path).parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "event": "model_upload_rejected",
+            "at": timezone.now().isoformat(),
+            "user_id": getattr(request.user, "pk", None),
+            "enrollment_id": getattr(enrollment, "pk", None),
+            "cohort_id": getattr(getattr(enrollment, "cohort", None), "cohort_id", ""),
+            "filename": filename,
+            "reason": result.get("reason"),
+            "details": result.get("details") or {},
+        }
+        with open(audit_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 - 審計失敗不得阻斷拒絕流程
+        pass
+
+
 @student_required
 @require_POST
 def growth_model_upload(request, enrollment_id):
@@ -1289,6 +1522,27 @@ def growth_model_upload(request, enrollment_id):
     upload = form.cleaned_data["model_file"]
     original_name = Path(str(upload.name)).name
     content = upload.read()
+
+    # 2026-10-28（階段四 D）：結構預檢。只檢查容器結構，不反序列化、不載入模型。
+    # 失敗時只寫審計事件，不建立 Evidence、不進教師待審佇列。
+    preflight = vision_preflight.inspect_bytes(content, original_name)
+    if not preflight.get("ok"):
+        _record_model_upload_rejection(
+            request=request,
+            enrollment=enrollment,
+            filename=original_name,
+            result=preflight,
+        )
+        messages.error(
+            request,
+            "模型檔案未通過安全檢查，已拒絕且不會進入待審佇列（原因：{}）。".format(
+                _MODEL_UPLOAD_REJECT_TEXT.get(
+                    preflight.get("reason"), preflight.get("reason") or "unknown"
+                )
+            ),
+        )
+        return redirect(redirect_url)
+
     evidence = None
     stored_name = ""
     storage = None
@@ -1321,6 +1575,9 @@ def growth_model_upload(request, enrollment_id):
                 original_filename=original_name,
                 content=content,
                 notes=submission.student_note,
+                # P7-B6：身分取自資料庫關係（enrollment → cohort），不是瀏覽器輸入。
+                enrollment_id=enrollment.pk,
+                cohort_ids=[enrollment.cohort_id] if enrollment.cohort_id else [],
             )
             evidence.processed_metadata = {
                 **evidence.original_metadata,
@@ -1445,7 +1702,7 @@ def student_prop_scan(request, enrollment_id):
 
     # 閘門通過才呼叫真實推論（Runner 由 live_backend 隔離環境提供）。
     try:
-        inference = _run_prop_inference(content, context["uploaded_name"])
+        inference = _run_prop_inference(content, context["uploaded_name"], enrollment)
     except prop_scan.PropScanBlocked as blocked:
         context["result"] = {"state": "BLOCKED", "state_label": "無法推論",
                              "detail": blocked.message, "code": blocked.code}
@@ -1467,11 +1724,101 @@ def student_prop_scan(request, enrollment_id):
     return render(request, "learning/student_prop_scan.html", context)
 
 
-def _run_prop_inference(image_bytes: bytes, file_name: str) -> dict:
-    """呼叫既有 prop-check，並只轉譯真實檢測與規則引擎結果。"""
+@student_required
+@require_http_methods(["GET", "POST"])
+def student_rotation_v5_scan(request, enrollment_id):
+    """CW／CCW 雙類 V5 教學試用入口；不取代既有四類槳葉方向任務。"""
+    enrollment = get_object_or_404(
+        Enrollment.objects.select_related("cohort", "student"),
+        pk=enrollment_id, student=request.student_profile, active=True,
+    )
+    context = {"enrollment": enrollment, "result": None, "error": "", "uploaded_data_url": ""}
+    if request.method == "GET":
+        return render(request, "learning/student_rotation_v5_scan.html", context)
+    upload = request.FILES.get("photo")
+    if upload is None or not (getattr(upload, "content_type", "") or "").lower().startswith("image/"):
+        context["error"] = "請選擇一張有效的螺旋槳圖片。"
+        return render(request, "learning/student_rotation_v5_scan.html", context)
+    if upload.size > PROP_SCAN_MAX_IMAGE_BYTES:
+        context["error"] = "照片超過 8 MB，請縮小後再上傳。"
+        return render(request, "learning/student_rotation_v5_scan.html", context)
+    content = upload.read()
+    context["uploaded_data_url"] = "data:{};base64,{}".format(
+        (getattr(upload, "content_type", "") or "image/jpeg").lower(), base64.b64encode(content).decode("ascii"),
+    )
+    try:
+        context["result"] = vision_api.rotation_v5_student_infer(
+            image_bytes=content, student_id=enrollment.student.public_user_id,
+            enrollment_id=enrollment.pk, cohort_ids=[enrollment.cohort_id],
+        )
+    except RuntimeError as exc:
+        context["error"] = "CW／CCW 教學試用目前不可用：{}".format(str(exc))
+    return render(request, "learning/student_rotation_v5_scan.html", context)
+
+
+@teacher_required
+@require_http_methods(["GET", "POST"])
+def teacher_rotation_v5_trial(request):
+    """教師 V5 圖片驗證、人工確認與限定班級教學試用頁。"""
+    context = {"status": {}, "result": None, "error": "", "uploaded_data_url": "", "cohorts": teacher_cohorts(request.user)}
+    try:
+        context["status"] = vision_api.rotation_v5_status(teacher_id=request.user.pk)
+    except RuntimeError as exc:
+        context["error"] = "V5 教學試用服務未就緒：{}".format(str(exc))
+    if request.method == "GET":
+        return render(request, "learning/teacher_rotation_v5_trial.html", context)
+    action = str(request.POST.get("action") or "")
+    try:
+        if action == "validate":
+            upload = request.FILES.get("photo")
+            if upload is None or not (getattr(upload, "content_type", "") or "").lower().startswith("image/"):
+                raise RuntimeError("請選擇一張有效圖片。")
+            if upload.size > PROP_SCAN_MAX_IMAGE_BYTES:
+                raise RuntimeError("照片超過 8 MB，請縮小後再上傳。")
+            content = upload.read()
+            context["uploaded_data_url"] = "data:{};base64,{}".format(
+                (getattr(upload, "content_type", "") or "image/jpeg").lower(), base64.b64encode(content).decode("ascii"),
+            )
+            context["result"] = vision_api.rotation_v5_teacher_validate(
+                image_bytes=content, teacher_id=request.user.pk,
+                expected_class=str(request.POST.get("expected_class") or ""),
+            )
+            request.session["rotation_v5_last_validation_id"] = context["result"].get("validation_id")
+        elif action == "confirm":
+            validation_id = str(request.POST.get("validation_id") or request.session.get("rotation_v5_last_validation_id") or "")
+            context["result"] = vision_api.rotation_v5_teacher_confirm(
+                validation_id=validation_id, decision=str(request.POST.get("decision") or ""), teacher_id=request.user.pk,
+            )
+            context["status"] = vision_api.rotation_v5_status(teacher_id=request.user.pk)
+        elif action == "enable_trial":
+            context["result"] = vision_api.rotation_v5_enable_trial(
+                cohort_id=str(request.POST.get("cohort_id") or ""), teacher_id=request.user.pk,
+            )
+            context["status"] = vision_api.rotation_v5_status(teacher_id=request.user.pk)
+        elif action == "activate":
+            # 服務端仍會因缺少獨立 Golden Test 拒絕，畫面僅如實呈現原因。
+            context["result"] = vision_api.rotation_v5_activate_isolated(teacher_id=request.user.pk)
+        else:
+            raise RuntimeError("未知操作。")
+    except RuntimeError as exc:
+        context["error"] = str(exc)
+    return render(request, "learning/teacher_rotation_v5_trial.html", context)
+
+
+def _run_prop_inference(image_bytes: bytes, file_name: str, enrollment=None) -> dict:
+    """呼叫既有 prop-check，並只轉譯真實檢測與規則引擎結果。
+
+    P7-B5（2026-10-29）：Live 端 `POST /prop-check` 會在非 PASS 時建立 hard
+    example（建立資料），因此必須帶已驗證的學員身分。身分取自本次請求已確認
+    屬於 request.student_profile 的 enrollment，不是瀏覽器輸入。
+    """
     try:
         response = vision_api.prop_check(
-            image_bytes=image_bytes, input_reference=file_name
+            image_bytes=image_bytes,
+            input_reference=file_name,
+            student_id=(enrollment.student.public_user_id if enrollment else ""),
+            enrollment_id=(enrollment.pk if enrollment else 0),
+            cohort_ids=([enrollment.cohort_id] if enrollment and enrollment.cohort_id else []),
         )
     except RuntimeError as exc:
         message = str(exc)
@@ -1954,7 +2301,7 @@ def teacher_vision_model_list(request):
     registry_models = []
     if api_online:
         try:
-            registry_models = [_vision_model_row(item) for item in (vision_api.list_models() or [])]
+            registry_models = [_vision_model_row(item) for item in (vision_api.list_models(teacher_id=request.user.pk) or [])]
         except RuntimeError as exc:
             api_online = False
             api_detail = str(exc)
@@ -3103,13 +3450,22 @@ def teacher_vision_center(request):
                 {
                     "label": meta["label"],
                     "active": history.get("active"),
-                    "history_count": len(history.get("history") or []),
+                    # 階段四 C：計數也要按班級過濾，否則異班教師可從「有幾筆」推測他班活動量。
+                    "history_count": sum(
+                        1
+                        for item in (history.get("history") or [])
+                        if vision_can_see_student(request.user, item.get("source_student_id"))
+                        or not item.get("source_student_id")
+                    ),
                 }
             )
             if meta["id"] == task_id:
+                # 階段四 C：只保留本教師被授權班級的模型（superuser 不受限）。
                 history_models = [
                     _vision_model_row(item, validation_records=history_records)
                     for item in (history.get("history") or [])
+                    if vision_can_see_student(request.user, item.get("source_student_id"))
+                    or not item.get("source_student_id")
                 ]
                 inference_source = history.get("inference_source") or {}
 
@@ -3119,6 +3475,13 @@ def teacher_vision_center(request):
             )
         except RuntimeError:
             raw_submissions = []
+
+        # 階段四 C：提交列表同樣只保留本教師被授權班級的學員。
+        raw_submissions = [
+            item
+            for item in (raw_submissions or [])
+            if vision_can_see_student(request.user, item.get("student_id"))
+        ]
 
         models_by_submission = {
             item["model_id"]: item
@@ -3993,7 +4356,7 @@ def teacher_vision_center_upload(request):
         )
     except RuntimeError:
         try:
-            existing = vision_api.list_datasets(model_type=task_id) or []
+            existing = vision_api.list_datasets(model_type=task_id, teacher_id=request.user.pk) or []
             dataset = existing[0] if existing else None
         except RuntimeError:
             dataset = None

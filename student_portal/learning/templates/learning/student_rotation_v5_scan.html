@@ -1,0 +1,10 @@
+{% extends 'learning/base.html' %}
+{% block title %}CW／CCW 槳葉辨識｜FDE-AI{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:growth_record_detail' enrollment.pk 'R07' %}">返回 R07 成長紀錄</a>
+<section class="page-heading"><p class="eyebrow">PROP_ROTATION_V5 · 教學試用</p><h1>CW／CCW 螺旋槳辨識</h1><p class="muted">此頁只辨識旋向（CW / CCW），不取代四類正反面任務。</p></section>
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+<section class="section-block"><form method="post" enctype="multipart/form-data">{% csrf_token %}<label>上傳真實槳葉照片<input type="file" name="photo" accept="image/*" capture="environment" required></label><button class="button primary" type="submit">開始 CW／CCW 辨識</button></form></section>
+{% if uploaded_data_url %}<section class="section-block"><img src="{{ uploaded_data_url }}" alt="上傳的槳葉照片" style="max-width:100%"></section>{% endif %}
+{% if result %}<section class="section-block"><h2>辨識結果</h2><p>模型：{{ result.model_version }} · 狀態：{{ result.model_status }}</p><p><strong>{{ result.best_detection.class|default:'未偵測' }}</strong> · 信心值 {{ result.best_detection.confidence|default:'—' }}</p><ul>{% for det in result.detections %}<li>{{ det.class }} · {{ det.confidence }} · 框 {{ det.bbox|join:', ' }}</li>{% empty %}<li>未偵測到目標。</li>{% endfor %}</ul><p class="muted">已保存教學試用辨識紀錄，教師可於隔離 Registry 覆核。</p></section>{% endif %}
+{% endblock %}

@@ -8,6 +8,7 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from .errors import error_response, json_response
+from . import internal_auth
 from .vision_center import (
     ModelClassNamesMappingRequiredError,
     ModelValidationError,
@@ -15,12 +16,24 @@ from .vision_center import (
     analyze_hover,
     evaluate_prop,
 )
+from .prop_rotation_service import PropRotationServiceError
 
 
-def _teacher(request: Request) -> tuple[str | None, Response | None]:
-    if request.headers.get("X-FDE-Role", "").casefold() != "teacher":
+async def _teacher(request: Request) -> tuple[str | None, Response | None]:
+    """教師身分驗證（P6）。
+
+    2026-10-28（P6）：``X-FDE-Role`` / ``X-FDE-Teacher-ID`` 標頭可被任意本機程序
+    偽造，因此**完全不採用**。身分一律來自 Django 簽發、且綁定本次 method / path /
+    body 的短效 Assertion（見 app/internal_auth.py 與 app/live_assertions.py）；
+    未設定密鑰或驗證失敗一律 403（fail closed）。
+    """
+    trusted, reason = await internal_auth.verify_async(request)
+    if not trusted:
+        return None, error_response("internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403)
+    identity = internal_auth.identity_from_request(request)
+    if not identity or identity.get("role") != "teacher":
         return None, error_response("teacher_required", "This action requires a teacher.", 403)
-    teacher_id = request.headers.get("X-FDE-Teacher-ID", "").strip()
+    teacher_id = str(identity.get("teacher_id") or "").strip()
     if not teacher_id:
         return None, error_response("teacher_id_required", "Teacher identity is required.", 403)
     return teacher_id, None
@@ -33,11 +46,90 @@ async def _json(request: Request) -> dict:
     return value
 
 
-def vision_routes(center: VisionCenter) -> list[Route]:
+async def _student_identity(request: Request) -> tuple[dict | None, Response | None]:
+    """學員身分驗證（P7-B6）。
+
+    2026-10-29：``POST /api/v1/vision/submissions`` 原本**完全沒有驗證**，任何本機
+    程序或瀏覽器只要送出 JSON 就能建立正式提交，且 ``student_id`` 可任意偽造。
+    現在只接受 Django 簽發、綁定本次 method / path / body 的短效 Assertion：
+
+    * 無 Assertion／簽章不符 → 403 ``internal_auth_rejected``（fail closed）；
+    * 角色不是 student → 403 ``student_assertion_required``（教師的既有上傳契約是
+      ``POST /api/v1/vision/models``，可帶 ``source_student_id``，不走本端點）；
+    * 缺 enrollment → 403 ``enrollment_required``；
+    * 缺 cohort → 403 ``cohort_required``。
+
+    回傳的 ``student_id`` 一律取自 Assertion 的 ``sub``，請求本文的同名欄位只作為
+    「宣告」，與 Assertion 不符即拒絕（防冒用）。
+    """
+    trusted, reason = await internal_auth.verify_async(request)
+    if not trusted:
+        return None, error_response(
+            "internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403
+        )
+    identity = internal_auth.identity_from_request(request) or {}
+    if str(identity.get("role") or "") != "student":
+        return None, error_response(
+            "student_assertion_required",
+            "Student submissions require a student assertion; teachers upload via /api/v1/vision/models.",
+            403,
+        )
+    student_id = str(identity.get("student_id") or "").strip()
+    if not student_id:
+        return None, error_response(
+            "student_identity_required", "Assertion does not carry a student subject.", 403
+        )
+    enrollment_id = identity.get("enrollment_id")
+    if not isinstance(enrollment_id, int) or isinstance(enrollment_id, bool) or enrollment_id <= 0:
+        return None, error_response(
+            "enrollment_required", "Assertion does not carry a valid enrollment.", 403
+        )
+    cohort_ids = [str(item).strip() for item in (identity.get("cohort_ids") or []) if str(item).strip()]
+    if not cohort_ids:
+        return None, error_response(
+            "cohort_required", "Assertion does not carry any cohort.", 403
+        )
+    return {
+        "student_id": student_id,
+        "enrollment_id": enrollment_id,
+        "cohort_ids": cohort_ids,
+    }, None
+
+
+async def _any_identity(request: Request) -> tuple[dict | None, Response | None]:
+    """要求「任何一種已驗證身分」（學員或教師）。
+
+    P7-B5（2026-10-29）：`POST /api/v1/vision/prop-check`、`hover-analyze`、
+    `hover-video` 過去完全不需要身分，但三者都會在結果不理想時寫入 hard example
+    （`center.create_hard_example(...)`）——也就是**會建立資料**。依批准令
+    「任何建立／修改／導入／刪除／審核／啟用資料的端點預設都要求授權」，這三個
+    端點改為必須帶已驗證的 Assertion；學員端與教師端皆可（學員手機端要能推論）。
+
+    只驗證「有身分」，不在此處判斷班級；逐路由的權限仍由各 handler 自己宣告，
+    不以單一前綴取代。
+    """
+    trusted, reason = await internal_auth.verify_async(request)
+    if not trusted:
+        return None, error_response(
+            "internal_auth_rejected", f"Untrusted internal caller: {reason}.", 403
+        )
+    identity = internal_auth.identity_from_request(request) or {}
+    if str(identity.get("role") or "") not in ("student", "teacher"):
+        return None, error_response(
+            "identity_required", "A verified student or teacher identity is required.", 403
+        )
+    if not str(identity.get("sub") or "").strip():
+        return None, error_response(
+            "identity_required", "Assertion does not carry a subject.", 403
+        )
+    return identity, None
+
+
+def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
     async def models(request: Request):
         if request.method == "GET":
             return json_response(center.list_models(request.query_params.get("model_type")))
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -64,7 +156,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("model_not_found", "Model was not found.", 404)
 
     async def evaluate(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -73,7 +165,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("evaluation_failed", str(exc), 422)
 
     async def activate(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -84,7 +176,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("activation_failed", str(exc), 422)
 
     async def archive(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -95,9 +187,14 @@ def vision_routes(center: VisionCenter) -> list[Route]:
     async def prop_check(request: Request):
         try:
             if request.method == "GET":
+                # 唯讀：只回報 DEMO 核准狀態（單一指標，不含任何學員資料）。
                 return json_response(center.demo_model_status("PROP_DIRECTION") or {
                     "status": "MODEL_NOT_READY", "simulation_mode": False,
                 })
+            # P7-B5：POST 會在非 PASS 時建立 hard example，屬於「建立資料」，必須有身分。
+            _, denied = await _any_identity(request)
+            if denied:
+                return denied
             payload = await _json(request)
             demo_model = center.demo_model_status("PROP_DIRECTION")
             if demo_model is not None and payload.get("image_base64"):
@@ -121,6 +218,10 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("invalid_prop_request", str(exc), 422)
 
     async def hover_analyze(request: Request):
+        # P7-B5：會建立 hard example（難例回饋），屬於建立資料 → 必須有身分。
+        _, denied = await _any_identity(request)
+        if denied:
+            return denied
         try:
             payload = await _json(request)
             profile = center.get_camera_profile(payload["camera_profile_id"]) if payload.get("camera_profile_id") else None
@@ -145,8 +246,12 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
     async def datasets(request: Request):
         if request.method == "GET":
+            # P7-B5：資料集清單屬教師管理資料（含版本與來源），不再公開。
+            teacher_id, denied = await _teacher(request)
+            if denied:
+                return denied
             return json_response(center.list_datasets(request.query_params.get("model_type")))
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -157,7 +262,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("dataset_create_failed", str(exc), 422)
 
     async def build_next(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -167,7 +272,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("dataset_build_failed", str(exc), 422)
 
     async def export_dataset(request: Request):
-        _teacher_id, denied = _teacher(request)
+        _teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -177,13 +282,13 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("dataset_not_found", "Dataset was not found.", 404)
 
     async def hard_examples(request: Request):
-        _teacher_id, denied = _teacher(request)
+        _teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         return json_response(center.list_hard_examples(request.query_params.get("status")))
 
     async def review_hard_example(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -195,7 +300,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("hard_example_review_failed", str(exc), 422)
 
     async def camera_profiles(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -211,23 +316,37 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
     async def submissions(request: Request):
         if request.method == "GET":
-            teacher_id, denied = _teacher(request)
+            teacher_id, denied = await _teacher(request)
             if denied:
                 return denied
             return json_response(center.list_submissions(request.query_params.get("task_id"), request.query_params.get("status")))
+        # P7-B6（2026-10-29）：建立提交必須有已驗證的學員身分；本文的 student_id
+        # 只作為宣告，與 Assertion 不符即拒絕，且落盤一律用 Assertion 的值。
+        identity, denied = await _student_identity(request)
+        if denied:
+            return denied
         try:
             payload = await _json(request)
+            claimed_student_id = str(payload.get("student_id") or "").strip()
+            if claimed_student_id and claimed_student_id != identity["student_id"]:
+                return error_response(
+                    "student_identity_mismatch",
+                    "student_id does not match the verified assertion subject.",
+                    403,
+                )
             if not str(payload.get("original_filename", "")).lower().endswith(".pt"):
                 raise ModelValidationError("pt_file_required")
             content = base64.b64decode(payload.get("file_base64", ""), validate=True)
             submission = center.create_submission(
-                task_id=payload["task_id"], student_id=payload.get("student_id", "unknown"),
+                task_id=payload["task_id"], student_id=identity["student_id"],
                 group_id=payload.get("group_id", "X"), original_filename=payload["original_filename"],
                 content=content, notes=payload.get("notes", ""),
                 growth_record_id=payload.get("growth_record_id", ""),
                 growth_record_slot=payload.get("growth_record_slot", ""),
                 evidence_reference=payload.get("evidence_reference", ""),
                 evidence_type=payload.get("evidence_type", ""),
+                enrollment_id=identity["enrollment_id"],
+                cohort_ids=identity["cohort_ids"],
             )
             return json_response(submission, 201)
         except (KeyError, ValueError, ModelValidationError, binascii.Error) as exc:
@@ -239,7 +358,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         Refuses with a traceable 422 when any model depends on the submission, and
         always writes a timestamped backup before mutating the store.
         """
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -253,7 +372,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("submission_delete_failed", str(exc), 422)
 
     async def import_submission(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -280,7 +399,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
     async def import_preflight(request: Request):
         """導入前唯讀預檢：回報類別名結局，供教師頁決定顯示對照表／補充提示／錯誤。"""
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -295,7 +414,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
         只寫入既有 import_last_error 欄位與其代碼，不改動提交狀態。
         """
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -316,7 +435,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
         供 Django 匯入封裝層在補償時呼叫；已被模型引用的資料集會拒絕隔離。
         """
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -334,8 +453,12 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
     async def golden_sets(request: Request):
         if request.method == "GET":
+            # P7-B5：黃金測試集是評測內容，屬教師管理資料。
+            teacher_id, denied = await _teacher(request)
+            if denied:
+                return denied
             return json_response(center.list_golden_sets(request.query_params.get("model_type")))
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -346,18 +469,28 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("golden_set_create_failed", str(exc), 422)
 
     async def golden_set_detail(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
         try:
             return json_response(center.get_golden_set(request.path_params["golden_set_id"]))
         except KeyError:
             return error_response("golden_set_not_found", "Golden set was not found.", 404)
 
     async def model_golden_sets(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
         try:
             return json_response(center.model_golden_sets(request.path_params["model_id"]))
         except KeyError:
             return error_response("model_not_found", "Model was not found.", 404)
 
     async def hover_video(request: Request):
+        # P7-B5：影片分析同樣會建立 hard example → 必須有身分。
+        _, denied = await _any_identity(request)
+        if denied:
+            return denied
         try:
             payload = await _json(request)
             if not str(payload.get("file_name", "")).lower().endswith((".mp4", ".mov", ".webm", ".avi")):
@@ -372,6 +505,94 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         except (KeyError, ValueError, ModelValidationError, binascii.Error) as exc:
             return error_response("video_analysis_failed", str(exc), 422)
 
+    # ---- PROP_ROTATION_V5: independent CW/CCW teaching-trial flow ----
+    def rotation_unavailable():
+        return error_response("rotation_trial_unavailable", "PROP_ROTATION_V5 teaching trial is not configured.", 503)
+
+    async def rotation_status(request: Request):
+        _identity, denied = await _any_identity(request)
+        if denied:
+            return denied
+        if rotation_trial is None:
+            return rotation_unavailable()
+        return json_response(rotation_trial.status())
+
+    async def rotation_teacher_validate(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        if rotation_trial is None:
+            return rotation_unavailable()
+        try:
+            payload = await _json(request)
+            content = base64.b64decode(payload.get("image_base64", ""), validate=True)
+            return json_response(rotation_trial.run_teacher_validation(
+                image_bytes=content, teacher_id=teacher_id,
+                expected_class=payload.get("expected_class") or None,
+            ))
+        except (ValueError, binascii.Error, PropRotationServiceError) as exc:
+            return error_response("rotation_validation_failed", str(exc), 422)
+
+    async def rotation_teacher_confirm(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        if rotation_trial is None:
+            return rotation_unavailable()
+        try:
+            payload = await _json(request)
+            return json_response(rotation_trial.confirm_teacher_validation(
+                validation_id=request.path_params["validation_id"], teacher_id=teacher_id,
+                decision=str(payload.get("decision") or ""),
+            ))
+        except (ValueError, PropRotationServiceError) as exc:
+            return error_response("rotation_confirmation_failed", str(exc), 422)
+
+    async def rotation_enable_trial(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        if rotation_trial is None:
+            return rotation_unavailable()
+        try:
+            payload = await _json(request)
+            identity = internal_auth.identity_from_request(request) or {}
+            return json_response(rotation_trial.enable_teaching_trial(
+                teacher_id=teacher_id, cohort_id=str(payload.get("cohort_id") or ""),
+                authorized_cohort_ids=list(identity.get("cohort_ids") or []),
+            ))
+        except (ValueError, PropRotationServiceError) as exc:
+            return error_response("rotation_trial_enable_failed", str(exc), 422)
+
+    async def rotation_activate_isolated(request: Request):
+        teacher_id, denied = await _teacher(request)
+        if denied:
+            return denied
+        if rotation_trial is None:
+            return rotation_unavailable()
+        try:
+            return json_response(rotation_trial.activate_isolated(teacher_id=teacher_id))
+        except (ValueError, PropRotationServiceError) as exc:
+            return error_response("rotation_activation_failed", str(exc), 422)
+
+    async def rotation_student_infer(request: Request):
+        identity, denied = await _any_identity(request)
+        if denied:
+            return denied
+        if identity.get("role") != "student":
+            return error_response("student_assertion_required", "CW/CCW teaching trial requires a student assertion.", 403)
+        if rotation_trial is None:
+            return rotation_unavailable()
+        try:
+            payload = await _json(request)
+            content = base64.b64decode(payload.get("image_base64", ""), validate=True)
+            return json_response(rotation_trial.student_infer(
+                image_bytes=content, student_id=str(identity.get("student_id") or ""),
+                cohort_ids=list(identity.get("cohort_ids") or []),
+            ))
+        except (ValueError, binascii.Error, PropRotationServiceError) as exc:
+            return error_response("rotation_inference_failed", str(exc), 422)
+
     # ---- Teacher single-image validation against a named model ----
     async def validate_image(request: Request):
         """Run real inference with one specific model on one uploaded image.
@@ -379,7 +600,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         Read-only with respect to model status: it neither activates nor archives. The
         teacher page uses the returned detections as validation evidence.
         """
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -412,7 +633,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
         teacher verify a student submission (e.g. ``sub-5d87f027``) before enabling it,
         which is the gap that previously blocked the teacher review flow.
         """
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -439,7 +660,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
 
     # ---- Version history & rollback ----
     async def model_history(request: Request):
-        _teacher_id, denied = _teacher(request)
+        _teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         model_type = request.path_params["model_type"]
@@ -454,7 +675,7 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("model_history_failed", str(exc), 422)
 
     async def rollback(request: Request):
-        teacher_id, denied = _teacher(request)
+        teacher_id, denied = await _teacher(request)
         if denied:
             return denied
         try:
@@ -466,6 +687,12 @@ def vision_routes(center: VisionCenter) -> list[Route]:
             return error_response("rollback_failed", str(exc), 422)
 
     return [
+        Route("/api/v1/vision/rotation-v5/status", rotation_status, methods=["GET"]),
+        Route("/api/v1/vision/rotation-v5/teacher/validate-image", rotation_teacher_validate, methods=["POST"]),
+        Route("/api/v1/vision/rotation-v5/teacher/validations/{validation_id}/confirm", rotation_teacher_confirm, methods=["POST"]),
+        Route("/api/v1/vision/rotation-v5/teacher/enable-trial", rotation_enable_trial, methods=["POST"]),
+        Route("/api/v1/vision/rotation-v5/teacher/activate-isolated", rotation_activate_isolated, methods=["POST"]),
+        Route("/api/v1/vision/rotation-v5/infer", rotation_student_infer, methods=["POST"]),
         Route("/api/v1/vision/models", models, methods=["GET", "POST"]),
         Route("/api/v1/vision/models/{model_id}", model_detail, methods=["GET"]),
         Route("/api/v1/vision/models/{model_id}/evaluate", evaluate, methods=["POST"]),

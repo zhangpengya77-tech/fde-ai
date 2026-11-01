@@ -29,6 +29,8 @@ ASSERTION_KEY = "p3e-assertion-key"
 PROXY_KEY = "p3e-proxy-key"
 GATEWAY_KEY = "p3e-gateway-internal-key"
 DJANGO_ORIGIN = "http://django.internal:8022"
+# P7-B3：閘道送給 Django 的 Origin 必須是對外入口位址（在 CSRF_TRUSTED_ORIGINS 內）。
+PUBLIC_ORIGIN = "https://entry.test"
 STUDENT_SUBJECT = "student:601"
 STUDENT_ENROLLMENT = 88
 STUDENT_COHORT = "cohort-p3e"
@@ -73,7 +75,8 @@ def _gateway(downstream, *, handler=_django_ok, config=None):
             downstream,
             config=config
             or GatewayConfig(
-                django_origin=DJANGO_ORIGIN, gateway_key=GATEWAY_KEY, proxy_key=PROXY_KEY, timeout_seconds=2.0
+                django_origin=DJANGO_ORIGIN, gateway_key=GATEWAY_KEY, proxy_key=PROXY_KEY,
+                timeout_seconds=2.0, csrf_origin=PUBLIC_ORIGIN,
             ),
             transport=httpx.MockTransport(handler),
         )
