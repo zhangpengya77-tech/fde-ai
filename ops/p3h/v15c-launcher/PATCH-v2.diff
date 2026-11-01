@@ -1,0 +1,75 @@
+--- start_fde_v15c_classroom.original.ps1
++++ start_fde_v15c_classroom.patched-v2.ps1
+@@ -30,6 +30,21 @@
+ $StartupLog = Join-Path $StateRoot 'startup.log'
+ $TunnelStateFile = Join-Path $StateRoot 'tunnel-state.json'
+ $InstanceMutexName = 'Global\FDE-AI-v15C-Classroom-Startup'
++$DjangoPidStateFile = Join-Path $StateRoot 'django-v15c-pid.json'
++# P3-H Phase 18 scheme switch. $true = controlled adoption of a pre-existing
++# listener (scheme B). $false = require a stopped 8022 before the first run
++# (scheme A). Both keep the no-auto-kill rule.
++$EnableAdoption = $true
++
++# P3-H Phase 17: process-ownership module (single source of truth, shared with contract tests).
++$OwnershipModule = Join-Path $GatewayRoot 'V15C-Ownership.ps1'
++if (-not (Test-Path -LiteralPath $OwnershipModule)) { throw "Ownership module not found: $OwnershipModule" }
++. $OwnershipModule
++
++# P3-H Phase 18: controlled adoption gate (scheme B). Depends on the module above.
++$AdoptionModule = Join-Path $GatewayRoot 'V15C-Adoption.ps1'
++if (-not (Test-Path -LiteralPath $AdoptionModule)) { throw "Adoption module not found: $AdoptionModule" }
++. $AdoptionModule
+ 
+ trap {
+   $_ | Out-File -FilePath $StartupErrorLog -Encoding utf8 -Append
+@@ -182,17 +197,26 @@
+ if (-not (Test-Path (Join-Path $V15Root 'manage.py'))) { throw "v1.5C manage.py not found: $V15Root" }
+ if (-not (Test-Path (Join-Path $RagRoot 'rag_http_server.py'))) { throw "RAG runtime not found: $RagRoot" }
+ 
+-$expectedDjangoExe = [System.IO.Path]::GetFullPath($DjangoPython)
++# P3-H Phase 17: ownership is no longer decided by venv-shim path equality alone; never auto-kill.
++# OWNED is never stopped; FOREIGN/UNKNOWN are never stopped either: startup aborts, conflict logged.
+ $django = Get-Listener $DjangoPort
+ if ($django) {
+-  $owner = Get-Process -Id $django.OwningProcess -ErrorAction SilentlyContinue
+-  $ownerPath = if ($owner -and $owner.Path) { [System.IO.Path]::GetFullPath($owner.Path) } else { '' }
+-  if ($ownerPath -and $ownerPath -ne $expectedDjangoExe) {
+-    Add-Content -LiteralPath $StartupLog -Value "$(Get-Date -Format o) STOPPING stale 8022 listener: PID=$($django.OwningProcess); executable=$ownerPath"
+-    Stop-Process -Id $django.OwningProcess -Force -ErrorAction SilentlyContinue
+-    Start-Sleep -Seconds 2
+-    $django = Get-Listener $DjangoPort
+-    if ($django) { throw "Port $DjangoPort is still occupied by a non-v1.5C process." }
++  $verdict = Test-IsV15CDjango -ListenerPid $django.OwningProcess -Port $DjangoPort -V15Root $V15Root -DjangoPython $DjangoPython -StateFile $DjangoPidStateFile -HealthUrl "http://127.0.0.1:$DjangoPort/login/" -HealthMarker 'FDE-AI'
++  $reasonSummary = ($verdict.Reasons -join '; ')
++  $adoption = $null
++  if (($verdict.Verdict -ne 'OWNED') -and ($verdict.Reasons -contains 'state_record_absent')) {
++    $adoption = Test-V15CAdoptionEligible -ListenerPid $django.OwningProcess -Port $DjangoPort -V15Root $V15Root -DjangoPython $DjangoPython -HealthUrl "http://127.0.0.1:$DjangoPort/login/" -HealthMarkers @('FDE-AI', 'csrfmiddlewaretoken', 'resend-verification') -MutexName '' -CurrentPid $PID
++  }
++  $decision = Resolve-V15CListenerAction -Verdict $verdict.Verdict -Reasons $verdict.Reasons -Adoption $adoption -AdoptionEnabled $EnableAdoption
++  if ($decision.Action -eq 'REUSE') {
++    Add-Content -LiteralPath $StartupLog -Value "$(Get-Date -Format o) 8022 OWNED pid=$($django.OwningProcess); reuse; reasons=$reasonSummary"
++  } elseif ($decision.Action -eq 'ADOPT') {
++    $adoptCreated = if ($adoption -and $adoption.CreatedUtc) { $adoption.CreatedUtc.ToString('o') } else { '' }
++    Write-V15CAdoptionState -StateFile $DjangoPidStateFile -ListenerPid $django.OwningProcess -CreatedUtc $adoptCreated -Port $DjangoPort -V15Root $V15Root -Evidence $adoption.Evidence | Out-Null
++    Add-Content -LiteralPath $StartupLog -Value "$(Get-Date -Format o) 8022 ADOPTED pid=$($django.OwningProcess); mode=$($adoption.Mode); state=$DjangoPidStateFile; reasons=$(($adoption.Reasons) -join '; ')"
++  } else {
++    Add-Content -LiteralPath $StartupLog -Value "$(Get-Date -Format o) 8022 $($verdict.Verdict) pid=$($django.OwningProcess); refusing to stop or start; decision=$($decision.Action)/$($decision.Reason); manual intervention required; reasons=$reasonSummary"
++    throw "Port $DjangoPort is occupied by a $($verdict.Verdict) process; no auto-kill by policy; manual intervention required."
+   }
+ }
+ if (-not $django) {
+@@ -203,6 +227,14 @@
+     -WorkingDirectory $V15Root -WindowStyle Hidden -RedirectStandardOutput $djangoLog -RedirectStandardError $djangoErr | Out-Null
+ }
+ if (-not (Wait-Http "http://127.0.0.1:$DjangoPort/" 30)) { throw 'v1.5C Django did not become available.' }
++# P3-H Phase 17: persist the PID state record (consistency signal for later ownership judgments).
++$startedListener = Get-Listener $DjangoPort
++if ($startedListener) {
++  $startedProc = Get-CimInstance Win32_Process -Filter "ProcessId=$($startedListener.OwningProcess)" -ErrorAction SilentlyContinue
++  $startedCreated = if ($startedProc -and $startedProc.CreationDate) { ([datetime]$startedProc.CreationDate).ToUniversalTime().ToString('o') } else { '' }
++  [pscustomobject]@{ pid = [int]$startedListener.OwningProcess; created_at = $startedCreated; port = $DjangoPort; v15_root = $V15Root } |
++    ConvertTo-Json | Set-Content -LiteralPath $DjangoPidStateFile -Encoding utf8
++}
+ 
+ if (-not (Test-Http "http://127.0.0.1:$RagPort/api/rag/health")) {
+   $ragLog = Join-Path $LogRoot 'rag.log'

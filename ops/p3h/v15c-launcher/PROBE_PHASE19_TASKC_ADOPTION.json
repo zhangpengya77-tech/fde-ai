@@ -1,0 +1,18 @@
+﻿{
+    "is_elevated":  false,
+    "generated_at":  "2026-10-27T14:08:39.7389020+08:00",
+    "listener_pid":  29216,
+    "verdict":  "UNKNOWN",
+    "verdict_reasons":  [
+                            "listener_pid_matches",
+                            "command_line_unreadable"
+                        ],
+    "adoption_verdict":  "not_attempted",
+    "adoption_reasons":  [
+
+                         ],
+    "decision_action":  "ABORT",
+    "decision_reason":  "unknown_evidence",
+    "listener_pid_after":  29216,
+    "state_file_exists_after":  false
+}

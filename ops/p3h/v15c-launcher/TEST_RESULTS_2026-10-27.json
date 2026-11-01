@@ -1,0 +1,122 @@
+﻿{
+    "generated_at":  "2026-10-27T02:47:23.9498141Z",
+    "official_sha256":  "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+    "module_sha256":  "d31007a264fee254143044d3990700a9861b7e8929e77803e933eb68b56c937d",
+    "prod_before":  {
+                        "8022":  6976,
+                        "8030":  0,
+                        "8770":  14124
+                    },
+    "prod_after":  {
+                       "8022":  6976,
+                       "8030":  0,
+                       "8770":  14124
+                   },
+    "pass":  17,
+    "fail":  0,
+    "total":  17,
+    "results":  [
+                    {
+                        "Id":  "T1a",
+                        "Name":  "legit django (real process) -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "verdict=OWNED pid=22756; listener_pid_matches; command_line_is_django_runserver; ancestor_exe_is_django_python depth=1; state_record_matches; health_ok status=200"
+                    },
+                    {
+                        "Id":  "T1b",
+                        "Name":  "venv shim child (ancestor) -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "verdict=OWNED; listener_pid_matches; command_line_is_django_runserver; ancestor_exe_is_django_python depth=1; state_record_matches; health_ok status=200"
+                    },
+                    {
+                        "Id":  "T1c",
+                        "Name":  "listener exe is DjangoPython (self) -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "verdict=OWNED; listener_pid_matches; command_line_is_django_runserver; listener_exe_is_django_python; state_record_matches; health_ok status=200"
+                    },
+                    {
+                        "Id":  "T2",
+                        "Name":  "repeat check -\u003e OWNED, no restart",
+                        "Ok":  true,
+                        "Detail":  "v1=OWNED v2=OWNED pid_before=22756 pid_after=22756"
+                    },
+                    {
+                        "Id":  "T3",
+                        "Name":  "same python, different project -\u003e FOREIGN/UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=FOREIGN alive=True; listener_pid_matches; command_line_not_django_runserver_on_port"
+                    },
+                    {
+                        "Id":  "T4",
+                        "Name":  "different python, other server -\u003e FOREIGN/UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=FOREIGN alive=True; listener_pid_matches; command_line_not_django_runserver_on_port"
+                    },
+                    {
+                        "Id":  "T5",
+                        "Name":  "pid reused / creation differs -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True; listener_pid_matches; command_line_is_django_runserver; ancestor_exe_is_django_python depth=1; state_created_at_mismatch; health_ok status=200; unknown: state_mismatch"
+                    },
+                    {
+                        "Id":  "T6",
+                        "Name":  "command line unreadable -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True; listener_pid_matches; command_line_unreadable"
+                    },
+                    {
+                        "Id":  "T7",
+                        "Name":  "health check fails -\u003e no kill",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True; listener_pid_matches; command_line_is_django_runserver; ancestor_exe_is_django_python depth=1; state_record_matches; health_failed status=0; unknown: health_failed_despite_process_evidence"
+                    },
+                    {
+                        "Id":  "T8a",
+                        "Name":  "state file absent -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True; listener_pid_matches; command_line_is_django_runserver; ancestor_exe_is_django_python depth=1; state_record_absent; health_ok status=200; unknown: state_absent"
+                    },
+                    {
+                        "Id":  "T8b",
+                        "Name":  "state file corrupt -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True; listener_pid_matches; command_line_is_django_runserver; ancestor_exe_is_django_python depth=1; state_unreadable_or_corrupt; health_ok status=200; unknown: state_corrupt"
+                    },
+                    {
+                        "Id":  "T9",
+                        "Name":  "repeated trigger -\u003e no double start, no false kill",
+                        "Ok":  true,
+                        "Detail":  "v1=OWNED v2=OWNED v3=OWNED pid=22756-\u003e22756 started_count=3"
+                    },
+                    {
+                        "Id":  "T10",
+                        "Name":  "stopped -\u003e port free, start eligible",
+                        "Ok":  true,
+                        "Detail":  "port_pid=0 verdict=UNKNOWN; no_listener_on_port"
+                    },
+                    {
+                        "Id":  "T11",
+                        "Name":  "does not affect 8022/8770/8030",
+                        "Ok":  true,
+                        "Detail":  "8770=14124-\u003e14124 8030=0-\u003e0 8022=6976-\u003e6976 test_ports_exclude_prod=True"
+                    },
+                    {
+                        "Id":  "T12",
+                        "Name":  "cleanup only own test processes",
+                        "Ok":  true,
+                        "Detail":  "leaked_test_ports= 8770=14124 8030=0"
+                    },
+                    {
+                        "Id":  "T13",
+                        "Name":  "ownership module never terminates processes",
+                        "Ok":  true,
+                        "Detail":  "termination_calls=[] command_asts=12 parse_clean=True module_sha256=d31007a264fee254143044d3990700a9861b7e8929e77803e933eb68b56c937d"
+                    },
+                    {
+                        "Id":  "T14",
+                        "Name":  "official launcher unchanged during run",
+                        "Ok":  true,
+                        "Detail":  "before=a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59 after=a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59 expected=a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59"
+                    }
+                ]
+}

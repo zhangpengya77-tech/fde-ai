@@ -1,0 +1,11 @@
+--- PATCH-v3.diff (BEFORE, sha c24d3854...)
++++ PATCH-v3.diff (AFTER, sha 274253ed...)
+@@ -43,7 +43,7 @@
+ +  $reasonSummary = ($verdict.Reasons -join '; ')
+ +  $adoption = $null
+ +  if (($verdict.Verdict -ne 'OWNED') -and ($verdict.Reasons -contains 'state_record_absent')) {
+-+    $adoption = Test-V15CAdoptionEligible -ListenerPid $django.OwningProcess -Port $DjangoPort -V15Root $V15Root -DjangoPython $DjangoPython -HealthUrl "http://127.0.0.1:$DjangoPort/login/" -HealthMarkers @('FDE-AI', 'csrfmiddlewaretoken', 'resend-verification') -MutexName '' -CurrentPid $PID
+++    $adoption = Test-V15CAdoptionEligible -ListenerPid $django.OwningProcess -Port $DjangoPort -V15Root $V15Root -DjangoPython $DjangoPython -HealthUrl "http://127.0.0.1:$DjangoPort/login/" -HealthMarkers @('FDE-AI', 'csrfmiddlewaretoken') -MutexName '' -CurrentPid $PID
+ +  }
+ +  $decision = Resolve-V15CListenerAction -Verdict $verdict.Verdict -Reasons $verdict.Reasons -Adoption $adoption -AdoptionEnabled $EnableAdoption
+ +  if ($decision.Action -eq 'REUSE') {

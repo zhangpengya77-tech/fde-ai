@@ -1,0 +1,89 @@
+﻿{
+    "generated_at":  "2026-10-27T14:09:48.9066311+08:00",
+    "is_elevated":  false,
+    "note":  "CommandLine/ExecutablePath injected to emulate the elevated launcher; all other evidence is live.",
+    "listener_pid":  29216,
+    "real_creation_time":  "2026-10-27T06:07:01.3403250Z",
+    "real_parent_pid":  27740,
+    "verdict":  "UNKNOWN",
+    "verdict_reasons":  [
+                            "listener_pid_matches",
+                            "command_line_is_django_runserver",
+                            "root_hint_absent",
+                            "ancestor_exe_is_django_python depth=1",
+                            "state_record_absent",
+                            "health_ok status=200",
+                            "unknown: state_absent"
+                        ],
+    "adoption_verdict":  "UNKNOWN",
+    "adoption_reasons":  [
+                             "E1_listener_ok",
+                             "E2_creation_time_ok",
+                             "E3_commandline_ok",
+                             "E5_ancestor_matches_shim depth=1",
+                             "E4a_venv_pyvenv_ok",
+                             "E4b_manage_py_identity_ok",
+                             "E4c_http_project_fingerprint_missing",
+                             "E7_health_ok status=200",
+                             "E6_listener_stable",
+                             "E8_no_launcher_conflict"
+                         ],
+    "evidence":  {
+                     "E1_listener":  {
+                                         "Ok":  "True",
+                                         "Expected":  "29216",
+                                         "Actual":  "29216"
+                                     },
+                     "E2_process":  {
+                                        "Ok":  "True",
+                                        "ProcessId":  "29216",
+                                        "ParentProcessId":  "27740",
+                                        "CreatedUtc":  "2026-10-27T06:07:01.3403250Z"
+                                    },
+                     "E3_commandline":  {
+                                            "Ok":  "True",
+                                            "CommandLine":  "\"C:\\Users\\admin\\.fde-ai\\YoloRuntime\\python\\cpython-3.12.13-windows-x86_64-none\\python.exe\" manage.py runserver 127.0.0.1:8022 --noreload --insecure"
+                                        },
+                     "E5_interpreter":  {
+                                            "Ok":  "True",
+                                            "Mode":  "ancestor",
+                                            "ShimPath":  "C:\\Users\\admin\\Documents\\Codex\\2026-08-30\\new-chat\\FDE-AI-v1.5\\student_portal\\.venv\\Scripts\\python.exe",
+                                            "ListenerExe":  "C:\\Users\\admin\\.fde-ai\\YoloRuntime\\python\\cpython-3.12.13-windows-x86_64-none\\python.exe",
+                                            "ObservedInterpreter":  "C:\\Users\\admin\\.fde-ai\\YoloRuntime\\python\\cpython-3.12.13-windows-x86_64-none\\python.exe"
+                                        },
+                     "E4_project":  {
+                                        "Ok":  "False",
+                                        "VenvOk":  "True",
+                                        "ManagePyOk":  "True",
+                                        "FingerprintOk":  "False",
+                                        "Venv":  "{\"ShimPath\":\"C:\\\\Users\\\\admin\\\\Documents\\\\Codex\\\\2026-08-30\\\\new-chat\\\\FDE-AI-v1.5\\\\student_portal\\\\.venv\\\\Scripts\\\\python.exe\",\"ShimExists\":true,\"VenvRoot\":\"C:\\\\Users\\\\admin\\\\Documents\\\\Codex\\\\2026-08-30\\\\new-chat\\\\FDE-AI-v1.5\\\\student_portal\\\\.venv\",\"PyvenvCfgPath\":\"C:\\\\Users\\\\admin\\\\Documents\\\\Codex\\\\2026-08-30\\\\new-chat\\\\FDE-AI-v1.5\\\\student_portal\\\\.venv\\\\pyvenv.cfg\",\"PyvenvCfgReadable\":true,\"Home\":\"C:\\\\Users\\\\admin\\\\.fde-ai\\\\YoloRuntime\\\\python\\\\cpython-3.12.13-windows-x86_64-none\",\"HomeMatchesObserved\":true,\"ObservedInterpreter\":\"C:\\\\Users\\\\admin\\\\.fde-ai\\\\YoloRuntime\\\\python\\\\cpython-3.12.13-windows-x86_64-none\\\\python.exe\"}",
+                                        "Project":  "{\"V15Root\":\"D:\\\\FDE-AI-UAS\\\\v1.5C\\\\student_portal\",\"ManagePyPath\":\"D:\\\\FDE-AI-UAS\\\\v1.5C\\\\student_portal\\\\manage.py\",\"ManagePyExists\":true,\"ManagePySha256\":\"b30eeb4890cb6f315cc238313808f636db29e9906b61cc6f6051567156a0097b\",\"ShimProjectRoot\":\"C:\\\\Users\\\\admin\\\\Documents\\\\Codex\\\\2026-08-30\\\\new-chat\\\\FDE-AI-v1.5\\\\student_portal\",\"ShimManagePyExists\":true,\"ShimManagePySha256\":\"b30eeb4890cb6f315cc238313808f636db29e9906b61cc6f6051567156a0097b\",\"SameCode\":true}",
+                                        "Markers":  "{\"resend-verification\":false,\"csrfmiddlewaretoken\":true,\"FDE-AI\":true}"
+                                    },
+                     "E7_health":  {
+                                       "Ok":  "True",
+                                       "Status":  "200",
+                                       "ContentLength":  "1533"
+                                   },
+                     "E6_listener_recheck":  {
+                                                 "Ok":  "True",
+                                                 "Expected":  "29216",
+                                                 "Actual":  "29216"
+                                             },
+                     "E8_launcher_conflict":  {
+                                                  "LauncherScriptName":  "start_fde_v15c_classroom.ps1",
+                                                  "MutexName":  "",
+                                                  "ConflictingProcesses":  "",
+                                                  "ConflictCount":  "0",
+                                                  "MutexFree":  "True",
+                                                  "MutexCheckable":  "True",
+                                                  "MutexDetail":  "skipped_caller_holds_mutex"
+                                              }
+                 },
+    "decision_action":  "ABORT",
+    "decision_reason":  "adoption_evidence_insufficient",
+    "abort_branch_has_stop_process":  false,
+    "abort_branch_text":  "pid=$($django.OwningProcess); refusing to stop or start; decision=$($decision.Action)/$($decision.Reason); manual intervention required; reasons=$reasonSummary\"\n    throw \"Port $DjangoPort is occupied by a $($verdict.Verdict) process; no auto-kill by policy; manual intervention required.\"",
+    "listener_pid_after":  29216,
+    "state_file_exists_after":  false
+}

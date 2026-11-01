@@ -1,0 +1,37 @@
+﻿{
+    "collectedAtUtc":  "2026-10-27T22:44:35.2247872Z",
+    "sessionElevated":  false,
+    "scheduledTask":  {
+                          "taskName":  "FDE-AI v1.5C Classroom Server",
+                          "state":  "Ready",
+                          "userId":  "admin",
+                          "logonType":  "Interactive",
+                          "runLevel":  "Highest",
+                          "groupId":  null,
+                          "taskPath":  "\\",
+                          "lastRunTime":  "2026-10-28T06:41:54.0000000+08:00",
+                          "lastTaskResult":  0
+                      },
+    "listener":  {
+                     "localPort":  8022,
+                     "owningPid":  4764,
+                     "creationDate":  "\/Date(1793140920625)\/",
+                     "parentProcessId":  18720,
+                     "name":  "python.exe",
+                     "executablePath":  null
+                 },
+    "commandLine":  {
+                        "rawLength":  0,
+                        "readable":  false,
+                        "status":  "NOT_DETERMINED",
+                        "note":  "Empty under non-elevated identity; cannot read under formal elevated schedule identity in this sandbox (RunAs blocked). Marked NOT DETERMINED per authorization."
+                    },
+    "shimRelation":  {
+                         "parentPid":  18720,
+                         "parentName":  "python.exe",
+                         "parentExePath":  null,
+                         "parentCmdLen":  0,
+                         "relation":  "listener(base python.exe) parent is python.exe shim",
+                         "pyvenvCfgStatus":  "RESTRICTED_PATH_UNDER_NON_ELEVATED"
+                     }
+}

@@ -1,0 +1,130 @@
+﻿{
+    "generated_at":  "2026-10-28T08:45:41.7131586Z",
+    "phase":  "P3-H Phase 19 fault matrix",
+    "official_sha256":  "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+    "ownership_sha256":  "adf7f8ecd6bcdaf3d5bd013569c9c6231f0e7f16bf64675a83b0042391b03ec8",
+    "adoption_sha256":  "7988d8668ba8be71bc656c85625e4bad8867c6fc80a5c4fd7c416ebb64c74fe9",
+    "prod_before":  {
+                        "P8022":  5340,
+                        "P8770":  26380,
+                        "P8030":  0
+                    },
+    "prod_after":  {
+                       "P8022":  5340,
+                       "P8770":  26380,
+                       "P8030":  0
+                   },
+    "pass":  17,
+    "fail":  1,
+    "total":  18,
+    "results":  [
+                    {
+                        "Id":  "F10",
+                        "Name":  "module missing -\u003e adoption refuses to load",
+                        "Ok":  true,
+                        "Detail":  "threw=True msg=V15C-Adoption.ps1 requires V15C-Ownership.ps1 to be dot-sourced first."
+                    },
+                    {
+                        "Id":  "F01",
+                        "Name":  "state file absent -\u003e UNKNOWN, listener alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;ancestor_exe_is_django_python depth=1;state_record_absent;health_ok status=200;unknown: state_absent alive=True"
+                    },
+                    {
+                        "Id":  "F02",
+                        "Name":  "state corrupt -\u003e UNKNOWN, write refused, file untouched",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN written=False reason=existing_state_corrupt untouched=True"
+                    },
+                    {
+                        "Id":  "F03",
+                        "Name":  "state not writable -\u003e refused, no crash, file untouched",
+                        "Ok":  true,
+                        "Detail":  "written=False reason=replace_failed untouched=True alive=True"
+                    },
+                    {
+                        "Id":  "F04",
+                        "Name":  "pid reuse -\u003e UNKNOWN, listener alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;ancestor_exe_is_django_python depth=1;state_pid_mismatch;health_ok status=200;unknown: state_mismatch"
+                    },
+                    {
+                        "Id":  "F05",
+                        "Name":  "creation time mismatch -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;ancestor_exe_is_django_python depth=1;state_created_at_mismatch;health_ok status=200;unknown: state_mismatch"
+                    },
+                    {
+                        "Id":  "F06",
+                        "Name":  "command line unreadable -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_unreadable adopt=UNKNOWN"
+                    },
+                    {
+                        "Id":  "F07",
+                        "Name":  "health check fails -\u003e never OWNED, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;ancestor_exe_is_django_python depth=1;state_record_matches;health_failed status=0;unknown: health_failed_despite_process_evidence"
+                    },
+                    {
+                        "Id":  "F08",
+                        "Name":  "process/listener disappears mid-check -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "owner_verdict=UNKNOWN adopt=UNKNOWN e6=True"
+                    },
+                    {
+                        "Id":  "F09",
+                        "Name":  "repeated trigger -\u003e stable verdict, no restart",
+                        "Ok":  true,
+                        "Detail":  "written=True verdicts=OWNED,OWNED,OWNED pids=19312 reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;ancestor_exe_is_django_python depth=1;state_record_matches;health_ok status=200"
+                    },
+                    {
+                        "Id":  "F11",
+                        "Name":  "schema mismatch -\u003e UNKNOWN, no false OWNED",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;ancestor_exe_is_django_python depth=1;state_pid_mismatch;health_ok status=200;unknown: state_mismatch rewrite=True"
+                    },
+                    {
+                        "Id":  "F12",
+                        "Name":  "atomic write: no partial reads, tmp leftovers inert",
+                        "Ok":  true,
+                        "Detail":  "reads=96 bad=0 rewrite=True final_ok=True"
+                    },
+                    {
+                        "Id":  "F13",
+                        "Name":  "FOREIGN/UNKNOWN never terminated",
+                        "Ok":  true,
+                        "Detail":  "verdict=FOREIGN action=ABORT/foreign_process foreign_alive=True unknown_alive=True"
+                    },
+                    {
+                        "Id":  "F14",
+                        "Name":  "adoption failure -\u003e ABORT, no kill, no state file",
+                        "Ok":  true,
+                        "Detail":  "adopt=UNKNOWN decision=ABORT/adoption_evidence_insufficient claimed=False state_exists=False alive=True"
+                    },
+                    {
+                        "Id":  "G01",
+                        "Name":  "8770/8030 untouched by fault tests",
+                        "Ok":  false,
+                        "Detail":  "8770=26380-\u003e16500 8030=0-\u003e0 8022=5340-\u003e5340(background scheduler may rotate 8022)"
+                    },
+                    {
+                        "Id":  "G02",
+                        "Name":  "official launcher unchanged",
+                        "Ok":  true,
+                        "Detail":  "sha=a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59"
+                    },
+                    {
+                        "Id":  "G03",
+                        "Name":  "test ports exclude production",
+                        "Ok":  true,
+                        "Detail":  "ports=18031,18032,18033"
+                    },
+                    {
+                        "Id":  "G04",
+                        "Name":  "adoption module never calls Stop-Process",
+                        "Ok":  true,
+                        "Detail":  "contains_stop_process=False"
+                    }
+                ]
+}

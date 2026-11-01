@@ -1,0 +1,201 @@
+﻿{
+    "suite":  "P20-A-RECONSTRUCTED-REGRESSION",
+    "note":  "Reconstructed fresh suite, NOT the original 84-item suite (unrecoverable).",
+    "total":  32,
+    "pass":  32,
+    "fail":  0,
+    "results":  [
+                    {
+                        "id":  "O-01",
+                        "name":  "write to absent file -\u003e written",
+                        "pass":  true,
+                        "detail":  "written=True reason=written"
+                    },
+                    {
+                        "id":  "O-02",
+                        "name":  "live owner never overwritten; record unchanged",
+                        "pass":  true,
+                        "detail":  "r1=True r2=False/existing_owner_alive pidKept=12124"
+                    },
+                    {
+                        "id":  "O-03",
+                        "name":  "same pid may refresh its own record",
+                        "pass":  true,
+                        "detail":  "r1=True r2=True/written"
+                    },
+                    {
+                        "id":  "O-04",
+                        "name":  "explicit AllowOverwrite takeover succeeds",
+                        "pass":  true,
+                        "detail":  "r2=True/written pid=99999"
+                    },
+                    {
+                        "id":  "O-05",
+                        "name":  "dead owner record is replaceable",
+                        "pass":  true,
+                        "detail":  "r2=True/written pid=12124"
+                    },
+                    {
+                        "id":  "O-06",
+                        "name":  "corrupt existing state is never silently replaced",
+                        "pass":  true,
+                        "detail":  "written=False reason=existing_state_corrupt"
+                    },
+                    {
+                        "id":  "O-07",
+                        "name":  "atomic write leaves no .tmp file",
+                        "pass":  true,
+                        "detail":  "written=True tmpLeftover=0"
+                    },
+                    {
+                        "id":  "O-08",
+                        "name":  "read absent -\u003e Exists=false",
+                        "pass":  true,
+                        "detail":  "exists=False ok=False"
+                    },
+                    {
+                        "id":  "O-09",
+                        "name":  "read corrupt -\u003e Exists=true Ok=false",
+                        "pass":  true,
+                        "detail":  "exists=True ok=False"
+                    },
+                    {
+                        "id":  "O-10",
+                        "name":  "payload schema is snake_case (pid/created_at/port/v15_root)",
+                        "pass":  true,
+                        "detail":  "fields=pid,created_at,port,v15_root"
+                    },
+                    {
+                        "id":  "O-11",
+                        "name":  "modules contain 0 real termination primitives (comments excluded)",
+                        "pass":  true,
+                        "detail":  "own=0 adp=0"
+                    },
+                    {
+                        "id":  "F-01",
+                        "name":  "E1 listener mismatch -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e1=False"
+                    },
+                    {
+                        "id":  "F-02",
+                        "name":  "E2 creation time unreadable -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e2=False"
+                    },
+                    {
+                        "id":  "F-03",
+                        "name":  "E3 unreadable (no process info) -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN reason=E3_commandline_unreadable"
+                    },
+                    {
+                        "id":  "F-04",
+                        "name":  "E3 not django runserver -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e3=False"
+                    },
+                    {
+                        "id":  "F-05",
+                        "name":  "E4b manage.py identity mismatch -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e4b=False"
+                    },
+                    {
+                        "id":  "F-06",
+                        "name":  "E4a venv/pyvenv insufficient -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e4a=False"
+                    },
+                    {
+                        "id":  "F-07",
+                        "name":  "E5 interpreter unproven -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e5=False"
+                    },
+                    {
+                        "id":  "F-08",
+                        "name":  "E6 listener drift during evidence -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e6=False"
+                    },
+                    {
+                        "id":  "F-09",
+                        "name":  "E7 health failed -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN e7=False status=500"
+                    },
+                    {
+                        "id":  "F-10",
+                        "name":  "E8 launcher process conflict -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN conflicts=1"
+                    },
+                    {
+                        "id":  "F-11",
+                        "name":  "E8 mutex unverifiable -\u003e UNKNOWN",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN checkable=False"
+                    },
+                    {
+                        "id":  "F-12",
+                        "name":  "all evidence present -\u003e ADOPTABLE",
+                        "pass":  true,
+                        "detail":  "verdict=ADOPTABLE reasons=E1_listener_ok,E2_creation_time_ok,E3_commandline_ok,E5_self_is_shim,E4a_venv_pyvenv_ok,E4b_manage_py_identity_ok,E4c_http_project_fingerprint_ok,E7_health_ok status=200,E6_listener_stable,E8_no_launcher_conflict"
+                    },
+                    {
+                        "id":  "F-13",
+                        "name":  "ADOPTABLE claim delegates to single writer (pid written)",
+                        "pass":  true,
+                        "detail":  "claimed=True reason=written pid=90001"
+                    },
+                    {
+                        "id":  "F-14",
+                        "name":  "non-ADOPTABLE claim rejected",
+                        "pass":  true,
+                        "detail":  "claimed=False reason=adoption_not_eligible"
+                    },
+                    {
+                        "id":  "F-15",
+                        "name":  "ADOPTABLE without creation time rejected",
+                        "pass":  true,
+                        "detail":  "claimed=False reason=creation_time_unavailable"
+                    },
+                    {
+                        "id":  "D-01",
+                        "name":  "OWNED -\u003e REUSE",
+                        "pass":  true,
+                        "detail":  "action=REUSE reason=owned"
+                    },
+                    {
+                        "id":  "D-02",
+                        "name":  "UNKNOWN + state_absent + ADOPTABLE -\u003e ADOPT",
+                        "pass":  true,
+                        "detail":  "action=ADOPT reason=adopted_by_full_evidence"
+                    },
+                    {
+                        "id":  "D-03",
+                        "name":  "UNKNOWN + state_absent + insufficient -\u003e ABORT",
+                        "pass":  true,
+                        "detail":  "action=ABORT reason=adoption_evidence_insufficient"
+                    },
+                    {
+                        "id":  "D-04",
+                        "name":  "UNKNOWN + state_absent + adoption disabled -\u003e ABORT",
+                        "pass":  true,
+                        "detail":  "action=ABORT reason=adoption_disabled_state_absent"
+                    },
+                    {
+                        "id":  "D-05",
+                        "name":  "FOREIGN -\u003e ABORT",
+                        "pass":  true,
+                        "detail":  "action=ABORT reason=foreign_process"
+                    },
+                    {
+                        "id":  "D-06",
+                        "name":  "UNKNOWN without state_absent -\u003e ABORT",
+                        "pass":  true,
+                        "detail":  "action=ABORT reason=unknown_evidence"
+                    }
+                ]
+}

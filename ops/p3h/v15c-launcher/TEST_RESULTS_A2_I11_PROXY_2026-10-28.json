@@ -1,0 +1,33 @@
+﻿{
+    "suite":  "P20-A2-I11-PROXY-CONFLICT",
+    "total":  4,
+    "pass":  4,
+    "fail":  0,
+    "duplicateCaseProxyPresent":  true,
+    "results":  [
+                    {
+                        "id":  "I11-1",
+                        "name":  "duplicate-case proxy vars present in this environment",
+                        "pass":  true,
+                        "detail":  "names=HTTP_PROXY,HTTPS_PROXY,http_proxy,https_proxy lower=True upper=True dup=True"
+                    },
+                    {
+                        "id":  "I11-2",
+                        "name":  "Start-Process -RedirectStandardOutput throws on duplicate env keys",
+                        "pass":  true,
+                        "detail":  "threw=True msg=Item has already been added. Key in dictionary: \u0027https_proxy\u0027 Key being added: \u0027HTTPS_PROX"
+                    },
+                    {
+                        "id":  "I11-3",
+                        "name":  "after sanitising duplicates, Start-Process succeeds",
+                        "pass":  true,
+                        "detail":  "started=True childOut=\u0027child-ok\u0027"
+                    },
+                    {
+                        "id":  "I11-4",
+                        "name":  "environment restored to original proxy values",
+                        "pass":  true,
+                        "detail":  "restoredKeys=HTTPS_PROXY,HTTP_PROXY"
+                    }
+                ]
+}

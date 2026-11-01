@@ -1,0 +1,135 @@
+﻿{
+    "checkedAtUtc":  "2026-10-27T22:45:36.2388112Z",
+    "fileCount":  11,
+    "anyHashMismatch":  true,
+    "results":  [
+                    {
+                        "file":  "V15C-Adoption.ps1",
+                        "exists":  true,
+                        "size":  22926,
+                        "sha256":  "7988d8668ba8be71bc656c85625e4bad8867c6fc80a5c4fd7c416ebb64c74fe9",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "229267988d8668ba8be71bc656c85625e4bad8867c6fc80a5c4fd7c416ebb64c74fe9",
+                        "hashMatch":  false
+                    },
+                    {
+                        "file":  "start_fde_v15c_classroom.original.ps1",
+                        "exists":  true,
+                        "size":  15766,
+                        "sha256":  "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+                        "hashMatch":  true
+                    },
+                    {
+                        "file":  "start_fde_v15c_classroom.patched-v3.ps1",
+                        "exists":  true,
+                        "size":  19713,
+                        "sha256":  "bc57751349551959c9a7957039854d291a59800b3a16a42786dc9d805c5640d0",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "prefix-only",
+                        "hashMatch":  "PREFIX:bc57751349551959"
+                    },
+                    {
+                        "file":  "Test-V15CLauncherOwnership.ps1",
+                        "exists":  true,
+                        "size":  40813,
+                        "sha256":  "3157570af27511413eb4a4273583717ba38b66a62b4c6cd81c661375b73cd031",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "3157570af27511413eb4a4273583717ba38b66a62b4c6cd81c661375b73cd031",
+                        "hashMatch":  true
+                    },
+                    {
+                        "file":  "V15C-Adoption.e4c.ps1",
+                        "exists":  true,
+                        "size":  22926,
+                        "sha256":  "7988d8668ba8be71bc656c85625e4bad8867c6fc80a5c4fd7c416ebb64c74fe9",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "229267988d8668ba8be71bc656c85625e4bad8867c6fc80a5c4fd7c416ebb64c74fe9",
+                        "hashMatch":  false
+                    },
+                    {
+                        "file":  "Test-V15CPhase19E4c.supp.ps1",
+                        "exists":  true,
+                        "size":  14873,
+                        "sha256":  "5cf3ea454586b1b97892bd5bff3b0cb65bc67a1d0b2085e84b0e0be6c7d6e01b",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "5cf3ea454586b1b97892bd5bff3b0cb65bc67a1d0b2085e84b0e0be6c7d6e01b",
+                        "hashMatch":  true
+                    },
+                    {
+                        "file":  "PATCH-v3.diff",
+                        "exists":  true,
+                        "size":  6472,
+                        "sha256":  "c24d3854f5e082bf52f05b8cc319079b97c6eb3d7302e2aff95fcb6a2383ef79",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "expectedSha":  "prefix-only",
+                        "hashMatch":  "PREFIX:c24d3854f5e082bf"
+                    },
+                    {
+                        "file":  "E3-elevated-probe.ps1",
+                        "exists":  true,
+                        "size":  4110,
+                        "sha256":  "9b037a4ac176bd78c8cf74323cc4b37ffa06ce3daff8bb08f121a631d6b65bf7",
+                        "bom":  false,
+                        "nonAsciiBytes":  3,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "b037a4ac176bd78c8cf74323cc4b37ffa06ce3daff8bb08f121a631d6b65bf7",
+                        "hashMatch":  false
+                    },
+                    {
+                        "file":  "V15C-Ownership.ps1",
+                        "exists":  true,
+                        "size":  19902,
+                        "sha256":  "adf7f8ecd6bcdaf3d5bd013569c9c6231f0e7f16bf64675a83b0042391b03ec8",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "adf7f8ecd6bcdaf3d5bd013569c9c6231f0e7f16bf64675a83b0042391b03ec8",
+                        "hashMatch":  true
+                    },
+                    {
+                        "file":  "Test-V15CPhase19FaultMatrix.ps1",
+                        "exists":  true,
+                        "size":  25306,
+                        "sha256":  "31c0d300049076b78e2847aa66f0f87c05b938f49746deb84350aa14ac39adf6",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "ps51SyntaxErrors":  0,
+                        "ps51SyntaxOk":  true,
+                        "expectedSha":  "631c0d300049076b78e2847aa66f0f87c05b938f49746deb84350aa14ac39adf6",
+                        "hashMatch":  false
+                    },
+                    {
+                        "file":  "PATCH-v3.diff",
+                        "exists":  true,
+                        "size":  6472,
+                        "sha256":  "c24d3854f5e082bf52f05b8cc319079b97c6eb3d7302e2aff95fcb6a2383ef79",
+                        "bom":  false,
+                        "nonAsciiBytes":  0,
+                        "expectedSha":  "prefix-only",
+                        "hashMatch":  "PREFIX:c24d3854f5e082bf"
+                    }
+                ]
+}

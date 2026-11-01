@@ -1,0 +1,118 @@
+﻿{
+    "phase":  "P3-H Phase 19 Task D",
+    "generated_at":  "2026-10-28T17:56:21.8964658+08:00",
+    "iso_root":  "D:\\AI_Cache\\temp\\p3h19_iso_20261028-175430",
+    "double_sha":  "c7bfd55257ab36d03755b7d3860a18c44dcae98b0bdb67dabbd1b88995694a65",
+    "results":  [
+                    {
+                        "id":  "F1",
+                        "name":  "state absent + adoptable -\u003e ADOPT, record written, listener kept",
+                        "pass":  true,
+                        "detail":  "exit=0 adopted=True record_pid=4040 listener=4040 kept=True"
+                    },
+                    {
+                        "id":  "F2",
+                        "name":  "corrupt record -\u003e ABORT exit 1, record untouched, listener kept",
+                        "pass":  true,
+                        "detail":  "exit=1 abort_logged=True sha_same=True kept=True"
+                    },
+                    {
+                        "id":  "F3a",
+                        "name":  "read-only record -\u003e write refused, startup completes, record kept",
+                        "pass":  true,
+                        "detail":  "exit=0 refused_logged=True seed_kept=True completed=True"
+                    },
+                    {
+                        "id":  "F3b",
+                        "name":  "state dir not writable -\u003e explicit exit 1, listener kept",
+                        "pass":  true,
+                        "detail":  "exit=1 kept=True error_log_lines=0 stderr_head=Add-Content : Access to the path \u0027D:\\AI_Cache\\temp\\p3h19_iso_20261028-175430\\iso_state\\startup.log\u0027 is denied.\r"
+                    },
+                    {
+                        "id":  "F4",
+                        "name":  "PID reused (creation mismatch) -\u003e UNKNOWN/ABORT, no kill",
+                        "pass":  true,
+                        "detail":  "exit=1 mismatch_logged=True kept=True"
+                    },
+                    {
+                        "id":  "F5",
+                        "name":  "command line unreadable -\u003e UNKNOWN, never FOREIGN, never killed",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_unreadable"
+                    },
+                    {
+                        "id":  "F6",
+                        "name":  "health check fails -\u003e UNKNOWN/ABORT, no kill",
+                        "pass":  true,
+                        "detail":  "exit=1 listener_pid=4864 health_failed_logged=True kept=True verdict_line=2026-10-28T17:55:52.7521057+08:00 8022 UNKNOWN pid=4864; refusing to stop or start; decision=ABORT/adoption_evidence_insufficient; manual intervention required; reasons=listener_pid_matches; command_line_is_django_runserver; root_hint_absent; ancestor_exe_is_django_python depth=1; state_record_absent; health_failed status=500; unknown: state_absent"
+                    },
+                    {
+                        "id":  "F7",
+                        "name":  "listener PID drift during verification -\u003e UNKNOWN, no kill",
+                        "pass":  true,
+                        "detail":  "verdict=UNKNOWN reasons=listener_pid_matches;command_line_is_django_runserver;root_hint_absent;listener_exe_is_django_python;state_record_absent;unknown: state_absent"
+                    },
+                    {
+                        "id":  "F8",
+                        "name":  "duplicate trigger -\u003e second instance exits 0, no service started",
+                        "pass":  true,
+                        "detail":  "mutex_held=True exit=0 skip_logged=True service_started=False"
+                    },
+                    {
+                        "id":  "F9",
+                        "name":  "ownership module missing -\u003e explicit failure, no ownership side effect",
+                        "pass":  true,
+                        "detail":  "exit=1 guard_msg_in_log=True state_file_absent=True log=Ownership module not found: D:\\AI_Cache\\temp\\p3h19_iso_20261028-175430\\case_f9\\V15C-Ownership.ps1 At D:\\AI_Cache\\temp\\p3h19_iso_20261028-175430\\case_f9\\start_fde_v15c_classroom.patched-v3.isolation.ps1:40 char:55 + ... shipModule)) { throw \"Ownership module not found: $OwnershipModule\" } +                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~     + CategoryInfo          : OperationStopped: (Ownership modul...C-Ownership.ps1:String) [], RuntimeException     + FullyQualifiedErrorId : Ownership module not found: D:\\AI_Cache\\temp\\p3h19_iso_20261028-175430\\case_f9\\V15C-Owne     rship.ps1  "
+                    },
+                    {
+                        "id":  "F10",
+                        "name":  "module/patch version mismatch -\u003e guard throws, no ownership side effect",
+                        "pass":  true,
+                        "detail":  "exit=1 guard_msg_in_log=True state_file_absent=True log=V15C-Adoption.ps1 requires Write-V15CStateRecord from V15C-Ownership.ps1 (Phase 18). At D:\\AI_Cache\\temp\\p3h19_iso_20261028-175430\\case_f10\\V15C-Adoption.ps1:27 char:5 +     throw \u0027V15C-Adoption.ps1 requires Write-V15CStateRecord from V15C ... +     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~     + CategoryInfo          : OperationStopped: (V15C-Adoption.p...ps1 (Phase 18).:String) [], RuntimeException     + FullyQualifiedErrorId : V15C-Adoption.ps1 requires Write-V15CStateRecord from V15C-Ownership.ps1 (Phase 18).  "
+                    },
+                    {
+                        "id":  "F11",
+                        "name":  "atomic write with stale temp -\u003e valid record, no partial state",
+                        "pass":  true,
+                        "detail":  "written=True reason=written readable=True pid=999998 tmp_left=1"
+                    },
+                    {
+                        "id":  "F12",
+                        "name":  "aborted maintenance -\u003e stale record replaced by new owner",
+                        "pass":  true,
+                        "detail":  "first=25464 second=4056 live=4056 exit2=0"
+                    },
+                    {
+                        "id":  "INV1",
+                        "name":  "no production PID state record created",
+                        "pass":  true,
+                        "detail":  "before=False after=False"
+                    },
+                    {
+                        "id":  "INV2",
+                        "name":  "production database byte-identical",
+                        "pass":  true,
+                        "detail":  "before=2d58b9707670d8ad after=2d58b9707670d8ad"
+                    },
+                    {
+                        "id":  "INV3",
+                        "name":  "8770 unchanged, 8030 not listening",
+                        "pass":  true,
+                        "detail":  "8770 26380-\u003e26380 8030 0-\u003e0"
+                    },
+                    {
+                        "id":  "INV4",
+                        "name":  "only harness-tracked processes terminated",
+                        "pass":  true,
+                        "detail":  "tracked=12"
+                    }
+                ],
+    "pass":  17,
+    "total":  17,
+    "invariants":  {
+                       "INV1_no_prod_state_record":  true,
+                       "INV2_prod_db_unchanged":  true,
+                       "INV3_other_ports_unchanged":  true,
+                       "INV4_only_tracked_killed":  true
+                   }
+}

@@ -1,0 +1,244 @@
+﻿{
+    "generated_at":  "2026-10-27T04:12:22.4055872Z",
+    "official_sha256":  "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+    "patched_sha256":  "a95a857b11de2ca13483d0e50ae23c2c064b654994a51f7accfb56d0280d762b",
+    "ownership_sha256":  "adf7f8ecd6bcdaf3d5bd013569c9c6231f0e7f16bf64675a83b0042391b03ec8",
+    "adoption_sha256":  "48cb7c34732d1eb8c40611e3cf741c3b717784665ab7fde8dde8c544d66b81b1",
+    "prod_before":  {
+                        "8022":  23204,
+                        "8030":  0,
+                        "8770":  14124
+                    },
+    "prod_after":  {
+                       "8022":  28208,
+                       "8030":  0,
+                       "8770":  14124
+                   },
+    "pass":  37,
+    "fail":  0,
+    "total":  37,
+    "results":  [
+                    {
+                        "Id":  "T18-1",
+                        "Name":  "first start writes state -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "written=True verdict=OWNED; listener_pid_matches; command_line_is_django_runserver; root_hint_absent; ancestor_exe_is_django_python depth=1; state_record_matches; health_ok status=200"
+                    },
+                    {
+                        "Id":  "T18-2",
+                        "Name":  "controlled adoption -\u003e state written -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "before=UNKNOWN/state_absent adopt=ADOPTABLE mode=ancestor decision=ADOPT claimed=True after=OWNED"
+                    },
+                    {
+                        "Id":  "T18-3",
+                        "Name":  "state absent: scheme A abort / scheme B adopt",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN A=ABORT/adoption_disabled_state_absent B=ADOPT/adopted_by_full_evidence alive=True"
+                    },
+                    {
+                        "Id":  "T18-4",
+                        "Name":  "state corrupt -\u003e UNKNOWN, no adoption, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN decision=ABORT/unknown_evidence alive=True; listener_pid_matches; command_line_is_django_runserver; root_hint_absent; ancestor_exe_is_django_python depth=1; state_unreadable_or_corrupt; health_ok status=200; unknown: state_corrupt"
+                    },
+                    {
+                        "Id":  "T18-5",
+                        "Name":  "pid reused -\u003e UNKNOWN, no adoption, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN decision=ABORT alive=True; listener_pid_matches; command_line_is_django_runserver; root_hint_absent; ancestor_exe_is_django_python depth=1; state_created_at_mismatch; health_ok status=200; unknown: state_mismatch"
+                    },
+                    {
+                        "Id":  "T18-6",
+                        "Name":  "creation drift 5s -\u003e UNKNOWN, no adoption, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN decision=ABORT alive=True; listener_pid_matches; command_line_is_django_runserver; root_hint_absent; ancestor_exe_is_django_python depth=1; state_created_at_mismatch; health_ok status=200; unknown: state_mismatch"
+                    },
+                    {
+                        "Id":  "T18-7",
+                        "Name":  "same python other project -\u003e FOREIGN, no adoption, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=FOREIGN adopt=UNKNOWN decision=ABORT alive=True"
+                    },
+                    {
+                        "Id":  "T18-8",
+                        "Name":  "command line unreadable -\u003e UNKNOWN, no adoption, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN adopt=UNKNOWN alive=True; E1_listener_ok; E2_process_or_creation_unreadable; E3_commandline_unreadable; E5_no_self_or_ancestor_matches_shim; E4a_venv_pyvenv_insufficient; E4b_manage_py_identity_ok; E4c_http_project_fingerprint_ok; E7_health_ok status=200; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "T18-9",
+                        "Name":  "health failing -\u003e UNKNOWN, no adoption, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN adopt=UNKNOWN alive=True; E1_listener_ok; E2_creation_time_ok; E3_commandline_ok; E5_ancestor_matches_shim depth=1; E4a_venv_pyvenv_ok; E4b_manage_py_identity_ok; E4c_http_project_fingerprint_missing; E7_health_failed status=0; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "T18-10",
+                        "Name":  "repeated trigger -\u003e REUSE x3, pid unchanged",
+                        "Ok":  true,
+                        "Detail":  "actions=REUSE,REUSE,REUSE pid=21844-\u003e21844 started=4"
+                    },
+                    {
+                        "Id":  "T18-11",
+                        "Name":  "OWNED -\u003e REUSE, process alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=OWNED action=REUSE alive=True"
+                    },
+                    {
+                        "Id":  "T18-12",
+                        "Name":  "FOREIGN/UNKNOWN never terminated",
+                        "Ok":  true,
+                        "Detail":  "other_alive=True generic_alive=True main_alive=True"
+                    },
+                    {
+                        "Id":  "T18-13",
+                        "Name":  "stopped -\u003e safe restart -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "free_pid=0 free_verdict=UNKNOWN adopt_on_free=UNKNOWN restart_pid=6924 claimed=True restart_verdict=OWNED"
+                    },
+                    {
+                        "Id":  "T18-14",
+                        "Name":  "production 8022/8770/8030 untouched",
+                        "Ok":  true,
+                        "Detail":  "8770=14124-\u003e14124 8030=0-\u003e0 8022=23204-\u003e23204 ports_exclude_prod=True"
+                    },
+                    {
+                        "Id":  "A1",
+                        "Name":  "health 200 without fingerprint -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN alive=True; E1_listener_ok; E2_creation_time_ok; E3_commandline_not_django_runserver_on_port; E5_ancestor_matches_shim depth=1; E4a_venv_pyvenv_ok; E4b_manage_py_identity_ok; E4c_http_project_fingerprint_missing; E7_health_ok status=200; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "A2",
+                        "Name":  "pid + health only -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN; E1_listener_ok; E2_creation_time_ok; E3_commandline_unreadable; E5_no_self_or_ancestor_matches_shim; E4a_venv_pyvenv_insufficient; E4b_manage_py_identity_ok; E4c_http_project_fingerprint_ok; E7_health_ok status=200; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "A3",
+                        "Name":  "python path only (shim mismatch) -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN; E1_listener_ok; E2_creation_time_ok; E3_commandline_ok; E5_no_self_or_ancestor_matches_shim; E4a_venv_pyvenv_insufficient; E4b_manage_py_identity_insufficient; E4c_http_project_fingerprint_ok; E7_health_ok status=200; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "A4",
+                        "Name":  "manage.py identity missing -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN; E1_listener_ok; E2_creation_time_ok; E3_commandline_ok; E5_ancestor_matches_shim depth=1; E4a_venv_pyvenv_ok; E4b_manage_py_identity_insufficient; E4c_http_project_fingerprint_ok; E7_health_ok status=200; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "A5",
+                        "Name":  "other launcher process -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN; E1_listener_ok; E2_creation_time_ok; E3_commandline_ok; E5_ancestor_matches_shim depth=1; E4a_venv_pyvenv_ok; E4b_manage_py_identity_ok; E4c_http_project_fingerprint_ok; E7_health_ok status=200; E6_listener_stable; E8_launcher_process_conflict"
+                    },
+                    {
+                        "Id":  "A5b",
+                        "Name":  "instance mutex held elsewhere -\u003e UNKNOWN",
+                        "Ok":  true,
+                        "Detail":  "mutex_free=False detail=held_by_other adopt=UNKNOWN"
+                    },
+                    {
+                        "Id":  "A6",
+                        "Name":  "state writer refuses overwrite of live owner",
+                        "Ok":  true,
+                        "Detail":  "first_written=True second_written=False reason=existing_owner_alive preserved_pid=6924 expected_pid=6924"
+                    },
+                    {
+                        "Id":  "S1",
+                        "Name":  "patched-v3 wires the adoption branch",
+                        "Ok":  true,
+                        "Detail":  "missing=[]"
+                    },
+                    {
+                        "Id":  "S2",
+                        "Name":  "no Stop-Process targets $django",
+                        "Ok":  true,
+                        "Detail":  "stop_process_count=2 targets_django=0 parse_clean=True targets=[Stop-Process -Id $existingTunnel.ProcessId -Force -ErrorAction SilentlyContinue | Stop-Process -Id $startedTunnel.Id -Force -ErrorAction SilentlyContinue]"
+                    },
+                    {
+                        "Id":  "S3",
+                        "Name":  "patched-v3 is ASCII-only, no BOM",
+                        "Ok":  true,
+                        "Detail":  "non_ascii=0 bom=False bytes=19736"
+                    },
+                    {
+                        "Id":  "S4",
+                        "Name":  "official launcher unchanged during run",
+                        "Ok":  true,
+                        "Detail":  "before=a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59 after=a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59"
+                    },
+                    {
+                        "Id":  "R1",
+                        "Name":  "cold start: no listener -\u003e start -\u003e atomic state -\u003e OWNED",
+                        "Ok":  true,
+                        "Detail":  "port_was_free=True free_verdict=UNKNOWN pid=20300 written=True state_pid_port_ok=True verdict=OWNED"
+                    },
+                    {
+                        "Id":  "R2",
+                        "Name":  "existing legit process adopted (no restart, no new process)",
+                        "Ok":  true,
+                        "Detail":  "before=UNKNOWN/absent adopt=ADOPTABLE mode=ancestor decision=ADOPT claimed=True pid=20300-\u003e20300 after=OWNED started_total=6"
+                    },
+                    {
+                        "Id":  "R3",
+                        "Name":  "foreign process never adopted, never killed",
+                        "Ok":  true,
+                        "Detail":  "verdict=FOREIGN adopt=UNKNOWN decision=ABORT/foreign_process claimed=False state_file=False alive=True"
+                    },
+                    {
+                        "Id":  "R4",
+                        "Name":  "pid reuse: stale creation time -\u003e UNKNOWN, alive",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN decision=ABORT alive=True; listener_pid_matches; command_line_is_django_runserver; root_hint_absent; ancestor_exe_is_django_python depth=1; state_created_at_mismatch; health_ok status=200; unknown: state_mismatch"
+                    },
+                    {
+                        "Id":  "R5",
+                        "Name":  "creation time differs -\u003e UNKNOWN, no reuse, explicit rewrite recovers",
+                        "Ok":  true,
+                        "Detail":  "stale_verdict=UNKNOWN decision=ABORT rewrite=True after_rewrite=OWNED alive=True"
+                    },
+                    {
+                        "Id":  "R6",
+                        "Name":  "unreadable command line -\u003e UNKNOWN, no claim",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN claimed=False reason=adoption_not_eligible alive=True; E1_listener_ok; E2_creation_time_ok; E3_commandline_unreadable; E5_no_self_or_ancestor_matches_shim; E4a_venv_pyvenv_insufficient; E4b_manage_py_identity_ok; E4c_http_project_fingerprint_ok; E7_health_ok status=200; E6_listener_stable; E8_no_launcher_conflict"
+                    },
+                    {
+                        "Id":  "R7",
+                        "Name":  "corrupt state -\u003e UNKNOWN, write refused, file untouched",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN write=False/existing_state_corrupt untouched=True alive=True"
+                    },
+                    {
+                        "Id":  "R8",
+                        "Name":  "interrupted write: destination never half-written",
+                        "Ok":  true,
+                        "Detail":  "rounds=3 valid_after_kill=3 reads=2214 bad=0 openErr=0 seed_written=True tmp_leftovers=1"
+                    },
+                    {
+                        "Id":  "R9",
+                        "Name":  "repeated trigger: one instance, one claim, no restart",
+                        "Ok":  true,
+                        "Detail":  "actions=ADOPT,REUSE,REUSE,REUSE,REUSE claims=1 pid=20300-\u003e20300 listeners=1 new_processes=0"
+                    },
+                    {
+                        "Id":  "R10",
+                        "Name":  "health failure -\u003e UNKNOWN/ABORT, process survives",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN adopt=UNKNOWN decision=ABORT pid=20300-\u003e20300 alive=True"
+                    },
+                    {
+                        "Id":  "R11",
+                        "Name":  "rollback: no unknown process terminated; old launcher hazard proven",
+                        "Ok":  true,
+                        "Detail":  "verdict=UNKNOWN decision=ABORT listener_alive=True other_alive=True original_stop_django=1 patched_stop_django=0"
+                    },
+                    {
+                        "Id":  "R12",
+                        "Name":  "production 8022/8770/8030 untouched by R-tests",
+                        "Ok":  true,
+                        "Detail":  "8770=14124-\u003e14124 8030=0-\u003e0 8022=23204-\u003e28208 8022_unchanged=False ports_exclude_prod=True"
+                    }
+                ]
+}

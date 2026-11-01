@@ -1,0 +1,363 @@
+{
+  "baseline_drift": [
+    {
+      "file": "verify_p3h19_patch_integrity.py",
+      "reason": "not_in_phase18_baseline",
+      "sha256": "949092605257f2802e61c9db39e10ae6ee1a9a89daef7ef525a1455a78f13c0f"
+    }
+  ],
+  "encoding_scripts": [
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "bytes": 40813,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "Test-V15CPhase18Adoption.ps1",
+      "bytes": 50025,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "V15C-Adoption.ps1",
+      "bytes": 22949,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "V15C-Ownership.ps1",
+      "bytes": 19902,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "fake_manage.py",
+      "bytes": 1197,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "fake_project.py",
+      "bytes": 2069,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "start_fde_v15c_classroom.original.ps1",
+      "bytes": 15766,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "start_fde_v15c_classroom.patched-v2.ps1",
+      "bytes": 18771,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "start_fde_v15c_classroom.patched-v3.ps1",
+      "bytes": 19736,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "start_fde_v15c_classroom.patched.ps1",
+      "bytes": 17846,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "verify_p3h19_patch_integrity.py",
+      "bytes": 25009,
+      "bom": "none",
+      "non_ascii": 0
+    }
+  ],
+  "encoding_datafiles": [
+    {
+      "file": "PATCH-v2.diff",
+      "bytes": 5494,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "PATCH-v3.diff",
+      "bytes": 6472,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "PATCH.diff",
+      "bytes": 4557,
+      "bom": "none",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_2026-10-27.json",
+      "bytes": 6951,
+      "bom": "utf-8-bom",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_2026-10-27.log",
+      "bytes": 3619,
+      "bom": "utf-8-bom",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_PHASE18_2026-10-27.json",
+      "bytes": 12111,
+      "bom": "utf-8-bom",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_PHASE18_2026-10-27.log",
+      "bytes": 12546,
+      "bom": "utf-16le-bom",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_PHASE18_OWNERSHIP_RERUN2_2026-10-27.json",
+      "bytes": 12115,
+      "bom": "utf-8-bom",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_PHASE18_OWNERSHIP_RERUN_2026-10-27.json",
+      "bytes": 12085,
+      "bom": "utf-8-bom",
+      "non_ascii": 0
+    },
+    {
+      "file": "TEST_RESULTS_PHASE18_RERUN_2026-10-27.json",
+      "bytes": 15588,
+      "bom": "utf-8-bom",
+      "non_ascii": 0
+    }
+  ],
+  "A3_pass": true,
+  "parse": [
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "Test-V15CPhase18Adoption.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "V15C-Adoption.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "V15C-Ownership.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "start_fde_v15c_classroom.original.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "start_fde_v15c_classroom.patched-v2.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "start_fde_v15c_classroom.patched-v3.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "start_fde_v15c_classroom.patched.ps1",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "start_fde_v15c_classroom.ps1",
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "A2_pass": true,
+  "dependencies": [
+    {
+      "declared_var": "OwnershipModule",
+      "relative": "V15C-Ownership.ps1",
+      "resolved": "D:\\FDE-AI-UAS-v2.0-p3h-local-backend\\ops\\p3h\\v15c-launcher\\V15C-Ownership.ps1",
+      "exists": true,
+      "dot_sourced": true,
+      "guard": true
+    },
+    {
+      "declared_var": "AdoptionModule",
+      "relative": "V15C-Adoption.ps1",
+      "resolved": "D:\\FDE-AI-UAS-v2.0-p3h-local-backend\\ops\\p3h\\v15c-launcher\\V15C-Adoption.ps1",
+      "exists": true,
+      "dot_sourced": true,
+      "guard": true
+    }
+  ],
+  "A1_pass": true,
+  "module_functions": {
+    "V15C-Ownership.ps1": {
+      "Test-IsV15CDjango": true,
+      "Write-V15CStateRecord": true,
+      "Read-V15CStateRecord": true,
+      "Get-V15CListenerPid": true,
+      "Get-V15CProcessInfo": true,
+      "Test-V15CHealth": true,
+      "Test-V15CProcessAlive": true
+    },
+    "V15C-Adoption.ps1": {
+      "Test-V15CAdoptionEligible": true,
+      "Resolve-V15CListenerAction": true,
+      "Invoke-V15CAdoptionClaim": true
+    }
+  },
+  "A1_functions_pass": true,
+  "diff": {
+    "hunks": 3,
+    "added_lines": 54,
+    "removed_lines": 9,
+    "scope_issues": [],
+    "tunnel_stop_process_touched_by_patch": false,
+    "tunnel_stop_process_still_present": {
+      "$existingTunnel.ProcessId": true,
+      "$startedTunnel.Id": true
+    }
+  },
+  "A4_pass": true,
+  "A5_hits": [
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "line_no": 99,
+      "token": "prod_v15_root",
+      "kind": "read_only_probe_or_fixture",
+      "text": "$V15ROOT = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal'"
+    },
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "line_no": 163,
+      "token": "prod_v15_root",
+      "kind": "read_only_probe_or_fixture",
+      "text": "$fakeShim = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal\\.venv\\Scripts\\python.exe'"
+    },
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "line_no": 171,
+      "token": "prod_v15_root",
+      "kind": "read_only_probe_or_fixture",
+      "text": "return [pscustomobject]@{ ProcessId = 40002; ParentProcessId = 0; ExecutablePath = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal\\.venv\\Scripts\\python.exe'; CommandLine = 'shim'; CreationTimeUtc = $t }"
+    },
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "line_no": 187,
+      "token": "prod_v15_root",
+      "kind": "read_only_probe_or_fixture",
+      "text": "return [pscustomobject]@{ ProcessId = 40011; ParentProcessId = 0; ExecutablePath = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal\\.venv\\Scripts\\python.exe'; CommandLine = '\"D:\\FDE-AI-UAS\\v1.5C\\student_portal\\.ve"
+    },
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "line_no": 454,
+      "token": "prod_state_root",
+      "kind": "read_only_probe_or_fixture",
+      "text": "$prodStatePath = 'C:\\Users\\admin\\AppData\\Local\\FDE-AI\\classroom\\django-v15c-pid.json'"
+    },
+    {
+      "file": "Test-V15CLauncherOwnership.ps1",
+      "line_no": 465,
+      "token": "prod_v15_root",
+      "kind": "read_only_probe_or_fixture",
+      "text": "$fakeShim20 = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal\\.venv\\Scripts\\python.exe'"
+    }
+  ],
+  "A5_write_targets": [],
+  "A5_pass": true,
+  "A5_launcher_inheritance": {
+    "prod_state_root": {
+      "original": [
+        "$StateRoot = 'C:\\Users\\admin\\AppData\\Local\\FDE-AI\\classroom'"
+      ],
+      "patched_v3": [
+        "$StateRoot = 'C:\\Users\\admin\\AppData\\Local\\FDE-AI\\classroom'"
+      ],
+      "identical": true
+    },
+    "prod_v15_root": {
+      "original": [
+        "$V15Root = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal'"
+      ],
+      "patched_v3": [
+        "$V15Root = 'D:\\FDE-AI-UAS\\v1.5C\\student_portal'"
+      ],
+      "identical": true
+    },
+    "prod_db": {
+      "original": [
+        "$env:DJANGO_DB_NAME = 'C:\\Users\\admin\\Documents\\Codex\\2026-08-30\\new-chat\\FDE-AI-v1.5\\student_portal\\db.sqlite3'"
+      ],
+      "patched_v3": [
+        "$env:DJANGO_DB_NAME = 'C:\\Users\\admin\\Documents\\Codex\\2026-08-30\\new-chat\\FDE-AI-v1.5\\student_portal\\db.sqlite3'"
+      ],
+      "identical": true
+    },
+    "prod_media": {
+      "original": [
+        "$env:DJANGO_MEDIA_ROOT = 'C:\\Users\\admin\\Documents\\Codex\\2026-08-30\\new-chat\\FDE-AI-v1.5\\student_portal\\private_media'"
+      ],
+      "patched_v3": [
+        "$env:DJANGO_MEDIA_ROOT = 'C:\\Users\\admin\\Documents\\Codex\\2026-08-30\\new-chat\\FDE-AI-v1.5\\student_portal\\private_media'"
+      ],
+      "identical": true
+    }
+  },
+  "A5_launcher_pass": true,
+  "A5_ownership_readonly": {
+    "test_is_v15c_django_body_lines": 197,
+    "write_verbs_in_body": [],
+    "reads_state_file": true
+  },
+  "A5_ownership_readonly_pass": true,
+  "A6_hits": [],
+  "A6_pass": true,
+  "A7": {
+    "ownership_has_version_banner": true,
+    "adoption_has_version_banner": true,
+    "adoption_delegates_to_single_writer": true,
+    "adoption_has_no_own_state_writer": true,
+    "ownership_defines_state_writer": true,
+    "launcher_requires_both_modules": true,
+    "launcher_phase_tags": [
+      "17",
+      "18"
+    ]
+  },
+  "A7_pass": true,
+  "A8": {
+    "official_path": "D:\\FDE-AI-Gateway\\start_fde_v15c_classroom.ps1",
+    "official_sha256": "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+    "official_bytes": 15766,
+    "official_matches_recorded": true,
+    "isolation_copy_sha256": "a64330ef7a31e6c981fba95117466610af5e5db833d1ddafc8d91dba1c7a7b59",
+    "isolation_copy_identical_to_official": true,
+    "patched_v3_still_traceable": true
+  },
+  "A8_pass": true,
+  "summary": {
+    "A1_dependency_paths": "PASS",
+    "A2_ps51_parse": "PASS",
+    "A3_ascii_bom": "PASS",
+    "A4_diff_scope": "PASS",
+    "A5_no_prod_write_from_isolation": "PASS",
+    "A6_no_credentials": "PASS",
+    "A7_version_match": "PASS",
+    "A8_original_traceable": "PASS"
+  },
+  "total_pass": 8
+}

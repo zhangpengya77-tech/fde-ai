@@ -1,0 +1,37 @@
+{
+  "source": "start_fde_v15c_classroom.patched-v3.ps1",
+  "source_sha256": "bc57751349551959c9a7957039854d291a59800b3a16a42786dc9d805c5640d0",
+  "source_lines": 348,
+  "double": "start_fde_v15c_classroom.patched-v3.isolation.ps1",
+  "double_sha256": "c7bfd55257ab36d03755b7d3860a18c44dcae98b0bdb67dabbd1b88995694a65",
+  "double_lines": 254,
+  "double_bytes": 14020,
+  "config_block_replaced": {
+    "from_line": 8,
+    "to_line": 37,
+    "old_line_count": 30,
+    "new_line_count": 36
+  },
+  "logic_block_lines": {
+    "from": 38,
+    "to": 250,
+    "count": 213
+  },
+  "logic_block_byte_identical": true,
+  "termination_primitives_in_double": [],
+  "kill_word_occurrences": [
+    "# (scheme A). Both keep the no-auto-kill rule.",
+    "# P3-H Phase 17: ownership is no longer decided by venv-shim path equality alone; never auto-kill.",
+    "throw \"Port $DjangoPort adoption claim failed: $($claim.Reason); no auto-kill by policy; manual intervention required.\"",
+    "throw \"Port $DjangoPort is occupied by a $($verdict.Verdict) process; no auto-kill by policy; manual intervention required.\""
+  ],
+  "non_ascii_lines": [],
+  "bom": false,
+  "isolation_values": {
+    "DjangoPort": 18022,
+    "RagPort": 18770,
+    "StateRoot": "<GatewayRoot>\\iso_state",
+    "V15Root": "<GatewayRoot>\\iso_project",
+    "MutexName": "Local\\FDE-AI-v15C-Classroom-Startup-ISOLATION-P3H19"
+  }
+}
