@@ -48,74 +48,99 @@ const AppState = {
 const DEMO_PAYLOAD = {
   // ── 學員視圖（來自後端 student_view）──
   student_view: {
-    overall_status: "inspect",
-    display_status: "需要檢查",
-    main_finding: "動力輸出命令分配不均，某一側持續偏高，飛機可能動力失衡。",
-    next_action: "先檢查槳葉，再檢查馬達、電調、接線和重心。",
+    overall_status: "danger",
+    display_status: "危險，不建議飛行",
+    main_finding: "檢測到危險項：02 馬達輸出（電機）。不建議飛行，請先排除並由老師確認。",
+    next_action: "先處理紅色危險項，修好後重新飛一次並上傳新日誌確認。",
     health_cards: [
       {
-        card_id: "propulsion",
-        title: "01 動力健康",
-        status: "ABNORMAL",
-        display_status: "需要檢查",
-        main_finding: "飛控持續要求某一側多出力，飛機動力可能不夠平衡。",
-        next_action: "先檢查槳葉，再檢查馬達、電調、接線和重心。"
+        card_id: "battery",
+        title: "01 電池與供電",
+        subtitle: "電池電壓（每片電芯）＋飛控供電",
+        critical: true,
+        status: "NORMAL",
+        display_status: "健康",
+        metric: "最低 3.71V/片（3S 共 11.1V）· 第 182 秒 · 飛控 5.04V",
+        main_finding: "電池電壓正常，帶載最低 3.71V/片。",
+        next_action: "按標準飛前檢查繼續觀察。"
       },
       {
-        card_id: "battery",
-        title: "02 電池健康",
+        card_id: "propulsion",
+        title: "02 馬達輸出（電機）",
+        subtitle: "四顆馬達輸出平衡、飽和、懸停油門",
+        critical: true,
+        status: "DANGER",
+        display_status: "危險，不建議飛行",
+        metric: "M1 1421 / M2 1666 / M3 1410 / M4 1430 · 差 256µs · 懸停油門 48%",
+        main_finding: "四顆馬達輸出相差 256µs，M2 一直在多出力。",
+        next_action: "拆槳檢查 M2：槳葉正反與裂痕、馬達軸與軸承、電調與焊點、馬達座是否歪斜，最後確認重心。"
+      },
+      {
+        card_id: "vibration",
+        title: "03 振動",
+        subtitle: "機體振動與加速度計削頂",
+        critical: true,
+        status: "INSPECT",
+        display_status: "需要檢查",
+        metric: "最大 32.6 m/s² · 第 95 秒 · Clip +0",
+        main_finding: "振動超過 30 m/s² 持續 1.4 秒（第 95 秒），建議處理後再飛。",
+        next_action: "檢查飛控減震墊、槳葉動平衡與裂痕、馬達螺絲與機架是否鬆動。"
+      },
+      {
+        card_id: "stability",
+        title: "04 姿態追蹤",
+        subtitle: "實際姿態 vs 飛控期望姿態",
+        critical: true,
         status: "NORMAL",
-        display_status: "正常",
-        main_finding: "現有數據未發現明顯供電異常。",
+        display_status: "健康",
+        metric: "最大偏差 3.2° · 第 40 秒",
+        main_finding: "姿態追蹤良好（最大偏差 3.2°）。",
+        next_action: "按標準飛前檢查繼續觀察。"
+      },
+      {
+        card_id: "events",
+        title: "05 事件與失效保護",
+        subtitle: "錯誤、失效保護、墜機、空中斷電",
+        critical: true,
+        status: "NORMAL",
+        display_status: "健康",
+        metric: "0 個錯誤事件",
+        main_finding: "沒有失效保護、墜機或錯誤事件。",
         next_action: "按標準飛前檢查繼續觀察。"
       },
       {
         card_id: "gps",
-        title: "03 定位健康",
+        title: "06 GPS 定位",
+        subtitle: "定位類型、衛星數、HDOP（看飛行模式）",
+        critical: false,
         status: "NORMAL",
-        display_status: "正常",
-        main_finding: "現有定位數據沒有觸發異常規則。",
+        display_status: "健康",
+        metric: "最少 13 顆星 · HDOP 最高 0.9",
+        main_finding: "GPS 定位穩定（最少 13 顆星）。",
         next_action: "按標準飛前檢查繼續觀察。"
       },
       {
-        card_id: "stability",
-        title: "04 姿態穩定",
-        status: "NOTICE",
-        display_status: "注意",
-        main_finding: "這一項出現需要留意的變化，目前不能直接認定零件損壞。",
-        next_action: "先檢查槳葉、緊固件、馬達和飛控減震，再進行低空復測。"
-      },
-      {
-        card_id: "rc-signal",
-        title: "05 遙控信號",
+        card_id: "compass",
+        title: "07 羅盤／磁干擾",
+        subtitle: "磁場強度與馬達電流干擾",
+        critical: false,
         status: "NORMAL",
-        display_status: "正常",
-        main_finding: "本次未發現遙控信號相關異常記錄。",
+        display_status: "健康",
+        metric: "磁場 448 mG · 磁干擾 12%",
+        main_finding: "羅盤磁場正常。",
         next_action: "按標準飛前檢查繼續觀察。"
       },
       {
-        card_id: "flight-mode",
-        title: "06 飛行模式",
-        status: "NOTICE",
-        display_status: "注意",
-        main_finding: "飛行模式出現需要留意的變化（含失控保護相關記錄）。",
-        next_action: "請老師協助確認當時的操作條件與飛行模式記錄。"
-      },
-      {
-        card_id: "altitude",
-        title: "07 高度控制",
-        status: "INSUFFICIENT_DATA",
-        display_status: "無法判斷",
-        main_finding: "本次日誌資料不足，無法評估這一項。",
-        next_action: "下一次確認日誌已記錄對應資料後再判斷。"
-      },
-      {
-        card_id: "sensors",
-        title: "08 飛控傳感器",
-        status: "INSUFFICIENT_DATA",
-        display_status: "無法判斷",
-        main_finding: "本次日誌資料不足，無法評估這一項。",
-        next_action: "請老師協助查看傳感器與狀態估計證據。"
+        card_id: "ekf",
+        title: "08 EKF 位置估算",
+        subtitle: "飛控「位置裁判」的方差",
+        critical: false,
+        status: "UNKNOWN",
+        display_status: "未檢測",
+        metric: "未檢測",
+        main_finding: "本次日誌沒有 EKF 方差（XKF4/NKF4）紀錄，這一項未檢測。未檢測不代表正常。",
+        missing_reason: "沒有 EKF 方差（XKF4/NKF4）紀錄",
+        next_action: "下次飛行前確認飛控有記錄這項資料，再重新分析。"
       }
     ]
   },
@@ -618,7 +643,7 @@ function getStatusMeta(statusStr) {
   switch (key) {
     case "NORMAL":
     case "PASS":
-      return { icon: "🟢", label: "通過", cssClass: "status-normal" };
+      return { icon: "🟢", label: "健康", cssClass: "status-normal" };
     case "ABNORMAL":
     case "NOTICE":
     case "ATTENTION":
@@ -634,7 +659,7 @@ function getStatusMeta(statusStr) {
     case "UNASSESSED":
     case "INSUFFICIENT_DATA":
     default:
-      return { icon: "⚪", label: "無法判斷", cssClass: "status-unassessed" };
+      return { icon: "⚪", label: "未檢測", cssClass: "status-unassessed" };
   }
 }
 
@@ -684,28 +709,31 @@ function renderReportPage() {
     q3El.innerHTML = sv.next_action || "請由教師複核後確認下一步。";
   }
 
-  // 八項健康卡：從後端 student_view.health_cards 讀取（固定順序 01→08）。
-  // 學員層絕無 PWM / PID / EKF / HDOP / 原始規則編號。
+  // 八項健康卡：從後端 student_view.health_cards 讀取（固定順序 01→08，依實務優先順序）。
+  // 2026-11-01 改版：依真實飛行日誌實務重排為
+  //   battery 電池與供電 / propulsion 馬達輸出（電機）/ vibration 振動 / stability 姿態追蹤 /
+  //   events 事件與失效保護 / gps GPS 定位 / compass 羅盤磁干擾 / ekf EKF 位置估算
   // 唯一權威映射：後端 builtin_rule_engine.CARD_DEFS 的 card_id → 前端 DOM 卡片 id。
-  //   propulsion / battery / gps / stability / rc-signal / flight-mode / altitude / sensors
-  // 前端不再保留任何歷史別名（positioning / rc_signal / flight_mode / altitude_control），
-  // 以免契約漂移被「雙 key 兼容」掩蓋；未知 card_id 於下方明確記錄，不靜默丟棄。
+  // 未知 card_id 於下方明確記錄，不靜默丟棄；後端沒提供的卡顯示 ⚪ 未檢測（不留白）。
   const cardIdMap = {
-    propulsion: "propulsion-card",
     battery: "battery-card",
-    gps: "gps-card",
+    propulsion: "propulsion-card",
+    vibration: "vibration-card",
     stability: "stability-card",
-    "rc-signal": "rc-signal-card",
-    "flight-mode": "flight-mode-card",
-    altitude: "altitude-card",
-    sensors: "sensors-card"
+    events: "events-card",
+    gps: "gps-card",
+    compass: "compass-card",
+    ekf: "ekf-card"
   };
 
   const cards = sv.health_cards || [];
   // 先把八張卡全部重置為「無資料」佔位，避免上一份報告殘留
   Object.values(cardIdMap).forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = "";
+    if (el) {
+      el.innerHTML = "";
+      delete el.dataset.status;
+    }
   });
   cards.forEach((card) => {
     // 2026-10-17：先歸一化兩套已知後端契約的 card_id（沙箱 gps / 教師 positioning 等），
@@ -718,6 +746,21 @@ function renderReportPage() {
       return;
     }
     renderCardFromBackend(htmlId, card);
+  });
+  // 後端未提供的卡：明確顯示 ⚪ 未檢測，未檢測不代表正常
+  Object.values(cardIdMap).forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && !el.innerHTML.trim()) {
+      el.dataset.status = "status-unassessed";
+      el.innerHTML = `
+        <div>
+          <div class="card-top-row">
+            <span class="card-title">${el.dataset.title || "健康檢查"}</span>
+            <span class="status-badge status-unassessed">⚪ 未檢測</span>
+          </div>
+          <div class="card-finding-text">目前的分析引擎沒有提供這一項，未檢測不代表正常。</div>
+        </div>`;
+    }
   });
 
   // 本次飛行安全提醒（V1.2）：只顯示後端已核驗的 safety_alerts，無事件則整塊隱藏
@@ -807,14 +850,21 @@ function renderCardFromBackend(htmlId, card) {
   const finding = card.main_finding || "⚠️ 結果字段缺失／待驗證：本卡未取得判定結論，請教師複核。";
   const next = card.next_action || "⚠️ 結果字段缺失／待驗證：請由教師複核確認下一步。";
   const missing = card.missing_reason
-    ? `<div class="card-missing-reason">缺資料原因：${card.missing_reason}</div>`
+    ? `<div class="card-missing-reason">未檢測原因：${card.missing_reason}（未檢測不代表正常）</div>`
     : "";
+  const subtitle = card.subtitle
+    ? `<div class="card-subtitle">${card.critical ? '<span class="card-critical-tag">關鍵</span>' : ""}${card.subtitle}</div>`
+    : "";
+  const metric = card.metric ? `<div class="card-metric">📊 ${card.metric}</div>` : "";
+  el.dataset.status = meta.cssClass;
   el.innerHTML = `
     <div>
       <div class="card-top-row">
         <span class="card-title">${title}</span>
         <span class="status-badge ${meta.cssClass}">${meta.icon} ${meta.label}</span>
       </div>
+      ${subtitle}
+      ${metric}
       <div class="card-finding-text">${finding}</div>
       ${missing}
       <div class="card-next-strip">👉 ${next}</div>
@@ -838,7 +888,7 @@ function getStatusMetaFromEngine(engineStatus) {
   switch (String(engineStatus).toUpperCase()) {
     case "NORMAL":
     case "PASS":
-      return { icon: "🟢", label: "通過", cssClass: "status-normal" };
+      return { icon: "🟢", label: "健康", cssClass: "status-normal" };
     case "NOTICE":
     case "ABNORMAL":
     case "INSPECT":
@@ -851,7 +901,7 @@ function getStatusMetaFromEngine(engineStatus) {
     case "INSUFFICIENT_DATA":
     case "UNKNOWN":
     default:
-      return { icon: "⚪", label: "無法判斷", cssClass: "status-unassessed" };
+      return { icon: "⚪", label: "未檢測", cssClass: "status-unassessed" };
   }
 }
 
@@ -865,7 +915,7 @@ function determineStatus(subsystem) {
   // 優先讀取 student_view.health_cards
   const sv = data?.student_view;
   if (sv?.health_cards) {
-    const subMap = { motors: "propulsion", battery: "battery", gps: "gps", vibration: "stability" };
+    const subMap = { motors: "propulsion", battery: "battery", gps: "gps", vibration: "vibration" };
     const cardId = subMap[subsystem];
     const card = cardId ? sv.health_cards.find((c) => c.card_id === cardId) : null;
     if (card) {
@@ -932,23 +982,22 @@ function normalizeSeverity(statusStr) {
 }
 
 // ── 2026-10-17 P0 修復：已知兩套後端契約的 card_id 歸一化 ──────────────────────
-// 沙箱內建引擎 / 參考後端（本倉）使用：propulsion|battery|gps|stability|rc-signal|flight-mode|altitude|sensors
+// 沙箱內建引擎 / 參考後端（本倉，2026-11-01 改版）使用：battery|propulsion|vibration|stability|events|gps|compass|ekf
 // 教師正式診斷主機（:8040）使用：propulsion|battery|positioning|stability|rc_signal|flight_mode|altitude_control|sensors
+// 教師主機若仍送舊卡（rc_signal / flight_mode / altitude_control / sensors），這些不在新八卡內：
+//   console 明確記錄，對應新卡位顯示 ⚪ 未檢測，待教師主機同步新八卡契約。
 // 兩套命名皆為「已知且刻意的契約」，此處僅做顯式橋接（非雙 key 掩蓋漂移）：
 //   未知 id 仍回傳 null 並明確記錄，不靜默丟棄。
 const CARD_ID_CANONICAL = {
-  propulsion: "propulsion",
   battery: "battery",
-  positioning: "gps",
-  gps: "gps",
+  propulsion: "propulsion",
+  vibration: "vibration",
   stability: "stability",
-  "rc-signal": "rc-signal",
-  rc_signal: "rc-signal",
-  "flight-mode": "flight-mode",
-  flight_mode: "flight-mode",
-  altitude: "altitude",
-  altitude_control: "altitude",
-  sensors: "sensors",
+  events: "events",
+  gps: "gps",
+  positioning: "gps",
+  compass: "compass",
+  ekf: "ekf",
 };
 
 function canonicalCardId(rawId) {
@@ -1243,7 +1292,8 @@ function renderGrowthCard() {
   if (!container) return;
 
   const data = AppState.diagnosisData;
-  const overallMeta = getStatusMeta(data?.overall_status || "normal");
+  // 2026-11-01 修復：整體狀態在 student_view 內；讀不到時必須是「未檢測」，絕不預設為健康
+  const overallMeta = getStatusMeta(data?.student_view?.overall_status || data?.overall_status || "unknown");
   const rev = AppState.teacherReview;
 
   // 2026-10-17 修復：成長卡「主要問題」不得硬編碼故障故事（違反本檔 1170 行紀律）。

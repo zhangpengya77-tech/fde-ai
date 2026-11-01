@@ -21,10 +21,13 @@ TYPE_VIBE = 201
 TYPE_GPS = 202
 TYPE_ATT = 203
 TYPE_RCOU = 204
-TYPE_RCIN = 205
 TYPE_MODE = 206
 TYPE_CTUN = 207
-TYPE_BARO = 208
+TYPE_POWR = 209
+TYPE_MAG = 210
+TYPE_XKF4 = 211
+TYPE_ERR = 212
+TYPE_PARM = 213
 
 
 def _fmt_payload(type_id: int, length: int, name: str, fmt: str, labels: str) -> bytes:
@@ -39,12 +42,12 @@ def _frame(type_id: int, payload: bytes) -> bytes:
     return _HEAD + bytes([type_id]) + payload
 
 
-def _fmt_frame(type_id: int, name: str, fmt: str, labels: str) -> bytes:
+def _fmt_frame(type_id: int, name: str, fmt: str, labels: str, struct_fmt: str = "") -> bytes:
     """FMT 定义帧：payload = [ftype][flen][name:4][format:16][labels:64]。
 
     flen = 该消息类型自身的总长度（含 3 字节帧头），供解析器切帧。
     """
-    msg_len = 3 + struct.calcsize("<" + fmt)
+    msg_len = 3 + struct.calcsize("<" + (struct_fmt or fmt))  # DataFlash 字符 N 对应 struct 16s
     return _frame(FMT_TYPE, _fmt_payload(type_id, msg_len, name, fmt, labels))
 
 
@@ -54,84 +57,82 @@ def _msg_frame(type_id: int, fmt: str, values: tuple) -> bytes:
     return _frame(type_id, payload)
 
 
-# 八卡规则全部有对应消息：BAT / VIBE / GPS / ATT / RCOU / RCIN / MODE / CTUN / BARO
-def build_sample(healthy: bool = True, count: int = 40) -> bytes:
-    out = bytearray()
+# 2026-11-01 八卡改版：样本具备真实时间轴（地面待机 → 起飞悬停 → 降落），
+# 覆盖八卡所需消息：BAT / POWR / RCOU / CTUN / VIBE / ATT / ERR / GPS / MODE / MAG / XKF4 / PARM。
+# healthy=False 时刻意制造各卡危险特征，用于验证规则真实生效。
+def build_sample(healthy: bool = True, count: int = 30, hz: int = 5) -> bytes:
+    """count = 日志秒数；hz = 采样率。"""
+    import math
 
-    # FMT 定义（自描述，真实帧头 0xA3 0x95 0x80）
-    out += _fmt_frame(TYPE_BAT, "BAT", "Qfff", "TimeUS,Vol,Curr,Pct")
-    out += _fmt_frame(TYPE_VIBE, "VIBE", "QfffB", "TimeUS,VibeX,VibeY,VibeZ,Clip")
-    out += _fmt_frame(TYPE_GPS, "GPS", "QBff", "TimeUS,NSats,HDop,Status")
+    out = bytearray()
+    out += _fmt_frame(TYPE_PARM, "PARM", "QNf", "TimeUS,Name,Value", "Q16sf")
+    out += _fmt_frame(TYPE_BAT, "BAT", "Qfff", "TimeUS,Volt,Curr,RemPct")
+    out += _fmt_frame(TYPE_POWR, "POWR", "Qf", "TimeUS,Vcc")
+    out += _fmt_frame(TYPE_VIBE, "VIBE", "QBfffI", "TimeUS,IMU,VibeX,VibeY,VibeZ,Clip")
+    out += _fmt_frame(TYPE_GPS, "GPS", "QBBf", "TimeUS,Status,NSats,HDop")
     out += _fmt_frame(TYPE_ATT, "ATT", "Qffffff", "TimeUS,DesRoll,Roll,DesPitch,Pitch,DesYaw,Yaw")
     out += _fmt_frame(TYPE_RCOU, "RCOU", "QHHHH", "TimeUS,C1,C2,C3,C4")
-    out += _fmt_frame(TYPE_RCIN, "RCIN", "QHHHH", "TimeUS,C1,C2,C3,C4")
     out += _fmt_frame(TYPE_MODE, "MODE", "QBBB", "TimeUS,Mode,ModeNum,Rsn")
-    out += _fmt_frame(TYPE_CTUN, "CTUN", "Qfffff", "TimeUS,ThrOut,DAlt,Alt,BAlt")
-    out += _fmt_frame(TYPE_BARO, "BARO", "Qff", "TimeUS,Alt,Press")
+    out += _fmt_frame(TYPE_CTUN, "CTUN", "Qff", "TimeUS,ThO,Alt")
+    out += _fmt_frame(TYPE_MAG, "MAG", "QBfff", "TimeUS,I,MagX,MagY,MagZ")
+    out += _fmt_frame(TYPE_XKF4, "XKF4", "QBfffff", "TimeUS,C,SV,SP,SH,SM,SVT")
+    out += _fmt_frame(TYPE_ERR, "ERR", "QBB", "TimeUS,Subsys,ECode")
 
-    for i in range(count):
-        t = i * 1000000
+    def name16(n):
+        return n.encode("ascii").ljust(16, b"\x00")
+
+    out += _msg_frame(TYPE_PARM, "Q16sf", (1, name16("MOT_PWM_MIN"), 1000.0))
+    out += _msg_frame(TYPE_PARM, "Q16sf", (1, name16("MOT_PWM_MAX"), 2000.0))
+    out += _msg_frame(TYPE_MODE, "QBBB", (1, 5, 5, 1))  # LOITER（需要 GPS 的模式）
+
+    n = count * hz
+    takeoff = 2 * hz
+    landing = n - 3 * hz if healthy else n + 1   # 危险样本：日志在空中中断
+    clip = 0
+    err_written = False
+    for i in range(n):
+        t = 1_000_000 + i * (1_000_000 // hz)
+        sec = i / hz
+        flying = takeoff <= i < landing
+        wave = math.sin(sec * 0.8)             # 油门起伏，供磁干扰估算
         if healthy:
-            vol = 15.8 - (i % 5) * 0.02      # ~15.7-15.8V
-            pct = 92.0 - (i % 5) * 0.5
-            vx = 0.3 + (i % 3) * 0.05
-            vy = 0.25 + (i % 3) * 0.04
-            vz = 0.2 + (i % 2) * 0.05
-            clip = 0
-            sats = 13
-            hdop = 0.8
-            roll = 0.5 + (i % 3) * 0.1
-            desroll = 0.5
-            pitch = -0.2 + (i % 2) * 0.1
-            despitch = -0.2
-            yaw = 90.0 + (i % 4) * 0.2
-            desyaw = 90.0
-            # 动力均衡：四通道命令接近（极差 < 200）
-            c1 = 1450 + (i % 7) * 10
-            c2 = 1452 + (i % 5) * 10
-            c3 = 1448 + (i % 6) * 10
-            c4 = 1451 + (i % 4) * 10
-            # 遥控正常带 1000~2000 内
-            rc1, rc2, rc3, rc4 = 1500, 1505, 1000, 1995
-            mode, modenum = 5, 5          # LOITER
-            dalt = alt = 12.0 + (i % 3) * 0.05   # 定高一致
-            baro_alt = alt + 0.02
+            base = 1500 + 90 * wave if flying else 1000
+            c = [base + 6, base - 4, base + 3, base - 5]
+            vol = (16.4 - 0.03 * sec) if flying else 16.6
+            vcc = 5.05 + 0.02 * ((i % 3) - 1)
+            vib = 9.0 + 3.0 * abs(wave) if flying else 0.5
+            status, sats, hdop = 3, 14, 0.8
+            droll, roll = 1.0 * wave, 1.0 * wave + 0.6
+            dpitch, pitch = -0.5, -0.1
+            thr = (base - 1000) / 1000
+            mag = 450.0 + 5.0 * thr
+            var = 0.1 + 0.05 * abs(wave)
         else:
-            vol = 9.8 + (i % 3) * 0.15        # 危险低电压（低于 10.5V 危险阈值）
-            pct = 12.0
-            vx = 3.4                          # 振动危险
-            vy = 3.2
-            vz = 2.9
-            clip = 1
-            sats = 3                          # 定位危险
-            hdop = 3.5
-            roll = 18.0 + (i % 3)
-            desroll = 0.5
-            pitch = 12.0
-            despitch = -0.2
-            yaw = 90.0 + (i % 5) * 4.0
-            desyaw = 90.0
-            # 动力不均衡：C2 持续偏低（极差 > 200 检查阈值）
-            c1 = 1500
-            c2 = 1250
-            c3 = 1498
-            c4 = 1501
-            # 遥控越界：C4 跌出正常带（失控保护迹象）
-            rc1, rc2, rc3, rc4 = 1500, 1505, 1000, 850
-            mode, modenum = 5, 5
-            dalt = 12.0                        # 定高与气压高度偏差 5m（> 3m 阈值）
-            alt = 7.0 + (i % 3) * 0.05
-            baro_alt = 12.02
-
-        out += _msg_frame(TYPE_BAT, "Qfff", (t, vol, 0.0, pct))
-        out += _msg_frame(TYPE_VIBE, "QfffB", (t, vx, vy, vz, clip))
-        out += _msg_frame(TYPE_GPS, "QBff", (t, sats, hdop, 3))
-        out += _msg_frame(TYPE_ATT, "Qffffff", (t, desroll, roll, despitch, pitch, desyaw, yaw))
-        out += _msg_frame(TYPE_RCOU, "QHHHH", (t, int(c1), int(c2), int(c3), int(c4)))
-        out += _msg_frame(TYPE_RCIN, "QHHHH", (t, rc1, rc2, rc3, rc4))
-        out += _msg_frame(TYPE_MODE, "QBBB", (t, mode, modenum, 1))
-        out += _msg_frame(TYPE_CTUN, "Qfffff", (t, 1450.0, dalt, alt, 12.0, 0.0))
-        out += _msg_frame(TYPE_BARO, "Qff", (t, baro_alt, 98500.0))
+            base = 1520 + 90 * wave if flying else 1000
+            c = [base + 10, base - 230, base + 5, base + 8]  # M2 持续偏低
+            vol = (15.6 - 0.15 * sec) if flying else 16.0      # 带载跌到 ~3.2V/片
+            vcc = 4.5 if 10 * hz <= i < 14 * hz else 5.0
+            vib = 68.0 if flying else 0.5
+            if flying and i % hz == 0:
+                clip += 1                                     # Clip 持续增长
+            status, sats, hdop = 3, 4, 3.2
+            droll, roll = 0.0, 15.0 + wave if flying else 0.0
+            dpitch, pitch = 0.0, 0.0
+            thr = (base - 1000) / 1000
+            mag = 420.0 + 300.0 * thr                         # 磁场随油门剧烈变化
+            var = 0.95 if flying else 0.1
+        out += _msg_frame(TYPE_RCOU, "QHHHH", (t, *[int(x) for x in c]))
+        out += _msg_frame(TYPE_BAT, "Qfff", (t, vol, 12.0 if flying else 0.5, 80.0))
+        out += _msg_frame(TYPE_POWR, "Qf", (t, vcc))
+        out += _msg_frame(TYPE_VIBE, "QBfffI", (t, 0, vib * 0.8, vib * 0.9, vib, clip))
+        out += _msg_frame(TYPE_GPS, "QBBf", (t, status, sats, hdop))
+        out += _msg_frame(TYPE_ATT, "Qffffff", (t, droll, roll, dpitch, pitch, 90.0, 90.0))
+        out += _msg_frame(TYPE_CTUN, "Qff", (t, thr, 5.0 if flying else 0.0))
+        out += _msg_frame(TYPE_MAG, "QBfff", (t, 0, mag * 0.6, mag * 0.0, mag * 0.8))
+        out += _msg_frame(TYPE_XKF4, "QBfffff", (t, 0, var, var, var * 0.5, var * 0.5, var * 0.3))
+        if not healthy and not err_written and sec >= 20:
+            out += _msg_frame(TYPE_ERR, "QBB", (t, 6, 1))     # 电池失效保护
+            err_written = True
 
     return bytes(out)
 

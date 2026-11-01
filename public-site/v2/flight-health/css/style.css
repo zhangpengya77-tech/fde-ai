@@ -637,6 +637,42 @@ body {
   margin-bottom: 8px;
 }
 
+/* 2026-11-01 八卡改版：檢查項目副標題 / 實測最差值 / 關鍵項標籤 / 燈號邊框 */
+.card-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -4px 0 6px 0;
+  line-height: 1.4;
+}
+
+.card-critical-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  color: #00c2ff;
+  border: 1px solid rgba(0, 194, 255, 0.45);
+}
+
+.card-metric {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 194, 255, 0.06);
+  overflow-wrap: anywhere;
+}
+
+.health-card[data-status="status-stop"] { border-left: 4px solid #ff5c73; }
+.health-card[data-status="status-inspect"] { border-left: 4px solid #fb923c; }
+.health-card[data-status="status-normal"] { border-left: 4px solid #35e6a8; }
+.health-card[data-status="status-unassessed"] { border-left: 4px solid #94a3b8; }
+
 /* 2026-10-16：缺資料原因（灰色卡上明示缺哪項必要數據） */
 .card-missing-reason {
   font-size: 12px;

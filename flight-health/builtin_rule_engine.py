@@ -22,6 +22,9 @@ FDE Flight Health — 系统内建飞行健康规则引擎 (Built-in Rule Engine
 
 from __future__ import annotations
 
+import bisect
+import math
+import statistics
 import struct
 from dataclasses import dataclass, field
 
@@ -42,59 +45,73 @@ _FMT_CHARS = {
     "n": ("4s", 4, None), "N": ("16s", 16, None), "Z": ("64s", 64, None), "a": ("64s", 64, None),
 }
 
-# 四色语义
+# 四色语义（学员端：🔴 危险不建议飞行 / 🟠 需要检查 / 🟢 健康 / ⚪ 未检测≠正常）
 S_NORMAL = "normal"
 S_INSPECT = "inspect"
 S_DANGER = "danger"
 S_UNKNOWN = "unknown"
 
 _STATUS_META = {
-    S_NORMAL: {"display": "通过", "icon": "🟢"},
-    S_INSPECT: {"display": "需要检查", "icon": "🟠"},
-    S_DANGER: {"display": "危险", "icon": "🔴"},
-    S_UNKNOWN: {"display": "无法判断", "icon": "⚪"},
+    S_NORMAL: {"display": "健康", "icon": "🟢"},
+    S_INSPECT: {"display": "需要檢查", "icon": "🟠"},
+    S_DANGER: {"display": "危險，不建議飛行", "icon": "🔴"},
+    S_UNKNOWN: {"display": "未檢測", "icon": "⚪"},
 }
 
 
 # ───────────────────────── 参考安全阈值（可审阅 / 可调整） ─────────────────────────
-# 来源：多旋翼地面检查与常见飞行前隐患排查经验阈值。教师可按机型微调。
+# 2026-11-01 八卡改版：按真实飞控日志实务重排为
+#   电池与供电 / 马达输出 / 振动 / 姿态追踪 / 事件与失效保护 / GPS / 罗盘 / EKF。
+# 阈值参考 ArduPilot 官方 LogAnalyzer 与 Wiki（振动、磁干扰、EKF 失效保护默认值等），
+# 是「起始值」，教师可用本校真实日志再校正。
+# 判定只看「真正在空中」的时段，且超标需持续 sustain_s 秒才算，单一尖峰不算。
 SAFETY_THRESHOLDS = {
+    "flight": {
+        "airborne_throttle_frac": 0.25,  # 四路马达平均输出超过 PWM 行程 25% 视为在空中
+        "takeoff_ignore_s": 2.0,         # 起飞后前 2 秒不评估（起飞瞬态）
+        "landing_ignore_s": 1.0,         # 降落前 1 秒不评估
+    },
+    "sustain_s": 1.0,                    # 超标需持续 ≥1 秒才计入
     "battery": {
-        "vol_min_danger_v": 10.5,    # 满电 4S≈16.8V；低于此视为危险
-        "vol_min_inspect_v": 13.5,   # 低于此提示检查电量/单节
-        "pct_min_inspect": 25,       # 剩余电量低于此提示
+        "cell_inspect_v": 3.5,           # 带载单片最低 < 3.5V → 需要检查
+        "cell_danger_v": 3.3,            # 带载单片最低 < 3.3V → 危险
+        "cell_full_v": 4.25,             # 用于由最高电压估算电芯数
+        "vcc_danger_v": 4.6,             # 飞控供电 Vcc 最低 < 4.6V → 危险
+        "vcc_swing_inspect_v": 0.15,     # 飞控供电波动 > 0.15V → 需要检查
+    },
+    "motor": {
+        "spread_inspect_us": 75.0,       # 四路马达平均输出差 > 75µs → 需要检查
+        "spread_danger_us": 150.0,       # > 150µs → 危险
+        "saturation_frac": 0.95,         # 输出达 PWM 行程 95% 视为顶到最大（饱和）
+        "hover_inspect_frac": 0.60,      # 悬停油门 > 60% → 机体偏重 / 动力不足
+        "yaw_pair_inspect_us": 50.0,     # 对角两组马达平均差 > 50µs → 偏航不平衡
     },
     "vibe": {
-        "max_inspect": 2.0,          # 振动加速度 m/s 超过此提示检查
-        "max_danger": 3.0,           # 超过此视为危险（可能传感器/结构问题）
-        "clip_danger": 1,            # 任一轴发生 clipping 即危险
-    },
-    "gps": {
-        "sats_min_inspect": 7,       # 卫星数低于此提示
-        "sats_min_danger": 4,        # 低于此危险（定位不可靠）
-        "hdop_max_inspect": 2.0,     # HDOP 高于此提示
+        "inspect": 30.0,                 # VIBE m/s² > 30 → 需要检查
+        "danger": 60.0,                  # > 60 → 危险
     },
     "attitude": {
-        "err_inspect_deg": 10.0,     # 姿态指令跟踪误差超过此提示
-        "err_danger_deg": 25.0,      # 超过此危险
+        "err_inspect_deg": 5.0,          # 实际与期望姿态差 > 5° → 需要检查
+        "err_danger_deg": 10.0,          # > 10° → 危险
     },
-    # ── 2026-10-16 新增规则域（阈值与教师诊断主机 D:\FDE-Flight-Health-AI 对齐）──
-    "motor": {
-        # 动力输出均衡度：RCOU 四通道平均命令的极差。
-        # 与教师诊断主机 basic_rules.py 的 MOTOR_COMMAND_SPREAD 一致。
-        "spread_max_inspect": 200.0,
+    "gps": {
+        "sats_inspect": 8,
+        "sats_danger": 6,
+        "hdop_inspect": 1.4,
+        "hdop_danger": 2.0,
     },
-    "rc": {
-        # 遥控输入 PWM 正常带（正常行程 1000~2000，留容差）。
-        "min_normal": 900.0,
-        "max_normal": 2100.0,
+    "compass": {
+        "interf_inspect_pct": 30.0,      # 磁干扰（油门 0→100% 外推）> 30% → 需要检查
+        "interf_danger_pct": 60.0,       # > 60% → 危险
+        "field_min": 120.0,              # 磁场强度合理范围（mGauss）
+        "field_max": 600.0,
+        "min_throttle_span": 0.10,       # 油门变化不足 10% 时无法估算磁干扰
     },
-    "altitude": {
-        # 气压高度（BARO）与飞控定高（CTUN）交叉核对容差（米）。
-        "cross_check_max_inspect_m": 3.0,
+    "ekf": {
+        "var_inspect": 0.5,              # EKF 方差 > 0.5 → 需要检查
+        "var_danger": 0.8,               # ≥ 0.8（ArduPilot FS_EKF_THRESH 默认）→ 危险
     },
 }
-
 
 @dataclass
 class _MsgSchema:
@@ -220,413 +237,623 @@ def parse_bin_log(data: bytes):
     return messages
 
 
-# ───────────────────────── 规则判断 ─────────────────────────
+# ───────────────────────── 飞行时段与通用工具 ─────────────────────────
 
-def _rule_battery(messages):
-    vols, pcts = [], []
-    for name, rec in messages:
-        if name != "BAT":
-            continue
-        # 真实日志 BAT 电压字段名为 Volt（旧样本为 Vol），电量百分比为 RemPct（旧样本为 Pct）
-        v = rec.get("Vol")
-        if v is None:
-            v = rec.get("Volt")
-        if isinstance(v, (int, float)):
-            vols.append(float(v))
-        p = rec.get("Pct")
-        if p is None:
-            p = rec.get("RemPct")
-        if isinstance(p, (int, float)):
-            pcts.append(float(p))
-    if not vols:
-        return S_UNKNOWN, "日志中未找到电池电压字段，无法判断电量健康。"
-    vmin = min(vols)
+# ArduCopter 需要 GPS 的飞行模式编号（Loiter / RTL / Auto / PosHold 等）
+GPS_MODES = {3, 4, 5, 6, 7, 11, 16, 17, 18, 19, 21, 23, 24, 27}
+
+# ArduCopter ERR 子系统（Subsys）中文名；ECode=0 代表「已恢复」，不计入
+ERR_SUBSYS = {
+    1: "主程式", 2: "遙控接收", 3: "羅盤", 4: "光流", 5: "遙控失效保護", 6: "電池失效保護",
+    7: "GPS 失效保護", 8: "地面站失效保護", 9: "電子圍欄", 10: "飛行模式切換", 11: "GPS",
+    12: "墜機偵測", 13: "翻滾", 14: "自動調參", 15: "降落傘", 16: "EKF 檢查",
+    17: "EKF 失效保護", 18: "氣壓計", 19: "CPU", 20: "ADSB 失效保護", 21: "地形",
+    22: "導航", 23: "地形失效保護", 24: "EKF 主核心切換", 25: "推力不足", 26: "感測器失效保護",
+    27: "漏水失效保護", 28: "遙控輸入", 29: "振動失效保護", 30: "內部錯誤", 31: "航位推算失效保護",
+}
+# 出现即视为危险的子系统（失效保护 / 坠机 / 推力不足 / 内部错误）
+ERR_DANGER = {5, 6, 7, 8, 12, 17, 25, 26, 29, 30, 31}
+
+
+def _num(v):
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)) else None
+
+
+def _fmt_t(t):
+    return f"第 {t:.0f} 秒" if t is not None else "時間未知"
+
+
+class _Ctx:
+    """一次分析的共享上下文：按消息名分组、参数、PWM 行程、飞行时段。"""
+
+    def __init__(self, messages):
+        self.by = {}
+        for name, rec in messages:
+            self.by.setdefault(name, []).append(rec)
+        times = [_num(r.get("TimeUS")) for _, r in messages]
+        times = [t for t in times if t is not None and t > 0]
+        self.t0 = min(times) if times else 0.0
+
+        self.params = {}
+        for rec in self.by.get("PARM", []):
+            n, v = rec.get("Name"), _num(rec.get("Value"))
+            if isinstance(n, str) and v is not None:
+                self.params[n] = v
+        pmin = self.params.get("MOT_PWM_MIN") or self.params.get("RC3_MIN") or 1000.0
+        pmax = self.params.get("MOT_PWM_MAX") or self.params.get("RC3_MAX") or 2000.0
+        if pmax - pmin < 200:
+            pmin, pmax = 1000.0, 2000.0
+        self.pwm_min, self.pwm_max = pmin, pmax
+
+        # 马达输出时间序列（只取 C1~C4，Quad-X）
+        self.rcou = []
+        for rec in self.by.get("RCOU", []):
+            t = self.t(rec)
+            ch = [_num(rec.get(f"C{i}")) for i in range(1, 5)]
+            if t is not None and all(c is not None for c in ch):
+                self.rcou.append((t, ch))
+        self.rcou.sort(key=lambda x: x[0])
+        self._rcou_t = [t for t, _ in self.rcou]
+
+        # 在空中的时段：四路平均输出超过行程 25%
+        th = pmin + SAFETY_THRESHOLDS["flight"]["airborne_throttle_frac"] * (pmax - pmin)
+        self.segments = []
+        start = prev = None
+        for t, ch in self.rcou:
+            flying = sum(ch) / 4 > th
+            if flying and start is None:
+                start = t
+            if not flying and start is not None:
+                self.segments.append((start, prev))
+                start = None
+            prev = t
+        self.ended_in_air = start is not None
+        if start is not None:
+            self.segments.append((start, prev))
+        self.has_flight = bool(self.segments)
+        fl = SAFETY_THRESHOLDS["flight"]
+        self.trimmed = [(a + fl["takeoff_ignore_s"], b - fl["landing_ignore_s"])
+                        for a, b in self.segments if b - a > fl["takeoff_ignore_s"] + fl["landing_ignore_s"]]
+        self.flight_seconds = sum(b - a for a, b in self.segments)
+
+    def t(self, rec):
+        v = _num(rec.get("TimeUS"))
+        return (v - self.t0) / 1e6 if v is not None else None
+
+    def airborne(self, t, trimmed=True):
+        """t 是否在空中；未侦测到飞行时（无 RCOU）退回全程评估。"""
+        if not self.rcou:
+            return True
+        segs = self.trimmed if trimmed and self.trimmed else self.segments
+        return any(a <= t <= b for a, b in segs)
+
+    def throttle_at(self, t):
+        if not self.rcou:
+            return None
+        i = max(0, bisect.bisect_right(self._rcou_t, t) - 1)
+        avg = sum(self.rcou[i][1]) / 4
+        return (avg - self.pwm_min) / (self.pwm_max - self.pwm_min)
+
+    def series(self, name, getter, trimmed=True, names=None):
+        """取 (t, value) 序列，只保留在空中的样本。"""
+        out = []
+        for n in (names or (name,)):
+            for rec in self.by.get(n, []):
+                t = self.t(rec)
+                v = getter(rec)
+                if t is None or v is None:
+                    continue
+                if self.airborne(t, trimmed):
+                    out.append((t, v))
+        out.sort(key=lambda x: x[0])
+        return out
+
+    def scope_note(self):
+        if not self.rcou:
+            return "（無馬達輸出紀錄，以全程資料評估）"
+        return ""
+
+
+def _sustained(series, pred, min_s=None, max_gap=2.0):
+    """最长「连续满足 pred」的持续时间（秒）与起点时间。单一尖峰持续 0 秒。"""
+    min_s = SAFETY_THRESHOLDS["sustain_s"] if min_s is None else min_s
+    best, best_t, start, prev = -1.0, None, None, None
+    for t, v in series:
+        if prev is not None and t - prev > max_gap:
+            start = None
+        if pred(v):
+            if start is None:
+                start = t
+            if t - start > best:
+                best, best_t = t - start, start
+        else:
+            start = None
+        prev = t
+    return best >= min_s, max(best, 0.0), best_t
+
+
+def _result(status, finding, metric="", evidence=None, action=None, missing=None):
+    return {"status": status, "finding": finding, "metric": metric,
+            "evidence": evidence or {}, "action": action, "missing": missing}
+
+
+def _unknown(missing, finding=None):
+    return _result(S_UNKNOWN, finding or f"本次日誌{missing}，這一項未檢測。未檢測不代表正常。",
+                   metric="未檢測", missing=missing)
+
+
+# ───────────────────────── 八项规则 ─────────────────────────
+
+def _rule_battery(ctx):
+    """01 电池与供电：带载最低单片电压 + 飞控 Vcc。"""
     th = SAFETY_THRESHOLDS["battery"]
-    if vmin < th["vol_min_danger_v"]:
-        return S_DANGER, f"电池最低电压 {vmin:.2f}V 过低，存在放电风险，禁止起飞。"
-    if vmin < th["vol_min_inspect_v"] or (pcts and min(pcts) < th["pct_min_inspect"]):
-        return S_INSPECT, f"电池最低电压 {vmin:.2f}V 偏低，建议充满后再飞。"
-    return S_NORMAL, f"电池电压稳定（最低 {vmin:.2f}V），电量充足。"
+    get_v = lambda r: _num(r.get("Volt")) if r.get("Volt") is not None else _num(r.get("Vol"))
+    all_v = [get_v(r) for r in ctx.by.get("BAT", []) + ctx.by.get("CURR", [])]
+    all_v = [v for v in all_v if v is not None and v > 0.5]
+    if not all_v:
+        return _unknown("沒有電池電壓（BAT）紀錄，通常是沒接電源模組或沒設定 BATT_MONITOR")
+
+    vmax = max(all_v)
+    mot_vmax = ctx.params.get("MOT_BAT_VOLT_MAX") or 0
+    cells = round(mot_vmax / 4.2) if mot_vmax > 4 else max(1, math.ceil(vmax / th["cell_full_v"]))
+    vs = ctx.series("BAT", get_v, trimmed=False, names=("BAT", "CURR"))
+    vs = [(t, v) for t, v in vs if v > 0.5] or [(None, v) for v in all_v]
+    t_min, v_min = min(vs, key=lambda x: x[1])
+    cell_min = v_min / cells
+    cell_series = [(t, v / cells) for t, v in vs if t is not None]
+    danger, d_dur, d_t = _sustained(cell_series, lambda c: c < th["cell_danger_v"])
+    inspect, _, _ = _sustained(cell_series, lambda c: c < th["cell_inspect_v"])
+
+    ev = {"cells_estimated": cells, "volt_max": round(vmax, 2), "volt_min_in_flight": round(v_min, 2),
+          "cell_min_v": round(cell_min, 3)}
+    notes = []
+    status = S_NORMAL
+    if danger:
+        status = S_DANGER
+        notes.append(f"帶載時單片電壓低於 {th['cell_danger_v']}V 持續 {d_dur:.1f} 秒（{_fmt_t(d_t)}），電池已過放")
+    elif inspect:
+        status = S_INSPECT
+        notes.append(f"帶載時單片電壓低於 {th['cell_inspect_v']}V，電量偏低或電池老化")
+
+    vcc = ctx.series("POWR", lambda r: _num(r.get("Vcc")), trimmed=False)
+    if vcc:
+        vmin_cc = min(v for _, v in vcc)
+        swing = max(v for _, v in vcc) - vmin_cc
+        ev.update({"vcc_min": round(vmin_cc, 3), "vcc_swing": round(swing, 3)})
+        if vmin_cc < th["vcc_danger_v"]:
+            status = S_DANGER
+            notes.append(f"飛控供電最低 {vmin_cc:.2f}V，有斷電重啟風險")
+        elif swing > th["vcc_swing_inspect_v"] and status == S_NORMAL:
+            status = S_INSPECT
+            notes.append(f"飛控供電波動 {swing:.2f}V，電源模組或接線可能不穩")
+
+    metric = f"最低 {cell_min:.2f}V/片（{cells}S 共 {v_min:.1f}V）· {_fmt_t(t_min)}"
+    if vcc:
+        metric += f" · 飛控 {ev['vcc_min']:.2f}V"
+    if status == S_NORMAL:
+        finding = f"電池電壓正常，帶載最低 {cell_min:.2f}V/片{ctx.scope_note()}。"
+    else:
+        finding = "；".join(notes) + "。"
+    return _result(status, finding, metric, ev,
+                   action="充飽電再飛；檢查電池是否鼓包老化、電源模組與 XT60 接線，並確認電源模組已校準。")
 
 
-def _rule_vibration(messages):
-    peaks = []
-    clip = False
-    for name, rec in messages:
-        if name != "VIBE":
-            continue
-        for ax in ("VibeX", "VibeY", "VibeZ"):
-            if ax in rec and isinstance(rec[ax], (int, float)):
-                peaks.append(abs(float(rec[ax])))
-        if "Clip" in rec and float(rec["Clip"]) > 0:
-            clip = True
-    if not peaks:
-        return S_UNKNOWN, "日志中未找到振动字段，无法判断机体振动。"
-    vmax = max(peaks)
+def _rule_motor(ctx):
+    """02 马达输出（电机）：四路输出均衡度、饱和、悬停油门、对角偏航不平衡。"""
+    th = SAFETY_THRESHOLDS["motor"]
+    if not ctx.rcou:
+        return _unknown("沒有馬達輸出（RCOU）紀錄")
+    if not ctx.has_flight:
+        return _unknown("沒有偵測到起飛（馬達輸出一直未達飛行油門）")
+    samples = [(t, ch) for t, ch in ctx.rcou if ctx.airborne(t)]
+    if not samples:
+        samples = [(t, ch) for t, ch in ctx.rcou if ctx.airborne(t, trimmed=False)]
+    avgs = [sum(ch[i] for _, ch in samples) / len(samples) for i in range(4)]
+    spread = max(avgs) - min(avgs)
+    # 离其余三颗最远的那颗：偏低 = 其余在补偿它；偏高 = 它在多出力
+    med = statistics.median(avgs)
+    odd_i = max(range(4), key=lambda i: abs(avgs[i] - med))
+    odd = odd_i + 1
+    odd_desc = (f"M{odd} 一直在多出力" if avgs[odd_i] > med
+                else f"M{odd} 輸出明顯偏低（其他馬達在幫它補償）")
+    # ArduCopter Quad-X：M1、M2 为 CCW，M3、M4 为 CW
+    yaw_diff = (avgs[0] + avgs[1]) / 2 - (avgs[2] + avgs[3]) / 2
+    sat_level = ctx.pwm_min + th["saturation_frac"] * (ctx.pwm_max - ctx.pwm_min)
+    sat = []
+    for i in range(4):
+        hit, dur, t = _sustained([(t, ch[i]) for t, ch in samples], lambda v: v >= sat_level)
+        if hit:
+            sat.append((i + 1, dur, t))
+    hover = None
+    thos = ctx.series("CTUN", lambda r: _num(r.get("ThO")))
+    if thos:
+        hover = statistics.median(v for _, v in thos)
+    else:
+        hover = statistics.median((sum(ch) / 4 - ctx.pwm_min) / (ctx.pwm_max - ctx.pwm_min) for _, ch in samples)
+
+    ev = {"motor_avg": {f"M{i+1}": round(a) for i, a in enumerate(avgs)}, "spread_us": round(spread, 1),
+          "yaw_pair_diff_us": round(yaw_diff, 1), "hover_throttle": round(hover, 3),
+          "saturated": [f"M{m}" for m, _, _ in sat], "pwm_range": [ctx.pwm_min, ctx.pwm_max]}
+    notes = []
+    status = S_NORMAL
+    if sat:
+        status = S_DANGER
+        m, dur, t = sat[0]
+        notes.append(f"M{m} 輸出頂到最大持續 {dur:.1f} 秒（{_fmt_t(t)}），飛控已沒有餘力控制")
+    if spread > th["spread_danger_us"]:
+        status = S_DANGER
+        notes.append(f"四顆馬達輸出相差 {spread:.0f}µs，{odd_desc}")
+    elif spread > th["spread_inspect_us"]:
+        status = S_DANGER if status == S_DANGER else S_INSPECT
+        notes.append(f"四顆馬達輸出相差 {spread:.0f}µs，{odd_desc}")
+    pair_split = (min(avgs[0], avgs[1]) > max(avgs[2], avgs[3])
+                  or min(avgs[2], avgs[3]) > max(avgs[0], avgs[1]))
+    if abs(yaw_diff) > th["yaw_pair_inspect_us"] and pair_split:
+        status = S_DANGER if status == S_DANGER else S_INSPECT
+        pair = "M1/M2（逆時針）" if yaw_diff > 0 else "M3/M4（順時針）"
+        notes.append(f"對角 {pair} 一起偏高 {abs(yaw_diff):.0f}µs，可能馬達座歪或槳裝錯，造成偏航不平衡")
+    if hover > th["hover_inspect_frac"]:
+        status = S_DANGER if status == S_DANGER else S_INSPECT
+        notes.append(f"懸停油門 {hover:.0%}，機體偏重或動力不足")
+
+    detail = " / ".join(f"M{i+1} {a:.0f}" for i, a in enumerate(avgs))
+    metric = f"{detail} · 差 {spread:.0f}µs · 懸停油門 {hover:.0%}"
+    finding = ("；".join(notes) + "。") if notes else f"四顆馬達輸出平衡（最大差 {spread:.0f}µs），懸停油門 {hover:.0%}。"
+    return _result(status, finding, metric, ev,
+                   action=f"拆槳檢查 M{odd}：槳葉正反與裂痕、馬達軸與軸承、電調與焊點、馬達座是否歪斜，最後確認重心。")
+
+
+def _rule_vibration(ctx):
+    """03 振动：VIBE X/Y/Z（m/s²）与 Clip 计数增长。"""
     th = SAFETY_THRESHOLDS["vibe"]
-    if clip or vmax > th["max_danger"]:
-        return S_DANGER, f"机体振动峰值 {vmax:.2f} 过高或发生 clipping，检查桨叶/马达/机架。"
-    if vmax > th["max_inspect"]:
-        return S_INSPECT, f"机体振动峰值 {vmax:.2f} 偏高，建议检查桨叶动平衡与机架松动。"
-    return S_NORMAL, f"机体振动正常（峰值 {vmax:.2f}）。"
+    if not ctx.by.get("VIBE"):
+        return _unknown("沒有振動（VIBE）紀錄")
+    def peak(r):
+        vals = [_num(r.get(a)) for a in ("VibeX", "VibeY", "VibeZ")]
+        vals = [abs(v) for v in vals if v is not None]
+        return max(vals) if vals else None
+
+    vib = ctx.series("VIBE", peak)
+    if not vib:
+        return _unknown("在空中時段沒有振動數據")
+    # Clip 为累计计数：同一 IMU 首尾差 > 0 即发生过削顶
+    clip_growth = 0
+    by_imu = {}
+    for rec in ctx.by["VIBE"]:
+        key = rec.get("IMU", 0)
+        for f in ("Clip", "Clip0", "Clip1", "Clip2"):
+            v = _num(rec.get(f))
+            if v is not None:
+                lo, hi = by_imu.get((key, f), (v, v))
+                by_imu[(key, f)] = (min(lo, v), max(hi, v))
+    clip_growth = int(sum(hi - lo for lo, hi in by_imu.values()))
+    t_max, v_max = max(vib, key=lambda x: x[1])
+    danger, d_dur, d_t = _sustained(vib, lambda v: v > th["danger"])
+    inspect, i_dur, i_t = _sustained(vib, lambda v: v > th["inspect"])
+    ev = {"vibe_max": round(v_max, 2), "vibe_median": round(statistics.median(v for _, v in vib), 2),
+          "clip_growth": clip_growth}
+    metric = f"最大 {v_max:.1f} m/s² · {_fmt_t(t_max)} · Clip +{clip_growth}"
+    action = "檢查飛控減震墊、槳葉動平衡與裂痕、馬達螺絲與機架是否鬆動。"
+    if clip_growth > 0:
+        return _result(S_DANGER, f"加速度計發生削頂（Clip 增加 {clip_growth} 次），飛控讀到的數據失真，可能突然竄升或失控。",
+                       metric, ev, action)
+    if danger:
+        return _result(S_DANGER, f"振動超過 {th['danger']:.0f} m/s² 持續 {d_dur:.1f} 秒（{_fmt_t(d_t)}），定高與定位會失準。",
+                       metric, ev, action)
+    if inspect:
+        return _result(S_INSPECT, f"振動超過 {th['inspect']:.0f} m/s² 持續 {i_dur:.1f} 秒（{_fmt_t(i_t)}），建議處理後再飛。",
+                       metric, ev, action)
+    return _result(S_NORMAL, f"振動正常（最大 {v_max:.1f} m/s²，未發生削頂）{ctx.scope_note()}。", metric, ev, action)
 
 
-def _rule_gps(messages):
-    sats, hdops = [], []
-    for name, rec in messages:
-        if name not in ("GPS", "GPS2"):
-            continue
-        if "NSats" in rec and isinstance(rec["NSats"], (int, float)):
-            sats.append(float(rec["NSats"]))
-        elif "Sat" in rec and isinstance(rec["Sat"], (int, float)):
-            sats.append(float(rec["Sat"]))
-        if "HDop" in rec and isinstance(rec["HDop"], (int, float)):
-            hdops.append(float(rec["HDop"]))
-    if not sats:
-        return S_UNKNOWN, "日志中未找到 GPS 卫星数，无法判断定位健康。"
-    smin = min(sats)
-    th = SAFETY_THRESHOLDS["gps"]
-    if smin < th["sats_min_danger"]:
-        return S_DANGER, f"GPS 卫星数最低仅 {int(smin)} 颗，定位不可靠，禁止依赖定高/返航。"
-    if smin < th["sats_min_inspect"] or (hdops and max(hdops) > th["hdop_max_inspect"]):
-        return S_INSPECT, f"GPS 卫星数偏低（最低 {int(smin)} 颗），悬停/返航前确认定位稳定。"
-    return S_NORMAL, f"GPS 定位正常（最少 {int(smin)} 颗星）。"
-
-
-def _rule_attitude(messages):
-    errs = []
-    for name, rec in messages:
-        if name != "ATT":
-            continue
-        for d, a in (("DesRoll", "Roll"), ("DesPitch", "Pitch"), ("DesYaw", "Yaw")):
-            if d in rec and a in rec:
-                try:
-                    errs.append(abs(float(rec[a]) - float(rec[d])))
-                except (TypeError, ValueError):
-                    pass
-    if not errs:
-        return S_UNKNOWN, "日志中未找到姿态跟踪字段，无法判断姿态控制。"
-    emax = max(errs)
+def _rule_attitude(ctx):
+    """04 姿态追踪：Roll/Pitch 实际 vs 期望（不看 Yaw，避免 0/360 跳变误判）。"""
     th = SAFETY_THRESHOLDS["attitude"]
-    if emax > th["err_danger_deg"]:
-        return S_DANGER, f"姿态指令跟踪误差最大 {emax:.1f}°，控制异常，需检修。"
-    if emax > th["err_inspect_deg"]:
-        return S_INSPECT, f"姿态指令跟踪误差 {emax:.1f}° 偏大，建议校准与检查。"
-    return S_NORMAL, f"姿态控制跟踪良好（最大误差 {emax:.1f}°）。"
+    if not ctx.by.get("ATT"):
+        return _unknown("沒有姿態（ATT）紀錄")
+
+    def err(r):
+        vals = []
+        for d, a in (("DesRoll", "Roll"), ("DesPitch", "Pitch")):
+            dv, av = _num(r.get(d)), _num(r.get(a))
+            if dv is not None and av is not None:
+                vals.append(abs(av - dv))
+        return max(vals) if vals else None
+
+    s = ctx.series("ATT", err)
+    if not s:
+        return _unknown("在空中時段沒有姿態追蹤數據")
+    t_max, e_max = max(s, key=lambda x: x[1])
+    danger, d_dur, d_t = _sustained(s, lambda v: v > th["err_danger_deg"])
+    inspect, i_dur, i_t = _sustained(s, lambda v: v > th["err_inspect_deg"])
+    ev = {"att_err_max_deg": round(e_max, 2), "att_err_median_deg": round(statistics.median(v for _, v in s), 2)}
+    metric = f"最大偏差 {e_max:.1f}° · {_fmt_t(t_max)}"
+    action = "先排除馬達、振動、槳葉問題，再做低空復測；仍不穩才請老師檢查 PID 參數。"
+    if danger:
+        return _result(S_DANGER, f"實際姿態和飛控想要的姿態差超過 {th['err_danger_deg']:.0f}° 持續 {d_dur:.1f} 秒（{_fmt_t(d_t)}），飛機控制不住。",
+                       metric, ev, action)
+    if inspect:
+        return _result(S_INSPECT, f"姿態偏差超過 {th['err_inspect_deg']:.0f}° 持續 {i_dur:.1f} 秒（{_fmt_t(i_t)}），姿態跟不太上。",
+                       metric, ev, action)
+    return _result(S_NORMAL, f"姿態追蹤良好（最大偏差 {e_max:.1f}°）{ctx.scope_note()}。", metric, ev, action)
 
 
-# ── 2026-10-16 新增：补齐原本恒 UNKNOWN 的四张卡（规则语义与教师诊断主机一致）──
-
-def _rule_motor(messages):
-    """01 动力健康：RCOU 四通道电机输出命令均衡度。
-
-    原 CARD_DEFS 误用 _rule_battery（动力卡看电池电压）；本规则对齐教师诊断主机
-    basic_rules.py 的 MOTOR 规则（平均命令极差 > 200 → 检查）。
-    """
-    sums = {ch: 0.0 for ch in ("C1", "C2", "C3", "C4")}
-    counts = {ch: 0 for ch in ("C1", "C2", "C3", "C4")}
-    for name, rec in messages:
-        if name != "RCOU":
+def _rule_events(ctx):
+    """05 事件与失效保护：ERR 错误事件 + 日志是否在空中中断。"""
+    events = []
+    for rec in ctx.by.get("ERR", []):
+        sub, code = _num(rec.get("Subsys")), _num(rec.get("ECode"))
+        if sub is None or code is None or code == 0:
             continue
-        for ch in sums:
-            v = rec.get(ch)
-            if isinstance(v, (int, float)):
-                sums[ch] += float(v)
-                counts[ch] += 1
-    if min(counts.values()) == 0:
-        return S_UNKNOWN, "缺少 RCOU 电机输出命令记录，无法判断动力输出是否均衡。"
-    avgs = {ch: sums[ch] / counts[ch] for ch in sums}
-    spread = max(avgs.values()) - min(avgs.values())
-    th = SAFETY_THRESHOLDS["motor"]["spread_max_inspect"]
-    detail = " / ".join(f"{ch}≈{v:.0f}" for ch, v in avgs.items())
-    if spread > th:
-        return S_INSPECT, (
-            f"四路电机输出命令差值达 {spread:.0f}（{detail}），动力输出不均衡，"
-            "飞控可能在持续补偿某一侧，建议检查桨叶、马达与电调。"
-        )
-    return S_NORMAL, f"四路电机输出命令均衡（最大差值 {spread:.0f}，{detail}）。"
+        events.append((ctx.t(rec), int(sub), int(code)))
+    danger = [e for e in events if e[1] in ERR_DANGER or (e[1] == 16 and e[2] == 2)]
+    other = [e for e in events if e not in danger]
+    names = lambda es: "、".join(f"{ERR_SUBSYS.get(s, f'子系統{s}')}（{_fmt_t(t)}）" for t, s, _ in es[:4])
+    ev = {"errors": [{"t_s": round(t, 1) if t is not None else None, "subsys": s,
+                      "name": ERR_SUBSYS.get(s, ""), "ecode": c} for t, s, c in events],
+          "ended_in_air": ctx.ended_in_air}
+    metric = f"{len(events)} 個錯誤事件" + (" · 日誌在空中中斷" if ctx.ended_in_air else "")
+    action = "把錯誤事件時間點對照其他卡片；失效保護或墜機事件一律先找老師確認再飛。"
+    notes = []
+    status = S_NORMAL
+    if danger:
+        status = S_DANGER
+        notes.append(f"觸發 {names(danger)}")
+    if ctx.ended_in_air:
+        status = S_DANGER
+        notes.append("日誌在馬達仍在飛行輸出時突然結束，可能是空中斷電或墜機")
+    if other and status == S_NORMAL:
+        status = S_INSPECT
+    if other:
+        notes.append(f"另有 {names(other)} 等錯誤紀錄")
+    if status == S_NORMAL:
+        extra = "" if ctx.rcou else "（無馬達輸出紀錄，無法檢查是否空中斷電）"
+        return _result(S_NORMAL, f"沒有失效保護、墜機或錯誤事件{extra}。", metric, ev, action)
+    return _result(status, "；".join(notes) + "。", metric, ev, action)
 
 
-def _rule_rc(messages):
-    """05 遥控信号：RCIN 四通道 PWM 是否全程落在正常带内。"""
-    chans = {ch: [] for ch in ("C1", "C2", "C3", "C4")}
-    for name, rec in messages:
-        if name != "RCIN":
-            continue
-        for ch in chans:
-            v = rec.get(ch)
-            if isinstance(v, (int, float)):
-                chans[ch].append(float(v))
-    if not any(chans.values()):
-        return S_UNKNOWN, "缺少 RCIN 遥控输入通道记录，无法判断遥控信号。"
-    th = SAFETY_THRESHOLDS["rc"]
-    out_of_range = []
-    for ch, vals in chans.items():
-        if vals and (min(vals) < th["min_normal"] or max(vals) > th["max_normal"]):
-            out_of_range.append(f"{ch}（{min(vals):.0f}~{max(vals):.0f}）")
-    if out_of_range:
-        return S_INSPECT, (
-            f"遥控通道数值越出正常带（{th['min_normal']:.0f}~{th['max_normal']:.0f}）："
-            f"{'、'.join(out_of_range)}，可能触发失控保护或存在信号干扰。"
-        )
-    return S_NORMAL, "遥控输入四通道全程处于正常范围，未见失控保护触发迹象。"
+def _rule_gps(ctx):
+    """06 GPS 定位：定位类型、卫星数、HDOP；严重度随飞行模式调整。"""
+    th = SAFETY_THRESHOLDS["gps"]
+    names = ("GPS", "GPS2")
+    if not any(ctx.by.get(n) for n in names):
+        return _unknown("沒有 GPS 紀錄")
+    rows = ctx.series("GPS", lambda r: (_num(r.get("Status")), _num(r.get("NSats")), _num(r.get("HDop"))),
+                      trimmed=False, names=names)
+    rows = [(t, v) for t, v in rows if v[1] is not None]
+    if not rows:
+        return _unknown("在空中時段沒有 GPS 衛星數紀錄")
+    modes = {int(m) for m in (_num(r.get("ModeNum")) if r.get("ModeNum") is not None else _num(r.get("Mode"))
+                              for r in ctx.by.get("MODE", [])) if m is not None}
+    gps_needed = bool(modes & GPS_MODES) or not modes
+
+    def bad(v, sats, hdop):
+        st, ns, hd = v
+        return (st is not None and st < 3) or ns < sats or (hd is not None and hd > hdop)
+
+    danger, d_dur, d_t = _sustained(rows, lambda v: bad(v, th["sats_danger"], th["hdop_danger"]))
+    inspect, i_dur, i_t = _sustained(rows, lambda v: bad(v, th["sats_inspect"], th["hdop_inspect"]))
+    sats_min = int(min(v[1] for _, v in rows))
+    hdops = [v[2] for _, v in rows if v[2] is not None]
+    hdop_max = max(hdops) if hdops else None
+    ev = {"sats_min": sats_min, "hdop_max": round(hdop_max, 2) if hdop_max is not None else None,
+          "modes_used": sorted(modes), "gps_mode_used": bool(modes & GPS_MODES)}
+    metric = f"最少 {sats_min} 顆星" + (f" · HDOP 最高 {hdop_max:.1f}" if hdop_max is not None else "")
+    action = "到開闊處等 GPS 穩定（10 顆星以上）再起飛；檢查 GPS 是否離電源線太近。"
+    if danger:
+        msg = f"定位品質不足（3D 定位丟失、衛星少於 {th['sats_danger']} 顆或 HDOP 高於 {th['hdop_danger']}）持續 {d_dur:.1f} 秒（{_fmt_t(d_t)}）"
+        if gps_needed:
+            return _result(S_DANGER, msg + "，定點與返航不可靠。", metric, ev, action)
+        return _result(S_INSPECT, msg + "；本次只用了自穩/定高模式，暫列需要檢查，切勿使用定點或返航。", metric, ev, action)
+    if inspect:
+        return _result(S_INSPECT, f"定位品質偏弱持續 {i_dur:.1f} 秒（{_fmt_t(i_t)}），使用定點或返航前要確認。", metric, ev, action)
+    return _result(S_NORMAL, f"GPS 定位穩定（最少 {sats_min} 顆星）。", metric, ev, action)
 
 
-def _rule_mode(messages):
-    """06 飞行模式：MODE 记录存在且模式编号有效。"""
-    modes = []
-    for name, rec in messages:
-        if name != "MODE":
-            continue
-        mn = rec.get("ModeNum")
-        if mn is None:
-            mn = rec.get("Mode")
-        if isinstance(mn, (int, float)):
-            modes.append(int(mn))
-    if not modes:
-        return S_UNKNOWN, "缺少 MODE 飞行模式记录，无法判断飞行模式使用情况。"
-    bad = [m for m in modes if m < 0 or m > 30]
-    if bad:
-        return S_INSPECT, f"飞行模式编号出现无效值（{bad[:3]}），日志可能不完整，请教师复核。"
-    distinct = sorted(set(modes))
-    return S_NORMAL, (
-        f"飞行模式记录正常（共 {len(modes)} 次模式记录，使用 {len(distinct)} 种模式）。"
-    )
+def _rule_compass(ctx):
+    """07 罗盘 / 磁干扰：磁场强度范围 + 随油门变化（外推到 0→100% 油门）。"""
+    th = SAFETY_THRESHOLDS["compass"]
+    if not ctx.by.get("MAG"):
+        return _unknown("沒有羅盤（MAG）紀錄")
+
+    def field(r):
+        if r.get("I") not in (None, 0):
+            return None
+        xs = [_num(r.get(a)) for a in ("MagX", "MagY", "MagZ")]
+        return math.sqrt(sum(x * x for x in xs)) if all(x is not None for x in xs) else None
+
+    s = ctx.series("MAG", field, trimmed=False)
+    if not s:
+        return _unknown("在空中時段沒有羅盤數據")
+    f_med = statistics.median(v for _, v in s)
+    ev = {"field_median_mGauss": round(f_med, 1)}
+    status, notes = S_NORMAL, []
+    if not th["field_min"] <= f_med <= th["field_max"]:
+        status = S_INSPECT
+        notes.append(f"磁場強度 {f_med:.0f} 超出合理範圍（{th['field_min']:.0f}~{th['field_max']:.0f}），可能沒校準或附近有鐵件")
+
+    pairs = [(ctx.throttle_at(t), v) for t, v in s]
+    pairs = [(a, b) for a, b in pairs if a is not None]
+    interf = None
+    if len(pairs) >= 8:
+        thr = sorted(a for a, _ in pairs)
+        lo_cut, hi_cut = thr[len(thr) // 4], thr[3 * len(thr) // 4]
+        lo = [(a, b) for a, b in pairs if a <= lo_cut]
+        hi = [(a, b) for a, b in pairs if a >= hi_cut]
+        span = statistics.mean(a for a, _ in hi) - statistics.mean(a for a, _ in lo)
+        if span >= th["min_throttle_span"]:
+            f_lo = statistics.median(b for _, b in lo)
+            f_hi = statistics.median(b for _, b in hi)
+            interf = abs(f_hi - f_lo) / span / max(f_lo, 1.0) * 100
+            ev["interference_pct"] = round(interf, 1)
+    if interf is not None and interf > th["interf_danger_pct"]:
+        status = S_DANGER
+        notes.append(f"磁干擾約 {interf:.0f}%，羅盤被馬達電流嚴重干擾，可能繞圈或飛走")
+    elif interf is not None and interf > th["interf_inspect_pct"]:
+        status = S_DANGER if status == S_DANGER else S_INSPECT
+        notes.append(f"磁干擾約 {interf:.0f}%，偏高")
+
+    metric = f"磁場 {f_med:.0f} mG" + (f" · 磁干擾 {interf:.0f}%" if interf is not None else " · 油門變化不足，未估算磁干擾")
+    action = "把 GPS 羅盤架高、遠離電源線與電調，確認箭頭朝機頭，再重做羅盤校準。"
+    if notes:
+        return _result(status, "；".join(notes) + "。", metric, ev, action)
+    tail = "" if interf is not None else "（本次油門變化太小，磁干擾未估算）"
+    return _result(S_NORMAL, f"羅盤磁場正常{tail}。", metric, ev, action)
 
 
-def _rule_altitude(messages):
-    """07 高度控制：BARO 气压高度与 CTUN 飞控定高交叉核对。"""
-    baro, ctun = [], []
-    for name, rec in messages:
-        if name == "BARO" and isinstance(rec.get("Alt"), (int, float)):
-            baro.append(float(rec["Alt"]))
-        if name == "CTUN" and isinstance(rec.get("Alt"), (int, float)):
-            ctun.append(float(rec["Alt"]))
-    if not baro or not ctun:
-        missing = "BARO 气压高度" if not baro else "CTUN 飞控定高"
-        return S_UNKNOWN, f"缺少 {missing} 数据，无法交叉验证高度控制。"
-    import statistics
-    diff = abs(statistics.median(baro) - statistics.median(ctun))
-    th = SAFETY_THRESHOLDS["altitude"]["cross_check_max_inspect_m"]
-    if diff > th:
-        return S_INSPECT, (
-            f"气压高度与飞控定高偏差达 {diff:.1f}m（阈值 {th:.0f}m），"
-            "高度数据来源不一致，可能气压计或定高异常，请教师复核。"
-        )
-    return S_NORMAL, f"气压高度与飞控定高一致（偏差 {diff:.1f}m），高度控制正常。"
+def _rule_ekf(ctx):
+    """08 EKF 位置估算：XKF4（EKF3）/ NKF4（EKF2）各项方差。"""
+    th = SAFETY_THRESHOLDS["ekf"]
+    names = ("XKF4", "NKF4")
+    if not any(ctx.by.get(n) for n in names):
+        return _unknown("沒有 EKF 方差（XKF4/NKF4）紀錄")
+
+    def var(r):
+        vals = [_num(r.get(k)) for k in ("SV", "SP", "SH", "SM", "SMX", "SVT")]
+        vals = [abs(v) for v in vals if v is not None]
+        return max(vals) if vals else None
+
+    s = ctx.series("XKF4", var, trimmed=False, names=names)
+    if not s:
+        return _unknown("在空中時段沒有 EKF 方差數據")
+    t_max, v_max = max(s, key=lambda x: x[1])
+    danger, d_dur, d_t = _sustained(s, lambda v: v >= th["var_danger"])
+    inspect, i_dur, i_t = _sustained(s, lambda v: v > th["var_inspect"])
+    ev = {"variance_max": round(v_max, 3)}
+    metric = f"方差最高 {v_max:.2f} · {_fmt_t(t_max)}"
+    action = "EKF 多半是結果：先看振動、GPS、羅盤三張卡；三者都正常仍異常，請老師深入檢查。"
+    if danger:
+        return _result(S_DANGER, f"EKF 方差達 {th['var_danger']} 以上持續 {d_dur:.1f} 秒（{_fmt_t(d_t)}），飛控不確定自己在哪，會觸發 EKF 失效保護。",
+                       metric, ev, action)
+    if inspect:
+        return _result(S_INSPECT, f"EKF 方差超過 {th['var_inspect']} 持續 {i_dur:.1f} 秒（{_fmt_t(i_t)}），感測器之間說法不一致。",
+                       metric, ev, action)
+    return _result(S_NORMAL, f"EKF 位置估算穩定（方差最高 {v_max:.2f}）。", metric, ev, action)
 
 
-# 学员端固定 8 张健康卡：与前端 health_cards_grid 的 id 一一对应
-# 2026-10-16：propulsion 由误挂的 _rule_battery 改为 _rule_motor（动力看电机输出命令，
-# 与教师诊断主机 MOTOR 规则一致）；rc-signal / flight-mode / altitude 补齐真实规则。
+# 学员端固定 8 张健康卡（按优先级排序）：与前端 health-cards-grid 的 DOM id 一一对应。
+# critical=True 为关键项：关键项「未检测」时，总结论不得显示健康。
 CARD_DEFS = [
-    ("propulsion", "01 动力健康", _rule_motor),
-    ("battery", "02 电池健康", _rule_battery),
-    ("gps", "03 定位健康", _rule_gps),
-    ("stability", "04 姿态稳定", _rule_attitude),
-    ("rc-signal", "05 遥控信号", _rule_rc),
-    ("flight-mode", "06 飞行模式", _rule_mode),
-    ("altitude", "07 高度控制", _rule_altitude),
-    ("sensors", "08 传感器", _rule_vibration),
+    ("battery", "01 電池與供電", "電池電壓（每片電芯）＋飛控供電", True, "BAT-01", _rule_battery),
+    ("propulsion", "02 馬達輸出（電機）", "四顆馬達輸出平衡、飽和、懸停油門", True, "MOT-01", _rule_motor),
+    ("vibration", "03 振動", "機體振動與加速度計削頂", True, "VIB-01", _rule_vibration),
+    ("stability", "04 姿態追蹤", "實際姿態 vs 飛控期望姿態", True, "ATT-01", _rule_attitude),
+    ("events", "05 事件與失效保護", "錯誤、失效保護、墜機、空中斷電", True, "EVT-01", _rule_events),
+    ("gps", "06 GPS 定位", "定位類型、衛星數、HDOP（看飛行模式）", False, "GPS-01", _rule_gps),
+    ("compass", "07 羅盤／磁干擾", "磁場強度與馬達電流干擾", False, "MAG-01", _rule_compass),
+    ("ekf", "08 EKF 位置估算", "飛控「位置裁判」的方差", False, "EKF-01", _rule_ekf),
 ]
 
-_SEVERITY = {S_UNKNOWN: 0, S_NORMAL: 1, S_INSPECT: 2, S_DANGER: 3}
-
-
-# ── 八卡统一 API 契约（2026-10-16）──────────────────────────────────────────
-# 每张卡固定输出：card_id / title / status / display_status / main_finding /
-# next_action / rule_id / missing_reason（UNKNOWN 时）；evidence 供教师层查核。
-# next_action 文案与教师诊断主机 result_views.py 的八卡文案保持一致。
-CARD_CONTRACT = {
-    "propulsion": {"rule_id": "MOT-01", "next_action": "先检查桨叶，再检查马达、电调、接线和重心。", "required": ("RCOU",)},
-    "battery": {"rule_id": "BAT-01", "next_action": "确认电池节数、电量、电源模块校准和接线。", "required": ("BAT",)},
-    "gps": {"rule_id": "GPS-01", "next_action": "到开阔区域复测，并由教师查看定位证据。", "required": ("GPS", "GPS2")},
-    "stability": {"rule_id": "ATT-01", "next_action": "先检查桨叶、紧固件、马达和飞控减震，再进行低空复测。", "required": ("ATT",)},
-    "rc-signal": {"rule_id": "RC-01", "next_action": "请老师协助检查遥控器、接收机及天线。", "required": ("RCIN",)},
-    "flight-mode": {"rule_id": "MODE-01", "next_action": "请老师协助确认当时的操作条件与飞行模式记录。", "required": ("MODE",)},
-    "altitude": {"rule_id": "ALT-01", "next_action": "由教师结合定高相关证据复核。", "required": ("BARO", "CTUN")},
-    "sensors": {"rule_id": "VIB-01", "next_action": "请老师协助查看传感器与状态估计证据。", "required": ("VIBE",)},
+# 每卡读取的日志消息类型（教师抽屉「实际命中消息」）
+CARD_SOURCES = {
+    "battery": ("BAT", "CURR", "POWR"), "propulsion": ("RCOU", "CTUN", "PARM"), "vibration": ("VIBE",),
+    "stability": ("ATT",), "events": ("ERR", "RCOU"), "gps": ("GPS", "GPS2", "MODE"),
+    "compass": ("MAG", "RCOU"), "ekf": ("XKF4", "NKF4"),
 }
 
-
-def _card_evidence(card_id: str, messages):
-    """教师查核证据：该卡判断依据的原始字段与实测数值（学员视图不可见）。"""
-    ev = {}
-    if card_id == "propulsion":
-        sums, counts = {}, {}
-        for name, rec in messages:
-            if name != "RCOU":
-                continue
-            for ch in ("C1", "C2", "C3", "C4"):
-                v = rec.get(ch)
-                if isinstance(v, (int, float)):
-                    sums[ch] = sums.get(ch, 0.0) + float(v)
-                    counts[ch] = counts.get(ch, 0) + 1
-        if counts:
-            ev["channel_avg"] = {ch: round(sums[ch] / counts[ch], 1) for ch in sums}
-            ev["spread"] = round(max(ev["channel_avg"].values()) - min(ev["channel_avg"].values()), 1)
-    elif card_id == "battery":
-        vols = []
-        pcts = []
-        for n, r in messages:
-            if n != "BAT":
-                continue
-            v = r.get("Vol")
-            if v is None:
-                v = r.get("Volt")
-            if isinstance(v, (int, float)):
-                vols.append(float(v))
-            p = r.get("Pct")
-            if p is None:
-                p = r.get("RemPct")
-            if isinstance(p, (int, float)):
-                pcts.append(float(p))
-        if vols:
-            ev["volt_min"] = round(min(vols), 3)
-            ev["volt_max"] = round(max(vols), 3)
-        if pcts:
-            ev["pct_min"] = round(min(pcts), 1)
-    elif card_id == "gps":
-        sats = [float(r["NSats"]) for n, r in messages if n in ("GPS", "GPS2") and isinstance(r.get("NSats"), (int, float))]
-        hdops = [float(r["HDop"]) for n, r in messages if n in ("GPS", "GPS2") and isinstance(r.get("HDop"), (int, float))]
-        if sats:
-            ev["sats_min"] = int(min(sats))
-        if hdops:
-            ev["hdop_max"] = round(max(hdops), 2)
-    elif card_id == "stability":
-        errs = []
-        for n, r in messages:
-            if n != "ATT":
-                continue
-            for d, a in (("DesRoll", "Roll"), ("DesPitch", "Pitch"), ("DesYaw", "Yaw")):
-                if d in r and a in r:
-                    try:
-                        errs.append(abs(float(r[a]) - float(r[d])))
-                    except (TypeError, ValueError):
-                        pass
-        if errs:
-            ev["att_err_max_deg"] = round(max(errs), 2)
-    elif card_id == "rc-signal":
-        chans = {}
-        for n, r in messages:
-            if n != "RCIN":
-                continue
-            for ch in ("C1", "C2", "C3", "C4"):
-                v = r.get(ch)
-                if isinstance(v, (int, float)):
-                    chans.setdefault(ch, []).append(float(v))
-        if chans:
-            ev["channel_range"] = {ch: [round(min(v)), round(max(v))] for ch, v in chans.items()}
-    elif card_id == "flight-mode":
-        modes = [int(r["ModeNum"]) for n, r in messages if n == "MODE" and isinstance(r.get("ModeNum"), (int, float))]
-        if modes:
-            ev["mode_records"] = len(modes)
-            ev["distinct_modes"] = sorted(set(modes))
-    elif card_id == "altitude":
-        baro = [float(r["Alt"]) for n, r in messages if n == "BARO" and isinstance(r.get("Alt"), (int, float))]
-        ctun = [float(r["Alt"]) for n, r in messages if n == "CTUN" and isinstance(r.get("Alt"), (int, float))]
-        if baro and ctun:
-            import statistics
-            ev["baro_median_m"] = round(statistics.median(baro), 2)
-            ev["ctun_median_m"] = round(statistics.median(ctun), 2)
-            ev["cross_diff_m"] = round(abs(ev["baro_median_m"] - ev["ctun_median_m"]), 2)
-    elif card_id == "sensors":
-        peaks = [abs(float(r[ax])) for n, r in messages if n == "VIBE"
-                 for ax in ("VibeX", "VibeY", "VibeZ") if isinstance(r.get(ax), (int, float))]
-        clips = sum(1 for n, r in messages if n == "VIBE" and float(r.get("Clip", 0) or 0) > 0)
-        if peaks:
-            ev["vibe_peak_max"] = round(max(peaks), 3)
-        ev["clip_count"] = clips
-    return ev
+_SEVERITY = {S_UNKNOWN: 0, S_NORMAL: 1, S_INSPECT: 2, S_DANGER: 3}
+_NORMAL_ACTION = "按標準飛前檢查繼續觀察。"
 
 
 def analyze(file_bytes: bytes, filename: str = "", aircraft_name: str = "", training_task: str = ""):
-    """对 .bin 日志做真实解析与规则判断。
+    """对 .bin 日志做真实解析与规则判断（八卡统一契约）。
 
-    返回与前端 student_view 对齐的结构化结果（八卡统一契约）。
+    每卡输出：card_id / title / subtitle / critical / status / display_status /
+    main_finding / metric / next_action / rule_id / evidence / missing_reason（UNKNOWN 时）。
     安全约束：绝不返回伪造结果；数据不足时对应卡为 UNKNOWN 并说明缺哪项数据。
     """
     messages = parse_bin_log(file_bytes)
+    present = {n for n, _ in messages}
 
-    def _card(cid, title, status, finding):
-        """统一八卡契约：无论 status 如何，字段齐全、绝不出现 undefined。"""
-        contract = CARD_CONTRACT[cid]
-        ev = _card_evidence(cid, messages)
-        found = sorted({n for n, _ in messages if n in contract["required"]})
+    def _card(cid, title, subtitle, critical, rule_id, res):
+        status = res["status"]
         card = {
             "card_id": cid,
             "title": title,
+            "subtitle": subtitle,
+            "critical": critical,
             "status": status,
             "display_status": _STATUS_META[status]["display"],
-            "main_finding": finding,
-            "next_action": contract["next_action"],
-            "rule_id": contract["rule_id"],
-            "evidence": ev,
-            "evidence_found_types": found,
+            "main_finding": res["finding"],
+            "metric": res["metric"],
+            "next_action": _NORMAL_ACTION if status == S_NORMAL else (res["action"] or "請老師協助確認。"),
+            "rule_id": rule_id,
+            "evidence": res["evidence"],
+            "evidence_found_types": sorted(n for n in CARD_SOURCES.get(cid, ()) if n in present),
         }
         if status == S_UNKNOWN:
-            missing = [t for t in contract["required"] if t not in found]
-            card["missing_reason"] = (
-                f"本次日志中未找到 {'、'.join(missing)} 数据" if missing
-                else "该卡所需字段在日志中记录不完整"
-            )
+            card["missing_reason"] = res["missing"] or "該卡所需欄位在日誌中記錄不完整"
+            card["next_action"] = "下次飛行前確認飛控有記錄這項資料，再重新分析。"
         return card
 
     if not messages:
         return {
             "overall_status": S_UNKNOWN,
-            "display_status": "无法判断",
-            "main_finding": "未能从日志解析出任何有效数据，请确认文件为完整的 ArduPilot DataFlash .bin。",
-            "next_action": "重新导出飞行日志，或联系教师确认日志来源。",
-            "health_cards": [_card(cid, title, S_UNKNOWN, "数据缺失，无法判断。") for cid, title, _ in CARD_DEFS],
+            "display_status": "無法判定",
+            "main_finding": "未能從日誌解析出任何有效數據，請確認文件為完整的 ArduPilot DataFlash .bin。未檢測不代表正常。",
+            "next_action": "重新導出飛行日誌，或聯繫教師確認日誌來源。",
+            "health_cards": [_card(cid, t, sub, crit, rid, _unknown("無法解析"))
+                             for cid, t, sub, crit, rid, _ in CARD_DEFS],
             "engine": "builtin_rule_engine",
             "parsed_message_count": 0,
         }
 
+    ctx = _Ctx(messages)
     cards = []
-    worst = S_NORMAL
-    for cid, title, rule in CARD_DEFS:
-        status, finding = rule(messages)
-        worst = worst if _SEVERITY[worst] >= _SEVERITY[status] else status
-        cards.append(_card(cid, title, status, finding))
+    for cid, title, sub, crit, rid, rule in CARD_DEFS:
+        try:
+            res = rule(ctx)
+        except Exception as exc:  # 单卡异常不得拖垮整份报告，也不得伪装成健康
+            res = _unknown(f"分析這一項時發生錯誤（{type(exc).__name__}）")
+        cards.append(_card(cid, title, sub, crit, rid, res))
 
-    # 全部卡片均无法判断时，整体不得报「良好」（避免把无数据说成健康）
-    if all(c["status"] == S_UNKNOWN for c in cards):
-        worst = S_UNKNOWN
-
-    overall = worst
+    overall = _overall_status(cards)
     return {
         "overall_status": overall,
-        "display_status": _STATUS_META[overall]["display"],
-        "main_finding": _overall_finding(overall, cards, messages),
+        "display_status": "無法判定" if overall == S_UNKNOWN else _STATUS_META[overall]["display"],
+        "main_finding": _overall_finding(overall, cards),
         "next_action": _next_action(overall),
         "health_cards": cards,
+        "flight_seconds": round(ctx.flight_seconds, 1),
         "engine": "builtin_rule_engine",
-        "engine_display": "系统标准规则",
+        "engine_display": "系統標準規則",
         "parsed_message_count": len(messages),
     }
 
 
-def _overall_finding(overall, cards, messages):
+def _overall_status(cards):
+    """总结论：任一危险 → 危险；关键项未检测 → 无法判定；任一需检查 → 需要检查；否则健康。"""
+    if any(c["status"] == S_DANGER for c in cards):
+        return S_DANGER
+    if any(c["critical"] and c["status"] == S_UNKNOWN for c in cards):
+        return S_UNKNOWN
+    if any(c["status"] == S_INSPECT for c in cards):
+        return S_INSPECT
+    return S_NORMAL
+
+
+def _overall_finding(overall, cards):
+    pick = lambda st, crit=None: [c["title"] for c in cards
+                                  if c["status"] == st and (crit is None or c["critical"] == crit)]
     if overall == S_DANGER:
-        danger = [c["title"] for c in cards if c["status"] == S_DANGER]
-        return f"检测到危险项：{', '.join(danger)}。请先排除后再考虑起飞。"
+        return f"檢測到危險項：{'、'.join(pick(S_DANGER))}。不建議飛行，請先排除並由老師確認。"
+    if overall == S_UNKNOWN:
+        return f"關鍵項未檢測：{'、'.join(pick(S_UNKNOWN, True))}。未檢測不代表正常，無法給出健康結論。"
+    gray = pick(S_UNKNOWN)
+    tail = f"（{'、'.join(gray)} 未檢測，不代表正常）" if gray else ""
     if overall == S_INSPECT:
-        insp = [c["title"] for c in cards if c["status"] == S_INSPECT]
-        return f"存在需检查项：{', '.join(insp)}。建议按提示排查后再飞。"
-    if overall == S_NORMAL:
-        return "整体飞行健康状态良好，未见明显隐患。"
-    return "部分数据缺失，无法完整判断，建议结合教师端专业资料层复核。"
+        return f"需要檢查：{'、'.join(pick(S_INSPECT))}。可以飛，但下次起飛前要先處理{tail}。"
+    return f"本次日誌未發現異常{tail}。"
 
 
 def _next_action(overall):
     if overall == S_DANGER:
-        return "先处理危险项，确认无误后再重新体检。"
+        return "先處理紅色危險項，修好後重新飛一次並上傳新日誌確認。"
+    if overall == S_UNKNOWN:
+        return "補齊缺少的資料（例如接上電源模組、插好 SD 卡）後重新分析。"
     if overall == S_INSPECT:
-        return "按提示依次排查动力/电池/定位/振动，再重新体检。"
-    if overall == S_NORMAL:
-        return "可进行下一步手感回饋与教师复校。"
-    return "补充完整日志后重新体检。"
+        return "按橘色卡片的提示依序排查，再重新體檢。"
+    return "可進行下一步手感回饋與教師複核。"
 
 
 if __name__ == "__main__":

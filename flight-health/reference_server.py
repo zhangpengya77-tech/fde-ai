@@ -60,6 +60,10 @@ def _student_view_from_analysis(analysis: dict, filename: str) -> dict:
             "main_finding": card.get("main_finding", ""),
             "next_action": card.get("next_action", "请由教师复核确认下一步。"),
             "rule_id": card.get("rule_id", ""),
+            # 2026-11-01：学员卡片显示「检查什么」与「实测最差值」
+            "subtitle": card.get("subtitle", ""),
+            "metric": card.get("metric", ""),
+            "critical": bool(card.get("critical", False)),
         }
         if card.get("status") == "unknown":
             sv_card["missing_reason"] = card.get("missing_reason", "数据缺失，无法判断。")

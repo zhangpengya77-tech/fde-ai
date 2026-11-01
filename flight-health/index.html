@@ -155,16 +155,16 @@
         <div id="safety-alerts-list" class="safety-alerts-list"></div>
       </div>
 
-      <!-- 八項健康卡（學員層固定 8 張、雙列四行）：絕不出現 PWM / PID / EKF / HDOP / 原始規則編號 -->
+      <!-- 八項健康卡（學員層固定 8 張、雙列四行，依實務優先順序）：🔴 危險不建議飛行 / 🟠 需要檢查 / 🟢 健康 / ⚪ 未檢測≠正常 -->
       <div class="health-cards-grid">
-        <div id="propulsion-card" class="health-card"></div>
-        <div id="battery-card" class="health-card"></div>
-        <div id="gps-card" class="health-card"></div>
-        <div id="stability-card" class="health-card"></div>
-        <div id="rc-signal-card" class="health-card"></div>
-        <div id="flight-mode-card" class="health-card"></div>
-        <div id="altitude-card" class="health-card"></div>
-        <div id="sensors-card" class="health-card"></div>
+        <div id="battery-card" class="health-card" data-title="01 電池與供電"></div>
+        <div id="propulsion-card" class="health-card" data-title="02 馬達輸出（電機）"></div>
+        <div id="vibration-card" class="health-card" data-title="03 振動"></div>
+        <div id="stability-card" class="health-card" data-title="04 姿態追蹤"></div>
+        <div id="events-card" class="health-card" data-title="05 事件與失效保護"></div>
+        <div id="gps-card" class="health-card" data-title="06 GPS 定位"></div>
+        <div id="compass-card" class="health-card" data-title="07 羅盤／磁干擾"></div>
+        <div id="ekf-card" class="health-card" data-title="08 EKF 位置估算"></div>
       </div>
 
       <div class="nav-bottom-bar">

@@ -86,14 +86,105 @@ class TestBuiltinRuleEngineRealParse(unittest.TestCase):
         self.assertEqual(result["overall_status"], bre.S_DANGER)
         by_id = {c["card_id"]: c for c in result["health_cards"]}
         self.assertEqual(by_id["battery"]["status"], bre.S_DANGER)
-        self.assertEqual(by_id["sensors"]["status"], bre.S_DANGER)  # 振动
+        self.assertEqual(by_id["vibration"]["status"], bre.S_DANGER)
         self.assertEqual(by_id["gps"]["status"], bre.S_DANGER)
+        self.assertEqual(by_id["propulsion"]["status"], bre.S_DANGER)
+        self.assertEqual(by_id["stability"]["status"], bre.S_DANGER)
+        self.assertEqual(by_id["events"]["status"], bre.S_DANGER)
+        self.assertEqual(by_id["ekf"]["status"], bre.S_DANGER)
+        self.assertIn("M2", by_id["propulsion"]["main_finding"])
+        self.assertIn("空中", by_id["events"]["main_finding"])
 
     # ── 空 / 损坏文件必须 UNKNOWN，绝不伪造 ──
     def test_empty_file_is_unknown(self):
         result = bre.analyze(b"not a real bin file at all", filename="junk.bin")
         self.assertEqual(result["overall_status"], bre.S_UNKNOWN)
         self.assertEqual(result["parsed_message_count"], 0)
+
+
+class TestEightCardRules(unittest.TestCase):
+    """2026-11-01 八卡改版：电池/马达/振动/姿态/事件/GPS/罗盘/EKF。"""
+
+    CARD_IDS = ["battery", "propulsion", "vibration", "stability", "events", "gps", "compass", "ekf"]
+
+    def test_card_order_and_contract(self):
+        result = bre.analyze(build_sample(healthy=True))
+        self.assertEqual([c["card_id"] for c in result["health_cards"]], self.CARD_IDS)
+        for card in result["health_cards"]:
+            for key in ("title", "subtitle", "status", "display_status", "main_finding",
+                        "metric", "next_action", "rule_id", "critical"):
+                self.assertIn(key, card)
+                self.assertNotEqual(card[key], None)
+
+    def test_healthy_sample_is_all_green(self):
+        result = bre.analyze(build_sample(healthy=True))
+        self.assertEqual(result["overall_status"], bre.S_NORMAL)
+        self.assertEqual(result["display_status"], "健康")
+        for card in result["health_cards"]:
+            self.assertEqual(card["status"], bre.S_NORMAL, card["title"] + card["main_finding"])
+
+    def test_danger_display_says_do_not_fly(self):
+        result = bre.analyze(build_sample(healthy=False))
+        self.assertIn("不建議飛行", result["display_status"])
+
+    def _strip(self, data, drop):
+        """移除指定消息类型的数据帧（保留 FMT），模拟日志缺少该数据。"""
+        msgs = bre.parse_bin_log(data)
+        kept = [(n, r) for n, r in msgs if n not in drop]
+        ctx_result = {}
+        orig = bre.parse_bin_log
+        try:
+            bre.parse_bin_log = lambda _b: kept
+            ctx_result = bre.analyze(b"x")
+        finally:
+            bre.parse_bin_log = orig
+        return ctx_result
+
+    def test_critical_unknown_is_never_green(self):
+        result = self._strip(build_sample(healthy=True), {"BAT", "CURR"})
+        by_id = {c["card_id"]: c for c in result["health_cards"]}
+        self.assertEqual(by_id["battery"]["status"], bre.S_UNKNOWN)
+        self.assertEqual(result["overall_status"], bre.S_UNKNOWN)
+        self.assertIn("未檢測不代表正常", result["main_finding"])
+
+    def test_non_critical_unknown_keeps_green_but_says_so(self):
+        result = self._strip(build_sample(healthy=True), {"XKF4"})
+        self.assertEqual(result["overall_status"], bre.S_NORMAL)
+        self.assertIn("EKF", result["main_finding"])
+
+    def test_gps_bad_without_gps_mode_is_capped_to_inspect(self):
+        msgs = bre.parse_bin_log(build_sample(healthy=True))
+        patched = []
+        for n, r in msgs:
+            r = dict(r)
+            if n == "GPS":
+                r["NSats"], r["HDop"] = 3, 4.0
+            if n == "MODE":
+                r["ModeNum"] = 0  # STABILIZE：不依赖 GPS
+            patched.append((n, r))
+        orig = bre.parse_bin_log
+        try:
+            bre.parse_bin_log = lambda _b: patched
+            result = bre.analyze(b"x")
+        finally:
+            bre.parse_bin_log = orig
+        gps = [c for c in result["health_cards"] if c["card_id"] == "gps"][0]
+        self.assertEqual(gps["status"], bre.S_INSPECT)
+
+    def test_single_spike_is_ignored(self):
+        msgs = bre.parse_bin_log(build_sample(healthy=True))
+        vibe_idx = [i for i, (n, _) in enumerate(msgs) if n == "VIBE"]
+        mid = vibe_idx[len(vibe_idx) // 2]  # 悬停中段的单一尖峰
+        patched = [(n, dict(r, VibeZ=90.0) if i == mid else r) for i, (n, r) in enumerate(msgs)]
+        orig = bre.parse_bin_log
+        try:
+            bre.parse_bin_log = lambda _b: patched
+            result = bre.analyze(b"x")
+        finally:
+            bre.parse_bin_log = orig
+        vib = [c for c in result["health_cards"] if c["card_id"] == "vibration"][0]
+        self.assertEqual(vib["status"], bre.S_NORMAL)
+        self.assertIn("90.0", vib["metric"])  # 最差值仍如实显示
 
 
 if __name__ == "__main__":

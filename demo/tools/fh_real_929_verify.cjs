@@ -32,14 +32,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 學員端八卡：DOM id（與 index.html 一致）＋ 卡片標題
 const CARD_DOM = [
-  ['propulsion-card', '01 动力健康'],
-  ['battery-card', '02 电池健康'],
-  ['gps-card', '03 定位健康'],
-  ['stability-card', '04 姿态稳定'],
-  ['rc-signal-card', '05 遥控信号'],
-  ['flight-mode-card', '06 飞行模式'],
-  ['altitude-card', '07 高度控制'],
-  ['sensors-card', '08 传感器'],
+  ['battery-card', '01 電池與供電'],
+  ['propulsion-card', '02 馬達輸出（電機）'],
+  ['vibration-card', '03 振動'],
+  ['stability-card', '04 姿態追蹤'],
+  ['events-card', '05 事件與失效保護'],
+  ['gps-card', '06 GPS 定位'],
+  ['compass-card', '07 羅盤／磁干擾'],
+  ['ekf-card', '08 EKF 位置估算'],
 ];
 
 function sha256File(file) {
