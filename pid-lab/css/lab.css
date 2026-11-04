@@ -46,7 +46,7 @@ code { background: rgba(255,255,255,.08); padding: 0 4px; border-radius: 4px; }
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px; }
 .eco-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; margin: 12px 0; }
-.eco-card { text-align: left; cursor: pointer; background: var(--bg-card); color: var(--text-main); border: 2px solid var(--border); border-radius: var(--radius); padding: 12px; font: inherit; }
+.eco-card { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; text-align: left; cursor: pointer; background: var(--bg-card); color: var(--text-main); border: 2px solid var(--border); border-radius: var(--radius); padding: 12px; font: inherit; }
 .eco-card[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(22,139,255,.3); }
 .eco-card b { display: block; font-size: 16px; }
 .eco-card small { color: var(--text-muted); display: block; margin-top: 4px; }
