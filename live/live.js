@@ -280,7 +280,9 @@
     return { start, stop, checkFrozen, lastFrameTimestamp: () => lastFrameAt };
   }
 
-  const INTERACTION_TIMEOUTS = Object.freeze({ LISTENING: 15000, TRANSCRIBING: 5000, ASKING: 20000, CAPTURING_FRAME: 3000, VISION_PROCESSING: 20000, SPEAKING: 30000 });
+  // 2026-11-04：ASKING／VISION_PROCESSING 原本 20 秒，後台要跑 V7＋知識庫＋大模型常超過，逾時會主動取消提問、看起來沒反應；
+  // 改成略長於前端等待後台的時間（文字 30 秒、附畫面 45 秒）
+  const INTERACTION_TIMEOUTS = Object.freeze({ LISTENING: 15000, TRANSCRIBING: 5000, ASKING: 32000, CAPTURING_FRAME: 3000, VISION_PROCESSING: 47000, SPEAKING: 30000 });
 
   function createInteractionStateMachine({ onChange = () => {}, onTimeout = () => {}, timeouts = INTERACTION_TIMEOUTS, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout } = {}) {
     let current = 'IDLE';
@@ -1814,6 +1816,8 @@
       if (elements.diagnosticSubmittedQuestion) elements.diagnosticSubmittedQuestion.textContent = question.trim();
       if (elements.diagnosticAskRequest) elements.diagnosticAskRequest.textContent = requestId;
       elements.askAiResponse.textContent = 'AI 正在根據當前步驟查詢教學知識…';
+      // 2026-11-04：學員看得到的 AI 回答框也顯示等待中，避免以為沒反應
+      if (elements.latestAiAnswer) elements.latestAiAnswer.textContent = visual ? 'AI 正在看畫面並思考…（約 5～20 秒）' : 'AI 思考中…（約 5～15 秒）';
       const started = performance.now();
       try {
         const id = await ensureSession();
@@ -1863,6 +1867,8 @@
         else if (error.message === 'camera_not_ready' || error.message === 'camera_frame_required') elements.askAiResponse.textContent = '攝像頭畫面還沒準備好，請稍等一秒再試。';
         else elements.askAiResponse.textContent = visual ? '這次沒有成功讀取畫面，請重新檢查鏡頭後再試。' : 'AI 服務暫時沒有回應，請稍後再試。';
         if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = error.message || error.name;
+        // 2026-11-04：錯誤訊息原本只寫在收合的「更多方式」面板裡，學員看不到；同步顯示在 AI 回答框
+        if (elements.latestAiAnswer) elements.latestAiAnswer.textContent = error.name === 'AbortError' ? '這次提問已中斷，請再說一次。' : elements.askAiResponse.textContent;
         interaction.transition('ERROR', { requestId, interactionId }); interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer();
       } finally {
         if (currentAskController === askController) currentAskController = null;
