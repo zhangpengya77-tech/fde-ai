@@ -34,10 +34,46 @@ class GeneralAIProviderManager:
             # 沿用舊的 GPT 模型名稱設定時不能傳給 Claude
             model = model_override if model_override.startswith("claude-") else DEFAULT_MODEL
             return cls(AnthropicTextProvider(anthropic_key, model=model))
+        # 免費／便宜的通用相容格式服務（Gemini、通義千問、OpenRouter）；排在 OpenAI 前面，
+        # 避免系統裡殘留的舊 OpenAI 金鑰（已失效）搶先被選用
+        compat = cls._compatible_from_environment(choice, model_override)
+        if compat is not None:
+            return cls(compat)
         if openai_key and choice in ("", "openai", "gpt"):
             model = model_override if model_override and not model_override.startswith("claude-") else "gpt-5.6-luna"
             return cls(OpenAITextProvider(openai_key, model=model))
         return cls()
+
+    @staticmethod
+    def _compatible_from_environment(choice: str, model_override: str):
+        """依 FDE_GENERAL_PROVIDER（gemini／qwen／openrouter／compat）或已設定的金鑰建立通用相容格式供應者。
+
+        可用環境變數：FDE_GENERAL_API_KEY（或各服務自己的 GEMINI_API_KEY／DASHSCOPE_API_KEY／OPENROUTER_API_KEY）、
+        FDE_GENERAL_BASE_URL、FDE_GENERAL_MODEL、FDE_GENERAL_VISION_MODEL、FDE_GENERAL_SEND_IMAGES（0＝不傳鏡頭畫面）。
+        """
+        from .provider_openai_compat import PRESETS, OpenAICompatibleProvider
+
+        if choice in PRESETS:
+            names = [choice]
+        elif choice == "compat":
+            names = ["compat"]
+        elif choice == "":
+            names = [name for name, preset in PRESETS.items() if os.environ.get(preset["key_env"], "").strip()]
+        else:
+            return None
+        for name in names:
+            preset = PRESETS.get(name, {"base_url": "", "model": "", "key_env": ""})
+            key = os.environ.get("FDE_GENERAL_API_KEY", "").strip() or os.environ.get(preset["key_env"], "").strip() if preset["key_env"] else os.environ.get("FDE_GENERAL_API_KEY", "").strip()
+            base_url = os.environ.get("FDE_GENERAL_BASE_URL", "").strip() or preset["base_url"]
+            # 舊設定裡的 GPT／Claude 模型名稱不能傳給其他服務
+            model = model_override if model_override and not model_override.startswith(("gpt-", "claude-")) else preset["model"]
+            if not (key and base_url and model):
+                continue
+            send_images = os.environ.get("FDE_GENERAL_SEND_IMAGES", "1").strip().lower() not in ("0", "false", "no", "off")
+            vision_model = os.environ.get("FDE_GENERAL_VISION_MODEL", "").strip() or None
+            return OpenAICompatibleProvider(key, base_url=base_url, model=model, provider_name=name,
+                                            vision_model=vision_model, allow_images=send_images)
+        return None
 
     async def generate(self, **values) -> GeneralAIResult:
         if not self.enabled:
@@ -72,7 +108,7 @@ class GeneralAIProviderManager:
             "configured": self.enabled,
             # 依實際使用的供應者回報（anthropic 或 openai）
             # 未設定時維持舊行為回報 openai（既有健康檢查契約）
-            "provider": "anthropic" if type(provider).__name__ == "AnthropicTextProvider" else "openai",
+            "provider": getattr(provider, "provider_name", None) or ("anthropic" if type(provider).__name__ == "AnthropicTextProvider" else "openai"),
             "model": getattr(provider, "model", "gpt-5.6-luna"),
             "text_enabled": self.enabled,
             "vision_enabled": self.enabled,

@@ -93,3 +93,33 @@ class EagleInspectionAiTutorTests(TestCase):
         client = Client()
         client.force_login(teacher)
         self.assertEqual(self.post({"task": "f450_propeller_check", "motors": motors()}, client=client).status_code, 200)
+
+
+class CompatLlmTests(TestCase):
+    """2026-11-04：Django 端 AI 助教改用免費的通用相容服務（Gemini 等）。"""
+
+    def test_gemini_key_uses_chat_completions(self):
+        from learning import rotation_tutor
+        seen = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return json.dumps({"choices": [{"message": {"content": "M3 要換 CW 槳。"}}]}).encode("utf-8")
+
+        def opener(request, timeout):
+            seen["url"] = request.full_url
+            seen["body"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        env = {"GEMINI_API_KEY": "g-key", "OPENAI_API_KEY": "old", "FDE_GENERAL_MODEL": "gpt-5.6-luna"}
+        with mock.patch.dict("os.environ", env):
+            answer = rotation_tutor.call_llm("說明", {"x": 1}, opener=opener)
+        self.assertEqual(answer, "M3 要換 CW 槳。")
+        self.assertTrue(seen["url"].endswith("/v1beta/openai/chat/completions"))
+        self.assertEqual(seen["body"]["model"], "gemini-3.8-flash")

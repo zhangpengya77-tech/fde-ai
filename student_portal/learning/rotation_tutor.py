@@ -67,8 +67,58 @@ def _extract_output_text(payload):
     return ""
 
 
+# 2026-11-04：免費／便宜的通用相容格式服務（與 Live 後端同一套設定）
+COMPAT_PRESETS = {
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "GEMINI_API_KEY"),
+    "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "qwen3.8-max", "DASHSCOPE_API_KEY"),
+    "openrouter": ("https://openrouter.ai/api/v1", "", "OPENROUTER_API_KEY"),
+}
+
+
+def _compat_config():
+    """回傳 (網址, 模型, 金鑰)；沒設定通用相容服務時回傳 None。規則同 Live 後端 provider_manager。"""
+    choice = os.environ.get("FDE_GENERAL_PROVIDER", "").strip().lower()
+    names = [choice] if choice in COMPAT_PRESETS else ([n for n, p in COMPAT_PRESETS.items() if os.environ.get(p[2], "").strip()] if choice == "" else [])
+    override = os.environ.get("FDE_GENERAL_MODEL", "").strip()
+    for name in names:
+        base, model, key_env = COMPAT_PRESETS[name]
+        key = os.environ.get("FDE_GENERAL_API_KEY", "").strip() or os.environ.get(key_env, "").strip()
+        base = os.environ.get("FDE_GENERAL_BASE_URL", "").strip() or base
+        model = override if override and not override.startswith(("gpt-", "claude-")) else model
+        if key and base and model:
+            return base.rstrip("/"), model, key
+    return None
+
+
+def _call_compat(config, instructions, evidence, opener):
+    """通用相容格式（/chat/completions）呼叫；失敗回傳空字串。"""
+    base, model, key = config
+    body = json.dumps({
+        "model": model,
+        "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)}],
+        "max_tokens": 600,
+    }, ensure_ascii=False).encode("utf-8")
+    request = Request(base + "/chat/completions", data=body, method="POST", headers={
+        "Authorization": "Bearer " + key, "Content-Type": "application/json",
+    })
+    try:
+        with opener(request, timeout=LLM_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        content = payload["choices"][0]["message"]["content"]
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError) as exc:
+        logger.warning("AI tutor compatible LLM unavailable: %s", type(exc).__name__)
+        return ""
+    if isinstance(content, list):
+        content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return str(content or "").strip()[:1200]
+
+
 def call_llm(instructions, evidence, *, opener=urlopen):
-    """呼叫 OpenAI Responses API；未設定金鑰或失敗時回傳空字串（電力巡檢 AI 助教共用）。"""
+    """呼叫大模型；未設定金鑰或失敗時回傳空字串（電力巡檢 AI 助教共用）。
+    有 Gemini／通義千問等通用相容服務設定時優先使用（免費方案），否則用 OpenAI Responses API。"""
+    compat = _compat_config()
+    if compat:
+        return _call_compat(compat, instructions, evidence, opener)
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         return ""

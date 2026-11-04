@@ -15,19 +15,12 @@ import anthropic
 
 from .provider_base import GeneralAIProvider, GeneralAIResult
 from .provider_openai import OpenAITextProvider
+from .prompts import COACH_SYSTEM_PROMPT
 
 DEFAULT_MODEL = "claude-opus-5-5"
 
-# 教材依據：F450 以 DJI 官方組裝教學、飛控以 Pixhawk 2.4.8 文件為準（使用者之後提供文件後再補進知識庫）
-SYSTEM_PROMPT = (
-    "你是 FDE-AI-UAS 無人載具教學的 AI 實作助教，正在陪學員組裝 DJI F450 四軸機（飛控 Pixhawk 2.4.8）。"
-    "組裝與接線以 DJI F450 官方組裝教學與 Pixhawk 2.4.8 文件為依據；不確定或文件沒寫的，直接說不確定並請學員問老師，不要編造。"
-    "請用繁體中文、口語、2 到 4 句回答，因為回答會用語音唸給學員聽：先直接回答，再說下一步要做什麼。"
-    "看畫面時只描述畫面中真的看得到的東西；看不清楚就請學員把目標移到鏡頭中央、靠近一點再問。"
-    "不得聲稱步驟已完成、老師已確認或安全已放行。"
-    "涉及上電、解鎖、馬達測試、Failsafe、飛行、裝螺旋槳或電池時，只能解釋與提醒安全，不能批准操作。"
-    "F450 X 型旋向：左前 M3、右後 M4 為 CW；右前 M1、左後 M2 為 CCW。"
-)
+# 系統提示放在 prompts.py，與 Gemini、通義千問等供應者共用
+SYSTEM_PROMPT = COACH_SYSTEM_PROMPT
 
 
 class AnthropicTextProvider(GeneralAIProvider):
