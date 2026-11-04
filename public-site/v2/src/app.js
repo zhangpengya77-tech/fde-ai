@@ -108,14 +108,19 @@ function wirePortalLinks() {
     'teacher-login': '/teacher/login/',
     growth: '/student/growth/',
     // 2026-11-04：AI PID 與濾波實驗室在教學後台（需登入），靜態站只放連結
-    'pid-lab': '/pid-lab/'
+    'pid-lab': '/pid-lab/',
+    // 2026-11-04：F450 AI 陪做與飛行健康分析需要後台服務；靜態站的副本連不到後台，改導向後台
+    live: '/live/',
+    'flight-health': '/flight-health/'
   };
   const selectors = {
     student: 'a[href="./student/"]',
     register: 'a[href="./register/"]',
     'teacher-login': 'a[href="./teacher/login/"]',
     growth: 'a[href="./student/growth/"]',
-    'pid-lab': 'a[href="./pid-lab/"]'
+    'pid-lab': 'a[href="./pid-lab/"]',
+    live: 'a[href="./live/"], a[href="/live/"]',
+    'flight-health': 'a[href="./flight-health/"]'
   };
   Object.keys(pathMap).forEach((key) => {
     const path = pathMap[key];
@@ -1147,8 +1152,11 @@ function renderBuildMain12Entry() {
   if (!link) return;
   const config = window.FdeRagConfig || {};
   const publicUrl = String(config.PUBLIC_LIVE_COACH_URL || '').trim();
+  // 2026-11-04 修正：原本退回 '/live/'，在 GitHub 頁面會變成 github.io/live/（404）。
+  // 有設定教學後台網址時，一律導向後台的 AI 陪做頁。
+  const portalBase = String((window.FDE_PUBLIC_CONFIG || {}).portalBaseUrl || '').replace(/\/+$/, '');
   const localUrl = String(config.LIVE_COACH_URL || '/live/').trim();
-  link.href = publicUrl || localUrl;
+  link.href = publicUrl || (portalBase ? `${portalBase}/live/` : localUrl);
 }
 
 async function runLocalYoloDetection(file) {
