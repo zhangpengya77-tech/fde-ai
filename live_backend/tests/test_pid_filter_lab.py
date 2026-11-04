@@ -34,6 +34,12 @@ BF_STOCK = SAMPLES / "betaflight" / "plasmatree_stock_tune.BFL"
 AP_FLIGHT = SAMPLES / "ardupilot" / "f450_flight_4.5.7.bin"
 AP_BENCH = SAMPLES / "ardupilot" / "log_452_2026-9-29-20-38-08.bin"
 AP_TAROT = SAMPLES / "ardupilot" / "tarot_x4_methodic.bin"
+FCB = SAMPLES / "betaflight" / "fc-blackbox"  # ilya-epifanov/fc-blackbox 測試日誌（Apache-2.0），僅本機測試
+BF42_GOOD = FCB / "btfl_002.bbl"
+BF42_OVERSHOOT = FCB / "LOG00037.BFL"
+BF42_BENCH_TRAILING = FCB / "LOG00002.BFL"
+INAV_LOG = FCB / "LOG00004.TXT"
+EMUFLIGHT_LOG = FCB / "crashing-LOG00002.BFL"
 AP_484 = SAMPLES / "ardupilot" / "f450_log484_20261015.bin"
 AP_496 = SAMPLES / "ardupilot" / "f450_log496_20261018.bin"
 AP_498_CRASH = SAMPLES / "ardupilot" / "f450_log498_20261101_crash.bin"
@@ -148,6 +154,46 @@ class RealSampleAnalysis(unittest.TestCase):
         notch = [s for s in r["advice"]["suggestions"] if s["rule_id"] == "NOTCH-CHECK"]
         self.assertEqual(len(notch), 1)
         self.assertEqual(notch[0]["level"], "INFO")
+
+    @need(BF42_GOOD)
+    def test_betaflight_42_well_tuned(self):
+        r = pipeline.run(BF42_GOOD.read_bytes())
+        fl = r["flight"]
+        self.assertEqual(fl["firmware_version"]["version"], "4.2.8")
+        self.assertEqual(fl["hardware"]["board"], "AIKONF7")
+        self.assertFalse(fl["available_signals"]["rate.roll.setpoint"]["derived"], "4.x 直接使用日誌 setpoint")
+        for axis in ("roll", "pitch"):
+            step = r["control"]["rate_loop"][axis]["step"]
+            self.assertEqual(step["status"], "OK")
+            self.assertLess(step["overshoot_pct"], 15)
+        self.assertNotIn("REVIEW", r["advice"]["counts"])
+
+    @need(BF42_OVERSHOOT)
+    def test_betaflight_42_overshoot_review_uses_42_param_names(self):
+        r = pipeline.run(BF42_OVERSHOOT.read_bytes())
+        reviews = [s for s in r["advice"]["suggestions"] if s["level"] == "REVIEW"]
+        self.assertTrue(reviews)
+        names = {p["name"] for s in reviews for p in s["params"]}
+        self.assertTrue(names <= {"d_roll", "d_pitch", "p_roll", "p_pitch"}, names)
+
+    @need(BF42_BENCH_TRAILING)
+    def test_betaflight_trailing_flash_garbage_and_bench_log(self):
+        r = pipeline.run(BF42_BENCH_TRAILING.read_bytes())
+        meta = r["flight"]["log_metadata"]
+        self.assertGreater(meta["duration_s"], 200, "檔尾殘留不得讓時長變成負數")
+        self.assertGreater(meta["trailing_garbage_bytes"], 4096)
+        ind = {i["key"]: i["status"] for i in r["health"]["indicators"]}
+        self.assertEqual(ind["rc_link"], "INSUFFICIENT", "台架測試不得判為遙控故障")
+        self.assertIsNone(r["health"]["overall"]["score"], "可評估項目不足時不給綜合分")
+
+    def test_non_betaflight_blackbox_rejected(self):
+        for path, name in ((INAV_LOG, "INAV"), (EMUFLIGHT_LOG, "EmuFlight")):
+            if not path.exists():
+                self.skipTest(f"缺少 {path}")
+            with self.assertRaises(ValueError) as ctx:
+                pipeline.run(path.read_bytes())
+            self.assertIn(name, str(ctx.exception))
+            self.assertIn("不是 Betaflight", str(ctx.exception))
 
     @need(AP_498_CRASH)
     def test_f450_crash_and_thrust_loss_block_tuning(self):

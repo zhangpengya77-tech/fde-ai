@@ -37,6 +37,9 @@ EVT_DISARM = 15
 EVT_FLIGHT_MODE = 30
 EVT_LOG_END = 255
 
+# 相鄰 I 框之間可接受的最大時間跳躍（微秒）；超過視為重新同步時誤判的雜訊框
+MAX_I_FRAME_GAP_US = 60_000_000
+
 
 class BlackboxError(ValueError):
     """日誌無法解碼時拋出，訊息為給使用者看的中文說明。"""
@@ -364,6 +367,19 @@ class _LogDecoder:
                 out[i] &= 0xFFFFFFFF
         return out
 
+    SLOW_LIMITS = {"failsafePhase": (0, 7), "rxSignalReceived": (0, 1), "rxFlightChannelsValid": (0, 1)}
+
+    def _slow_plausible(self, values: list[int]) -> bool:
+        names = self.sdef.names if self.sdef else []
+        for name, value in zip(names, values):
+            if name in self.SLOW_LIMITS:
+                lo, hi = self.SLOW_LIMITS[name]
+                if not lo <= value <= hi:
+                    return False
+            elif value < 0:
+                return False
+        return True
+
     def _should_have_frame(self, index: int) -> bool:
         return (index % self.i_interval + self.p_num - 1) % self.p_den < self.p_num
 
@@ -385,7 +401,10 @@ class _LogDecoder:
         prev = prev2 = None
         self.home = [0, 0]
         self.last_time = 0
-        corrupt = 0
+        corrupt = 0  # 解碼失敗或被判定不合理的框（每次嘗試計一次）
+        accepted_bytes = 0  # 被接受的框所佔位元組
+        last_good_end = self.body_start  # 最後一個被接受框的結束位置（之後為檔尾殘留）
+        resume_pending = False
         ended_cleanly = False
         time_idx = self.idef.names.index("time") if "time" in self.idef.names else 1
         iter_idx = self.idef.names.index("loopIteration") if "loopIteration" in self.idef.names else 0
@@ -395,7 +414,6 @@ class _LogDecoder:
             marker = data[r.pos]
             if marker not in FRAME_MARKERS:
                 r.pos += 1
-                corrupt += 1
                 continue
             r.pos += 1
             try:
@@ -433,6 +451,15 @@ class _LogDecoder:
                 continue
             tag, payload = pending
             if tag == "I":
+                # 重新同步時雜訊可能剛好像 I 框：時間不得倒退，也不得無故前跳超過 60 秒（記錄恢復事件除外）
+                if rows and not resume_pending:
+                    gap = payload[time_idx] - self.last_time
+                    if gap < 0 or gap > MAX_I_FRAME_GAP_US:
+                        corrupt += 1
+                        r.pos = frame_start + 1
+                        prev = prev2 = None
+                        continue
+                resume_pending = False
                 prev2 = prev = payload
                 rows.append(payload)
                 self.last_time = payload[time_idx]
@@ -440,12 +467,18 @@ class _LogDecoder:
                 # 時間倒退表示解碼錯位，丟棄該框並等待下一個 I 框。
                 if payload[time_idx] < prev[time_idx]:
                     corrupt += 1
+                    r.pos = frame_start + 1
                     prev = prev2 = None
                     continue
                 prev2, prev = prev, payload
                 rows.append(payload)
                 self.last_time = payload[time_idx]
             elif tag == "S":
+                # 慢速框是旗標：負值或超出範圍代表重新同步時誤判的雜訊，丟棄
+                if not self._slow_plausible(payload):
+                    corrupt += 1
+                    r.pos = frame_start + 1
+                    continue
                 last_slow = payload
                 slow.append((len(rows), payload))
             elif tag == "G":
@@ -460,14 +493,24 @@ class _LogDecoder:
                     break
                 if payload["type"] == EVT_LOGGING_RESUME:
                     prev = prev2 = None
+                    resume_pending = True
+            accepted_bytes += r.pos - frame_start
+            last_good_end = r.pos
         main = np.asarray(rows, dtype=np.int64) if rows else np.zeros((0, len(self.idef.names)), dtype=np.int64)
+        body = max(1, end - self.body_start)
+        trailing = end - last_good_end
+        interior_unparsed = max(0, (last_good_end - self.body_start) - accepted_bytes)
         stats = {
             "frames": len(rows),
             "corrupt_frames": corrupt,
             "ended_cleanly": ended_cleanly,
             "slow_frames": len(slow),
             "gps_frames": len(gps),
-            "bytes": end - self.body_start,
+            "bytes": body,
+            "accepted_bytes": accepted_bytes,
+            # 資料品質以位元組計：中段無法解析的比例（檔尾殘留另計，不視為損毀）
+            "interior_unparsed_ratio": round(interior_unparsed / body, 4),
+            "trailing_garbage_bytes": trailing,
         }
         _ = last_slow
         return BlackboxLog(

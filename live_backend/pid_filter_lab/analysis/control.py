@@ -47,11 +47,19 @@ def _delay_ms(a: np.ndarray, s: np.ndarray, rate: float) -> float | None:
     max_lag = int(0.15 * rate)
     if max_lag < 1 or len(a) < 4 * max_lag:
         return None
+    # 正規化互相關取峰值：不受實際值與目標值之間增益差異影響（最小均方誤差在增益 < 1 時會偏向 0）
+    a0, s0 = a - np.mean(a), s - np.mean(s)
     best, best_lag = None, 0
     for lag in range(0, max_lag + 1):
-        err = np.mean((a[lag:] - s[: len(s) - lag]) ** 2)
-        if best is None or err < best:
-            best, best_lag = err, lag
+        x, y = a0[lag:], s0[: len(s0) - lag]
+        denom = np.sqrt(np.sum(x * x) * np.sum(y * y))
+        if denom <= 0:
+            continue
+        c = float(np.sum(x * y) / denom)
+        if best is None or c > best:
+            best, best_lag = c, lag
+    if best is None or best < 0.3:
+        return None
     return round(best_lag / rate * 1000.0, 1)
 
 
@@ -242,6 +250,7 @@ def analyze_axis(fd: FlightData, axis: str) -> dict:
         tracking_norm=round(rms_err / rms_sp, 3) if rms_sp > MIN_SETPOINT_DPS else None,
         tracking_scope="僅計算 |目標| > 20 deg/s 的飛行樣本" if rms_sp > MIN_SETPOINT_DPS else "操控量不足 1 秒，未計算正規化誤差",
         delay_ms=_delay_ms(a[valid], s[valid], rate),
+        delay_resolution_ms=round(1000.0 / min(rate, 1000.0), 1),
         step=step_response(t, a, s, rate, valid),
     )
     if setpoint.derived:

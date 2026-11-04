@@ -35,7 +35,7 @@ DEV_HEADER = "X-PidLab-Dev-Identity"
 
 # 各生態目前的實際驗收狀態（依真實樣本測試結果填寫，不得誇大）
 SUPPORT_STATUS = {
-    "betaflight": {"log_formats": ["BBL", "BFL"], "status": "PARTIAL", "note": "已用 2 份公開真實 Blackbox（Betaflight 3.1.5）驗證解碼與分析；4.x 新版欄位尚缺真實樣本驗收。"},
+    "betaflight": {"log_formats": ["BBL", "BFL"], "status": "PARTIAL", "note": "已用公開真實 Blackbox 驗證：Betaflight 3.1.5（2 份）與 4.2.0～4.2.11（6 份、4 種飛控板），含 setpoint / Feedforward 欄位、檔尾 Flash 殘留與台架日誌；4.3 以後尚無真實樣本。INAV、EmuFlight 等非 Betaflight 韌體會被拒絕分析。"},
     "ardupilot": {"log_formats": ["BIN"], "status": "PARTIAL", "note": "已用多份 ArduCopter 4.5.5 / 4.5.7 / 4.8-dev 真實 BIN 驗證解析與八大健康，並以 IMU 批次取樣（ISBH/ISBD）驗收濾波前後頻譜與諧波陷波對照；PID 階躍響應尚缺高頻 RATE 日誌；舊版 APM 尚無真實樣本。"},
     "px4": {"log_formats": ["ULG"], "status": "PARTIAL", "note": "已用 PX4 官方測試 ULog 樣本驗證解析、版本識別與八大健康映射；尚缺真實多旋翼高頻飛行日誌驗收 PID 分析。"},
     "other": {"log_formats": [], "status": "PROFILE_ONLY", "note": "可建立飛機檔案；不支援日誌分析。"},

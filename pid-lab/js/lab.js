@@ -247,7 +247,7 @@
     if (!a) return;
     $('#health-head').innerHTML = headLine(a);
     const o = a.health.overall;
-    $('#health-overall').innerHTML = `<div class="card overall"><div><span class="muted">綜合分</span><div class="score">${fmt(o.score)}</div></div>
+    $('#health-overall').innerHTML = `<div class="card overall"><div><span class="muted">綜合分</span><div class="score">${o.score === null || o.score === undefined ? '—' : o.score}</div>${o.score === null || o.score === undefined ? '<span class="muted">可評估項目不足，不計算綜合分</span>' : ''}</div>
       <div>已評估 ${o.evaluated} / 適用 ${o.applicable} 項；不適用 ${o.not_applicable}；資料不足 ${o.insufficient}<br>覆蓋率 ${(o.coverage * 100).toFixed(0)}% · ${o.comparable ? '可與同條件飛行比較' : '<b>覆蓋率不足，不可與其他飛行直接比較或排名</b>'}<div class="kv">${esc(o.rule)}</div></div></div>`;
     $('#health-cards').innerHTML = a.health.indicators.map((i) => `
       <article class="card health-card"><div class="top"><b>${esc(i.label)}</b><span class="badge ${i.status === 'N/A' ? 'NA' : i.status}">${i.status} ${STATUS_LABEL[i.status]}</span></div>
@@ -274,7 +274,7 @@
           <div class="metric"><b>${fmt(st.settling_ms, 'ms')}</b><span>穩定時間 ±5%</span></div>
           <div class="metric"><b>${fmt(r.tracking_norm)}</b><span>正規化追蹤誤差</span></div>
           <div class="metric"><b>${fmt(r.tracking_rms_dps, 'deg/s')}</b><span>追蹤誤差 RMS</span></div>
-          <div class="metric"><b>${fmt(r.delay_ms, 'ms')}</b><span>互相關延遲</span></div>
+          <div class="metric"><b>${r.delay_ms === 0 && r.delay_resolution_ms ? `≤ ${r.delay_resolution_ms} ms` : fmt(r.delay_ms, 'ms')}</b><span>互相關延遲（低頻為主）</span></div>
           <div class="metric"><b>${fmt(st.windows)}</b><span>有效操控視窗</span></div>
         </div>
         <div class="grid-2">

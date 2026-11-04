@@ -30,10 +30,16 @@ def _ints(raw: str) -> list[int]:
 def firmware_info(headers: dict[str, str]) -> dict:
     revision = headers.get("Firmware revision", "")
     ftype = headers.get("Firmware type", "")
-    m = re.match(r"\s*(Betaflight|Cleanflight|INAV|Emuflight|Rotorflight)\s+(\S+)\s*(?:\(([0-9a-f]+)\))?\s*(\S+)?", revision)
+    m = re.match(r"\s*(Betaflight|Cleanflight|INAV|EmuFlight|Emuflight|Rotorflight|KISS)\s+(\S+)\s*(?:\(([0-9a-f]+)\))?\s*(\S+)?", revision, re.IGNORECASE)
     name = m.group(1) if m else (ftype or "unknown")
+    if name.lower() == "emuflight":
+        name = "EmuFlight"
+    elif name.lower() == "inav":
+        name = "INAV"
     version = m.group(2) if m else ""
-    target = m.group(4) if m and m.group(4) else headers.get("Board information", "")
+    # 4.x 標頭的 revision 末段是 MCU（例如 STM32F405），板型在 Board information（例如 "AIRB OMNIBUSF4"）
+    board_info = headers.get("Board information", "").strip()
+    target = board_info.split(" ", 1)[-1] if board_info else (m.group(4) if m and m.group(4) else "")
     vt = parse_version(version)
     return {
         "name": name,
@@ -45,6 +51,7 @@ def firmware_info(headers: dict[str, str]) -> dict:
         "legacy": False,
         "source": "Blackbox 標頭 Firmware revision",
         "target": target,
+        "mcu": m.group(4) if m and m.group(4) else None,
     }
 
 
@@ -89,7 +96,20 @@ def header_params(headers: dict[str, str]) -> dict[str, float]:
     return params
 
 
+class UnsupportedFirmware(blackbox.BlackboxError):
+    """Blackbox 格式相同但韌體不是 Betaflight（INAV、EmuFlight 等）：參數與控制結構不同，不套用 Betaflight 規則。"""
+
+
 def adapt(data: bytes, log_index: int | None = None) -> FlightData:
+    first = blackbox.headers_only(data)
+    if first:
+        fw0 = firmware_info(first[0])
+        if fw0["name"] != "Betaflight":
+            raise UnsupportedFirmware(
+                f"這份 Blackbox 日誌的韌體是 {fw0['name']} {fw0['version']}，不是 Betaflight。"
+                f"{fw0['name']} 的參數名稱與控制結構不同，系統尚未建立對應的解析與調參規則，因此不提供分析；"
+                "可在「其他飛控」建立飛機檔案保存資料。"
+            )
     logs = blackbox.decode(data)
     usable = [l for l in logs if l.stats["frames"] > 100]
     if not usable:
@@ -103,8 +123,6 @@ def adapt(data: bytes, log_index: int | None = None) -> FlightData:
     h = chosen.headers
     fw = firmware_info(h)
     warnings: list[str] = []
-    if fw["name"] != "Betaflight":
-        warnings.append(f"日誌韌體為 {fw['name']}，不是 Betaflight；分析規則以 Betaflight 為準，結果僅供參考。")
     vt = fw["version_tuple"] or (0, 0, 0)
     if tuple(vt) < (3, 0, 0):
         warnings.append("Betaflight 3.0 以前的日誌單位定義不同，陀螺儀數值未經驗證。")
@@ -113,7 +131,7 @@ def adapt(data: bytes, log_index: int | None = None) -> FlightData:
         ecosystem="betaflight",
         vehicle_type="multirotor",
         firmware=fw,
-        hardware={"board": fw.get("target") or "unknown", "source": "Blackbox 標頭（Firmware revision 末段 / Board information）", "craft_name": h.get("Craft name", "")},
+        hardware={"board": fw.get("target") or "unknown", "mcu": fw.get("mcu"), "source": "Blackbox 標頭（Board information，無則 Firmware revision 末段）", "craft_name": h.get("Craft name", "")},
         params=params,
         param_source="Blackbox 標頭參數快照",
         warnings=warnings,
@@ -212,7 +230,9 @@ def adapt(data: bytes, log_index: int | None = None) -> FlightData:
         "segments_summary": [{"index": l.index, "frames": l.stats["frames"]} for l in logs],
         "frames": chosen.stats["frames"],
         "corrupt_frames": chosen.stats["corrupt_frames"],
-        "corrupt_ratio": round(chosen.stats["corrupt_frames"] / max(1, chosen.stats["frames"] + chosen.stats["corrupt_frames"]), 4),
+        # 以位元組計的中段損毀比例；檔尾殘留（未擦除的 Flash 等）另列，不視為損毀
+        "corrupt_ratio": chosen.stats["interior_unparsed_ratio"],
+        "trailing_garbage_bytes": chosen.stats["trailing_garbage_bytes"],
         "ended_cleanly": chosen.stats["ended_cleanly"],
         "duration_s": round(float(t[-1]), 2) if len(t) else 0.0,
         "main_rate_hz": round(float(1.0 / np.median(np.diff(t))), 1) if len(t) > 2 else 0.0,
@@ -223,5 +243,8 @@ def adapt(data: bytes, log_index: int | None = None) -> FlightData:
     if not chosen.stats["ended_cleanly"]:
         fd.warnings.append("日誌沒有正常結束標記（可能斷電或記錄被截斷），尾段資料可能不完整。")
     if fd.log_metadata["corrupt_ratio"] > 0.01:
-        fd.warnings.append(f"偵測到 {chosen.stats['corrupt_frames']} 個損毀資料框，已略過並重新同步。")
+        fd.warnings.append(f"日誌中段有 {fd.log_metadata['corrupt_ratio'] * 100:.1f}% 的資料無法解析，已略過並重新同步。")
+    trailing = chosen.stats["trailing_garbage_bytes"]
+    if trailing > 4096:
+        fd.warnings.append(f"日誌結尾有 {trailing / 1024:.0f} KB 無法解析的資料（常見於未擦除的 Flash 殘留），已忽略，不影響前面的有效資料。")
     return fd

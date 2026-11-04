@@ -29,6 +29,7 @@ INDICATORS = (
     ("flight_mode", "飛行模式與控制狀態健康"),
 )
 STATUS_SCORE = {"PASS": 100, "WARN": 60, "FAIL": 20}
+MIN_EVALUATED_FOR_SCORE = 4
 THRESHOLD_SOURCE = "FDE 教學閾值（DERIVED，待驗證）"
 
 
@@ -211,13 +212,27 @@ def rc_link(fd: FlightData) -> dict:
     sig, fs, rssi = fd.sig("rc.signal"), fd.sig("rc.failsafe_phase"), fd.sig("rc.rssi")
     if sig is None and fs is None:
         return _result("rc_link", "INSUFFICIENT", "日誌沒有遙控訊號或失控保護狀態資料。")
+    # 只評估飛行中（油門 / 馬達 > 15%）的遙控狀態；台架測試未接接收機不應判為通訊故障
+    ref = sig if sig is not None else fs
+    fly_ref = _flying_mask(fd, ref.t)
+    has_flight_data = fd.sig("throttle") is not None or any(fd.sig(f"motor.{i}") is not None for i in range(1, 9))
+    if has_flight_data and not np.any(fly_ref):
+        return _result("rc_link", "INSUFFICIENT", "日誌中沒有飛行段（可能是地面 / 台架測試），不評估遙控通訊。",
+                       sources=[s.source for s in (sig, fs) if s is not None], limits=["只評估飛行中的遙控狀態"])
+
+    def flying(s):
+        if s is None:
+            return None
+        m = _flying_mask(fd, s.t)
+        return s.v[m] if np.any(m) else s.v
+
     ev, status = [], "PASS"
     if sig is not None:
-        lost = float(np.mean(sig.v < 0.5))
+        lost = float(np.mean(flying(sig) < 0.5))
         ev.append({"metric": "遙控訊號遺失時間比例", "value": round(lost * 100, 2), "unit": "%", "warn": 0.1, "fail": 1.0})
         status = "FAIL" if lost > 0.01 else ("WARN" if lost > 0.001 else status)
     if fs is not None:
-        triggered = bool(np.any(fs.v > 0))
+        triggered = bool(np.any(flying(fs) > 0))
         ev.append({"metric": "失控保護觸發", "value": "是" if triggered else "否"})
         if triggered:
             status = "FAIL"
@@ -301,7 +316,8 @@ def evaluate(fd: FlightData, control: dict) -> dict:
     items = [power(fd), battery(fd), gps(fd), navigation(fd), vibration(fd), rc_link(fd), attitude(fd, control), flight_mode(fd)]
     applicable = [i for i in items if i["status"] != "N/A"]
     evaluated = [i for i in applicable if i["status"] in STATUS_SCORE]
-    score = round(sum(i["score"] for i in evaluated) / len(evaluated), 1) if evaluated else None
+    # 可評估項目少於 4 項（例如台架測試）時不給綜合分，避免少數 PASS 被誤讀成「健康 100 分」
+    score = round(sum(i["score"] for i in evaluated) / len(evaluated), 1) if len(evaluated) >= MIN_EVALUATED_FOR_SCORE else None
     coverage = round(len(evaluated) / len(applicable), 3) if applicable else 0.0
     return {
         "indicators": items,
@@ -314,6 +330,6 @@ def evaluate(fd: FlightData, control: dict) -> dict:
             "coverage": coverage,
             "comparable": coverage >= 0.75,
             "worst_status": "FAIL" if any(i["status"] == "FAIL" for i in items) else ("WARN" if any(i["status"] == "WARN" for i in items) else ("PASS" if evaluated else "INSUFFICIENT")),
-            "rule": "PASS=100、WARN=60、FAIL=20，八項等權；N/A 不計入；INSUFFICIENT 不計分但降低覆蓋率；覆蓋率 <75% 時不可與其他飛行比較。",
+            "rule": "PASS=100、WARN=60、FAIL=20，八項等權；N/A 不計入；INSUFFICIENT 不計分但降低覆蓋率；可評估項目少於 4 項時不計算綜合分；覆蓋率 <75% 時不可與其他飛行比較。",
         },
     }
