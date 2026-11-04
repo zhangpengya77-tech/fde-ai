@@ -80,7 +80,8 @@ function escapeHtml(value) {
 
 function renderNavigation() {
   const primaryNav = [
-    { key: 'missions', label: '任', title: '12 任務地圖' },
+    // 2026-11-05：原「12 任務地圖」入口改為「關於我們」；12 任務資料與 /platform/tasks 路由保留不刪
+    { key: 'about', label: '關', title: '關於我們 About FDE-AI' },
     ...moduleSections,
     { label: '健', title: '飛行健康 AI / Flight Health', href: '/flight-health/' },
     { label: '調', title: 'AI PID 與濾波實驗室 / AI PID & Filter Lab', href: '/pid-lab/' },
@@ -142,6 +143,18 @@ function setMetaContent(attribute, key, value, fallback) {
 }
 
 function updatePageMetadata(routeKey) {
+  // 2026-11-05：「關於我們」頁的標題與描述（分享連結時顯示）
+  if (routeKey === 'about') {
+    const title = 'FDE-AI｜關於我們 About FDE-AI';
+    const description = 'FDE-AI 是結合無人機教育、開源技術、AI 應用與產業實作的無人載具人才實訓平台，服務零基礎學員到專業進階人才。';
+    document.title = title;
+    setMetaContent('name', 'description', description, null);
+    setMetaContent('property', 'og:title', title, null);
+    setMetaContent('property', 'og:description', description, null);
+    setMetaContent('property', 'og:type', 'website', null);
+    setMetaContent('property', 'og:url', new URL(router.hrefFor('about'), window.location.href).href, null);
+    return;
+  }
   if (routeKey === 'fde-column') {
     const title = 'FDE-AI 無人載具實驗室｜無人機 × AI 實作教學';
     const description = 'FDE-AI 無人載具實驗室，分享無人機、F450、YOLO 目標檢測、RAG 知識庫、飛控與產業應用實作。';

@@ -1,7 +1,11 @@
 (() => {
   const routeDefinitions = [
     { key: 'home', sectionId: 'home', path: '' },
+    // 12 任務地圖路由保留（/platform/tasks 仍可直接開啟，供首頁「三分鐘看懂」與既有連結使用），
+    // 但左側導航入口已改為「關於我們」（2026-11-05）
     { key: 'missions', sectionId: 'missions', path: 'tasks' },
+    // 2026-11-05：新訪客認識平台的「關於我們 About FDE-AI」頁（/platform/about）
+    { key: 'about', sectionId: 'about', path: 'about' },
     { key: 'learn', sectionId: 'learn', path: 'courses' },
     { key: 'fde-column', sectionId: 'fde-column', path: 'fde' },
     { key: 'practice', sectionId: 'practice', path: 'simulator' },

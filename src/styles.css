@@ -3094,3 +3094,82 @@ body.fde-column-view main {
     text-decoration: none;
   }
 }
+
+/* ===== 2026-11-05：關於我們 About FDE-AI（沿用深藍科技風格與既有色彩變數） ===== */
+.about-page { display: grid; gap: 22px; }
+.about-block {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(19, 43, 68, 0.72), rgba(11, 23, 38, 0.72));
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+.about-block h3 { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; font-size: 22px; color: var(--text); }
+.about-step {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; height: 28px; border: 1px solid var(--line-strong);
+  color: var(--cyan); font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+}
+.about-lead { margin: 0; font-size: 18px; line-height: 1.75; color: var(--text); }
+.about-lead strong { color: var(--cyan); }
+.about-sub { margin: 0 0 14px; color: var(--muted); }
+.about-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.about-grid { display: grid; gap: 12px; }
+.about-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.about-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.about-card {
+  display: grid; gap: 6px; align-content: start;
+  padding: 16px; border: 1px solid var(--line);
+  background: rgba(7, 17, 31, 0.55); color: var(--text); text-decoration: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba(0, 194, 255, 0.18); }
+.about-card strong { font-size: 16px; }
+.about-card small { color: var(--muted); line-height: 1.5; }
+.about-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border: 1px solid rgba(0, 194, 255, 0.4);
+  color: var(--cyan); font-weight: 800; font-size: 18px;
+}
+.about-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 14px; }
+.about-panel { padding: 18px; border: 1px solid var(--line); background: rgba(7, 17, 31, 0.55); }
+.about-panel p { color: var(--text); line-height: 1.7; }
+.about-big { margin: 10px 0 0; font-size: 40px; font-weight: 900; color: var(--cyan) !important; line-height: 1.1; }
+.about-note { display: block; margin-top: 8px; color: var(--yellow); line-height: 1.5; }
+.about-features { margin: 12px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.about-features li a {
+  display: block; padding: 10px 12px; border: 1px solid var(--line);
+  color: var(--text); text-decoration: none; line-height: 1.45;
+}
+.about-features li a::before { content: '✓ '; color: var(--green); font-weight: 800; }
+.about-features li a:hover { border-color: var(--line-strong); }
+.about-path {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;
+  margin: 18px 0 0; padding: 0; list-style: none; counter-reset: about-path;
+}
+.about-path li {
+  position: relative; padding: 12px 10px; border: 1px solid var(--line);
+  background: rgba(0, 194, 255, 0.06); text-align: center; counter-increment: about-path;
+}
+.about-path li::before { content: counter(about-path); display: block; color: var(--cyan); font-weight: 800; font-size: 12px; }
+.about-path li strong { display: block; color: var(--text); }
+.about-path li small { color: var(--muted); }
+.about-cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.about-cta a { text-decoration: none; }
+
+@media (max-width: 1100px) {
+  .about-grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .about-path { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .about-block { padding: 16px; }
+  .about-block h3 { font-size: 19px; }
+  .about-lead { font-size: 16px; }
+  .about-grid-5, .about-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .about-split { grid-template-columns: 1fr; }
+  .about-features { grid-template-columns: 1fr; }
+  .about-path { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .about-cta a { flex: 1 1 100%; text-align: center; }
+}
+@media (max-width: 420px) {
+  .about-grid-5, .about-grid-3 { grid-template-columns: 1fr; }
+}
