@@ -36,9 +36,22 @@
   }
 
   async function checkStatus() {
-    if (!portalBase || !statusUrl) return renderStatus(false);
+    if (!portalBase) return renderStatus(false);
     var controller = typeof AbortController === "function" ? new AbortController() : null;
-    var timer = controller ? setTimeout(function () { controller.abort(); }, 3000) : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, statusUrl ? 3000 : 8000) : null;
+    if (!statusUrl) {
+      // 2026-11-04：後台沒有跨站狀態端點時，改用 no-cors 探測登入頁是否連得到。
+      // 連得到（不透明回應）才視為上線；網路失敗或逾時仍誠實顯示離線，不產生假結果。
+      try {
+        await fetch(portalBase + "/login/", { mode: "no-cors", cache: "no-store", credentials: "omit", signal: controller ? controller.signal : undefined });
+        renderStatus(true);
+      } catch (_) {
+        renderStatus(false);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      return;
+    }
     try {
       var response = await fetch(statusUrl, { cache: "no-store", credentials: "omit", signal: controller ? controller.signal : undefined });
       if (!response.ok) throw new Error("status_unavailable");
