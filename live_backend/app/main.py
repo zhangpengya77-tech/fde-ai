@@ -748,6 +748,8 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
     pid_lab = pid_lab_service or PidLabService(require_identity=require_identity)
     routes = routes + pid_lab.routes() + [
         Mount("/pid-lab", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "pid-lab"), html=True, check_dir=False), name="pid-lab"),
+        # F450 數位孿生（2026-11-04）：純靜態互動拆解頁，獨立入口；不影響其他路由。
+        Mount("/f450-twin", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "f450-twin"), html=True, check_dir=False), name="f450-twin"),
     ]
     app = Starlette(routes=routes)
     app.state.pid_lab = pid_lab

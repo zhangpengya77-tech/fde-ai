@@ -1,0 +1,185 @@
+<!doctype html>
+<!--
+  F450 數位孿生（互動拆解）— FDE-AI-UAS v2.0 獨立入口頁
+  來源：F450-DIGITAL-TWIN-V2 專案 L2-R4（2026-11-04 教師外觀驗收通過，照片參考級）。
+  本頁為純靜態頁：three.js 0.181.2（MIT，vendor/three/LICENSE）與 GLB 模型都放在本資料夾，不依賴外部 CDN。
+  刻意不放教師真機照片（對外公開權利尚未確認）。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>F450 數位孿生｜FDE-AI-UAS</title>
+<style>
+/* 色彩 token：淺色為預設，深色依系統設定切換 */
+:root{--bg:#f3f4f1;--panel:#fff;--fg:#1c211f;--muted:#5b6560;--line:#d7dcd8;--accent:#9b1d4c;--soft:#f6e3ea;--stage:#dfe2dd;
+  --font:"Microsoft JhengHei","PingFang TC","Noto Sans TC",system-ui,sans-serif;--mono:ui-monospace,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#121614;--panel:#1b201e;--fg:#e5eae6;--muted:#9ba69f;--line:#323a36;--accent:#ec7aa2;--soft:#3a1f2a;--stage:#262c29;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.65}
+.wrap{max-width:1180px;margin:0 auto;padding:18px max(16px,env(safe-area-inset-right)) 48px max(16px,env(safe-area-inset-left));display:grid;gap:18px}
+.top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.back{color:var(--accent);text-decoration:none;font-size:14px}
+h1{margin:0;font-size:clamp(1.35rem,3.4vw,1.9rem);line-height:1.3}
+h2{margin:0 0 8px;font-size:1.1rem}
+.badge{display:inline-block;font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--accent)}
+.lede{margin:0;color:var(--muted);max-width:72ch}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px}
+@media (max-width:860px){.stage{grid-template-columns:1fr}}
+#viewer{position:relative;background:var(--stage);border-radius:10px;height:min(68vh,620px);min-height:380px;overflow:hidden;touch-action:none}
+#viewer canvas{display:block;width:100%;height:100%}
+#loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:14px;pointer-events:none;text-align:center;padding:16px}
+.side{display:grid;gap:12px;align-content:start;min-width:0}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;font-size:14px;padding:8px 12px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.label{font-size:12px;color:var(--muted)}
+#part-name{font-size:1.1rem;font-weight:700;margin:4px 0 0}
+.kv{display:grid;gap:6px;margin-top:8px;font-size:13.5px}
+.kv div{display:grid;grid-template-columns:4em minmax(0,1fr);gap:8px}
+.kv span:first-child{color:var(--muted)}
+ul{margin:0;padding-left:1.2em}li{margin:4px 0}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="back" href="/#build">← 回 FDE-AI 首頁「做 Build」</a>
+    <span class="badge">L2 照片參考級｜教師外觀驗收通過 2026-11-04｜尺寸未量測</span>
+  </div>
+  <header>
+    <h1>F450 數位孿生（互動拆解）</h1>
+    <p class="lede">依教師真機照片與 DJI F450 手冊 V2.2 重建的教學模型。可以旋轉、縮放、爆炸拆解，並點選零件看功能說明。除了 450 mm 對角軸距，其他尺寸都是照片比例估計，不是官方一比一或實測模型。</p>
+  </header>
+
+  <section class="stage" aria-label="F450 3D 模型">
+    <div id="viewer"><div id="loading">正在載入 F450 模型…</div></div>
+    <div class="side">
+      <div class="box">
+        <div class="label">視角</div>
+        <div class="btns" style="margin-top:6px">
+          <button id="v-iso" class="on">等軸測</button><button id="v-top">上視</button><button id="v-right">右視</button><button id="v-front">前視</button>
+        </div>
+        <div class="label" style="margin-top:12px">爆炸拆解：<span id="explode-label">裝配</span></div>
+        <input id="explode" type="range" min="0" max="100" value="0" aria-label="爆炸拆解程度">
+        <div class="btns" style="margin-top:6px"><button id="reset">一鍵復原</button></div>
+      </div>
+      <div class="box">
+        <span class="badge" id="part-status">待選取</span>
+        <div id="part-name">點選機上的零件</div>
+        <div class="label" id="part-en">機架、飛控、GPS、電調、電池、電機、槳葉、腳架都可以點</div>
+        <div class="kv" id="part-kv"></div>
+        <div class="btns" style="margin-top:10px"><button id="focus" disabled>聚焦</button><button id="isolate" disabled>單獨顯示</button><button id="restore" disabled>返回整機</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>驗證狀態說明</h2>
+    <ul>
+      <li><b>VERIFIED</b>：電機中心對角距 450 mm（與 DJI 手冊一致；不是實機量測）。</li>
+      <li><b>PHOTO_REFERENCED</b>：機臂、中心板、飛控、GPS 的外形與位置依教師真機照片。</li>
+      <li><b>DISPLAY_REFERENCE</b>：腳架、電調、電機、槳葉為展示級外形，型號與尺寸未確認。</li>
+      <li><b>UNKNOWN</b>：電機座孔位、電池規格、槳葉旋向等尚未取得資料。</li>
+    </ul>
+  </section>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from './vendor/three/addons/loaders/GLTFLoader.js';
+
+// ── 零件教學資料（與 F450 專案 web-demo/src/parts.js 的 R4 版本一致） ──
+const PARTS = [
+  {zh:'飛控主機',en:'Flight controller',st:'PHOTO_REFERENCED',model:'Pixhawk（照片可見 pixhawk 字樣；代次待確認）',dim:'外形取常見公開尺寸，非實測',fn:'讀取感測器、估算姿態並輸出控制訊號；長邊朝機頭，裝在上中心板的減震泡棉上。',needles:['pixhawk','flightcontroller']},
+  {zh:'無刷外轉子電機',en:'Brushless outrunner motor',st:'DISPLAY_REFERENCE',model:'展示型號，未核實',dim:'外徑與高度 UNKNOWN',fn:'把電調輸出的三相電能轉成旋轉動力，帶動螺旋槳。',needles:['outrunner motor']},
+  {zh:'雙葉螺旋槳',en:'Two-blade propeller',st:'DISPLAY_REFERENCE',model:'展示規格，未核實',dim:'槳徑、螺距、旋向 UNKNOWN',fn:'把電機的旋轉變成升力與姿態控制所需的推力。',needles:['two-blade propeller']},
+  {zh:'GPS／羅盤模組',en:'GPS / compass module',st:'PHOTO_REFERENCED',model:'型號待確認',dim:'直徑與支架高度依照片比例',fn:'提供定位與航向參考；裝在上板前緣的短支架上，箭頭指向機頭。',needles:['gps']},
+  {zh:'電子變速器（電調）',en:'Electronic speed controller',st:'PHOTO_REFERENCED',model:'型號待確認',dim:'尺寸與額定電流 UNKNOWN',fn:'依飛控訊號把電池直流電轉成電機需要的三相驅動。',needles:['esc ']},
+  {zh:'電池與電源模組',en:'Battery and power module',st:'PHOTO_REFERENCED',model:'型號待確認',dim:'容量、電壓與尺寸 UNKNOWN',fn:'為整機供電；電池在下中心板下方，電源模組提供飛控所需電力。',needles:['battery','powermodule','power lead','cable']},
+  {zh:'起落腳架',en:'Landing legs',st:'DISPLAY_REFERENCE',model:'型號待確認',dim:'高度與截面 UNKNOWN',fn:'讓機身和電池離地，降落時提供支撐。',needles:['landing leg']},
+  {zh:'F450 機架',en:'F450 airframe',st:'PHOTO_REFERENCED',model:'紅臂 ×2、白臂 ×2（對應手冊 450FAC／450FAW）',dim:'對角距 450 mm；其餘未量測',fn:'支撐動力、飛控與供電設備。機臂根部夾在上下中心板之間；下中心板也是配電板。',needles:['lattice','centre plate']},
+];
+// GLTFLoader 會把節點名稱的空白改成底線，所以比對前先還原
+const partFor = name => { const n = String(name).replace(/_/g, ' ').toLowerCase() + ' '; return PARTS.find(p => p.needles.some(k => n.includes(k))) || null; };
+
+const $ = id => document.getElementById(id);
+const host = $('viewer'), loading = $('loading');
+// 模型為 glTF 標準 Y 向上（機頭 = -Z）
+const VIEWS = {iso:[560,430,560], top:[0,980,1], right:[940,40,0], front:[0,40,-940]};
+const stageColor = () => getComputedStyle(document.documentElement).getPropertyValue('--stage').trim() || '#dfe2dd';
+
+const scene = new THREE.Scene(); scene.background = new THREE.Color(stageColor());
+const camera = new THREE.PerspectiveCamera(40, 1, 1, 6000);
+const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); host.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.minDistance = 120; controls.maxDistance = 2200;
+camera.position.fromArray(VIEWS.iso); controls.target.set(0, 10, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x50555a, 2.2));
+const key = new THREE.DirectionalLight(0xffffff, 2.0); key.position.set(400, 700, 300); scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, .8); fill.position.set(-500, 200, -400); scene.add(fill);
+const grid = new THREE.GridHelper(900, 18, 0x888888, 0xbbbbbb); grid.position.y = -77; grid.material.transparent = true; grid.material.opacity = .35; scene.add(grid);
+
+let assembly, exploded, selected = null, isolated = false, progress = 0, animating = false;
+const camGoal = camera.position.clone(), tgtGoal = controls.target.clone();
+controls.addEventListener('start', () => { animating = false; });
+const meshes = root => { const a = []; root && root.traverse(n => { if (n.isMesh) a.push(n); }); return a; };
+const owner = n => { let o = n; while (o.parent && o.parent !== assembly && o.parent !== exploded && o.parent.type !== 'Scene') o = o.parent; return o; };
+const active = () => progress > 0 ? exploded : assembly;
+
+function resize(){ const r = host.getBoundingClientRect(); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); renderer.setSize(r.width, r.height, false); }
+addEventListener('resize', resize); resize();
+function go(view){ camGoal.fromArray(VIEWS[view]); tgtGoal.set(0, 10, 0); animating = true; ['iso','top','right','front'].forEach(v => $('v-' + v).classList.toggle('on', v === view)); }
+['iso','top','right','front'].forEach(v => $('v-' + v).onclick = () => go(v));
+
+function clearIsolation(){ if (!isolated) return; [assembly, exploded].forEach(r => r && r.traverse(n => { if (n.isMesh) n.visible = true; })); isolated = false; $('isolate').textContent = '單獨顯示'; }
+function setExplode(v){
+  progress = Number(v); const t = progress / 100; $('explode').value = progress;
+  $('explode-label').textContent = t === 0 ? '裝配' : t === 1 ? '完整拆解' : `拆解 ${progress}%`;
+  if (!assembly) return; assembly.visible = t === 0; exploded.visible = t > 0;
+  exploded.children.forEach(n => n.position.copy(n.userData.final).addScaledVector(n.userData.delta, -(1 - t)));
+  if (selected) selected = active().getObjectByName(selected.name) || selected;
+}
+$('explode').oninput = e => { clearIsolation(); setExplode(e.target.value); };
+
+function show(part){
+  $('part-status').textContent = part.st; $('part-name').textContent = part.zh; $('part-en').textContent = part.en;
+  const kv = $('part-kv'); kv.replaceChildren();
+  [['型號', part.model], ['尺寸', part.dim], ['功能', part.fn]].forEach(([k, v]) => { const row = document.createElement('div'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = k; b.textContent = v; row.append(a, b); kv.append(row); });
+  ['focus','isolate','restore'].forEach(id => $(id).disabled = false);
+}
+function focusOn(){ if (!selected) return; const box = new THREE.Box3().setFromObject(selected), c = box.getCenter(new THREE.Vector3()), s = Math.max(box.getSize(new THREE.Vector3()).length(), 60);
+  tgtGoal.copy(c); camGoal.copy(c).add(new THREE.Vector3(1.4, 1.0, 1.4).multiplyScalar(s)); animating = true; }
+$('focus').onclick = focusOn;
+$('isolate').onclick = () => { if (!selected) return; if (isolated) { clearIsolation(); return; } const keep = new Set(meshes(selected)); active().traverse(n => { if (n.isMesh) n.visible = keep.has(n); }); isolated = true; $('isolate').textContent = '顯示全部'; focusOn(); };
+$('restore').onclick = $('reset').onclick = () => { clearIsolation(); setExplode(0); go('iso'); };
+
+// 點選（短距離點擊才算選取，拖曳旋轉不觸發）
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !assembly) return;
+  const r = renderer.domElement.getBoundingClientRect(); ptr.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera); const hit = ray.intersectObjects(meshes(active()).filter(m => m.visible), false)[0]; if (!hit) return;
+  const node = owner(hit.object), part = partFor(node.userData.cad_group || node.name); if (!part) return; selected = node; show(part);
+});
+
+const loader = new GLTFLoader();
+Promise.all(['./models/f450-l2-r4-preview-assembly.glb', './models/f450-l2-r4-preview-exploded.glb'].map(u => loader.loadAsync(u))).then(([a, e]) => {
+  assembly = a.scene; exploded = e.scene; scene.add(assembly, exploded);
+  // 依節點名稱配對：記錄每個零件從裝配到完全拆解的位移
+  const byName = new Map(assembly.children.map(n => [n.name, n]));
+  exploded.children.forEach(n => { const a0 = byName.get(n.name); n.userData.final = n.position.clone(); n.userData.delta = a0 ? n.position.clone().sub(a0.position) : new THREE.Vector3(); });
+  loading.remove(); setExplode(0);
+}).catch(err => { loading.textContent = '模型載入失敗：' + err.message; });
+
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { scene.background = new THREE.Color(stageColor()); });
+(function tick(){ controls.update(); if (animating) { camera.position.lerp(camGoal, .12); controls.target.lerp(tgtGoal, .12); if (camera.position.distanceTo(camGoal) < 1) animating = false; } renderer.render(scene, camera); requestAnimationFrame(tick); })();
+</script>
+</body>
+</html>
