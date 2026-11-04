@@ -71,8 +71,10 @@ class GeneralAIProviderManager:
                 continue
             send_images = os.environ.get("FDE_GENERAL_SEND_IMAGES", "1").strip().lower() not in ("0", "false", "no", "off")
             vision_model = os.environ.get("FDE_GENERAL_VISION_MODEL", "").strip() or None
+            # 備援模型：FDE_GENERAL_FALLBACK_MODELS（逗號分隔）可覆寫；未設定用該服務預設
+            fallbacks = [item.strip() for item in os.environ.get("FDE_GENERAL_FALLBACK_MODELS", "").split(",") if item.strip()] or list(preset.get("fallback_models", ()))
             return OpenAICompatibleProvider(key, base_url=base_url, model=model, provider_name=name,
-                                            vision_model=vision_model, allow_images=send_images)
+                                            vision_model=vision_model, allow_images=send_images, fallback_models=fallbacks)
         return None
 
     async def generate(self, **values) -> GeneralAIResult:

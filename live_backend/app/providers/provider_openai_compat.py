@@ -21,7 +21,10 @@ from .provider_openai import OpenAITextProvider
 # 各服務預設值；網址與模型都可用環境變數覆寫
 PRESETS = {
     # Google Gemini：免費額度（不需信用卡）、支援看圖；免費版內容可能被 Google 用來改善產品
-    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-3.8-flash", "key_env": "GEMINI_API_KEY"},
+    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-3.6-flash", "key_env": "GEMINI_API_KEY",
+               # 2026-11-04 實測：免費版各模型時常「忙碌（503）」或「每分鐘／每日額度用完（429）」，
+               # 所以準備多個備援依序嘗試（失敗通常 1 秒內就回應，不會拖太久）
+               "fallback_models": ("gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite")},
     # 阿里雲通義千問（新加坡國際站）：網址需含工作空間 ID，請在 FDE_GENERAL_BASE_URL 設定
     "qwen": {"base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "model": "qwen3.8-max", "key_env": "DASHSCOPE_API_KEY"},
     # OpenRouter：免費模型每日次數很少，需自行指定模型
@@ -32,7 +35,7 @@ PRESETS = {
 class OpenAICompatibleProvider(GeneralAIProvider):
     def __init__(self, api_key: str, *, base_url: str, model: str, provider_name: str = "openai_compatible",
                  vision_model: str | None = None, allow_images: bool = True, timeout_seconds: float = 25.0,
-                 client: httpx.AsyncClient | None = None):
+                 client: httpx.AsyncClient | None = None, fallback_models: tuple[str, ...] | list[str] = ()):
         if not api_key.strip():
             raise ValueError("general_api_key_required")
         if not model.strip() or not base_url.strip():
@@ -45,6 +48,8 @@ class OpenAICompatibleProvider(GeneralAIProvider):
         self.allow_images = allow_images
         self.timeout_seconds = timeout_seconds
         self.client = client or httpx.AsyncClient()
+        # 主模型回 503（忙碌）、429（免費額度／次數用完）或逾時時，依序改用的備援模型
+        self.fallback_models = [name for name in fallback_models if name and name != model]
 
     @staticmethod
     def _extract(payload: dict) -> str:
@@ -67,7 +72,7 @@ class OpenAICompatibleProvider(GeneralAIProvider):
                     json={
                         "model": model,
                         "messages": [{"role": "system", "content": COACH_SYSTEM_PROMPT}, {"role": "user", "content": user_content}],
-                        "max_tokens": 600,
+                        "max_tokens": 1500,  # Gemini 3 會先「思考」再回答，太小會把回答截斷
                     },
                 ),
                 timeout=self.timeout_seconds,
@@ -92,14 +97,25 @@ class OpenAICompatibleProvider(GeneralAIProvider):
                   "total_tokens": int(usage.get("total_tokens") or 0)}
         return self._result(started, model, answer=answer, tokens=tokens, source=source, http_status=response.status_code)
 
+    RETRYABLE_ERRORS = {"provider_http_503", "provider_http_429", "provider_timeout", "provider_http_500", "provider_http_502"}
+
+    async def _call_with_fallback(self, model: str, user_content, *, source: str) -> GeneralAIResult:
+        """先用指定模型；忙碌、額度用完或逾時就依序換備援模型，全部失敗回傳最後一次的錯誤。"""
+        result = None
+        for name in [model, *[m for m in self.fallback_models if m != model]]:
+            result = await self._call(name, user_content, source=source)
+            if result.answer or result.error not in self.RETRYABLE_ERRORS:
+                return result
+        return result
+
     async def generate(self, *, question: str, session: dict, task: dict, step: dict, language: str = "zh-TW") -> GeneralAIResult:
-        return await self._call(self.model, OpenAITextProvider._input(question, session, task, step), source="AI_REFERENCE")
+        return await self._call_with_fallback(self.model, OpenAITextProvider._input(question, session, task, step), source="AI_REFERENCE")
 
     async def generate_visual(self, *, question: str, session: dict, task: dict, step: dict, image_bytes: bytes, language: str = "zh-TW", safety_level: str | None = None) -> GeneralAIResult:
         prompt = OpenAITextProvider._input(question, session, task, step)
         if not self.allow_images:
             # 設定為不傳照片：只用文字（含 V7 判讀結果與教材）回答
-            return await self._call(self.model, prompt + "\n（未附鏡頭畫面，請依文字資訊回答）", source="AI_REFERENCE")
+            return await self._call_with_fallback(self.model, prompt + "\n（未附鏡頭畫面，請依文字資訊回答）", source="AI_REFERENCE")
         started = time.perf_counter()
         try:
             compressed = OpenAITextProvider.compress_image(image_bytes)
@@ -109,7 +125,7 @@ class OpenAICompatibleProvider(GeneralAIProvider):
             {"type": "text", "text": prompt + "\n請根據這張學員鏡頭畫面回答。"},
             {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(compressed).decode("ascii")}},
         ]
-        return await self._call(self.vision_model, content, source="AI_VISUAL_REFERENCE")
+        return await self._call_with_fallback(self.vision_model, content, source="AI_VISUAL_REFERENCE")
 
     def _result(self, started: float, model: str, *, answer: str | None = None, tokens: dict | None = None, source: str = "AI_REFERENCE",
                 error: str | None = None, http_status: int | None = None, error_type: str | None = None, provider_status: str = "READY") -> GeneralAIResult:

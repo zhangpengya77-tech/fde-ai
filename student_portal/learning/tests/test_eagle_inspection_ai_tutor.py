@@ -122,4 +122,4 @@ class CompatLlmTests(TestCase):
             answer = rotation_tutor.call_llm("說明", {"x": 1}, opener=opener)
         self.assertEqual(answer, "M3 要換 CW 槳。")
         self.assertTrue(seen["url"].endswith("/v1beta/openai/chat/completions"))
-        self.assertEqual(seen["body"]["model"], "gemini-3.8-flash")
+        self.assertEqual(seen["body"]["model"], "gemini-3.6-flash")

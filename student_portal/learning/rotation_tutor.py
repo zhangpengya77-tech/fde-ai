@@ -69,7 +69,7 @@ def _extract_output_text(payload):
 
 # 2026-11-04：免費／便宜的通用相容格式服務（與 Live 後端同一套設定）
 COMPAT_PRESETS = {
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "GEMINI_API_KEY"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.6-flash", "GEMINI_API_KEY"),  # 3.8-flash 常忙碌（503），改用穩定的 3.6
     "qwen": ("https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "qwen3.8-max", "DASHSCOPE_API_KEY"),
     "openrouter": ("https://openrouter.ai/api/v1", "", "OPENROUTER_API_KEY"),
 }
@@ -90,27 +90,41 @@ def _compat_config():
     return None
 
 
+# Gemini 免費版各模型常忙碌（503）或額度用完（429），依序改用備援模型（同 Live 後端）
+GEMINI_FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite")
+
+
 def _call_compat(config, instructions, evidence, opener):
-    """通用相容格式（/chat/completions）呼叫；失敗回傳空字串。"""
+    """通用相容格式（/chat/completions）呼叫；忙碌或額度用完就換備援模型，全部失敗回傳空字串。"""
     base, model, key = config
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)}],
-        "max_tokens": 600,
-    }, ensure_ascii=False).encode("utf-8")
-    request = Request(base + "/chat/completions", data=body, method="POST", headers={
-        "Authorization": "Bearer " + key, "Content-Type": "application/json",
-    })
-    try:
-        with opener(request, timeout=LLM_TIMEOUT_SECONDS) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        content = payload["choices"][0]["message"]["content"]
-    except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError) as exc:
-        logger.warning("AI tutor compatible LLM unavailable: %s", type(exc).__name__)
-        return ""
-    if isinstance(content, list):
-        content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
-    return str(content or "").strip()[:1200]
+    models = [model]
+    if "generativelanguage.googleapis.com" in base:
+        models += [name for name in GEMINI_FALLBACK_MODELS if name != model]
+    for name in models:
+        body = json.dumps({
+            "model": name,
+            "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)}],
+            "max_tokens": 1500,  # Gemini 3 會先思考，太小會截斷回答
+        }, ensure_ascii=False).encode("utf-8")
+        request = Request(base + "/chat/completions", data=body, method="POST", headers={
+            "Authorization": "Bearer " + key, "Content-Type": "application/json",
+        })
+        try:
+            with opener(request, timeout=LLM_TIMEOUT_SECONDS) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            content = payload["choices"][0]["message"]["content"]
+        except HTTPError as exc:
+            logger.warning("AI tutor compatible LLM %s HTTP %s", name, exc.code)
+            if exc.code in (429, 500, 502, 503):
+                continue  # 忙碌或額度用完：換下一個模型
+            return ""
+        except (URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError) as exc:
+            logger.warning("AI tutor compatible LLM unavailable: %s", type(exc).__name__)
+            continue
+        if isinstance(content, list):
+            content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+        return str(content or "").strip()[:1200]
+    return ""
 
 
 def call_llm(instructions, evidence, *, opener=urlopen):

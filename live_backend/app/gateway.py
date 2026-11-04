@@ -370,6 +370,9 @@ def create_gateway_app(*, live_app=None, config: GatewayConfig | None = None, tr
     """建立閘道 app；未提供 live_app 時以正式設定建立 Live。"""
     if live_app is None:
         from .main import create_app
+        from .providers.provider_manager import GeneralAIProviderManager
 
-        live_app = create_app()
+        # 2026-11-04 修正：原本沒帶入通用大模型，學員經閘道提問時永遠用不到大模型；
+        # 改成和 app.main 模組層級相同，依環境變數（Gemini／Claude／通義千問…）建立
+        live_app = create_app(general_ai_provider=GeneralAIProviderManager.from_environment())
     return IdentityGateway(live_app, config=config or GatewayConfig.from_environment(), transport=transport)

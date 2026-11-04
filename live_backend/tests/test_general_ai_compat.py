@@ -85,7 +85,7 @@ class CompatSelectionTests(unittest.TestCase):
         with self.clean_env(GEMINI_API_KEY="g-key", OPENAI_API_KEY="old", FDE_GENERAL_MODEL="gpt-5.6-luna"):
             manager = GeneralAIProviderManager.from_environment()
         self.assertIsInstance(manager.provider, OpenAICompatibleProvider)
-        self.assertEqual(manager.provider.model, "gemini-3.8-flash", "GPT 模型名稱不能傳給 Gemini")
+        self.assertEqual(manager.provider.model, "gemini-3.6-flash", "GPT 模型名稱不能傳給 Gemini")
         self.assertEqual(manager.health_status()["provider"], "gemini")
 
     def test_qwen_with_custom_base_and_send_images_off(self):
@@ -101,3 +101,47 @@ class CompatSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FallbackModelTests(unittest.TestCase):
+    """2026-11-04：主模型忙碌（503）或額度用完（429）時自動改用備援模型。"""
+
+    def test_busy_model_falls_back(self):
+        import json as _json
+        tried = []
+
+        def handler(request):
+            model = _json.loads(request.content)["model"]
+            tried.append(model)
+            if model == "gemini-3.6-flash":
+                return httpx.Response(503, json={"error": {"code": 503}})
+            return httpx.Response(200, json={"choices": [{"message": {"content": f"由 {model} 回答"}}]})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = OpenAICompatibleProvider("k", base_url="https://example.test/v1", model="gemini-3.6-flash", provider_name="gemini",
+                                            client=client, fallback_models=["gemini-3.5-flash", "gemini-3.8-flash"])
+        result = asyncio.run(provider.generate(question="q", **CONTEXT))
+        self.assertEqual(tried, ["gemini-3.6-flash", "gemini-3.5-flash"])
+        self.assertEqual(result.answer, "由 gemini-3.5-flash 回答")
+        self.assertEqual(result.model, "gemini-3.5-flash")
+
+    def test_bad_key_does_not_retry(self):
+        tried = []
+
+        def handler(request):
+            tried.append(1)
+            return httpx.Response(401, json={})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = OpenAICompatibleProvider("k", base_url="https://example.test/v1", model="a", client=client, fallback_models=["b", "c"])
+        asyncio.run(provider.generate(question="q", **CONTEXT))
+        self.assertEqual(len(tried), 1, "金鑰錯誤換模型也沒用，不重試")
+
+    def test_gemini_preset_defaults(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith(("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "DASHSCOPE_API_KEY", "OPENROUTER_API_KEY", "FDE_GENERAL_"))}
+        env["GEMINI_API_KEY"] = "g"
+        with mock.patch.dict(os.environ, env, clear=True):
+            provider = GeneralAIProviderManager.from_environment().provider
+        self.assertEqual(provider.model, "gemini-3.6-flash")
+        self.assertEqual(provider.fallback_models[0], "gemini-3.5-flash")
+        self.assertGreaterEqual(len(provider.fallback_models), 4)
