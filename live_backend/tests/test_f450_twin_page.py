@@ -34,6 +34,9 @@ class F450TwinPageTests(unittest.TestCase):
         self.assertEqual(html.count('id="buildF450TwinEntry"'), 1)
         self.assertIn('href="/f450-twin/"', html)
         self.assertIn('id="buildMain12Entry"', html)
+        self.assertIn('f450-twin-panel', html)
+        self.assertIn('<div class="panel" hidden>', html, "舊 AI 助教面板需保留並隱藏，避免 app.js 綁定失敗")
+        self.assertEqual(self.client.get("/f450-twin/preview.jpg").status_code, 200)
 
     def test_twin_page_does_not_embed_teacher_photos(self):
         html = (ROOT / "f450-twin" / "index.html").read_text(encoding="utf-8")
