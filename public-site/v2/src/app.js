@@ -106,13 +106,16 @@ function wirePortalLinks() {
     student: '/student/',
     register: '/register/',
     'teacher-login': '/teacher/login/',
-    growth: '/student/growth/'
+    growth: '/student/growth/',
+    // 2026-11-04：AI PID 與濾波實驗室在教學後台（需登入），靜態站只放連結
+    'pid-lab': '/pid-lab/'
   };
   const selectors = {
     student: 'a[href="./student/"]',
     register: 'a[href="./register/"]',
     'teacher-login': 'a[href="./teacher/login/"]',
-    growth: 'a[href="./student/growth/"]'
+    growth: 'a[href="./student/growth/"]',
+    'pid-lab': 'a[href="./pid-lab/"]'
   };
   Object.keys(pathMap).forEach((key) => {
     const path = pathMap[key];
@@ -137,7 +140,9 @@ function renderNavigation() {
     { key: 'build', label: '作', title: '實作任務' },
     { key: 'inspection', label: '測', title: 'AI 視覺檢測' },
     { key: 'certify', label: '證', title: '證照 SOP、學員成長日誌與成果紀錄' },
-    { label: '飛', title: '飛行健康分析｜Flight Health AI', href: './flight-health/' }
+    { label: '飛', title: '飛行健康分析｜Flight Health AI', href: './flight-health/' },
+    // 2026-11-04：飛行健康正下方新增 AI PID 調參入口；網址由 wirePortalLinks() 改成教學後台 /pid-lab/
+    { label: '調', title: 'AI PID 與濾波實驗室｜AI PID & Filter Lab', href: './pid-lab/' }
   ];
   $('#moduleNav').innerHTML = primaryNav
     .map((section) => {
