@@ -550,19 +550,20 @@ export function searchKnowledgeBase(question = '', limit = 2) {
 }
 
 export const assessmentWorkflows = [
+  // 2026-11-04：正式檢測入口為 V7 槳葉檢測與電力巡檢（四面懸停不再是正式入口）
   {
     key: 'propeller-inspection',
     title: 'F450 槳葉正反及方向檢查',
-    engine: 'YOLOv8 placeholder',
+    engine: 'YOLO11 V7 槳葉旋向模型',
     acceptedEvidence: ['photo'],
-    checks: ['槳葉 M1 = CCW', '槳葉 M2 = CCW', '槳葉 M3 = CW', '槳葉 M4 = CW', '錯誤項目交由 RAG 知識庫回答']
+    checks: ['槳葉 M1 = CCW', '槳葉 M2 = CCW', '槳葉 M3 = CW', '槳葉 M4 = CW', '錯誤時 AI 助教說明哪一支錯並語音朗讀', '知識庫（RAG）＋大模型補充修正步驟']
   },
   {
-    key: 'hover-scoring',
-    title: 'F450 四面懸停 AI 評分',
-    engine: 'YOLOv8 hover scoring placeholder',
-    acceptedEvidence: ['30-second-video'],
-    checks: ['機頭朝前懸停', '機頭朝右懸停', '機頭朝後懸停', '機頭朝左懸停', '線下老師完成最終評分']
+    key: 'power-inspection',
+    title: '電力巡檢影片上傳與分析',
+    engine: '電力巡檢 R7 模型（教師已審核）',
+    acceptedEvidence: ['video'],
+    checks: ['上傳無人機巡檢影片（MP4、MOV 等）', '偵測鳥巢、異物、絕緣子損傷、導線斷開', '異常時間軸與截圖保存於本人紀錄', '分析完成後 AI 助教語音說明', '教師覆核結果回寫學生巡檢紀錄']
   }
 ];
 
