@@ -34,7 +34,7 @@ PRESETS = {
 
 class OpenAICompatibleProvider(GeneralAIProvider):
     def __init__(self, api_key: str, *, base_url: str, model: str, provider_name: str = "openai_compatible",
-                 vision_model: str | None = None, allow_images: bool = True, timeout_seconds: float = 25.0,
+                 vision_model: str | None = None, allow_images: bool = True, timeout_seconds: float = 15.0,
                  client: httpx.AsyncClient | None = None, fallback_models: tuple[str, ...] | list[str] = ()):
         if not api_key.strip():
             raise ValueError("general_api_key_required")
@@ -47,7 +47,8 @@ class OpenAICompatibleProvider(GeneralAIProvider):
         self.provider_name = provider_name
         self.allow_images = allow_images
         self.timeout_seconds = timeout_seconds
-        self.client = client or httpx.AsyncClient()
+        # 2026-11-04 修正：httpx 預設只等 5 秒，Gemini 常要 5～6 秒才回答，會被誤判為網路錯誤
+        self.client = client or httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds, connect=8.0))
         # 主模型回 503（忙碌）、429（免費額度／次數用完）或逾時時，依序改用的備援模型
         self.fallback_models = [name for name in fallback_models if name and name != model]
 
@@ -97,12 +98,17 @@ class OpenAICompatibleProvider(GeneralAIProvider):
                   "total_tokens": int(usage.get("total_tokens") or 0)}
         return self._result(started, model, answer=answer, tokens=tokens, source=source, http_status=response.status_code)
 
-    RETRYABLE_ERRORS = {"provider_http_503", "provider_http_429", "provider_timeout", "provider_http_500", "provider_http_502"}
+    RETRYABLE_ERRORS = {"provider_http_503", "provider_http_429", "provider_timeout", "provider_http_500", "provider_http_502", "provider_network_error"}
+    # 整個備援流程最多花這麼久；超過就交給知識庫／V7 回答，避免學員端等到逾時、看起來卡住
+    TOTAL_BUDGET_SECONDS = 20.0  # 加上 V7（≤15 秒）與知識庫（≤6 秒）後，仍在前端 45 秒等待內
 
     async def _call_with_fallback(self, model: str, user_content, *, source: str) -> GeneralAIResult:
-        """先用指定模型；忙碌、額度用完或逾時就依序換備援模型，全部失敗回傳最後一次的錯誤。"""
+        """先用指定模型；忙碌、額度用完、逾時或網路錯誤就依序換備援模型，總時間有上限。"""
+        started = time.perf_counter()
         result = None
         for name in [model, *[m for m in self.fallback_models if m != model]]:
+            if result is not None and time.perf_counter() - started > self.TOTAL_BUDGET_SECONDS - self.timeout_seconds / 2:
+                break  # 剩下的時間不夠再試一個模型
             result = await self._call(name, user_content, source=source)
             if result.answer or result.error not in self.RETRYABLE_ERRORS:
                 return result

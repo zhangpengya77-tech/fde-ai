@@ -702,7 +702,9 @@
     // 安全相關問題不靠畫面判斷（簡繁體都要排除）
     if (/上電|上電|通電|通電|解鎖|解鎖|起飛|起飛|馬達測試|馬達測試|電機測試|電機測試|failsafe|prearm|飛前|飛前|放行|真實飛行|真實飛行|安全/i.test(value)) return false;
     // 2026-11-04：補上繁體與口語說法，鏡頭開著時學員這樣問，AI 會讀取當前畫面
-    return /幫我看|幫我看|看一下|看看|畫面|畫面|鏡頭|鏡頭|這個是什麼|這個是什麼|這是什麼|對不對|對不對|對嗎|對嗎|正不正確|裝好了|裝好了|裝對|裝對|裝錯|裝錯|有沒有問題|有沒有問題|方向|接對|接對|接線|接線|插對|插對|槳葉|槳葉|螺旋槳|螺旋槳|電調|電調|飛控|飛控|馬達|馬達/i.test(value);
+    // 「這個…」「這樣…」「機架」等指著實物問的說法，也讀取畫面（簡體辨識結果一併涵蓋）
+    if (/這個|这个|這樣|这样|這是|这是|那個|那个|機架|机架|手上|眼前|我拿的/i.test(value)) return true;
+    return /幫我看|帮我看|看一下|看看|畫面|畫面|鏡頭|鏡頭|這個是什麼|這個是什麼|這是什麼|對不對|對不對|對嗎|對嗎|正不正確|裝好了|裝好了|裝對|裝對|裝錯|裝錯|有沒有問題|有沒有問題|方向|接對|接對|接線|接線|插對|插對|槳葉|槳葉|螺旋槳|螺旋槳|電調|電調|飛控|飛控|馬達|馬達/i.test(value);
   }
 
   function cameraPreviewPolicy() {
@@ -850,7 +852,7 @@
       payload.image_data = captured.imageData;
     }
     const controller = options.controller || (typeof AbortController !== 'undefined' ? new AbortController() : null);
-    const timeoutMs = options.timeoutMs ?? 20000;
+    const timeoutMs = options.timeoutMs ?? 30000;  // 2026-11-04：後台要查知識庫、跑 V7、再問大模型，原本 15～20 秒常不夠
     let timeout;
     try {
       const request = fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/ask`, {
@@ -1805,7 +1807,7 @@
           if (elements.diagnosticVision) elements.diagnosticVision.textContent = 'processing';
           return frame;
         } : null;
-        const result = await askLiveCoach(fetchImpl, id, question, captureCurrent, { timeoutMs: visual ? 20000 : 15000, requestId, interactionId, controller: askController });
+        const result = await askLiveCoach(fetchImpl, id, question, captureCurrent, { timeoutMs: visual ? 45000 : 30000, requestId, interactionId, controller: askController });
         if (elements.diagnosticAskHttpStatus) elements.diagnosticAskHttpStatus.textContent = '200';
         interaction.transition('ANSWER_READY', { requestId, interactionId });
         const delivered = deliverAiAnswer(result.answer, { autoSpeak, speechReply, callbacks: speechCallbacks() });

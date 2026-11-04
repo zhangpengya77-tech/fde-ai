@@ -45,7 +45,7 @@ def build_prop_checker(center, evaluate_prop):
     return check
 
 
-async def run_prop_check(checker, image_bytes: bytes, *, timeout_seconds: float = 25.0) -> dict | None:
+async def run_prop_check(checker, image_bytes: bytes, *, timeout_seconds: float = 15.0) -> dict | None:
     """在背景執行緒跑 V7（推論是阻塞的子程序），失敗或逾時回傳 None，不影響回答。"""
     if checker is None or not image_bytes:
         return None
