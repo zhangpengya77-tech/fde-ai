@@ -34,6 +34,15 @@ class StudentTaskWorkflowTests(TestCase):
             [phase for phase, _ in TaskDefinition.Stage.choices],
         )
 
+    def test_t06_shows_optional_pid_lab_link_only_on_t06(self):
+        TaskDefinition.objects.create(task_id="T06", sort_order=6, stage=TaskDefinition.Stage.BUILD, title="飛控與感測器調校")
+        response = self.client.get(reverse("learning:task_detail", args=[self.enrollment.pk, "T06"]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/pid-lab/"')
+        self.assertContains(response, "不影響本任務完成條件")
+        other = self.client.get(reverse("learning:task_detail", args=[self.enrollment.pk, "T04"]))
+        self.assertNotContains(other, "data-pid-lab-link")
+
     def test_t04_can_be_opened_when_t03_is_not_complete(self):
         response = self.client.get(reverse("learning:task_detail", args=[self.enrollment.pk, "T04"]))
         self.assertEqual(response.status_code, 200)

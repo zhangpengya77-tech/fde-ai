@@ -1006,6 +1006,9 @@
     if (elements.trainingAction) elements.trainingAction.textContent = step.student_instruction || step.instruction || task.description || '—';
     if (elements.trainingWhy) elements.trainingWhy.textContent = step.why_it_matters || step.rationale || task.description || '—';
     const taskId = task.id || task.task_id || training.current_task_id || `TASK_${String(order).padStart(2, '0')}`;
+    // AI PID 與濾波實驗室入口：只在 TASK_07 / TASK_08 顯示，純連結，不影響步驟與完成條件。
+    const pidLabLink = elements.trainingObjective?.ownerDocument?.getElementById?.('pidLabLink');
+    if (pidLabLink) pidLabLink.hidden = !(taskId === 'TASK_07' || taskId === 'TASK_08');
     const task08Check = taskId === 'TASK_08' && step.step_id !== 'T08_TEACHER_FINAL_REVIEW';
     // MP-12 只屬於 TASK_07：沒有 mission_planner payload 就一律 hidden（TASK_01～06 / TASK_08～12 不顯示）
     const isMissionPlanner = taskId === 'TASK_07' && Boolean(training.mission_planner);
