@@ -672,8 +672,14 @@
     showTaskMap(elements);
   }
 
-  function renderTaskMapLoadError(elements) {
-    if (elements.trainingTaskList) elements.trainingTaskList.innerHTML = '<li class="task-map-error">任務地圖載入失敗。<button type="button" data-retry-task-map>重新載入</button></li>';
+  function renderTaskMapLoadError(elements, error) {
+    // 2026-11-04：未登入（後台回 401／live_session_required）時改提示登入，登入後自動回到 AI 陪做頁
+    const needsLogin = error && (error.status === 401 || error.code === 'live_session_required');
+    if (elements.trainingTaskList) {
+      elements.trainingTaskList.innerHTML = needsLogin
+        ? '<li class="task-map-error">請先登入學員帳號，才能開始 F450 實訓與 AI 陪做。<a class="primary-action" href="/login/?next=%2Flive%2F">前往學員登入</a></li>'
+        : '<li class="task-map-error">任務地圖載入失敗。<button type="button" data-retry-task-map>重新載入</button></li>';
+    }
     showTaskMap(elements);
   }
 
@@ -1385,7 +1391,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'demo', vision_source: visionSource, training_track: 'F450_TWELVE_TASK' })
       });
-      if (!response.ok) throw new Error('session_create_failed');
+      if (!response.ok) { const error = new Error('session_create_failed'); error.status = response.status; throw error; }  // 帶上狀態碼：401 代表未登入，頁面會提示登入
       const created = await response.json();
       sessionId = created.session_id;
       sessionVisionSource = visionSource;
@@ -2006,7 +2012,7 @@
       renderCurrentTraining(state.training);
       showTaskMap(elements);
     }
-    bindTaskMapRetry(elements.trainingTaskList, () => refreshMap().catch(() => renderTaskMapLoadError(elements)));
+    bindTaskMapRetry(elements.trainingTaskList, () => refreshMap().catch((error) => renderTaskMapLoadError(elements, error)));
     elements.backToTaskMap?.addEventListener('click', () => refreshMap().catch((error) => setMessage(`任務地圖刷新失敗：${error.message}`)));
     elements.continueTrainingStep?.addEventListener('click', () => { if (!pendingTrainingState) return; const training = pendingTrainingState; pendingTrainingState = null; elements.stepCompleteFeedback.hidden = true; if (elements.completionCard) elements.completionCard.hidden = false; renderCurrentTraining(training); });
     elements.classroomValidationToggle?.addEventListener('change', async () => {
@@ -2402,7 +2408,7 @@
       initializeVisionCenter(document, fetch);
       controller.refreshHealth();
       controller.refreshCameraDevices();
-      controller.initializeStudentMode().catch(() => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }));
+      controller.initializeStudentMode().catch((error) => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }, error));
       // P1-4：pagehide 只停相機/語音，不銷燬 session——刷新/導航後 ensureSession 仍能複用同一會話。
       window.addEventListener('pagehide', () => { controller.pauseVoiceCoach(); controller.stopCameraStream(); });
     });
