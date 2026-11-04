@@ -147,7 +147,9 @@
   const RETRYABLE_SPEECH_CODES = new Set(['network']);
   const FATAL_SPEECH_CODES = new Set(['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported']);
 
-  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onInterim = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true, endGraceMs = 750, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout, silentRestartMs = 400, maxRetryableFailures = 5 } = {}) {
+  // startTimeoutMs：呼叫 start() 後這麼久還沒真正開始聆聽（onstart 沒觸發），就判定被瀏覽器擋下。
+  // iPhone Safari 不允許「非點擊當下」開始語音辨識，而且常常不回報錯誤；0＝不檢查（測試用預設）。
+  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onInterim = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true, endGraceMs = 750, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout, silentRestartMs = 400, maxRetryableFailures = 5, startTimeoutMs = 0 } = {}) {
     let enabled = false;
     let activeCycle = null;
     let sequence = 0;
@@ -190,7 +192,20 @@
       recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = 'zh-TW';
-      recognition.onstart = () => onState('LISTENING');
+      recognition.onstart = () => {
+        cycle.started = true;
+        if (cycle.startTimer) { clearTimeoutImpl(cycle.startTimer); cycle.startTimer = null; }
+        onState('LISTENING');
+      };
+      if (startTimeoutMs > 0) {
+        cycle.startTimer = setTimeoutImpl(() => {
+          cycle.startTimer = null;
+          if (cycle.started || cycle.submitted || cycle.cancelled || activeCycle !== cycle) return;
+          // 沒有真正開始聽（被瀏覽器擋下）：停止這輪並回報，頁面改顯示「點一下繼續說話」
+          try { (recognition.abort || recognition.stop)?.call(recognition); } catch { /* 已停止 */ }
+          failCycle(cycle, 'start-blocked');
+        }, startTimeoutMs);
+      }
       recognition.onresult = (event) => {
         const transcript = Array.from(event.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
         const finalSeen = Array.from(event.results || []).some((result) => result.isFinal === true);
@@ -1715,6 +1730,7 @@
     });
     handsFreeVoice = createHandsFreeVoiceCoach({
       recognitionFactory: SpeechRecognitionCtor ? () => new SpeechRecognitionCtor() : null,
+      startTimeoutMs: 2500,  // 2026-11-04：2.5 秒內沒真正開始聆聽＝被 iPhone 擋下，改請學員點一下
       isBusy: () => !['IDLE', 'ANSWER_READY'].includes(interaction.state()),
       isPageActive: () => !documentRef.hidden && !elements.taskDetailScreen?.hidden,
       onState: (state) => {
@@ -1769,6 +1785,16 @@
     // 語音辨識必須在點擊當下啟動（iOS 限制），所以先開語音、再非同步開鏡頭；
     // 學員不講話時語音靜置待命、鏡頭持續開著，講話時 AI 依問題讀取當前畫面回答。
     elements.enableVoiceCoach?.addEventListener('click', () => {
+      // 2026-11-04：iPhone 規定語音播放要由使用者點擊「解鎖」；趁這次點擊先播一段無聲語音，
+      // 之後 AI 回答回來（非點擊當下）才能自動唸出來
+      try {
+        if (globalThis.speechSynthesis && globalThis.SpeechSynthesisUtterance) {
+          const unlock = new globalThis.SpeechSynthesisUtterance(' ');
+          unlock.volume = 0;
+          globalThis.speechSynthesis.speak(unlock);
+        }
+      } catch { /* 不支援就略過，文字回答照常顯示 */ }
+      elements.enableVoiceCoach.textContent = '🎙 點一下繼續說話';
       const voiceOn = capabilities.speechInput && handsFreeVoice.enable();
       if (!stream) startCamera().catch((error) => setMessage(`攝影機無法開啟：${error.message}`));
       if (!voiceOn) {

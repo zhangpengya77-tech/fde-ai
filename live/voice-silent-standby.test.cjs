@@ -120,3 +120,39 @@ test('學員頁一鍵開始 AI 陪做（鏡頭＋語音）', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.match(html, /id="enableVoiceCoach"[^>]*>開始 AI 陪做（鏡頭＋語音）</);
 });
+
+test('iPhone 擋下自動聆聽（沒有 onstart）時，回報 start-blocked 並停止待命', () => {
+  const recognitions = [];
+  const timers = [];
+  const errors = [];
+  const coach = live.createHandsFreeVoiceCoach({
+    recognitionFactory: () => { const r = { start() {}, abort() { this.aborted = true; } }; recognitions.push(r); return r; },
+    onError: (code) => errors.push(code),
+    setTimeoutImpl: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeoutImpl: () => {},
+    startTimeoutMs: 2500
+  });
+  coach.enable();
+  timers.shift()();  // 2.5 秒到了，仍沒有 onstart
+  assert.deepEqual(errors, ['start-blocked']);
+  assert.equal(coach.isEnabled(), false);
+  assert.equal(recognitions[0].aborted, true);
+});
+
+test('有真正開始聆聽（onstart）就不會被判定擋下', () => {
+  const timers = [];
+  const errors = [];
+  const recognitions = [];
+  const coach = live.createHandsFreeVoiceCoach({
+    recognitionFactory: () => { const r = { start() {} }; recognitions.push(r); return r; },
+    onError: (code) => errors.push(code),
+    setTimeoutImpl: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeoutImpl: () => {},
+    startTimeoutMs: 2500
+  });
+  coach.enable();
+  recognitions[0].onstart();
+  timers.forEach((fn) => fn());
+  assert.deepEqual(errors, []);
+  assert.equal(coach.isEnabled(), true);
+});
