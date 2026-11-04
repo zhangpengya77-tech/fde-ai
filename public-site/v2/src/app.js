@@ -130,6 +130,23 @@ function wirePortalLinks() {
       }
     });
   });
+  wireBackendLinks(base);
+}
+
+// 2026-11-04：檢測入口（槳葉 V7、電力巡檢）改到教學後台執行。
+// 先經登入頁，登入後由 next 參數直接帶到對應的後台檢測頁；後台未設定時停用按鈕。
+function wireBackendLinks(base) {
+  document.querySelectorAll('a[data-backend-path]').forEach((el) => {
+    const path = el.getAttribute('data-backend-path') || '/';
+    if (!base) {
+      el.setAttribute('aria-disabled', 'true');
+      el.classList.add('portal-link-disabled');
+      el.removeAttribute('href');
+      el.title = '需教學系統上線後開放';
+      return;
+    }
+    el.href = `${base}/login/?next=${encodeURIComponent(path)}`;
+  });
 }
 
 function renderNavigation() {

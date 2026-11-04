@@ -271,10 +271,25 @@
         <div class="section-intro">
           <p class="eyebrow">AI Inspection Center · 測</p>
           <h2>鷹眼 AI 檢測中心</h2>
-          <p>本頁只保留兩個檢測入口：F450 槳葉正反及方向檢查、F450 四面懸停檢測。</p>
+          <p>本頁兩個正式檢測入口：F450 槳葉正反及方向檢查（V7 模型）、電力巡檢影片上傳與分析。檢測在教學後台執行，需先登入；結果交老師覆核。</p>
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
+        <!-- 2026-11-04：GitHub 靜態站無法安全地跨站上傳到後台，兩個入口改為登入後到後台檢測頁執行；
+             網址由 wireBackendLinks() 依 portalBaseUrl 產生，後台未上線時自動停用。 -->
         <div class="inspection-layout">
+          <div class="panel upload-panel">
+            <h3>F450 槳葉正反及方向檢查</h3>
+            <p class="muted">上傳 F450 俯視照片，V7 模型判斷 M1～M4 的 CW／CCW；未通過時會說明哪一支槳裝錯、正確應是什麼，並由 AI 助教與知識庫說明修正步驟。</p>
+            <a class="primary-action button" data-backend-path="/platform/eagle" href="#">登入後執行槳葉檢測</a>
+          </div>
+          <div class="panel upload-panel">
+            <h3>電力巡檢影片上傳與分析</h3>
+            <p class="muted">上傳無人機巡檢影片（MP4、MOV 等），教師審核過的電力巡檢模型偵測鳥巢、異物、絕緣子損傷、導線斷開，結果進入教師覆核。</p>
+            <a class="primary-action button" data-backend-path="/student/power-inspection/" href="#">登入後上傳巡檢影片</a>
+          </div>
+        </div>
+        <!-- 原本的上傳元件保留但隱藏：既有程式仍綁定這些元素，移除會讓頁面腳本出錯 -->
+        <div class="inspection-layout" hidden aria-hidden="true" style="display:none">
           <div class="panel upload-panel">
             <h3>F450 槳葉正反及方向檢查</h3>
             <label class="dropzone">
@@ -354,6 +369,6 @@
     </script>
     <script src="./src/rag-client.js?v=1.2.3-mobile-speech"></script>
     <script src="./src/vision-client.js?v=1.0.3-mobile-speech"></script>
-    <script src="./src/app.js?v=1.2.4-pidlab-nav"></script>
+    <script src="./src/app.js?v=1.2.5-inspection-backend"></script>
   </body>
 </html>
