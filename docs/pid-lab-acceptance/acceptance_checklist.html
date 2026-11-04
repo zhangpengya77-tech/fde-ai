@@ -1,0 +1,288 @@
+<title>PID 實驗室驗收清單</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 版面：單欄工作清單，左側為步驟、右側為判定；手機時判定移到步驟下方 */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --fg: #16202b;
+  --muted: #5b6977;
+  --line: #d9e0e7;
+  --accent: #0b6fb8;
+  --pass: #11804f;
+  --pass-bg: #e3f4ec;
+  --fail: #b42318;
+  --fail-bg: #fbe9e7;
+  --todo: #6b7785;
+  --todo-bg: #edf0f3;
+  --font-body: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d141b; --surface: #15202b; --fg: #e3ecf4; --muted: #93a4b5; --line: #26343f;
+    --accent: #5fb2f0; --pass: #4fd39a; --pass-bg: #123527; --fail: #ff8a7a; --fail-bg: #3b1915;
+    --todo: #9aa8b6; --todo-bg: #1d2a35; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d141b; --surface: #15202b; --fg: #e3ecf4; --muted: #93a4b5; --line: #26343f;
+  --accent: #5fb2f0; --pass: #4fd39a; --pass-bg: #123527; --fail: #ff8a7a; --fail-bg: #3b1915;
+  --todo: #9aa8b6; --todo-bg: #1d2a35; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 20px; }
+h1 { font-size: 26px; margin: 0; text-wrap: balance; }
+h2 { font-size: 18px; margin: 0 0 4px; text-wrap: balance; }
+p { margin: 0; }
+.muted { color: var(--muted); font-size: 13.5px; }
+code, .mono { font-family: var(--font-mono); font-size: 13px; }
+code { background: var(--todo-bg); padding: 1px 6px; border-radius: 4px; word-break: break-all; }
+a { color: var(--accent); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.head { display: grid; gap: 8px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.url-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.url { font-family: var(--font-mono); font-size: 15px; font-weight: 600; background: var(--todo-bg); padding: 6px 10px; border-radius: 6px; user-select: all; }
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 6px 12px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.summary { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.chip { font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.chip.pass { background: var(--pass-bg); color: var(--pass); }
+.chip.fail { background: var(--fail-bg); color: var(--fail); }
+.chip.todo { background: var(--todo-bg); color: var(--todo); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+td.mono { white-space: nowrap; }
+.section { display: grid; gap: 0; }
+.section > header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; }
+.item[data-state="pass"] { box-shadow: inset 3px 0 0 var(--pass); }
+.item[data-state="fail"] { box-shadow: inset 3px 0 0 var(--fail); }
+.item h3 { font-size: 15px; margin: 0 0 4px; }
+.item ol { margin: 4px 0 6px; padding-left: 20px; }
+.expect { font-size: 13.5px; }
+.expect b { color: var(--muted); font-weight: 500; }
+.verdict { display: grid; gap: 6px; align-content: start; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg label { text-align: center; padding: 5px 0; font-size: 13px; cursor: pointer; border-right: 1px solid var(--line); }
+.seg label:last-child { border-right: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg input:checked + span { font-weight: 700; }
+.seg label:has(input[value="pass"]:checked) { background: var(--pass-bg); color: var(--pass); }
+.seg label:has(input[value="fail"]:checked) { background: var(--fail-bg); color: var(--fail); }
+.seg label:has(input[value="todo"]:checked) { background: var(--todo-bg); }
+.seg label:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+textarea { width: 100%; min-height: 54px; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); resize: vertical; }
+.note { border-left: 3px solid var(--accent); padding: 6px 10px; background: var(--todo-bg); border-radius: 0 6px 6px 0; font-size: 13.5px; }
+#copy-out { display: none; width: 100%; min-height: 160px; font-family: var(--font-mono); font-size: 12.5px; }
+@media (max-width: 700px) {
+  .item { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <span class="eyebrow">FDE-AI UAS 2.0 · AI PID &amp; Filter Lab · PR #1 · 2026-11-04</span>
+    <h1>PID 實驗室驗收清單</h1>
+    <p class="muted">逐項操作真實頁面並判定「通過 / 不通過 / 未測」。判定與備註只存在你這台瀏覽器；完成後按「複製驗收結果」貼回對話即可。</p>
+  </div>
+
+  <section class="panel" aria-labelledby="h-entry">
+    <h2 id="h-entry">驗收入口</h2>
+    <div class="url-row">
+      <span class="url" id="lab-url">http://127.0.0.1:8195/pid-lab/</span>
+      <button type="button" id="copy-url">複製網址</button>
+    </div>
+    <p class="muted">只能在<b>執行驗收伺服器的這台電腦</b>上開啟（手機連不到 127.0.0.1）。首頁側欄入口：<code>http://127.0.0.1:8195/</code></p>
+    <div class="note">伺服器跑在 Claude 桌面版終端分頁「PID 實驗室驗收伺服器 :8195」。若已關閉，在 PowerShell 執行：<br><code>&amp; 'D:\FDE-AI-UAS-v2.0-pidlab\docs\pid-lab-acceptance\tools\start_acceptance_server.ps1'</code><br>這是<b>開發模式</b>：右上角下拉選單可切換「學員 / 教師」身分（正式站由登入決定，不會出現此選單）。資料在 <code>D:\FDE-AI-Runtime\pidlab-acceptance</code>，整個刪除即可重來。</div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-seed">
+    <h2 id="h-seed">已預載的真實日誌（學員身分可見）</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>飛機</th><th>日誌</th><th>預期結果</th></tr></thead>
+        <tbody>
+          <tr><td>2.5寸教學機 A01（BF 3.1.5）</td><td class="mono">stock_tune.BFL · BASELINE</td><td>健康 100；橫滾過衝約 84%、俯仰約 55% → 2 項 REVIEW（d_roll 20→22、d_pitch 22→24）</td></tr>
+          <tr><td>2.5寸教學機 A01（BF 3.1.5）</td><td class="mono">good_tune.BBL · AFTER_TUNING</td><td>健康 86.7；過衝約 8%，無 REVIEW</td></tr>
+          <tr><td>BF 4.2 AIKONF7</td><td class="mono">btfl_002.bbl</td><td>健康 100；板型 AIKONF7；過衝 4–9%，無建議；延遲顯示「≤ 2 ms」</td></tr>
+          <tr><td>BF 4.2 KAKUTEF7</td><td class="mono">LOG00037.BFL</td><td>過衝 38–44% → 2 項 REVIEW；GPS 有資料（非 N/A）</td></tr>
+          <tr><td>F450-01（ArduCopter 4.5.7）</td><td class="mono">log484（10/15）</td><td>健康 95；電池 WARN；PID 資料不足（RATE 10 Hz）並附「改善方法」連結</td></tr>
+          <tr><td>F450-01（ArduCopter 4.5.7）</td><td class="mono">log496（10/18）</td><td>健康 100；落地後搬動不誤判翻覆</td></tr>
+          <tr><td>F450-01（ArduCopter 4.5.7）</td><td class="mono">log498（11/01）</td><td>健康 65；推力不足 + 墜機 + 電池失控保護 → 飛行模式 FAIL、建議全部 BLOCKED</td></tr>
+          <tr><td>Tarot X4（4.5.5）</td><td class="mono">tarot_x4_methodic.bin</td><td>濾波前 / 後頻譜 6 張、濾波實測衰減表、諧波陷波對照 INFO</td></tr>
+          <tr><td>PX4 CubeOrange（1.11.2）</td><td class="mono">sample_log_small.ulg</td><td>識別 PX4 1.11.2；VTOL → 動力 INSUFFICIENT；不給多旋翼調參規則</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">要自行上傳的測試檔都在 <code>D:\FDE-AI-Runtime\pidlab-samples</code>。</p>
+  </section>
+
+  <div class="summary" role="status" aria-live="polite">
+    <span class="chip pass" id="n-pass">通過 0</span>
+    <span class="chip fail" id="n-fail">不通過 0</span>
+    <span class="chip todo" id="n-todo">未測 0</span>
+    <button type="button" class="primary" id="copy-result">複製驗收結果</button>
+    <button type="button" id="reset">清除全部判定</button>
+  </div>
+  <textarea id="copy-out" readonly aria-label="驗收結果文字"></textarea>
+
+  <div id="sections"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var SECTIONS = [
+    { id: 'A', title: 'A. 入口與介面', items: [
+      { id: 'A1', t: '首頁側欄入口', s: ['開 http://127.0.0.1:8195/', '看左側欄「飛行健康 AI」正下方'], e: '出現「調 · AI PID 與濾波實驗室」，其他項目順序與名稱不變；點擊進入實驗室。' },
+      { id: 'A2', t: '四個飛控入口', s: ['實驗室 → 「2 飛控與飛機」', '看頂部四張卡片'], e: 'Betaflight / ArduPilot（Pixhawk、APM）/ PX4 / 其他飛控；卡片標示驗收狀態（部分驗收 / 僅檔案）與說明。' },
+      { id: 'A3', t: '其他飛控手動填寫', s: ['點「其他飛控」', '不填韌體名稱直接儲存，再填寫後儲存'], e: '出現品牌 / 硬體 / 韌體 / 機型欄位；未填韌體會被拒；儲存後在「3 上傳」選這架飛機時，上傳按鈕不可用。' },
+      { id: 'A4', t: 'Flight Health 頁飛控選擇', s: ['開 http://127.0.0.1:8195/flight-health/', '依序點四個飛控按鈕'], e: 'ArduPilot 顯示原本的上傳區；Betaflight / PX4 / 其他 顯示前往實驗室的說明與按鈕。' },
+      { id: 'A5', t: '窄螢幕（手機寬度）', s: ['瀏覽器視窗縮到最窄，或開發者工具切 375px', '瀏覽健康報告、PID 頁'], e: '無左右捲動，卡片改為單欄，文字不被裁切。' },
+      { id: 'A6', t: '後端離線狀態', s: ['在終端分頁按 Ctrl+C 停伺服器', '重新整理實驗室頁，看頂部狀態列，之後再啟動伺服器'], e: '紅色離線提示，不顯示任何分析結果。（測完記得重新啟動）' }
+    ]},
+    { id: 'B', title: 'B. 健康指標與 PID 分析（用預載日誌）', items: [
+      { id: 'B1', t: '八大健康指標（Betaflight）', s: ['「3 上傳」下方「我的日誌」→ stock_tune「查看分析」'], e: '8 張卡；GPS、導航為 N/A（不扣分）；每張有證據、資料來源、覆蓋率、可信度、閾值來源；綜合分與評分規則說明。' },
+      { id: 'B2', t: 'Betaflight PID 圖表', s: ['同一份日誌 → 「5 PID / 濾波」'], e: '三軸各有時間曲線與階躍響應曲線、過衝 / 上升時間 / 延遲等數值；陀螺儀與 D 項頻譜；標示 setpoint 為推導值。' },
+      { id: 'B3', t: 'Betaflight 4.2 日誌', s: ['開 btfl_002 的分析'], e: '標頭顯示 Betaflight 4.2.8 · AIKONF7；setpoint 非推導值；延遲顯示「≤ 2 ms」；無 REVIEW 建議。' },
+      { id: 'B4', t: 'ArduPilot 八大健康與資料不足', s: ['開 log484 的健康報告與 AI 建議'], e: '電池 WARN（最低單芯 3.12 V）；PID 三軸 INSUFFICIENT（10 Hz）；建議頁有「改善方法」連結，點擊後跳到記錄設定教學。' },
+      { id: 'B5', t: '墜機日誌', s: ['開 log498 的健康報告與 AI 建議'], e: '飛行模式 FAIL，列出 119 s 推力不足、122 s 墜機偵測等事件；姿態 FAIL 並列出翻覆段；建議頁全部 BLOCKED，不能送審。' },
+      { id: 'B6', t: 'ArduPilot 濾波（批次取樣）', s: ['開 Tarot X4 的「5 PID / 濾波」'], e: '濾波前 / 後頻譜各三軸；「濾波實測效果」表顯示約 -30 ~ -47 dB；建議頁有諧波陷波對照（INFO）。' },
+      { id: 'B7', t: 'PX4 日誌', s: ['開 PX4 sample_log_small 的健康報告'], e: '識別 PX4 1.11.2 · CUBEPILOT_CUBEORANGE；動力 INSUFFICIENT（VTOL）；GPS / 導航 / 電池有實際數值。' }
+    ]},
+    { id: 'C', title: 'C. 教學流程（請親手操作）', items: [
+      { id: 'C1', t: '學員送審', s: ['學員身分 → stock_tune「6 AI 建議」', '勾選兩項 REVIEW，填寫自己的判斷，按「送交教師審核」'], e: '顯示 PENDING_REVIEW 與方案編號；每項建議列出目前值、建議值、範圍、驗證依據、風險與複測方法。' },
+      { id: 'C2', t: '教師審核', s: ['右上角切換「開發：教師」', '「7 教師審核」→ 不填意見先按核准，再填意見核准（可改數值）'], e: '未填意見被拒；超出範圍的數值被拒；核准後狀態 APPROVED，顯示審核人與意見。' },
+      { id: 'C3', t: '參數匯出', s: ['切回學員 → 「8 匯出」'], e: '顯示 Betaflight CLI（set d_roll = …、save），含 diff all 備份提醒與原值註解；未核准的方案不能匯出。' },
+      { id: 'C4', t: '前後比較', s: ['「10 前後比較」選 stock_tune（BASELINE）與 good_tune（AFTER_TUNING）', '按「產生前後比較」'], e: '逐軸列出過衝、上升時間、追蹤誤差、延遲的變化與判定；整體判定附原因與條件差異限制（這兩份是不同飛行，結果僅驗證流程）。' },
+      { id: 'C5', t: '實訓報告', s: ['「報告與檔案」選 stock_tune'], e: '報告含實驗編號、學員、機體、韌體、日誌雜湊、參數快照、八大指標、控制指標、頻譜、AI 摘要、審核紀錄、前後對比；下方有成長紀錄表。' },
+      { id: 'C6', t: '標準參數庫', s: ['切換教師 → 「標準參數庫」建立草稿', '按「標記 APPROVED」'], e: '可建立 DRAFT；沒有附 BASELINE、AFTER_TUNING 與 IMPROVED 比較時，標記 APPROVED 被拒並說明原因。' },
+      { id: 'C7', t: '安全驗證清單', s: ['「9 安全驗證」逐項勾選後重新整理'], e: '8 項安全檢查（拆槳、備份、不改資源映射等）；勾選狀態保留。' }
+    ]},
+    { id: 'D', title: 'D. 錯誤與防護（自行上傳）', items: [
+      { id: 'D1', t: '非 Betaflight 韌體被拒', s: ['在 Betaflight 飛機上傳 D:\\FDE-AI-Runtime\\pidlab-samples\\betaflight\\fc-blackbox\\LOG00004.TXT（INAV）'], e: '狀態 FAILED，說明「韌體是 INAV 3.0.1，不是 Betaflight」，不產生任何分析。' },
+      { id: 'D2', t: '飛控與檔案不符', s: ['在 Betaflight 飛機上傳任一 ArduPilot .bin（例如 pidlab-samples\\ardupilot\\f450_log496_20261018.bin）'], e: '立即拒絕，說明檔案內容判定為 ArduPilot，與飛機設定不一致。' },
+      { id: 'D3', t: '不支援的檔案', s: ['上傳一個改名為 .bin 的文字檔或圖片'], e: '拒絕並說明「依檔案內容判斷，不是可辨識的日誌」。' },
+      { id: 'D4', t: '重複上傳', s: ['再次上傳已上傳過的同一份日誌'], e: '提示「這個檔案已經上傳過，直接沿用先前的分析」，不重複分析。' }
+    ]},
+    { id: 'E', title: 'E. 課程入口（需正式整合環境）', items: [
+      { id: 'E1', t: 'T06 任務頁連結', s: ['需 Django 課程系統（本驗收伺服器未啟動 Django），可在整合環境以學員登入開 T06'], e: '標題下方出現「延伸實訓：AI PID 與濾波實驗室」選修連結；其他任務沒有。目前以自動化測試驗證。' },
+      { id: 'E2', t: 'Live 任務 07 / 08 連結', s: ['需走到任務 07 / 08 的實訓 Session'], e: '任務目標下方出現選修連結；其他任務不顯示。目前以自動化測試驗證。' }
+    ]}
+  ];
+
+  var KEY = 'pidlab-acceptance-v1';
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) { /* 私密視窗等情況略過 */ } }
+  var state = load();
+  var esc = function (v) { return String(v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+
+  function render() {
+    document.getElementById('sections').innerHTML = SECTIONS.map(function (sec) {
+      return '<section class="panel section" aria-labelledby="h-' + sec.id + '" style="padding:0"><header><h2 id="h-' + sec.id + '">' + esc(sec.title) + '</h2></header>' +
+        sec.items.map(function (it) {
+          var st = (state[it.id] && state[it.id].v) || 'todo';
+          var note = (state[it.id] && state[it.id].n) || '';
+          var radios = [['pass', '通過'], ['fail', '不通過'], ['todo', '未測']].map(function (o) {
+            return '<label><input type="radio" name="v-' + it.id + '" id="v-' + it.id + '-' + o[0] + '" value="' + o[0] + '"' + (st === o[0] ? ' checked' : '') + '><span>' + o[1] + '</span></label>';
+          }).join('');
+          return '<div class="item" data-id="' + it.id + '" data-state="' + st + '"><div style="min-width:0"><h3>' + it.id + ' · ' + esc(it.t) + '</h3><ol>' +
+            it.s.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol><p class="expect"><b>預期：</b>' + esc(it.e) + '</p></div>' +
+            '<div class="verdict"><div class="seg" role="radiogroup" aria-label="' + esc(it.id) + ' 判定">' + radios + '</div>' +
+            '<textarea id="n-' + it.id + '" placeholder="備註（不通過時請寫看到的情況）">' + esc(note) + '</textarea></div></div>';
+        }).join('') + '</section>';
+    }).join('');
+    count();
+  }
+
+  function count() {
+    var n = { pass: 0, fail: 0, todo: 0 };
+    SECTIONS.forEach(function (sec) { sec.items.forEach(function (it) { n[(state[it.id] && state[it.id].v) || 'todo']++; }); });
+    document.getElementById('n-pass').textContent = '通過 ' + n.pass;
+    document.getElementById('n-fail').textContent = '不通過 ' + n.fail;
+    document.getElementById('n-todo').textContent = '未測 ' + n.todo;
+  }
+
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (el.type !== 'radio') return;
+    var id = el.name.slice(2);
+    state[id] = state[id] || {};
+    state[id].v = el.value;
+    save(state);
+    var row = document.querySelector('.item[data-id="' + id + '"]');
+    if (row) row.dataset.state = el.value;
+    count();
+  });
+  document.addEventListener('input', function (ev) {
+    var el = ev.target;
+    if (el.tagName !== 'TEXTAREA' || !el.id.startsWith('n-')) return;
+    var id = el.id.slice(2);
+    state[id] = state[id] || {};
+    state[id].n = el.value;
+    save(state);
+  });
+
+  function copyText(text, fallbackEl) {
+    var done = function () { return true; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(done, function () { fallback(); return false; });
+    }
+    fallback();
+    return Promise.resolve(false);
+    function fallback() { fallbackEl.style.display = 'block'; fallbackEl.value = text; fallbackEl.focus(); fallbackEl.select(); }
+  }
+
+  document.getElementById('copy-result').addEventListener('click', function (ev) {
+    var label = { pass: '通過', fail: '不通過', todo: '未測' };
+    var lines = ['PID 實驗室人工驗收結果'];
+    SECTIONS.forEach(function (sec) {
+      lines.push('', sec.title);
+      sec.items.forEach(function (it) {
+        var s = state[it.id] || {};
+        lines.push(it.id + ' ' + it.t + '：' + label[s.v || 'todo'] + (s.n ? '（' + s.n.replace(/\s+/g, ' ') + '）' : ''));
+      });
+    });
+    var btn = ev.currentTarget;
+    copyText(lines.join('\n'), document.getElementById('copy-out')).then(function (ok) {
+      btn.textContent = ok ? '已複製' : '請手動複製下方文字';
+      setTimeout(function () { btn.textContent = '複製驗收結果'; }, 2000);
+    });
+  });
+  document.getElementById('copy-url').addEventListener('click', function (ev) {
+    var btn = ev.currentTarget;
+    var out = document.getElementById('copy-out');
+    copyText(document.getElementById('lab-url').textContent, out).then(function (ok) {
+      btn.textContent = ok ? '已複製' : '請選取網址';
+      setTimeout(function () { btn.textContent = '複製網址'; out.style.display = 'none'; }, 2000);
+    });
+  });
+  var resetBtn = document.getElementById('reset');
+  resetBtn.addEventListener('click', function () {
+    if (resetBtn.dataset.confirm !== '1') {
+      resetBtn.dataset.confirm = '1';
+      resetBtn.textContent = '再按一次確認清除';
+      setTimeout(function () { resetBtn.dataset.confirm = ''; resetBtn.textContent = '清除全部判定'; }, 3000);
+      return;
+    }
+    state = {};
+    save(state);
+    resetBtn.dataset.confirm = '';
+    resetBtn.textContent = '清除全部判定';
+    render();
+  });
+
+  render();
+})();
+</script>
