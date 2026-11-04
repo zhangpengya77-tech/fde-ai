@@ -15,6 +15,27 @@ BOARD_HINTS = ("Cube", "Pixhawk", "fmuv", "Matek", "Kakute", "SpeedyBee", "Duran
 COPTER_MODES = {0: "STABILIZE", 1: "ACRO", 2: "ALT_HOLD", 3: "AUTO", 4: "GUIDED", 5: "LOITER", 6: "RTL", 7: "CIRCLE", 9: "LAND", 11: "DRIFT", 13: "SPORT", 14: "FLIP", 15: "AUTOTUNE", 16: "POSHOLD", 17: "BRAKE", 18: "THROW", 19: "AVOID_ADSB", 20: "GUIDED_NOGPS", 21: "SMART_RTL", 22: "FLOWHOLD", 23: "FOLLOW", 24: "ZIGZAG", 25: "SYSTEMID", 26: "AUTOROTATE", 27: "AUTO_RTL", 28: "TURTLE"}
 PLANE_MODES = {0: "MANUAL", 1: "CIRCLE", 2: "STABILIZE", 3: "TRAINING", 4: "ACRO", 5: "FBWA", 6: "FBWB", 7: "CRUISE", 8: "AUTOTUNE", 10: "AUTO", 11: "RTL", 12: "LOITER", 13: "TAKEOFF", 15: "GUIDED", 17: "QSTABILIZE", 18: "QHOVER", 19: "QLOITER", 20: "QLAND", 21: "QRTL", 22: "QAUTOTUNE", 23: "QACRO", 24: "THERMAL"}
 
+# ArduCopter LogErrorSubsystem（AP_Logger/AP_Logger.h）；ECode 0 代表該錯誤已解除
+COPTER_ERR_SUBSYS = {
+    1: "MAIN", 2: "RADIO", 3: "COMPASS", 4: "OPTFLOW", 5: "FAILSAFE_RADIO", 6: "FAILSAFE_BATT",
+    7: "FAILSAFE_GPS", 8: "FAILSAFE_GCS", 9: "FAILSAFE_FENCE", 10: "FLIGHT_MODE", 11: "GPS",
+    12: "CRASH_CHECK", 13: "FLIP", 14: "AUTOTUNE", 15: "PARACHUTES", 16: "EKFCHECK",
+    17: "FAILSAFE_EKFINAV", 18: "BARO", 19: "CPU", 20: "FAILSAFE_ADSB", 21: "TERRAIN",
+    22: "NAVIGATION", 23: "FAILSAFE_TERRAIN", 24: "EKF_PRIMARY", 25: "THRUST_LOSS_CHECK",
+    26: "FAILSAFE_SENSORS", 27: "FAILSAFE_LEAK", 28: "PILOT_INPUT", 29: "FAILSAFE_VIBE",
+    30: "INTERNAL_ERROR", 31: "FAILSAFE_DEADRECKON",
+}
+ERR_LABELS = {
+    "CRASH_CHECK": "墜機偵測", "THRUST_LOSS_CHECK": "推力不足偵測", "FAILSAFE_RADIO": "遙控失控保護",
+    "FAILSAFE_BATT": "電池失控保護", "FAILSAFE_GPS": "GPS 失控保護", "FAILSAFE_GCS": "地面站失控保護",
+    "FAILSAFE_FENCE": "圍欄失控保護", "FAILSAFE_EKFINAV": "EKF 導航失控保護", "FAILSAFE_SENSORS": "感測器失控保護",
+    "FAILSAFE_VIBE": "振動失控保護", "FAILSAFE_DEADRECKON": "航位推算失控保護", "EKFCHECK": "EKF 檢查",
+    "COMPASS": "磁羅盤", "GPS": "GPS", "RADIO": "遙控", "FLIGHT_MODE": "飛行模式切換失敗", "EKF_PRIMARY": "EKF 主核心切換",
+}
+# 這些錯誤代表安全事件：飛行模式指標判 FAIL，並停止調參建議
+CRITICAL_ERR = {"CRASH_CHECK", "THRUST_LOSS_CHECK", "FAILSAFE_RADIO", "FAILSAFE_BATT", "FAILSAFE_GPS", "FAILSAFE_GCS",
+                "FAILSAFE_EKFINAV", "FAILSAFE_SENSORS", "FAILSAFE_VIBE", "FAILSAFE_DEADRECKON", "FLIP"}
+
 WANTED = {"ISBH", "ISBD", "RATE", "ATT", "PIDR", "PIDP", "PIDY", "VIBE", "BAT", "GPS", "XKF4", "NKF4", "EKF4", "RCOU", "RCIN", "MODE", "ERR", "EV", "IMU", "VER", "ATUN", "RSSI", "CTUN", "POWR", "MSG"}
 
 
@@ -223,7 +244,12 @@ def adapt(data: bytes) -> FlightData:
     err = log.messages.get("ERR")
     if err:
         for t, sub, code in zip(tsec(err), err.get("Subsys", []), err.get("ECode", [])):
-            fd.events.append({"t": round(float(t), 3), "kind": "ERR", "subsys": int(sub), "code": int(code)})
+            name = COPTER_ERR_SUBSYS.get(int(sub), f"SUBSYS_{int(sub)}") if vehicle == "multirotor" else f"SUBSYS_{int(sub)}"
+            fd.events.append({
+                "t": round(float(t), 3), "kind": "ERR", "subsys": int(sub), "code": int(code), "name": name,
+                "text": f"{ERR_LABELS.get(name, name)}（ECode {int(code)}{'，已解除' if int(code) == 0 else ''}）",
+                "critical": int(code) != 0 and name in CRITICAL_ERR,
+            })
     ev = log.messages.get("EV")
     if ev:
         for t, eid in zip(tsec(ev), ev.get("Id", [])):

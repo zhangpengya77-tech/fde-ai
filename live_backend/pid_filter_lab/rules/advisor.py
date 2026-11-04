@@ -72,7 +72,7 @@ def advise(fd: FlightData, control: dict, health: dict) -> dict:
     ind = {i["key"]: i for i in health["indicators"]}
     out: list[dict] = []
     blockers = []
-    for key, reason in (("vibration", "振動過大"), ("power", "動力飽和或嚴重不平衡"), ("battery", "電池電壓過低"), ("rc_link", "遙控訊號遺失 / 失控保護")):
+    for key, reason in (("vibration", "振動過大"), ("power", "動力飽和或嚴重不平衡"), ("battery", "電池電壓過低"), ("rc_link", "遙控訊號遺失 / 失控保護"), ("flight_mode", "墜機 / 推力不足 / 失控保護等安全事件")):
         if ind.get(key, {}).get("status") == "FAIL":
             blockers.append((key, reason, ind[key]))
     corrupt = float(fd.log_metadata.get("corrupt_ratio") or 0.0)

@@ -264,21 +264,56 @@ def analyze_axis(fd: FlightData, axis: str) -> dict:
     return result
 
 
+UPSET_DEG = 80.0
+UPSET_MARGIN_S = 1.0
+
+
+def upset_segments(fd: FlightData) -> list[dict]:
+    """找出翻覆 / 失控姿態段（任一軸 |實際角度| > 80°），回傳時間區間（含前後 1 秒）。"""
+    segs = []
+    for axis in ("roll", "pitch"):
+        a = fd.sig(f"att.{axis}.actual")
+        if a is None:
+            continue
+        # 只計算飛行中（油門 / 馬達輸出 > 15%）的翻覆；落地後搬動機體不算
+        idx = np.nonzero((np.abs(a.v) > UPSET_DEG) & flying_mask(fd, a.t))[0]
+        if not len(idx):
+            continue
+        for part in np.split(idx, np.nonzero(np.diff(idx) > 1)[0] + 1):
+            segs.append({"start_s": float(a.t[part[0]]) - UPSET_MARGIN_S, "end_s": float(a.t[part[-1]]) + UPSET_MARGIN_S, "axis": axis, "peak_deg": round(float(np.max(np.abs(a.v[part]))), 1)})
+    segs.sort(key=lambda s: s["start_s"])
+    merged = []
+    for s in segs:
+        if merged and s["start_s"] <= merged[-1]["end_s"]:
+            merged[-1]["end_s"] = max(merged[-1]["end_s"], s["end_s"])
+            merged[-1]["peak_deg"] = max(merged[-1]["peak_deg"], s["peak_deg"])
+        else:
+            merged.append(dict(s))
+    for s in merged:
+        s["start_s"], s["end_s"] = round(s["start_s"], 2), round(s["end_s"], 2)
+    return merged
+
+
 def attitude_loop(fd: FlightData) -> dict:
     out = {}
+    upsets = upset_segments(fd)
     for axis in ("roll", "pitch"):
         a, s = fd.sig(f"att.{axis}.actual"), fd.sig(f"att.{axis}.setpoint")
         if a is None or s is None:
             out[axis] = {"status": "INSUFFICIENT", "reason": "缺少姿態或姿態目標資料"}
             continue
         fly = flying_mask(fd, a.t)
-        if np.sum(fly) < 10:
-            out[axis] = {"status": "INSUFFICIENT", "reason": "飛行中的姿態資料不足"}
+        upset = np.zeros(len(a.t), dtype=bool)
+        for seg in upsets:
+            upset |= (a.t >= seg["start_s"]) & (a.t <= seg["end_s"])
+        use = fly & ~upset
+        if np.sum(use) < 10:
+            out[axis] = {"status": "INSUFFICIENT", "reason": "飛行中的姿態資料不足（已排除翻覆段）"}
             continue
-        t = a.t[fly]
+        t = a.t[use]
         sv = np.interp(t, s.t, s.v)
         # 角度差回繞到 ±180°，避免跨越 ±180° 時誤差被誤判為 360°
-        err = (a.v[fly] - sv + 180.0) % 360.0 - 180.0
+        err = (a.v[use] - sv + 180.0) % 360.0 - 180.0
         out[axis] = {
             "status": "OK",
             "loop": "attitude",
@@ -286,7 +321,10 @@ def attitude_loop(fd: FlightData) -> dict:
             "tracking_rms_deg": round(float(np.sqrt(np.mean(err ** 2))), 2),
             "max_error_deg": round(float(np.max(np.abs(err))), 2),
             "sample_rate_hz": round(a.rate_hz, 1),
+            "excluded_upset_s": round(float(np.sum(fly & upset)) / max(a.rate_hz, 1e-6), 1),
         }
+    if upsets:
+        out["upsets"] = upsets
     return out
 
 

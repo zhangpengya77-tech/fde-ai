@@ -34,6 +34,9 @@ BF_STOCK = SAMPLES / "betaflight" / "plasmatree_stock_tune.BFL"
 AP_FLIGHT = SAMPLES / "ardupilot" / "f450_flight_4.5.7.bin"
 AP_BENCH = SAMPLES / "ardupilot" / "log_452_2026-9-29-20-38-08.bin"
 AP_TAROT = SAMPLES / "ardupilot" / "tarot_x4_methodic.bin"
+AP_484 = SAMPLES / "ardupilot" / "f450_log484_20261015.bin"
+AP_496 = SAMPLES / "ardupilot" / "f450_log496_20261018.bin"
+AP_498_CRASH = SAMPLES / "ardupilot" / "f450_log498_20261101_crash.bin"
 PX4_OLD = SAMPLES / "px4" / "sample.ulg"
 PX4_NEW = SAMPLES / "px4" / "sample_log_small.ulg"
 PX4_115 = SAMPLES / "px4" / "sample_px4_events.ulg"
@@ -145,6 +148,35 @@ class RealSampleAnalysis(unittest.TestCase):
         notch = [s for s in r["advice"]["suggestions"] if s["rule_id"] == "NOTCH-CHECK"]
         self.assertEqual(len(notch), 1)
         self.assertEqual(notch[0]["level"], "INFO")
+
+    @need(AP_498_CRASH)
+    def test_f450_crash_and_thrust_loss_block_tuning(self):
+        r = pipeline.run(AP_498_CRASH.read_bytes())
+        ind = {i["key"]: i for i in r["health"]["indicators"]}
+        self.assertEqual(ind["flight_mode"]["status"], "FAIL")
+        self.assertIn("墜機偵測", ind["flight_mode"]["summary"])
+        self.assertIn("推力不足偵測", ind["flight_mode"]["summary"])
+        self.assertEqual(ind["attitude"]["status"], "FAIL")
+        upsets = r["control"]["attitude_loop"]["upsets"]
+        self.assertEqual(len(upsets), 1)
+        self.assertLess(upsets[0]["end_s"] - upsets[0]["start_s"], 10, "翻覆段只涵蓋墜機時段")
+        self.assertLess(r["control"]["attitude_loop"]["roll"]["tracking_rms_deg"], 6, "排除翻覆後的正常飛行誤差")
+        self.assertTrue(r["advice"]["blocked"])
+
+    @need(AP_496)
+    def test_f450_ground_handling_is_not_upset(self):
+        r = pipeline.run(AP_496.read_bytes())
+        self.assertNotIn("upsets", r["control"]["attitude_loop"])
+        self.assertEqual({i["key"]: i["status"] for i in r["health"]["indicators"]}["attitude"], "PASS")
+
+    @need(AP_484)
+    def test_f450_long_flight_battery_warning(self):
+        r = pipeline.run(AP_484.read_bytes())
+        ind = {i["key"]: i for i in r["health"]["indicators"]}
+        self.assertEqual(r["flight"]["firmware_version"]["version"], "4.5.7")
+        self.assertGreater(r["flight"]["log_metadata"]["duration_s"], 1300)
+        self.assertEqual(ind["battery"]["status"], "WARN")
+        self.assertFalse(r["advice"]["blocked"])
 
     @need(AP_BENCH)
     def test_ardupilot_bench_detected(self):

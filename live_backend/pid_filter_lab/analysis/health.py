@@ -244,7 +244,14 @@ def attitude(fd: FlightData, control: dict) -> dict:
         status = "FAIL" if worst > 6.0 else ("WARN" if worst > 3.0 else "PASS")
         summary = {"PASS": "姿態外環追蹤良好。", "WARN": "姿態追蹤誤差偏大。", "FAIL": "姿態追蹤誤差明顯，需檢查機構、重心與控制參數。"}[status]
         srcs = sorted({v for a in att_ok.values() for v in a["sources"].values()})
-        return _result("attitude", status, summary, ev, srcs, _coverage(fd, ["att.roll.actual"]), confidence="low", limits=["角速度內環資料不可用，僅以姿態外環評估"])
+        lims = ["角速度內環資料不可用，僅以姿態外環評估"]
+        upsets = att.get("upsets") or []
+        if upsets:
+            status = "FAIL"
+            summary = f"偵測到 {len(upsets)} 段翻覆 / 失控姿態（|角度| > 80°），不屬於正常控制範圍；其餘飛行段姿態誤差 RMS 最大 {worst}°。"
+            ev.append({"metric": "翻覆 / 失控姿態段", "value": [f"{u['start_s']}–{u['end_s']} s（峰值 {u['peak_deg']}°）" for u in upsets]})
+            lims.append("翻覆段已排除於追蹤誤差計算之外，單獨列出")
+        return _result("attitude", status, summary, ev, srcs, _coverage(fd, ["att.roll.actual"]), confidence="low", limits=lims)
     if not norms or max(active.get(a, 0) for a in norms) < 0.02:
         return _result("attitude", "INSUFFICIENT", "缺少目標/實際角速度，或操控量太小，無法評估控制追蹤。", limits=["需要有明顯桿量的飛行段"])
     worst = max(norms.values())
@@ -268,6 +275,7 @@ def flight_mode(fd: FlightData) -> dict:
     events = fd.events
     failsafes = [e for e in events if e.get("kind") == "DISARM" and e.get("text") in ("FAILSAFE", "CRASH_PROTECTION", "RUNAWAY_TAKEOFF")]
     errs = [e for e in events if e.get("kind") == "ERR" and e.get("code", 0) != 0]
+    critical = [e for e in errs if e.get("critical")]
     logs = [e for e in events if e.get("kind") == "LOG" and "fail" in e.get("text", "").lower()]
     has_mode_data = bool(fd.modes) or fd.sig("mode.flags") is not None or bool(events)
     if not has_mode_data:
@@ -278,8 +286,14 @@ def flight_mode(fd: FlightData) -> dict:
         {"metric": "異常解除武裝 / 失控保護事件", "value": len(failsafes)},
         {"metric": "飛控錯誤訊息（ERR / 失敗訊息）", "value": len(errs) + len(logs)},
     ]
-    status = "FAIL" if failsafes else ("WARN" if errs or logs else "PASS")
-    summary = {"PASS": "飛行模式與控制狀態正常。", "WARN": "飛控回報錯誤訊息，請查看事件明細。", "FAIL": "發生失控保護或異常解除武裝。"}[status]
+    for e in (critical or errs)[:6]:
+        ev.append({"metric": f"事件 {e['t']:.1f} s", "value": e.get("text") or e.get("name")})
+    status = "FAIL" if failsafes or critical else ("WARN" if errs or logs else "PASS")
+    if critical:
+        names = sorted({e.get("text", "").split("（")[0] for e in critical})
+        summary = "飛控記錄到安全事件：" + "、".join(names) + "。必須先完成事故檢查，暫停調參。"
+    else:
+        summary = {"PASS": "飛行模式與控制狀態正常。", "WARN": "飛控回報錯誤訊息，請查看事件明細。", "FAIL": "發生失控保護或異常解除武裝。"}[status]
     return _result("flight_mode", status, summary, ev, ["MODE / 事件訊息"], 1.0 if fd.modes else 0.5)
 
 
