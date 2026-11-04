@@ -6,30 +6,30 @@ const live = require('./live.js');
 
 test('current step presentation explains one action in plain language', () => {
   const view = live.studentCurrentStepView({
-    step_id: 'T01_WORKSPACE', title: '准备工作区域',
-    student_instruction: '清空桌面并集中摆放零件，暂时不要组装。'
+    step_id: 'T01_WORKSPACE', title: '準備工作區域',
+    student_instruction: '清空桌面並集中擺放零件，暫時不要組裝。'
   });
-  assert.equal(view.title, '准备工作区域');
-  assert.deepEqual(view.how, ['清空桌面', '把 F450 零件全部集中摆放', '电池先不要接电', '桨叶暂时不要安装']);
-  assert.deepEqual(view.doneWhen, ['所有零件都在桌面', '飞机没有接电', '桨叶没有安装', '工作区域没有杂物']);
+  assert.equal(view.title, '準備工作區域');
+  assert.deepEqual(view.how, ['清空桌面', '把 F450 零件全部集中擺放', '電池先不要接電', '槳葉暫時不要安裝']);
+  assert.deepEqual(view.doneWhen, ['所有零件都在桌面', '飛機沒有接電', '槳葉沒有安裝', '工作區域沒有雜物']);
 });
 
 test('missing step never renders Step 0 / 0', () => {
-  assert.equal(live.studentStepProgressLabel(null, []), '正在准备当前步骤…');
-  assert.equal(live.studentStepProgressLabel({ order: 2 }, [{}, {}, {}]), '当前第 2 步');
+  assert.equal(live.studentStepProgressLabel(null, []), '正在準備當前步驟…');
+  assert.equal(live.studentStepProgressLabel({ order: 2 }, [{}, {}, {}]), '當前第 2 步');
 });
 
 test('student page keeps full task flow collapsed and one primary CTA', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.match(html, /<details[^>]*class="step-map"(?![^>]*\sopen)/);
-  assert.match(html, /查看整个任务流程/);
+  assert.match(html, /查看整個任務流程/);
   assert.equal((html.match(/id="primaryTrainingAction"/g) || []).length, 1);
   assert.doesNotMatch(html, />Step 0 \/ 0</);
 });
 
 test('teacher step uses teacher confirmation while normal step says I am done', () => {
   assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_training_step_id: 'STEP_1', current_step: { step_id: 'STEP_1' } }), { kind: 'STEP', label: '我完成了' });
-  assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_training_step_id: 'STEP_1', current_step: { step_id: 'STEP_1', teacher_gate: true } }), { kind: 'TEACHER', label: '请教师确认' });
+  assert.deepEqual(live.studentPrimaryAction({ task_state: 'IN_PROGRESS', current_training_step_id: 'STEP_1', current_step: { step_id: 'STEP_1', teacher_gate: true } }), { kind: 'TEACHER', label: '請教師確認' });
 });
 
 test('embedded browser and Safari capabilities are detected separately', () => {
@@ -58,7 +58,7 @@ test('speech reply speaks at classroom pace and can stop', () => {
   const synthesis = { getVoices: () => [{ lang: 'zh-TW' }], speak: (utterance) => spoken.push(utterance), cancel: () => { cancelled += 1; } };
   function Utterance(text) { this.text = text; }
   const reply = live.createSpeechReply({ synthesis, Utterance });
-  assert.equal(reply.speak('现在先清空桌面。'), true);
+  assert.equal(reply.speak('現在先清空桌面。'), true);
   assert.equal(spoken[0].lang, 'zh-TW');
   assert.equal(spoken[0].rate, 0.95);
   reply.stop();
@@ -72,15 +72,15 @@ test('speech reply reports unsupported TTS without silent failure', () => {
 });
 
 test('voice answer is limited to three short points', () => {
-  assert.equal(live.voiceAnswerSummary('第一点。第二点。第三点。第四点。'), '第一点。第二点。第三点。');
+  assert.equal(live.voiceAnswerSummary('第一點。第二點。第三點。第四點。'), '第一點。第二點。第三點。');
 });
 
 test('every student question auto speaks while subtitle remains available', () => {
   const spoken = [];
   const speechReply = { supported: true, speak: (text) => { spoken.push(text); return true; } };
-  assert.deepEqual(live.deliverAiAnswer('第一点。第二点。第三点。第四点。', { autoSpeak: true, speechReply }), { text: '第一点。第二点。第三点。第四点。', spoken: true });
-  assert.deepEqual(live.deliverAiAnswer('文字问题回答。', { autoSpeak: true, speechReply }), { text: '文字问题回答。', spoken: true });
-  assert.deepEqual(spoken, ['第一点。第二点。第三点。', '文字问题回答。']);
+  assert.deepEqual(live.deliverAiAnswer('第一點。第二點。第三點。第四點。', { autoSpeak: true, speechReply }), { text: '第一點。第二點。第三點。第四點。', spoken: true });
+  assert.deepEqual(live.deliverAiAnswer('文字問題回答。', { autoSpeak: true, speechReply }), { text: '文字問題回答。', spoken: true });
+  assert.deepEqual(spoken, ['第一點。第二點。第三點。', '文字問題回答。']);
 });
 
 test('voice reply controls and embedded browser warning exist in Student Mode', () => {
@@ -88,7 +88,7 @@ test('voice reply controls and embedded browser warning exist in Student Mode', 
   for (const id of ['browserCapabilityWarning','copyCurrentLink','currentStepHow','currentStepDoneWhen']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  assert.match(html, /建议使用 Safari 打开本页面/);
+  assert.match(html, /建議使用 Safari 打開本頁面/);
 });
 
 test('Student Mode does not render playback or stop controls', () => {

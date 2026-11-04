@@ -96,6 +96,58 @@ def _video_frames(video_path: Path):
     return fps, frames()
 
 
+ANOMALY_LABELS = {
+    "bird_nest": "鳥巢",
+    "foreign_object": "異物",
+    "insulator_damage": "絕緣子損傷",
+    "conductor_disconnection": "導線斷開",
+}
+LABEL_FONTS = ("C:/Windows/Fonts/msjh.ttc", "C:/Windows/Fonts/msyh.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
+
+
+def anomaly_label(name: str, class_names: list[str]) -> str:
+    """舊版模型未拆出鳥巢，foreign_object 同時涵蓋鳥巢與異物。"""
+    if name == "foreign_object" and "bird_nest" not in class_names:
+        return "鳥巢或異物"
+    return ANOMALY_LABELS.get(name, name)
+
+
+def _label_font(size: int):
+    from PIL import ImageFont  # type: ignore[import-not-found]
+
+    for path in LABEL_FONTS:
+        if Path(path).is_file():
+            return ImageFont.truetype(path, size)
+    return None
+
+
+def _draw_anomalies(image, detections: list[dict], class_names: list[str]):
+    """以紅框標出異常，框上寫中文名稱與信心值；沒有中文字型時改用類別代碼。"""
+    from PIL import Image, ImageDraw, ImageFont  # type: ignore[import-not-found]
+    import numpy as np  # type: ignore[import-not-found]
+
+    red = (220, 0, 0)
+    scale = max(image.shape[:2]) / 1280
+    width = max(2, round(3 * scale))
+    font_size = max(16, round(26 * scale))
+    font = _label_font(font_size)
+    canvas = Image.fromarray(image[:, :, ::-1])
+    draw = ImageDraw.Draw(canvas)
+    for detection in detections:
+        x1, y1, x2, y2 = detection["bbox"]
+        draw.rectangle((x1, y1, x2, y2), outline=red, width=width)
+        name = anomaly_label(detection["class"], class_names) if font else detection["class"]
+        text = f"{name} {detection['confidence']:.0%}"
+        text_font = font or ImageFont.load_default()
+        left, top, right, bottom = draw.textbbox((0, 0), text, font=text_font)
+        height = bottom - top + 2 * width
+        y = max(0, y1 - height)
+        x = min(x1, max(0, canvas.width - (right - left) - 2 * width))
+        draw.rectangle((x, y, x + right - left + 2 * width, y + height), fill=red)
+        draw.text((x + width, y + width - top), text, fill=(255, 255, 255), font=text_font)
+    return np.asarray(canvas)[:, :, ::-1]
+
+
 def verify_model(*, manifest: dict, allowed_root: Path) -> dict:
     """核驗交付資料後實際載入模型，確認類別與類別契約完全一致。"""
     delivery = assess_model_delivery(manifest, allowed_root)
@@ -159,7 +211,7 @@ def inspect_video(*, manifest: dict, video_path: Path, allowed_root: Path, confi
             detections.append({"class": label, "confidence": confidence_value, "bbox": bbox})
         frame = {"timestamp_ms": int(frame_index * 1000 / fps), "detections": detections}
         if detections:
-            encoded_ok, encoded = cv2.imencode(".jpg", result.plot())
+            encoded_ok, encoded = cv2.imencode(".jpg", _draw_anomalies(image, detections, verified["class_names"]))
             if not encoded_ok:
                 raise PowerInspectionValidationError("worker_screenshot_encode_failed")
             frame["screenshot_bytes"] = encoded.tobytes()

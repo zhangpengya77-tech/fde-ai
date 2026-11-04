@@ -643,5 +643,25 @@ class VisionCenterHealthTests(unittest.TestCase):
         self.assertFalse(row["pass_eligible"])
 
 
+class SharedStoreTests(unittest.TestCase):
+    """Live 與閘道是兩個程序、共用同一份 vision_center.json。"""
+
+    def test_other_process_write_is_seen_and_not_overwritten(self):
+        from app.vision_center import JsonStore
+
+        with tempfile.TemporaryDirectory() as root:
+            live, gateway = JsonStore(Path(root)), JsonStore(Path(root))
+            self.assertEqual(gateway.data["models"], [])
+            live.data["models"].append({"model_id": "M1", "status": "ACTIVE"})
+            live.save()
+            # 閘道必須看到 Live 剛啟用的模型，而不是沿用啟動時的舊資料。
+            self.assertEqual([m["model_id"] for m in gateway.data["models"]], ["M1"])
+            gateway.data["hard_examples"].append({"sample_id": "S1"})
+            gateway.save()
+            reread = json.loads((Path(root) / "vision_center.json").read_text(encoding="utf-8"))
+            self.assertEqual([m["model_id"] for m in reread["models"]], ["M1"])
+            self.assertEqual([s["sample_id"] for s in live.data["hard_examples"]], ["S1"])
+
+
 if __name__ == "__main__":
     unittest.main()

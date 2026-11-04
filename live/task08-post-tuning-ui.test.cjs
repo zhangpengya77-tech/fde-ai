@@ -36,12 +36,12 @@ test('Task 08 normal check uses an explicit result action', () => {
   assert.deepEqual(live.studentPrimaryAction({
     task_state: 'IN_PROGRESS', current_task_id: 'TASK_08',
     current_step: { step_id: 'T08_RC_INPUT_CHECK' }
-  }), { kind: 'STEP', label: '记录检查结果' });
+  }), { kind: 'STEP', label: '記錄檢查結果' });
 });
 
 test('missing ACTIVE PROP model is shown as pending and remains nonblocking', () => {
   const elements = task08Elements();
-  const step = { step_id: 'T08_PROP_VISION', title: 'PROP Vision 验证', progress: {} };
+  const step = { step_id: 'T08_PROP_VISION', title: 'PROP Vision 驗證', progress: {} };
   live.renderTrainingState(elements, {
     task_state: 'IN_PROGRESS', current_task_id: 'TASK_08', current_training_step_id: step.step_id,
     prop_vision_status: 'PENDING', unsafe_action_allowed: true,
@@ -57,5 +57,5 @@ test('Task 08 final step requests teacher review instead of learner completion',
   assert.deepEqual(live.studentPrimaryAction({
     task_state: 'IN_PROGRESS', current_task_id: 'TASK_08',
     current_step: { step_id: 'T08_TEACHER_FINAL_REVIEW', teacher_gate: true }
-  }), { kind: 'TEACHER', label: '请教师最终复核' });
+  }), { kind: 'TEACHER', label: '請教師最終複核' });
 });

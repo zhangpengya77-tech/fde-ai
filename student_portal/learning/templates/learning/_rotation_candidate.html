@@ -1,0 +1,23 @@
+{% comment %}V1.0 教學測試版：規則引擎候選結果。候選不是正式結果，正式結果只看教師覆核。
+2026-11-04：ERROR 時列出錯槳、正確槳型、修正步驟與 RAG 知識庫說明。{% endcomment %}
+{% with ev=record.rule_evaluation %}{% if ev %}
+<div class="rotation-candidate" data-candidate="{{ ev.candidate }}">
+  {% if record.release_stage == 'TEST' %}<p class="alert alert-error"><strong>TEST 教學測試版</strong> · {{ ev.notice|default:'測試結果，待教師確認' }}</p>{% endif %}
+  <p>AI 候選結果：<strong>{{ ev.candidate }}</strong>{% if ev.candidate == 'UNKNOWN' %}（無法自動判定）{% endif %} · {{ ev.reason }}</p>
+  <p class="muted">模型版本 {{ record.model_version }} · 規則 {{ ev.rule_version }} · 信心門檻 {{ ev.confidence_threshold }}</p>
+  {% if ev.motors %}<ul>{% for motor, item in ev.motors.items %}<li>{% if item.wrong %}<strong>✗ {{ motor }}（{{ item.position }}）：偵測 {{ item.detected }}，應為 {{ item.expected }}</strong>{% else %}✓ {{ motor }}（{{ item.position }}）：偵測 {{ item.detected }}，應為 {{ item.expected }}{% endif %} · 信心 {{ item.confidence|floatformat:2 }}</li>{% endfor %}</ul>{% endif %}
+  {% if ev.wrong_props %}
+  <div class="rotation-fix">
+    <h3>哪一支錯、正確是什麼</h3>
+    <ul>{% for item in ev.wrong_props %}<li><strong>{{ item.motor }}（{{ item.position }}）</strong>：目前 {{ item.detected }}，正確應為 <strong>{{ item.expected }}</strong></li>{% endfor %}</ul>
+    {% if ev.fix_steps %}<h3>修正步驟</h3><ol>{% for step in ev.fix_steps %}<li>{{ step }}</li>{% endfor %}</ol>{% endif %}
+    {% with rag=ev.rag_guidance %}{% if rag %}
+    <h3>RAG 知識庫說明</h3>
+    {% if rag.available %}<p>{{ rag.answer|linebreaksbr }}</p>{% if rag.sources %}<p class="muted">出處：{% for src in rag.sources %}{{ src.title }}{% if src.ref %} {{ src.ref }}{% endif %}{% if not forloop.last %}；{% endif %}{% endfor %}</p>{% endif %}
+    {% else %}<p class="muted">知識庫暫時沒有對應說明，請依上方修正步驟處理，並詢問老師。</p>{% endif %}
+    {% endif %}{% endwith %}
+  </div>
+  {% endif %}
+  <p class="muted">此為 AI 候選結果，不是正式考核結果；須經教師覆核才會成為正式紀錄。</p>
+</div>
+{% endif %}{% endwith %}

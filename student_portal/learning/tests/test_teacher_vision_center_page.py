@@ -216,6 +216,18 @@ class VisionCenterOnlineTests(TestCase):
 
     @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
     @patch("learning.views.vision_api.list_submissions", return_value=[])
+    def test_review_required_model_can_be_image_validated(self, _subs, _health):
+        """通過結構檢查但待複核的模型必須能進圖片驗證，否則永遠無法啟用。"""
+        models = [self._model("PROP_REVIEW", status="REVIEW_REQUIRED", validation="REVIEW_REQUIRED")]
+        with self._patch_common(models):
+            response = self.client.get(
+                reverse("learning:teacher_vision_center"), {"task": self.TASK, "scene": 2}
+            )
+        self.assertEqual([item["model_id"] for item in response.context["verifiable_models"]], ["PROP_REVIEW"])
+        self.assertNotContains(response, "目前沒有可驗證的")
+
+    @patch("learning.views.vision_api.vision_api_health", return_value=(True, ""))
+    @patch("learning.views.vision_api.list_submissions", return_value=[])
     def test_tab_param_is_ignored_single_page_render(self, _subs, _health):
         """tab 參數已廢除：無效 task 仍回落到預設，且四場景照常渲染。"""
         with self._patch_common([]):
@@ -565,6 +577,27 @@ class VisionCenterOnlineTests(TestCase):
         self.assertContains(response, "已導入為候選模型")
         self.assertContains(response, "仍需完成圖片驗證")
         import_sub.assert_called_once()
+
+    @patch("learning.views.vision_api.record_import_failure")
+    @patch("learning.views.vision_api.quarantine_dataset")
+    @patch("learning.views.vision_api.list_submissions")
+    @patch("learning.views.vision_api.create_dataset")
+    @patch("learning.views.vision_api.import_submission")
+    @patch("learning.views.vision_api.preflight_import")
+    def test_duplicate_submit_goes_to_validation_instead_of_failure(
+        self, preflight, import_sub, create_ds, list_subs, quarantine_ds, record_failure,
+    ):
+        preflight.return_value = dict(self.READY_PREFLIGHT)
+        create_ds.return_value = {"dataset_id": "ds-2", "dataset_version": "v1"}
+        import_sub.side_effect = RuntimeError("submission_not_importable")
+        list_subs.return_value = [{"submission_id": "sub-abc123", "status": "IMPORTED", "imported_model_id": "PROP_new"}]
+        response = self.client.post(
+            reverse("learning:teacher_vision_center_import"),
+            {"task_id": self.TASK, "submission_id": "sub-abc123"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("scene=2&model=PROP_new", response["Location"])
+        record_failure.assert_not_called()
 
     @patch("learning.views.vision_api.record_import_failure")
     @patch("learning.views.vision_api.quarantine_dataset")

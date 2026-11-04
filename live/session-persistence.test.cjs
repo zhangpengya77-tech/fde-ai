@@ -2,11 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const live = require('./live.js');
 
-// P1-4 guard：浏览器重载（pagehide）不得销毁 coach session 与持久化。
-// 验收证据：2026-10-19 真实浏览器实测（agent-browser + removeItem 钩子）发现
-// pagehide → stopCamera() → clearPersistedSession() + DELETE 会在每次刷新时
-// 删除 localStorage 的 fde-live-coach-session 并删除旧 session，导致重载后
-// 总是新建空白 session、训练进度（含 VISION_MODEL_NOT_READY）丢失。
+// P1-4 guard：瀏覽器重載（pagehide）不得銷燬 coach session 與持久化。
+// 驗收證據：2026-10-19 真實瀏覽器實測（agent-browser + removeItem 鉤子）發現
+// pagehide → stopCamera() → clearPersistedSession() + DELETE 會在每次刷新時
+// 刪除 localStorage 的 fde-live-coach-session 並刪除舊 session，導致重載後
+// 總是新建空白 session、訓練進度（含 VISION_MODEL_NOT_READY）丟失。
 const SESSION_STORAGE_KEY = 'fde-live-coach-session';
 
 function el() {
@@ -76,7 +76,7 @@ const TRAINING_STATE = {
   prop_vision_status: 'PENDING',
 };
 
-test('重载后复用持久化的 session：GET 旧会话成功即不新建', async () => {
+test('重載後複用持久化的 session：GET 舊會話成功即不新建', async () => {
   const storage = makeStorage({ [SESSION_STORAGE_KEY]: JSON.stringify({ id: 'sess-old', source: 'REAL_VISION' }) });
   const { controller, calls } = makeController(storage, [
     [/\/api\/live\/sessions\/sess-old$/, () => ({ ok: true, status: 200, json: async () => ({ session_id: 'sess-old', dev_mode: false, training: TRAINING_STATE }) })],
@@ -87,7 +87,7 @@ test('重载后复用持久化的 session：GET 旧会话成功即不新建', as
   assert.equal(storage.getItem(SESSION_STORAGE_KEY), JSON.stringify({ id: 'sess-old', source: 'REAL_VISION' }));
 });
 
-test('服务端已无会话（404）时才回退新建并更新持久化', async () => {
+test('服務端已無會話（404）時才回退新建並更新持久化', async () => {
   const storage = makeStorage({ [SESSION_STORAGE_KEY]: JSON.stringify({ id: 'sess-old', source: 'REAL_VISION' }) });
   const { controller, calls } = makeController(storage, [
     [/\/api\/live\/sessions\/sess-old$/, () => ({ ok: false, status: 404, json: async () => ({ error: 'session_not_found' }) })],
@@ -99,7 +99,7 @@ test('服务端已无会话（404）时才回退新建并更新持久化', async
   assert.equal(storage.getItem(SESSION_STORAGE_KEY), JSON.stringify({ id: 'sess-new', source: 'REAL_VISION' }));
 });
 
-test('pagehide 路径（stopCameraStream）不删除持久化 session、不发 DELETE', async () => {
+test('pagehide 路徑（stopCameraStream）不刪除持久化 session、不發 DELETE', async () => {
   const storage = makeStorage();
   const { controller, calls } = makeController(storage, [
     [/\/api\/live\/sessions$/, () => ({ ok: true, status: 201, json: async () => ({ session_id: 'sess-live', dev_mode: false }) })],
@@ -112,7 +112,7 @@ test('pagehide 路径（stopCameraStream）不删除持久化 session、不发 D
   assert.ok(!calls.some(([method]) => method === 'DELETE'), 'stopCameraStream must not DELETE the session');
 });
 
-test('用户显式停止（stopCamera）才释放 session：清除持久化并 DELETE', async () => {
+test('用戶顯式停止（stopCamera）才釋放 session：清除持久化並 DELETE', async () => {
   const storage = makeStorage();
   const { controller, calls } = makeController(storage, [
     [/\/api\/live\/sessions$/, () => ({ ok: true, status: 201, json: async () => ({ session_id: 'sess-live', dev_mode: false }) })],
@@ -124,7 +124,7 @@ test('用户显式停止（stopCamera）才释放 session：清除持久化并 D
   assert.ok(calls.some(([method, url]) => method === 'DELETE' && url === '/api/live/sessions/sess-live'), 'stopCamera must DELETE the session');
 });
 
-test('持久化损坏 JSON 时回退新建而不是崩溃', async () => {
+test('持久化損壞 JSON 時回退新建而不是崩潰', async () => {
   const storage = makeStorage({ [SESSION_STORAGE_KEY]: '{not-json' });
   const { controller } = makeController(storage, [
     [/\/api\/live\/sessions$/, () => ({ ok: true, status: 201, json: async () => ({ session_id: 'sess-new', dev_mode: false }) })],

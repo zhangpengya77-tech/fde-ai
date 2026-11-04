@@ -5,6 +5,71 @@
 <section class="page-heading"><p class="eyebrow">PROP_ROTATION_V5 · 候選模型教學試用</p><h1>CW／CCW 螺旋槳辨識</h1><p class="muted">此頁只辨識旋向（CW / CCW）。結果需由教師覆核。</p></section>
 {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
 <section class="section-block"><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="submission_token" value="{{ submission_token }}"><label>上傳真實槳葉照片（JPG、JPEG、PNG，8 MB 內）<input type="file" name="photo" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required></label><button class="button primary" type="submit">開始 CW／CCW 辨識</button></form></section>
-{% if record %}<section class="section-block"><h2>辨識結果</h2><p>模型：{{ record.model_version }} · 狀態：{{ record.model_status }} · {{ record.created_at|date:"Y-m-d H:i" }}</p><p><strong>{{ record.best_class|default:'未偵測' }}</strong>{% if record.best_confidence is not None %} · 信心值 {{ record.best_confidence|floatformat:2 }}{% endif %}</p>{% include 'learning/_vision_overlay.html' %}<p>教師覆核：<strong>{{ record.get_review_status_display }}</strong>{% if record.review_note %} · {{ record.review_note }}{% endif %}</p>{% if record.review_status == 'RESUBMIT' %}<p class="alert alert-error">教師要求重傳，請重新拍攝後上傳。</p>{% endif %}</section>{% endif %}
-{% if records %}<section class="section-block"><h2>我的檢測紀錄</h2><ul>{% for item in records %}<li><a href="?record={{ item.pk }}">{{ item.created_at|date:"m-d H:i" }} · {{ item.best_class|default:'未偵測' }}</a> · {{ item.get_review_status_display }}</li>{% endfor %}</ul></section>{% endif %}
+{% if record %}<section class="section-block"><h2>辨識結果</h2><p>模型：{{ record.model_version }} · 狀態：{{ record.model_status }} · {{ record.created_at|date:"Y-m-d H:i" }}</p><p><strong>{{ record.best_class|default:'未偵測' }}</strong>{% if record.best_confidence is not None %} · 信心值 {{ record.best_confidence|floatformat:2 }}{% endif %}</p>{% include 'learning/_vision_overlay.html' %}{% include 'learning/_rotation_candidate.html' %}<p>教師覆核：<strong>{{ record.get_review_status_display }}</strong>{% if record.review_note %} · {{ record.review_note }}{% endif %}</p>{% if record.review_status == 'RESUBMIT' %}<p class="alert alert-error">教師要求重傳，請重新拍攝後上傳。</p>{% endif %}</section>{% endif %}
+{% if record and record.rule_evaluation.candidate %}
+{% comment %}2026-11-04 AI 助教：判定說明＋RAG 知識庫＋LLM 解說，並以瀏覽器語音朗讀。{% endcomment %}
+<section class="section-block" id="ai-tutor" data-url="{% url 'learning:student_rotation_ai_tutor' enrollment.pk record.pk %}">
+  <h2>AI 助教</h2>
+  <p class="muted">按下後，AI 助教會說明這次為什麼通過或未通過、正確應該是什麼，並用語音唸出來。</p>
+  <button class="button primary" type="button" id="ai-tutor-ask">AI 助教解說</button>
+  <button class="button" type="button" id="ai-tutor-replay" hidden>再聽一次</button>
+  <button class="button" type="button" id="ai-tutor-stop" hidden>停止朗讀</button>
+  <p id="ai-tutor-status" class="muted" aria-live="polite"></p>
+  <div id="ai-tutor-answer" hidden>
+    <h3>判定說明</h3><p id="ai-tutor-verdict"></p>
+    <div id="ai-tutor-rag-block" hidden><h3>知識庫說明</h3><p id="ai-tutor-rag"></p><p class="muted" id="ai-tutor-sources"></p></div>
+    <div id="ai-tutor-llm-block" hidden><h3>AI 補充解說</h3><p id="ai-tutor-llm"></p></div>
+  </div>
+</section>
+<script>
+(function () {
+  var box = document.getElementById('ai-tutor');
+  var ask = document.getElementById('ai-tutor-ask');
+  var replay = document.getElementById('ai-tutor-replay');
+  var stop = document.getElementById('ai-tutor-stop');
+  var status = document.getElementById('ai-tutor-status');
+  var speech = '';
+  function csrf() {
+    var input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return input ? input.value : '';
+  }
+  function speak() {
+    if (!('speechSynthesis' in window)) { status.textContent = '此瀏覽器不支援語音朗讀，請閱讀下方文字。'; return; }
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(speech);
+    u.lang = 'zh-TW'; u.rate = 0.95;
+    window.speechSynthesis.speak(u);
+  }
+  function show(id, text) {
+    document.getElementById(id).textContent = text || '';
+  }
+  ask.addEventListener('click', function () {
+    ask.disabled = true;
+    status.textContent = 'AI 助教整理中，請稍候…';
+    fetch(box.dataset.url, { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrf() } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { status.textContent = data.error || 'AI 助教暫時無法回答，請詢問老師。'; return; }
+        show('ai-tutor-verdict', data.verdict);
+        var rag = data.rag || {};
+        document.getElementById('ai-tutor-rag-block').hidden = !rag.available;
+        show('ai-tutor-rag', rag.answer);
+        show('ai-tutor-sources', (rag.sources || []).length ? '出處：' + rag.sources.map(function (s) { return s.title + (s.ref ? ' ' + s.ref : ''); }).join('；') : '');
+        document.getElementById('ai-tutor-llm-block').hidden = !data.llm;
+        show('ai-tutor-llm', data.llm);
+        document.getElementById('ai-tutor-answer').hidden = false;
+        replay.hidden = false; stop.hidden = false;
+        status.textContent = data.llm_available ? '' : 'AI 補充解說目前未啟用，以上為判定說明與知識庫內容。';
+        speech = data.speech_text || data.verdict;
+        speak();
+      })
+      .catch(function () { status.textContent = 'AI 助教暫時無法連線，請稍後再試或詢問老師。'; })
+      .then(function () { ask.disabled = false; });
+  });
+  replay.addEventListener('click', speak);
+  stop.addEventListener('click', function () { if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); } });
+})();
+</script>
+{% endif %}
+{% if records %}<section class="section-block"><h2>我的檢測紀錄</h2><ul>{% for item in records %}<li><a href="?record={{ item.pk }}">{{ item.created_at|date:"m-d H:i" }} · {{ item.best_class|default:'未偵測' }}</a>{% if item.ai_candidate %} · AI 候選 {{ item.ai_candidate }}{% endif %} · {{ item.get_review_status_display }}</li>{% endfor %}</ul></section>{% endif %}
 {% endblock %}

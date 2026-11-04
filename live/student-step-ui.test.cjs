@@ -22,7 +22,7 @@ test('Task 01 through 06 use five student-facing groups without changing backend
 test('current completed and future group states derive from authoritative current step', () => {
   const groups = live.studentStepGroups('TASK_03', task03Steps, 'T03_INSTALL', 'IN_PROGRESS');
   assert.deepEqual(groups.map((group) => group.state), ['COMPLETED', 'COMPLETED', 'CURRENT', 'FUTURE', 'FUTURE']);
-  assert.equal(groups.find((group) => group.state === 'CURRENT').title, '安装马达');
+  assert.equal(groups.find((group) => group.state === 'CURRENT').title, '安裝馬達');
 });
 
 test('unknown tasks fall back to one group per backend step', () => {
@@ -35,7 +35,7 @@ test('unknown tasks fall back to one group per backend step', () => {
 test('only tools required by the current backend step are visible', () => {
   assert.deepEqual(live.studentStepToolVisibility({}), { camera: true, aiCheck: false, evidence: false, reflection: false, teacher: false, safety: false });
   assert.deepEqual(live.studentStepToolVisibility({ step_id: 'T03_EVIDENCE', vision_task: 'motor_frame_presence', evidence_required: ['PHOTO'], teacher_gate: true, safety_reminders: [{ id: 'REM' }] }), { camera: true, aiCheck: true, evidence: true, reflection: false, teacher: true, safety: true });
-  assert.equal(live.studentStepToolVisibility({ step_id: 'T03_REFLECTION', title: '学习总结' }).reflection, true);
+  assert.equal(live.studentStepToolVisibility({ step_id: 'T03_REFLECTION', title: '學習總結' }).reflection, true);
 });
 
 test('teacher gate blocks learner forward navigation', () => {
@@ -45,7 +45,7 @@ test('teacher gate blocks learner forward navigation', () => {
   };
   live.renderTrainingState(elements, { task_state: 'IN_PROGRESS', current_training_step_id: 'T04_CONTINUITY', task: { id: 'TASK_04', steps: [{ step_id: 'T04_CONTINUITY', teacher_gate: true }] } });
   assert.equal(elements.primaryTrainingAction.dataset.action, 'TEACHER');
-  assert.equal(elements.primaryTrainingAction.textContent, '请教师确认');
+  assert.equal(elements.primaryTrainingAction.textContent, '請教師確認');
   assert.equal(elements.teacherCard.hidden, false);
 });
 
@@ -63,7 +63,7 @@ test('empty safety and unrelated tools remain hidden', () => {
 });
 
 test('step and task completion feedback use explicit continue actions', () => {
-  assert.deepEqual(live.trainingCompletionFeedback('T03_INSTALL', 'T03_MECHANICAL', 'IN_PROGRESS'), { type: 'STEP', title: '✅ 这一步完成', canContinue: true });
+  assert.deepEqual(live.trainingCompletionFeedback('T03_INSTALL', 'T03_MECHANICAL', 'IN_PROGRESS'), { type: 'STEP', title: '✅ 這一步完成', canContinue: true });
   assert.deepEqual(live.trainingCompletionFeedback('T03_REFLECTION', null, 'COMPLETED'), { type: 'TASK', title: 'Task 已完成', canContinue: true });
 });
 
@@ -112,9 +112,9 @@ test('completion policies distinguish AI, teacher, and hybrid tasks', () => {
 test('backend task states render green orange and red without frontend completion inference', () => {
   const e = { trainingTaskList: { innerHTML: '' } };
   live.renderTrainingState(e, { task: {}, tasks: [
-    { task_id: 'TASK_01', order: 1, short_name: '认', title: '零件识别与检查', status: 'COMPLETED' },
-    { task_id: 'TASK_02', order: 2, short_name: '测', title: 'Motor + ESC 台架测试', status: 'PENDING_TEACHER_REVIEW' },
-    { task_id: 'TASK_03', order: 3, short_name: '装', title: '机架 + 马达安装', status: 'NEED_REWORK' }
+    { task_id: 'TASK_01', order: 1, short_name: '認', title: '零件識別與檢查', status: 'COMPLETED' },
+    { task_id: 'TASK_02', order: 2, short_name: '測', title: 'Motor + ESC 臺架測試', status: 'PENDING_TEACHER_REVIEW' },
+    { task_id: 'TASK_03', order: 3, short_name: '裝', title: '機架 + 馬達安裝', status: 'NEED_REWORK' }
   ] });
   assert.match(e.trainingTaskList.innerHTML, /data-state="COMPLETED"/);
   assert.match(e.trainingTaskList.innerHTML, /data-state="PENDING_TEACHER_REVIEW"/);

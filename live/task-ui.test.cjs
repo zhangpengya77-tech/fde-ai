@@ -16,12 +16,12 @@ test('renders authoritative task state without advancing locally', () => {
   const e = elements();
   live.renderTaskState(e, {
     session: { state: 'PASS_CANDIDATE', current_step_id: 'prepare_motor', expected_class: 'motor' },
-    task: { course_title: 'F450 基础组装', task_title: '零件辨识与准备', progress: { current: 1, total: 3 }, step: { title: '准备马达', instruction: '请将 F450 马达放到摄像头前。' } },
+    task: { course_title: 'F450 基礎組裝', task_title: '零件辨識與準備', progress: { current: 1, total: 3 }, step: { title: '準備馬達', instruction: '請將 F450 馬達放到攝像頭前。' } },
     detection: { class: 'motor', confidence: 0.89 },
     sop: { status: 'PASS_CANDIDATE' },
-    guidance: { text: '已识别到当前步骤需要的零件，请确认后继续。' }
+    guidance: { text: '已識別到當前步驟需要的零件，請確認後繼續。' }
   });
-  assert.equal(e.course.textContent, 'F450 基础组装');
+  assert.equal(e.course.textContent, 'F450 基礎組裝');
   assert.equal(e.progress.textContent, '1 / 3');
   assert.equal(e.sopResult.textContent, 'PASS_CANDIDATE');
   assert.equal(e.confirm.disabled, false);
@@ -44,7 +44,7 @@ test('phase2 markup keeps manual detect and adds task and dev controls', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   for (const id of ['captureFrame','courseTitle','taskTitle','taskProgress','currentStep','taskInstruction','sopResult','coachGuidance','primaryTrainingAction','devSimulator']) assert.match(html, new RegExp(`id=["']${id}["']`));
   assert.match(html, /Simulate motor/);
-  assert.match(html, /🤖 AI 看当前画面/);
+  assert.match(html, /🤖 AI 看當前畫面/);
 });
 
 test('renders rag explanation separately from sop and deterministic guidance', () => {
@@ -52,18 +52,18 @@ test('renders rag explanation separately from sop and deterministic guidance', (
   live.renderTaskState(e, {
     session: { state: 'NG' },
     sop: { status: 'NG' },
-    guidance: { text: '请更换正确零件。' },
+    guidance: { text: '請更換正確零件。' },
     rag_explanation: {
       status: 'online',
-      explanation: '马达提供旋转动力。',
+      explanation: '馬達提供旋轉動力。',
       source_type: 'rag',
       latency_ms: 123.4,
       safety_notice: null
     }
   });
   assert.equal(e.sopResult.textContent, 'NG');
-  assert.equal(e.guidance.textContent, '请更换正确零件。');
-  assert.equal(e.ragExplanation.textContent, '马达提供旋转动力。');
+  assert.equal(e.guidance.textContent, '請更換正確零件。');
+  assert.equal(e.ragExplanation.textContent, '馬達提供旋轉動力。');
   assert.equal(e.ragSource.textContent, 'FDE-AI RAG');
   assert.equal(e.ragStatus.textContent, 'ONLINE');
   assert.equal(e.ragLatency.textContent, '123.4 ms');
@@ -71,11 +71,11 @@ test('renders rag explanation separately from sop and deterministic guidance', (
 
 test('pending fallback and teacher safety explanation remain explicit', () => {
   const e = elements();
-  live.renderTaskState(e, { session: { state: 'NG', rag_explanation: { status: 'pending', explanation: '正在查询教学知识…' } } });
-  assert.equal(e.ragExplanation.textContent, '正在查询教学知识…');
-  live.renderTaskState(e, { session: { state: 'TEACHER_CHECK', rag_explanation: { status: 'online', explanation: '允许起飞', safety_notice: '此步骤涉及安全操作，必须由教师确认后才能继续。' } } });
-  assert.match(e.ragExplanation.textContent, /^此步骤涉及安全操作/);
-  assert.match(e.ragExplanation.textContent, /允许起飞/);
+  live.renderTaskState(e, { session: { state: 'NG', rag_explanation: { status: 'pending', explanation: '正在查詢教學知識…' } } });
+  assert.equal(e.ragExplanation.textContent, '正在查詢教學知識…');
+  live.renderTaskState(e, { session: { state: 'TEACHER_CHECK', rag_explanation: { status: 'online', explanation: '允許起飛', safety_notice: '此步驟涉及安全操作，必須由教師確認後才能繼續。' } } });
+  assert.match(e.ragExplanation.textContent, /^此步驟涉及安全操作/);
+  assert.match(e.ragExplanation.textContent, /允許起飛/);
 });
 
 test('live frontend never calls local rag port directly', () => {
@@ -96,7 +96,7 @@ test('auto scheduler starts only after backend acceptance and stops with camera'
   const backendStart = source.indexOf('/auto/start');
   const schedulerStart = source.indexOf('autoScheduler.start()', backendStart);
   assert.ok(backendStart >= 0 && schedulerStart > backendStart);
-  // P1-4：stopCamera 经 stopCameraStream 停止 auto scheduler；pagehide 只停 stream 不动 session。
+  // P1-4：stopCamera 經 stopCameraStream 停止 auto scheduler；pagehide 只停 stream 不動 session。
   const stopCamera = source.slice(source.indexOf('async function stopCamera()'), source.indexOf('async function startAutoObservation()'));
   assert.match(stopCamera, /stopCameraStream\(\)/);
   const stopCameraStream = source.slice(source.indexOf('function stopCameraStream()'), source.indexOf('async function stopCamera()'));
@@ -119,15 +119,15 @@ test('renders twelve-task student training state with human-facing safety conten
     progress: '2 / 12', current_task_id: 'TASK_03', task_state: 'IN_PROGRESS', prerequisite_state: 'READY', camera_active: true,
     evidence_count: 1, reflection_state: 'available', teacher_review_state: 'NOT_REQUIRED',
     task: {
-      order: 3, title: 'F450 机架 + 马达安装', objective: '组装机架并安装马达。', description: '完成结构安装。',
-      steps: [{ id: 'MOTOR_INSTALL', title: 'Motor Install', instruction: '安装四颗马达。', rationale: '先确认结构可靠。' }],
-      safety_reminders: [{ id: 'REM_MOTOR_SCREW_TOO_LONG', message: '过长的马达固定螺丝可能损伤马达内部结构。' }]
+      order: 3, title: 'F450 機架 + 馬達安裝', objective: '組裝機架並安裝馬達。', description: '完成結構安裝。',
+      steps: [{ id: 'MOTOR_INSTALL', title: 'Motor Install', instruction: '安裝四顆馬達。', rationale: '先確認結構可靠。' }],
+      safety_reminders: [{ id: 'REM_MOTOR_SCREW_TOO_LONG', message: '過長的馬達固定螺絲可能損傷馬達內部結構。' }]
     }
   });
   assert.equal(e.trainingProgress.textContent, '2 / 12');
   assert.equal(e.trainingTaskNumber.textContent, 'Task 03 / 12');
   assert.match(e.trainingSafety.innerHTML, /⚠/);
-  assert.match(e.trainingSafety.innerHTML, /过长/);
+  assert.match(e.trainingSafety.innerHTML, /過長/);
   assert.doesNotMatch(e.trainingSafety.innerHTML, /REM_MOTOR/);
   assert.equal(e.cameraWaiting.textContent, 'ACTIVE / WAITING');
 });
@@ -142,12 +142,12 @@ test('snapshot refresh renders nested authoritative training state', () => {
   const e = elements();
   e.trainingStatus = { textContent: '' };
   live.renderTaskState(e, { session: { state: 'NG' }, task: { training: { task_state: 'IN_PROGRESS', task: {} } } });
-  assert.equal(e.trainingStatus.textContent, '进行中');
+  assert.equal(e.trainingStatus.textContent, '進行中');
 });
 
 test('maps internal connector and error ids to student language', () => {
-  assert.equal(live.studentFacingLabel('FC_MAIN_OUT_1'), '飞控 MAIN OUT 1（1号电机输出接口）');
-  assert.equal(live.studentFacingLabel('ERR_POWER_POLARITY'), '电源正负极需要重新确认。');
+  assert.equal(live.studentFacingLabel('FC_MAIN_OUT_1'), '飛控 MAIN OUT 1（1號電機輸出接口）');
+  assert.equal(live.studentFacingLabel('ERR_POWER_POLARITY'), '電源正負極需要重新確認。');
 });
 
 test('vision only triggers for explicit or configured checks', () => {
@@ -162,25 +162,25 @@ test('vision only triggers for explicit or configured checks', () => {
 test('student task renderer markup provides one unified twelve-task layout', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   for (const id of ['trainingTaskList','trainingProgress','trainingTaskNumber','trainingTitle','trainingObjective','trainingAction','trainingWhy','trainingSafety','trainingSteps','trainingEvidence','reflectionOriginal','reflectionAssisted','trainingTeacher','trainingStatus','trainingGrowth','cameraWaiting']) assert.match(html, new RegExp(`id=["']${id}["']`));
-  assert.match(html, /我的学习总结/);
-  assert.match(html, /学习证据/);
-  assert.match(html, /教师复核/);
+  assert.match(html, /我的學習總結/);
+  assert.match(html, /學習證據/);
+  assert.match(html, /教師複核/);
 });
 
 test('student evidence and reflection use backend-owned training APIs', async () => {
   const calls = [];
   const fetchImpl = async (url, init) => { calls.push([url, init]); return { ok: true, json: async () => ({ training: { evidence_count: 1 } }) }; };
   await live.saveTrainingEvidence(fetchImpl, 'sid', { task_id: 'F450_01', evidence_type: 'PHOTO', file_reference: 'dev-upload://parts.jpg' });
-  await live.saveTrainingReflection(fetchImpl, 'sid', { task_id: 'F450_01', original_text: '我辨认了零件。', source_type: 'TEXT' });
+  await live.saveTrainingReflection(fetchImpl, 'sid', { task_id: 'F450_01', original_text: '我辨認了零件。', source_type: 'TEXT' });
   assert.equal(calls[0][0], '/api/live/sessions/sid/training/evidence');
   assert.equal(calls[1][0], '/api/live/sessions/sid/training/reflection');
-  assert.equal(JSON.parse(calls[1][1].body).original_text, '我辨认了零件。');
+  assert.equal(JSON.parse(calls[1][1].body).original_text, '我辨認了零件。');
 });
 
 test('teacher action sends explicit role and development identity headers', async () => {
   let request;
   const fetchImpl = async (url, init) => { request = { url, init }; return { ok: true, json: async () => ({ development_identity: true }) }; };
-  await live.submitTeacherReview(fetchImpl, 'sid', 'APPROVE', '已现场复核');
+  await live.submitTeacherReview(fetchImpl, 'sid', 'APPROVE', '已現場複核');
   assert.match(request.url, /teacher-review$/);
   assert.equal(request.init.headers['X-FDE-Role'], 'teacher');
   assert.equal(request.init.headers['X-FDE-Teacher-ID'], 'MOCK_TEACHER');
@@ -195,7 +195,7 @@ test('step teacher action includes the backend current training step id', async 
 
 test('task map renders backend status rather than a nonexistent state field', () => {
   const e = { trainingTaskList: { innerHTML: '' } };
-  live.renderTrainingState(e, { task: {}, tasks: [{ task_id: 'TASK_01', order: 1, title: '零件识别', status: 'COMPLETED' }] });
+  live.renderTrainingState(e, { task: {}, tasks: [{ task_id: 'TASK_01', order: 1, title: '零件識別', status: 'COMPLETED' }] });
   assert.match(e.trainingTaskList.innerHTML, /已完成/);
   assert.doesNotMatch(e.trainingTaskList.innerHTML, />COMPLETED</);
   assert.doesNotMatch(e.trainingTaskList.innerHTML, /undefined/);
@@ -229,7 +229,7 @@ test('mobile student UI provides current step, safety acknowledgement, and one p
 
 test('student mode leads with plain-language coaching actions', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  for (const text of ['F450 AI 实训助教', 'AI 陪你一步一步完成 F450 实训', '现在要做什么', '为什么要这样做', 'AI 实训助教', '开启实训摄像头', '開始詢問 AI', '暫停語音', '无法使用语音？', '当前操作', '留下学习证据', '我的学习总结', '教师复核状态']) {
+  for (const text of ['F450 AI 實訓助教', 'AI 陪你一步一步完成 F450 實訓', '現在要做什麼', '為什麼要這樣做', 'AI 實訓助教', '開啟實訓攝像頭', '開始 AI 陪做（鏡頭＋語音）', '暫停語音', '無法使用語音？', '當前操作', '留下學習證據', '我的學習總結', '教師複核狀態']) {
     assert.match(html, new RegExp(text));
   }
 });
@@ -241,21 +241,21 @@ test('technical diagnostics remain available only inside collapsed dev mode', ()
   const start = html.indexOf('id="devModePanel"');
   const end = html.indexOf('</details>', start);
   const devMarkup = html.slice(start, end);
-  for (const text of ['Detection Facts', 'MODEL_ACCURACY_PENDING', 'RAG 延迟', 'Device diagnostics']) assert.match(devMarkup, new RegExp(text));
+  for (const text of ['Detection Facts', 'MODEL_ACCURACY_PENDING', 'RAG 延遲', 'Device diagnostics']) assert.match(devMarkup, new RegExp(text));
 });
 
 test('internal coaching states translate to student language', () => {
-  assert.equal(live.studentCoachMessage('NO_DETECTION'), '目前没有清楚看到目标零件，请把零件完整放到镜头中央。');
-  assert.equal(live.studentCoachMessage('UNCERTAIN'), 'AI 目前看不清楚，请调整角度或请老师确认。');
-  assert.equal(live.studentCoachMessage('PASS_CANDIDATE'), 'AI 初步检查没有发现明显问题。');
-  assert.match(live.studentCoachMessage('PASS_CANDIDATE', true), /等待教师复核/);
+  assert.equal(live.studentCoachMessage('NO_DETECTION'), '目前沒有清楚看到目標零件，請把零件完整放到鏡頭中央。');
+  assert.equal(live.studentCoachMessage('UNCERTAIN'), 'AI 目前看不清楚，請調整角度或請老師確認。');
+  assert.equal(live.studentCoachMessage('PASS_CANDIDATE'), 'AI 初步檢查沒有發現明顯問題。');
+  assert.match(live.studentCoachMessage('PASS_CANDIDATE', true), /等待教師複核/);
 });
 
 test('task map renders student-facing status instead of raw backend state', () => {
-  assert.equal(live.studentTaskStatus('NOT_STARTED'), '未开始');
-  assert.equal(live.studentTaskStatus('IN_PROGRESS'), '进行中');
-  assert.equal(live.studentTaskStatus('PENDING_TEACHER_REVIEW'), '待教师确认');
-  assert.equal(live.studentTaskStatus('NEED_REWORK'), '需重新检查');
+  assert.equal(live.studentTaskStatus('NOT_STARTED'), '未開始');
+  assert.equal(live.studentTaskStatus('IN_PROGRESS'), '進行中');
+  assert.equal(live.studentTaskStatus('PENDING_TEACHER_REVIEW'), '待教師確認');
+  assert.equal(live.studentTaskStatus('NEED_REWORK'), '需重新檢查');
   assert.equal(live.studentTaskStatus('COMPLETED'), '已完成');
 });
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -461,6 +462,41 @@ class PowerInspectionPortalTests(TestCase):
         self.assertEqual(job.model_id, current.model_id)
         self.assertEqual(job.status, PowerInspectionJob.Status.COMPLETED)
         self.assertEqual(job.result_json, {"model_version": "v17", "result": "preserve"})
+
+    def test_student_sees_readable_completed_result(self):
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=Path(media)):
+            job = PowerInspectionJob.objects.create(
+                enrollment=self.enrollment_a, status=PowerInspectionJob.Status.COMPLETED,
+                inference_mode=PowerInspectionJob.InferenceMode.REAL,
+                anomaly_timeline=[{"class": "foreign_object", "start_ms": 2500, "end_ms": 4000, "max_confidence": 0.79}],
+                result_json={"frame_count": 217},
+            )
+            frame = job.anomaly_frames.create(
+                timestamp_ms=3000, class_name="foreign_object", confidence=0.79,
+                inference_mode=PowerInspectionJob.InferenceMode.REAL,
+            )
+            frame.screenshot.save("anomaly.jpg", ContentFile(b"annotated-frame"), save=True)
+            client = Client(); client.force_login(self.student_a.user)
+            response = client.get(reverse("learning:power_inspection_task", args=[self.enrollment_a.pk]))
+            frame_url = reverse("learning:power_inspection_student_frame", args=[frame.frame_id])
+            self.assertContains(response, "發現 1 段疑似異常")
+            self.assertContains(response, "已分析 217 幀")
+            self.assertContains(response, f'src="{frame_url}"')
+            self.assertContains(response, "2.5–4.0 秒｜79%")
+            self.assertNotContains(response, "start_ms")
+            owner_image = client.get(frame_url)
+            self.assertEqual(b"".join(owner_image.streaming_content), b"annotated-frame")
+            owner_image.close()
+
+            other_student = Client(); other_student.force_login(self.student_b.user)
+            self.assertEqual(other_student.get(frame_url).status_code, 404)
+            teacher_url = reverse("learning:power_inspection_teacher_frame", args=[frame.frame_id])
+            authorized = Client(); authorized.force_login(self.teacher_a)
+            teacher_image = authorized.get(teacher_url)
+            self.assertEqual(teacher_image.status_code, 200)
+            teacher_image.close()
+            other_teacher = Client(); other_teacher.force_login(self.teacher_b)
+            self.assertEqual(other_teacher.get(teacher_url).status_code, 404)
 
     def test_existing_vision_center_contains_power_inspection_entry(self):
         template = (Path(__file__).resolve().parents[1] / "templates" / "learning" / "teacher_vision_center.html").read_text(encoding="utf-8")

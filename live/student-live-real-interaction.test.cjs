@@ -16,8 +16,8 @@ test('initial training state renders all backend tasks and keeps detail unselect
     tasks: Array.from({ length: 12 }, (_, index) => ({
       task_id: `TASK_${String(index + 1).padStart(2, '0')}`,
       order: index + 1,
-      short_name: ['认','测','装','焊','接','查','调','验','演','查','飞','析'][index],
-      title: `任务 ${index + 1}`,
+      short_name: ['認','測','裝','焊','接','查','調','驗','演','查','飛','析'][index],
+      title: `任務 ${index + 1}`,
       status: 'NOT_STARTED', viewable: true
     }))
   };
@@ -33,18 +33,18 @@ test('initial training state renders all backend tasks and keeps detail unselect
 test('failed task-map load replaces loading text with retry action', () => {
   const elements = { trainingTaskList: element(), taskMapScreen: element(), taskDetailScreen: element() };
   live.renderTaskMapLoadError(elements);
-  assert.match(elements.trainingTaskList.innerHTML, /任务地图载入失败/);
+  assert.match(elements.trainingTaskList.innerHTML, /任務地圖載入失敗/);
   assert.match(elements.trainingTaskList.innerHTML, /data-retry-task-map/);
-  assert.doesNotMatch(elements.trainingTaskList.innerHTML, /正在载入/);
+  assert.doesNotMatch(elements.trainingTaskList.innerHTML, /正在載入/);
   assert.equal(elements.taskDetailScreen.hidden, true);
 });
 
 test('question classifier captures only visual questions', () => {
   assert.equal(live.questionRequiresVision('下一步呢？'), false);
-  assert.equal(live.questionRequiresVision('为什么要做罗盘校准？'), false);
-  assert.equal(live.questionRequiresVision('我这个桨叶方向对不对？'), true);
-  assert.equal(live.questionRequiresVision('帮我看一下这个接收机接对了吗？'), true);
-  assert.equal(live.questionRequiresVision('帮我看一下，我现在可以安全上电吗？'), false);
+  assert.equal(live.questionRequiresVision('為什麼要做羅盤校準？'), false);
+  assert.equal(live.questionRequiresVision('我這個槳葉方向對不對？'), true);
+  assert.equal(live.questionRequiresVision('幫我看一下這個接收機接對了嗎？'), true);
+  assert.equal(live.questionRequiresVision('幫我看一下，我現在可以安全上電嗎？'), false);
 });
 
 test('camera preview policy never schedules continuous inference', () => {
@@ -61,7 +61,7 @@ test('text Ask AI sends no image for a next-step question and one image for a vi
   const capture = () => { captures += 1; return { imageData: 'data:image/jpeg;base64,WA==' }; };
 
   await live.askLiveCoach(fetchImpl, 'session-1', '下一步呢？', capture);
-  await live.askLiveCoach(fetchImpl, 'session-1', '我这个桨叶方向对不对？', capture);
+  await live.askLiveCoach(fetchImpl, 'session-1', '我這個槳葉方向對不對？', capture);
 
   assert.equal(captures, 1);
   assert.equal('image_data' in payloads[0], false);
@@ -91,7 +91,7 @@ test('session rendering tolerates the removed legacy confirm control', () => {
     visionResult: element(), sopResult: element(), guidance: element(), confirm: null
   };
   assert.doesNotThrow(() => live.renderTaskState(elements, {
-    course_title: 'F450', task_title: '零件识别', progress: { current: 1, total: 3 },
-    step: { title: '准备区域', instruction: '清理桌面' }, state: 'READY'
+    course_title: 'F450', task_title: '零件識別', progress: { current: 1, total: 3 },
+    step: { title: '準備區域', instruction: '清理桌面' }, state: 'READY'
   }));
 });

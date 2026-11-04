@@ -79,3 +79,6 @@ backups/
 
 # 2026-11-01 測試重放帳本為執行期產物
 live_backend/var/
+
+# 2026-11-04：Django 檔案快取（執行期資料，不進版本）
+student_portal/.cache/

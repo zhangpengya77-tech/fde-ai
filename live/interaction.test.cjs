@@ -67,16 +67,16 @@ test('capture failure restores button and exposes a visible error', async () => 
 });
 
 test('zero detections render an explicit empty result message', () => {
-  assert.match(detectionResultHtml([]), /未识别到目标零件/);
+  assert.match(detectionResultHtml([]), /未識別到目標零件/);
 });
 test('manual snapshot and upload controls remain available as collapsed fallbacks', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.match(html, /<details id="fallbackMethods"[^>]*>/);
   assert.doesNotMatch(html, /<details id="fallbackMethods"[^>]*\sopen/);
   assert.match(html, /id="assistantVisualAction"/);
-  assert.match(html, /id="captureFrame"[^>]*>🤖 AI 看当前画面</);
+  assert.match(html, /id="captureFrame"[^>]*>🤖 AI 看當前畫面</);
   assert.match(html, /id="uploadImage"/);
   assert.match(html, /id="imageFile"[^>]*accept="image\/jpeg,image\/png,image\/webp"/);
-  assert.match(html, /开启实训摄像头/);
-  assert.match(html, /只有你提出视觉问题时，AI 才读取一张当前画面/);
+  assert.match(html, /開啟實訓攝像頭/);
+  assert.match(html, /只有你提出視覺問題時，AI 才讀取一張當前畫面/);
 });

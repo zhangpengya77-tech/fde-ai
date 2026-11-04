@@ -90,9 +90,13 @@
   function throwForFailure(payload, response) {
     // 後端不可用或沒有 ACTIVE model：一律提示「目前尚無可用模型」。
     if (!response || !response.ok) {
-      const code = payload?.error || '';
-      if (['active_model_required', 'opencv_unavailable', 'model_unavailable'].includes(code)) {
-        throw noModelError(code);
+      // Live 錯誤信封為 {error: {code, message}}；舊格式 {error: "code"} 仍相容。
+      const error = payload?.error;
+      const code = typeof error === 'string' ? error : String(error?.code || '');
+      const message = typeof error === 'object' && error ? String(error.message || '') : '';
+      const noModelCodes = ['active_model_required', 'opencv_unavailable', 'model_unavailable'];
+      if (noModelCodes.includes(code) || noModelCodes.includes(message)) {
+        throw noModelError(noModelCodes.includes(code) ? code : message);
       }
       throw unavailableError(code || `HTTP_${response?.status || 'unknown'}`);
     }

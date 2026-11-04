@@ -20,8 +20,8 @@ function mpElements() {
 
 function item(id, overrides = {}) {
   return {
-    subtask_id: id, order: Number(id.slice(2)), title: `子任务 ${id}`, objective: `目标 ${id}`,
-    procedure: ['步骤一'], completion_checks: ['检查一'], safety_rules: [], scope_notes: [],
+    subtask_id: id, order: Number(id.slice(2)), title: `子任務 ${id}`, objective: `目標 ${id}`,
+    procedure: ['步驟一'], completion_checks: ['檢查一'], safety_rules: [], scope_notes: [],
     teacher_required: false, evidence_types: ['SCREENSHOT'], vision_task: null, legacy_step_ids: [],
     status: 'NOT_STARTED', facts: [], evidence: [], teacher_decision: null, teacher_id: null,
     teacher_reason: null, teacher_note: null, updated_at: null,
@@ -33,8 +33,8 @@ function missionPlanner(completed = false, count = 0) {
   const items = Array.from({ length: 12 }, (_, i) => item(`MP${String(i + 1).padStart(2, '0')}`,
     i < count ? { status: 'COMPLETED' } : {}));
   return {
-    title: 'Mission Planner AI 调参助教', parent_task_id: 'TASK_07',
-    current_subtask_id: 'MP01', current_subtask: items[0], next_subtask: { subtask_id: 'MP02', title: '子任务 MP02' },
+    title: 'Mission Planner AI 調參助教', parent_task_id: 'TASK_07',
+    current_subtask_id: 'MP01', current_subtask: items[0], next_subtask: { subtask_id: 'MP02', title: '子任務 MP02' },
     progress: `${count} / 12`, completed_count: count, total: 12, completed,
     subtasks: {}, items
   };
@@ -117,7 +117,7 @@ test('teacher review uses Main v2.0 teacher authority headers, not MP-12 PIN', a
   let headers = null;
   let body = null;
   const fetchImpl = async (url, init) => { headers = init.headers; body = JSON.parse(init.body); return { ok: true, json: async () => ({ training: {} }) }; };
-  await live.submitMpTeacherReview(fetchImpl, 'sid', 'MP06', { decision: 'APPROVE', reason: '接线问题', note: 'ok' });
+  await live.submitMpTeacherReview(fetchImpl, 'sid', 'MP06', { decision: 'APPROVE', reason: '接線問題', note: 'ok' });
   assert.equal(headers['X-FDE-Role'], 'teacher');
   assert.equal(headers['X-FDE-Teacher-ID'], 'MOCK_TEACHER');
   assert.equal(body.pin, undefined);
@@ -131,7 +131,7 @@ test('completed MP-12 shows completed banner with return-to-TASK_07 button', () 
   assert.equal(e.mp12CompletedBanner.hidden, false);
   assert.ok(HTML.includes('id="mp12CompletedBanner"'));
   assert.ok(HTML.includes('id="mp12BackToTask07"'));
-  assert.ok(HTML.includes('可以返回 F450 主任务继续学习'));
+  assert.ok(HTML.includes('可以返回 F450 主任務繼續學習'));
 });
 
 // ---------- 9. completed：不自動完成 TASK_07 ----------
@@ -181,12 +181,12 @@ test('existing Student Live Coach rendering is unchanged', () => {
   e.trainingStatus = { textContent: '' };
   e.trainingProgress = { textContent: '' };
   live.renderTrainingState(e, {
-    task: { id: 'TASK_07', order: 7, title: 'Mission Planner 完整调参', objective: '完成 F450 基本飞控配置。', steps: [] },
+    task: { id: 'TASK_07', order: 7, title: 'Mission Planner 完整調參', objective: '完成 F450 基本飛控配置。', steps: [] },
     current_task_id: 'TASK_07', task_state: 'IN_PROGRESS', progress: '6 / 12',
     mission_planner: missionPlanner()
   });
-  assert.equal(e.trainingTitle.textContent, 'Mission Planner 完整调参');
-  assert.equal(e.trainingObjective.textContent, '完成 F450 基本飞控配置。');
+  assert.equal(e.trainingTitle.textContent, 'Mission Planner 完整調參');
+  assert.equal(e.trainingObjective.textContent, '完成 F450 基本飛控配置。');
   assert.equal(e.trainingTaskNumber.textContent, 'Task 07 / 12');
   assert.equal(e.trainingProgress.textContent, '6 / 12');
 });

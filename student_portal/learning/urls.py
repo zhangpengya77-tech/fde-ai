@@ -10,6 +10,8 @@ urlpatterns = [
     path("platform/", views.platform_entry, name="platform"),
     path("platform/<path:asset_path>", views.platform_asset, name="platform_asset"),
     path("api/public/rag/ask/", public_ai.public_rag_ask, name="public_rag_ask"),
+    # 2026-11-04：鷹眼 AI 檢測頁的 AI 助教（需登入）；放在 /api/public/ 下才會經 Live 轉發到 Django
+    path("api/public/inspection/ai-tutor/", views.eagle_inspection_ai_tutor, name="eagle_inspection_ai_tutor"),
     path("api/public/inspection/detect/", public_ai.public_inspection_detect, name="public_inspection_detect"),
     path("api/public/inspection/hover/", public_ai.public_inspection_hover, name="public_inspection_hover"),
     path("api/public/voice/ask/", public_ai.public_voice_ask, name="public_voice_ask"),
@@ -43,6 +45,7 @@ urlpatterns = [
     ),
     path("student/courses/<int:enrollment_id>/prop-scan/", views.student_prop_scan, name="student_prop_scan"),
     path("student/courses/<int:enrollment_id>/rotation-v5/", views.student_rotation_v5_scan, name="student_rotation_v5_scan"),
+    path("student/courses/<int:enrollment_id>/rotation-v5/<uuid:record_id>/ai-tutor/", views.student_rotation_ai_tutor, name="student_rotation_ai_tutor"),
     path("evidence/vision-inspections/<uuid:record_id>/image/", views.vision_inspection_image, name="vision_inspection_image"),
     # POWER_INSPECTION_V1：獨立影片巡檢任務，不影響既有 R07／V5。
     path("student/power-inspection/", views.student_power_inspection_entry, name="power_inspection_entry"),
@@ -50,6 +53,8 @@ urlpatterns = [
     path("student/courses/<int:enrollment_id>/power-inspection/", views.student_power_inspection_task, name="power_inspection_task"),
     path("student/courses/<int:enrollment_id>/power-inspection/upload/", views.student_power_inspection_upload, name="power_inspection_upload"),
     path("student/power-inspection/jobs/<uuid:job_id>/", views.student_power_inspection_job, name="power_inspection_student_job"),
+    path("student/power-inspection/jobs/<uuid:job_id>/ai-tutor/", views.student_power_inspection_ai_tutor, name="power_inspection_ai_tutor"),
+    path("student/power-inspection/frames/<uuid:frame_id>/", views.student_power_inspection_frame, name="power_inspection_student_frame"),
     path("student/courses/<int:enrollment_id>/learning-path/", views.student_learning_path, name="student_learning_path"),
     path("student/courses/<int:enrollment_id>/growth/<str:slot_id>/", views.growth_record_detail, name="growth_record_detail"),
     path("student/courses/<int:enrollment_id>/growth/R08/survey/", views.student_survey, name="student_survey"),
@@ -124,6 +129,7 @@ urlpatterns = [
     path("teacher/vision-inspections/<uuid:record_id>/", views.teacher_vision_inspection_detail, name="teacher_vision_inspection_detail"),
     # POWER_INSPECTION_V1：教師端模型匯入／試用／部署／停用／回退與工作覆核。
     path("teacher/power-inspection/", views.teacher_power_inspection, name="power_inspection_teacher"),
+    path("teacher/power-inspection/frames/<uuid:frame_id>/", views.teacher_power_inspection_frame, name="power_inspection_teacher_frame"),
     path("teacher/power-inspection/models/import/", views.teacher_power_inspection_model_import, name="power_inspection_model_import"),
     path("teacher/power-inspection/models/<uuid:model_id>/verify/", views.teacher_power_inspection_verify, name="power_inspection_verify"),
     path("teacher/power-inspection/models/<uuid:model_id>/trial/", views.teacher_power_inspection_trial, name="power_inspection_trial"),

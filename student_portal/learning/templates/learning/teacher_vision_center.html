@@ -162,7 +162,7 @@
       <p class="vc-flowline">四個步驟一次做一件事：<b>看學員模型</b> → <b>驗一張圖</b> → <b>設正式模型</b> → <b>留教學資料</b>。不需懂 YOLO 或部署。</p>
     </div>
     <div class="vc-actions" style="margin-top:0">
-      <a class="button quiet" href="{% url 'learning:power_inspection_teacher' %}">電力巡檢模型管理</a>
+      <a class="button quiet" href="{% url 'learning:power_inspection_teacher' %}">電力巡檢後台</a>
       <a class="button quiet" href="{% url 'learning:teacher_dashboard' %}">回教師後台</a>
     </div>
   </div>
@@ -1060,5 +1060,16 @@
     });
   });
 })();
+
+// 模型檢查要在伺服器載入 .pt，常需 1～2 分鐘；送出後鎖定按鈕，避免重複送出。
+document.addEventListener('submit', function (e) {
+  if (e.defaultPrevented || (e.target.method || '').toLowerCase() !== 'post') return;
+  var button = e.submitter;
+  if (!button) return;
+  setTimeout(function () {
+    button.disabled = true;
+    button.textContent = '處理中，約需 1～2 分鐘，請勿重複點擊…';
+  }, 0);
+});
 </script>
 {% endblock %}

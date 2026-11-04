@@ -538,7 +538,26 @@ class JsonStore:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / "vision_center.json"
-        self.data = self._load()
+        self._data = self._load()
+        self._stamp = self._file_stamp()
+
+    @property
+    def data(self) -> dict:
+        """Live（:8141）與閘道（:8143）各自持有一份 VisionCenter；任一方寫入後，
+        另一方必須重讀檔案，否則會用舊資料推論（例如看不到剛啟用的模型），
+        之後再存檔還會把對方的變更整份蓋掉。"""
+        stamp = self._file_stamp()
+        if stamp != self._stamp:
+            self._data = self._load()
+            self._stamp = stamp
+        return self._data
+
+    def _file_stamp(self) -> tuple[int, int] | None:
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
 
     @staticmethod
     def empty() -> dict:
@@ -554,8 +573,9 @@ class JsonStore:
 
     def save(self) -> None:
         temp = self.path.with_suffix(".tmp")
-        temp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        temp.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temp, self.path)
+        self._stamp = self._file_stamp()
 
 
 class VisionCenter:

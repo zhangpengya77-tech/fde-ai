@@ -43,6 +43,7 @@ PORTAL_PROXY_PREFIXES = (
     "/evidence/",
     "/platform/",
     "/static/",
+    "/api/public/",
 )
 
 CREDENTIAL_HEADERS = (b"cookie", b"authorization")

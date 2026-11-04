@@ -128,11 +128,11 @@ test('late final result after onend submits exactly once', () => {
 
 test('student page presents one Live Coach action and moves manual tools into collapsed fallback', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  assert.match(html, /id="enableVoiceCoach"[^>]*>開始詢問 AI</);
+  assert.match(html, /id="enableVoiceCoach"[^>]*>開始 AI 陪做（鏡頭＋語音）</);
   assert.match(html, /id="pauseVoiceCoach"[^>]*hidden[^>]*>暫停語音</);
   assert.match(html, /id="liveCoachStatus"[^>]*>AI 已待命</);
   assert.match(html, /id="latestAiAnswer"/);
-  assert.match(html, /<details id="fallbackMethods"[^>]*>\s*<summary>无法使用语音？<\/summary>/);
+  assert.match(html, /<details id="fallbackMethods"[^>]*>\s*<summary>無法使用語音？<\/summary>/);
   assert.doesNotMatch(html, /<details id="fallbackMethods"[^>]*\sopen/);
 });
 
@@ -144,16 +144,16 @@ test('classroom layout keeps camera first while transcript and answer stay toget
   const camera = html.indexOf('id="cameraTool"');
   assert.ok(camera >= 0 && panel > camera && transcript > panel && answer > transcript);
   assert.match(html, /你剛剛說/);
-  assert.match(html, /<summary>无法使用语音？<\/summary>/);
+  assert.match(html, /<summary>無法使用語音？<\/summary>/);
   assert.match(html, /live\.css\?v=live-coach-mvp1/);
-  assert.match(html, /live\.js\?v=live-coach-mvp1/);
+  assert.match(html, /live\.js\?v=[^"]+/);  // 2026-11-04：版本號會隨更新變動，只檢查有帶快取版本參數
 });
 
 test('ready message stays separate from the last real answer', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
   assert.match(html, /id="liveCoachStatus">AI 已待命</);
-  assert.match(html, /id="latestAiAnswer">尚无 AI 回答。/);
-  assert.doesNotMatch(html, /id="latestAiAnswer">AI 助教已准备好/);
+  assert.match(html, /id="latestAiAnswer">尚無 AI 回答。/);
+  assert.doesNotMatch(html, /id="latestAiAnswer">AI 助教已準備好/);
 });
 
 test('student answer shows a small AI reference label without exposing RAG state', () => {
@@ -176,7 +176,7 @@ test('Task01 MVP screen keeps only task, live camera, chat, and one ask action v
   const ask = html.indexOf('id="enableVoiceCoach"');
   const more = html.indexOf('id="moreWays"');
   assert.ok(task >= 0 && camera > task && chat > camera && ask > chat);
-  assert.match(html, /id="enableVoiceCoach"[^>]*>開始詢問 AI</);
+  assert.match(html, /id="enableVoiceCoach"[^>]*>開始 AI 陪做（鏡頭＋語音）</);
   assert.match(html, /id="pauseVoiceCoach"[^>]*hidden[^>]*>暫停語音</);
   assert.ok(html.indexOf('id="currentStepCard"') > more, 'step explanation belongs in collapsed content');
   assert.ok(html.indexOf('id="fallbackMethods"') > more, 'manual tools belong in collapsed content');

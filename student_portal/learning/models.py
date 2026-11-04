@@ -1389,6 +1389,10 @@ class VisionInspectionRecord(models.Model):
     best_class = models.CharField(max_length=64, blank=True)
     best_confidence = models.FloatField(null=True, blank=True)
     learning_event_id = models.CharField(max_length=128, blank=True)
+    # V1.0 教學測試版（2026-11-03）：模型發布階段（TEST／TRIAL）與規則引擎候選結果
+    # PASS／ERROR／UNKNOWN。候選結果只是 AI 建議，正式結果只看 review_status（教師覆核）。
+    release_stage = models.CharField(max_length=16, blank=True)
+    rule_evaluation = models.JSONField(default=dict, blank=True)
     review_status = models.CharField(max_length=16, choices=ReviewStatus.choices, default=ReviewStatus.PENDING)
     review_note = models.CharField(max_length=500, blank=True)
     reviewed_by = models.ForeignKey(
@@ -1399,6 +1403,10 @@ class VisionInspectionRecord(models.Model):
     # NG／要求重傳的圖片回收為下一輪資料候選；只做標記，不自動進訓練集。
     failure_sample = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def ai_candidate(self) -> str:
+        return str((self.rule_evaluation or {}).get("candidate") or "")
 
     class Meta:
         ordering = ["-created_at"]

@@ -1,0 +1,12 @@
+{# 異常標注截圖；frame_route 決定走學員或教師的權限路由。 #}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0">
+  {% for row in rows %}
+    <figure style="margin:0">
+      {% if row.frame_id %}
+        {% url frame_route row.frame_id as frame_url %}
+        <a href="{{ frame_url }}" target="_blank" rel="noopener"><img src="{{ frame_url }}" alt="{{ row.time_label }} {{ row.label }} 標注截圖" loading="lazy" style="display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:6px"></a>
+      {% endif %}
+      <figcaption style="font-size:13px;margin-top:4px"><strong style="color:#c62828">{{ row.label }}</strong> {{ row.time_label }}{% if row.confidence_percent != None %}｜{{ row.confidence_percent }}%{% endif %}<br>{{ row.description }}</figcaption>
+    </figure>
+  {% endfor %}
+</div>

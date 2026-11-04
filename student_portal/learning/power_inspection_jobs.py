@@ -160,23 +160,22 @@ def _complete(job, *, frame_results: list[dict], provenance: str, metadata: dict
         job.worker_detail = "測試合成資料" if provenance == "MOCK_TEST_ONLY" else "隔離 YOLO worker 已完成。"
         job.save()
         for entry in timeline:
+            # 截圖僅接受 worker 交回的 bytes；沒有截圖時保留空值，而不是產生
+            # 虛構影像。每個時間軸區段只保存信心最高的異常幀作為覆核證據。
+            candidates = [
+                (max(float(d.get("confidence") or 0) for d in matches), item)
+                for item in frame_results
+                if entry["start_ms"] <= item.get("timestamp_ms", -1) <= entry["end_ms"]
+                and (matches := [d for d in item.get("detections") or [] if str(d.get("class")) == entry["class"]])
+            ]
+            best = max(candidates, key=lambda pair: pair[0], default=(None, {}))[1]
             frame = PowerInspectionAnomalyFrame.objects.create(
-                job=job, timestamp_ms=entry["start_ms"], class_name=entry["class"],
+                job=job, timestamp_ms=best.get("timestamp_ms", entry["start_ms"]), class_name=entry["class"],
                 confidence=entry["max_confidence"], inference_mode=job.inference_mode,
             )
-            # 截圖僅接受 worker 交回的 bytes；沒有截圖時保留空值，而不是產生
-            # 虛構影像。每個時間軸區段只保存起始異常幀作為覆核證據。
-            screenshot = next(
-                (
-                    item.get("screenshot_bytes") for item in frame_results
-                    if item.get("timestamp_ms") == entry["start_ms"]
-                    and any(str(d.get("class")) == entry["class"] for d in item.get("detections") or [])
-                    and isinstance(item.get("screenshot_bytes"), bytes)
-                ),
-                None,
-            )
-            if screenshot:
-                frame.screenshot.save(f"anomaly-{entry['start_ms']}.png", ContentFile(screenshot), save=True)
+            screenshot = best.get("screenshot_bytes")
+            if isinstance(screenshot, bytes) and screenshot:
+                frame.screenshot.save(f"anomaly-{frame.timestamp_ms}.jpg", ContentFile(screenshot), save=True)
         return job
 
 

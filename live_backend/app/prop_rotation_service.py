@@ -2,6 +2,9 @@
 
 本服務不碰既有 PROP_DIRECTION 四類模型，也不允許在缺少獨立 Golden Test 時
 將 V5 設為 ACTIVE。實際 checkpoint 僅由 rotation_sandbox 子程序載入。
+
+2026-11-03：同一流程可改用 V6 TEST 教學測試模型（只在隔離測試環境以環境變數指定）。
+學員推論額外附上規則引擎候選結果 PASS／ERROR／UNKNOWN，一律「測試結果，待教師確認」。
 """
 
 from __future__ import annotations
@@ -10,7 +13,9 @@ import hashlib
 import os
 from pathlib import Path
 
+from .prop_rotation_rules import TEACHING_TEST_NOTICE, evaluate_teaching_candidate
 from .prop_rotation_v5 import (
+    MODEL_SPECS,
     V5_CLASS_NAMES,
     PropRotationTrialError,
     PropRotationTrialRegistry,
@@ -32,7 +37,7 @@ class PropRotationTrialService:
         self.source = str(source)
 
     def _model(self) -> dict:
-        return self.registry.register_verified_v5(
+        return self.registry.register_verified_model(
             model_path=str(self.model_path), model_sha256=self.model_sha256,
             class_names=list(V5_CLASS_NAMES), source=self.source,
         )
@@ -105,19 +110,23 @@ class PropRotationTrialService:
         model = self._model()
         trial_cohorts = {str(item) for item in model.get("trial_cohort_ids", [])}
         caller_cohorts = {str(item) for item in cohort_ids}
-        if model.get("status") not in {"TEACHING_TRIAL", "ACTIVE_ISOLATED"}:
+        if model.get("status") not in {"TEACHING_TRIAL", "TEST", "ACTIVE_ISOLATED"}:
             raise PropRotationServiceError("rotation_model_not_available")
         if not trial_cohorts or not trial_cohorts.intersection(caller_cohorts):
             raise PropRotationServiceError("cohort_not_authorized")
         result = self.runner.infer(model_path=self.model_path, image_bytes=image_bytes, actual_model_sha256=self.model_sha256)
         detections = self._filtered(result)
+        # 規則引擎看較低門檻的框，才分得出「信心不足」與「沒有槳」；是否達標由規則引擎判斷。
+        rule_evaluation = evaluate_teaching_candidate(self._filtered(result, threshold=0.25))
         event = self.registry.record_student_event(
             model_id=model["model_id"], student_id=str(student_id), cohort_ids=sorted(caller_cohorts),
-            image_sha256=self._image_sha256(image_bytes), detections=detections,
+            image_sha256=self._image_sha256(image_bytes), detections=detections, rule_evaluation=rule_evaluation,
         )
         return {
             "task_id": model["task_id"], "model_id": model["model_id"], "model_version": model["version"],
             "model_status": model["status"], "model_sha256": model["file_hash"],
+            "release_stage": model.get("release_stage", "TRIAL"), "notice": TEACHING_TEST_NOTICE,
+            "rule_evaluation": rule_evaluation,
             "class_names": list(V5_CLASS_NAMES), "detections": detections, "best_detection": detections[0] if detections else None,
             "learning_event_id": event["event_id"],
             "image_width": int(result.get("image_width") or 0), "image_height": int(result.get("image_height") or 0),
@@ -136,7 +145,7 @@ def build_rotation_trial_service_from_environment() -> PropRotationTrialService 
     model_sha256 = os.environ.get("FDE_PROP_ROTATION_V5_MODEL_SHA256", "").strip()
     if not root or not model_path or not model_sha256:
         raise PropRotationServiceError("rotation_trial_configuration_required")
-    if model_sha256.lower() != "911228ff2c1019701e3409c51b767e359871418f501941f00746434cfcd7352c":
+    if model_sha256.lower() not in MODEL_SPECS:
         raise PropRotationServiceError("model_sha256_mismatch")
     from .rotation_sandbox import RotationSandboxRunner
 
@@ -148,5 +157,5 @@ def build_rotation_trial_service_from_environment() -> PropRotationTrialService 
             timeout_seconds=int(os.environ.get("FDE_PROP_ROTATION_V5_TIMEOUT_SECONDS", "60")),
         ),
         model_path=Path(model_path), model_sha256=model_sha256,
-        source="F450_CW_CCW_V5_training",
+        source=os.environ.get("FDE_PROP_ROTATION_V5_SOURCE", "F450_CW_CCW_V5_training"),
     )

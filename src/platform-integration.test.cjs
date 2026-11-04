@@ -23,7 +23,7 @@ const okResponse = (payload) => ({ ok: true, status: 200, json: async () => payl
 {
   const html = readFile('index.html');
   assert.match(html, /id="buildMain12Entry"[^>]*href="\/live\/"/, 'Build CTA 必須存在並指向 /live/');
-  assert.match(html, /src="\.\/src\/vision-client\.js\?v=1\.0\.3-mobile-speech"/, '手機端必須載入最新 Vision client，避免 Safari 沿用舊快取');
+  assert.match(html, /src="\.\/src\/vision-client\.js\?v=1\.0\.4-error-envelope"/, '手機端必須載入最新 Vision client，避免 Safari 沿用舊快取');
   assert.match(html, /build-legacy-note/, 'legacy F450 必須保留為次級入口');
   assert.ok(/id="build"/.test(html) && /assistantQuestion/.test(html), 'legacy 1.0 build 內容必須保留');
   console.log('✓ Build CTA → /live/，legacy 保留');
@@ -114,6 +114,16 @@ const okResponse = (payload) => ({ ok: true, status: 200, json: async () => payl
     (error) => {
       assert.equal(error.code, 'VISION_NO_ACTIVE_MODEL');
       assert.equal(error.message, client.NO_MODEL_MESSAGE);
+      return true;
+    },
+  );
+  // Live 錯誤信封 {error: {code, message}}：detail 必須是文字，不可顯示 [object Object]
+  const enveloped = mockFetch(() => ({ ok: false, status: 422, json: async () => ({ error: { code: 'invalid_prop_request', message: 'active_model_required' } }) }));
+  await assert.rejects(
+    () => client.propCheck({ fetchImpl: enveloped, base: 'http://x', imageDataUrl: 'data:image/jpeg;base64,AA', imageWidth: 1, imageHeight: 1, fileName: 'a.jpg' }),
+    (error) => {
+      assert.equal(error.code, 'VISION_NO_ACTIVE_MODEL');
+      assert.equal(error.detail, 'active_model_required');
       return true;
     },
   );

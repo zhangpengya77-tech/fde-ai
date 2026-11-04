@@ -20,8 +20,23 @@
   {% for job in jobs %}
     <li>
       {{ job.original_filename|default:"未命名影片" }}：{{ job.get_status_display }}／{{ job.get_inference_mode_display }}
-      {% if job.video_metadata %}<p>影片資訊：{{ job.video_metadata }}</p>{% endif %}
-      {% if job.anomaly_timeline %}<details><summary>異常時間軸</summary><pre>{{ job.anomaly_timeline }}</pre></details>{% endif %}
+      {% if job.status == 'COMPLETED' %}
+        <p><strong>檢測結果：{% if job.timeline_rows %}發現 {{ job.timeline_rows|length }} 段疑似異常{% else %}未發現疑似異常{% endif %}</strong>{% if job.analyzed_frames %}（已分析 {{ job.analyzed_frames }} 幀）{% endif %}</p>
+        {% if job.timeline_rows %}{% include "learning/_power_anomaly_gallery.html" with rows=job.timeline_rows frame_route="learning:power_inspection_student_frame" %}{% endif %}
+        <p>實驗模型結果，可能有誤報或漏報，須經教師覆核。點圖片可放大。</p>
+        {# 2026-11-04 AI 助教：判定說明＋處理建議＋LLM 解說，並以瀏覽器語音朗讀。 #}
+        <div class="power-ai-tutor" data-url="{% url 'learning:power_inspection_ai_tutor' job.job_id %}">
+          <button type="button" data-tutor-ask>AI 助教解說</button>
+          <button type="button" data-tutor-replay hidden>再聽一次</button>
+          <button type="button" data-tutor-stop hidden>停止朗讀</button>
+          <p data-tutor-status aria-live="polite"></p>
+          <div data-tutor-answer hidden>
+            <h3>判定說明</h3><p data-tutor-verdict></p>
+            <h3>處理建議</h3><p data-tutor-advice></p>
+            <div data-tutor-llm-block hidden><h3>AI 補充解說</h3><p data-tutor-llm></p></div>
+          </div>
+        </div>
+      {% endif %}
       {% if job.inference_mode == 'MOCK' %}<p><strong>MOCK TEST ONLY：此結果不是真實 YOLO 推論。</strong></p>{% endif %}
       {% if job.last_error %}<p>處理錯誤：{{ job.last_error }}</p>{% endif %}
       {% for review in job.reviews.all %}<p>教師覆核：{{ review.get_decision_display }}{% if review.score != None %}，{{ review.score }} 分{% endif %}</p>{% endfor %}
@@ -36,5 +51,34 @@ document.querySelectorAll('form[data-api-form]').forEach((form) => form.addEvent
   try { const response = await fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin'}); const body = await response.json(); result.textContent = body.detail || (body.ok ? '已保存，重新整理可查看工作狀態。' : '操作未完成。'); }
   catch (_) { result.textContent = '連線失敗，未確認建立任何巡檢工作。'; }
 }));
+// AI 助教：每筆已完成巡檢各自一個按鈕，回答後自動以 zh-TW 語音朗讀。
+document.querySelectorAll('.power-ai-tutor').forEach((box) => {
+  const $ = (name) => box.querySelector('[data-tutor-' + name + ']');
+  let speech = '';
+  const speak = () => {
+    if (!('speechSynthesis' in window)) { $('status').textContent = '此瀏覽器不支援語音朗讀，請閱讀下方文字。'; return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(speech); u.lang = 'zh-TW'; u.rate = 0.95;
+    window.speechSynthesis.speak(u);
+  };
+  $('ask').addEventListener('click', async () => {
+    $('ask').disabled = true; $('status').textContent = 'AI 助教整理中，請稍候…';
+    try {
+      const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      const response = await fetch(box.dataset.url, {method: 'POST', credentials: 'same-origin', headers: {'X-CSRFToken': token ? token.value : ''}});
+      const data = await response.json();
+      if (!data.ok) { $('status').textContent = data.error || 'AI 助教暫時無法回答，請詢問老師。'; return; }
+      $('verdict').textContent = data.verdict; $('advice').textContent = data.advice;
+      $('llm').textContent = data.llm || ''; $('llm-block').hidden = !data.llm;
+      $('answer').hidden = false; $('replay').hidden = false; $('stop').hidden = false;
+      $('status').textContent = data.llm_available ? '' : 'AI 補充解說目前未啟用，以上為判定說明與處理建議。';
+      speech = data.speech_text || data.verdict; speak();
+    } catch (_) { $('status').textContent = 'AI 助教暫時無法連線，請稍後再試或詢問老師。'; }
+    finally { $('ask').disabled = false; }
+  });
+  $('replay').addEventListener('click', speak);
+  $('stop').addEventListener('click', () => { if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); } });
+});
+{% if has_pending_job %}setTimeout(() => { if (!('speechSynthesis' in window) || !window.speechSynthesis.speaking) { location.reload(); } }, 15000);{% endif %}
 </script>
 {% endblock %}

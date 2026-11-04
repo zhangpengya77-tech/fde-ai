@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI PID 與濾波實驗室 | FDE-AI-UAS</title>
+  <meta name="description" content="FDE-AI 2.0 AI PID & Filter Lab：Betaflight / ArduPilot / PX4 飛控日誌 PID 與濾波分析、教師審核與複測比較。">
+  <link rel="stylesheet" href="./css/lab.css?v=20261104">
+</head>
+<body>
+  <header class="top-header">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+      </span>
+      <div>
+        <h1 class="brand-title">AI PID 與濾波實驗室</h1>
+        <span class="brand-subtitle">AI PID &amp; Filter Lab · Betaflight / ArduPilot / PX4</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="identity-chip" class="chip">未連線</span>
+      <select id="dev-role" class="dev-only hidden" aria-label="開發模式身分">
+        <option value="student:demo-student:dev-cohort">開發：學員</option>
+        <option value="teacher:demo-teacher:dev-cohort">開發：教師</option>
+      </select>
+      <a class="back-link" href="../">← 返回首頁</a>
+    </div>
+  </header>
+
+  <div id="service-banner" class="status-banner checking">正在偵測實驗室分析服務…</div>
+
+  <nav class="steps" id="steps" aria-label="實驗步驟"></nav>
+
+  <main class="container">
+    <section data-view="learn" class="view">
+      <h2>第一步：認識 PID、Rate 與濾波</h2>
+      <div class="grid-2">
+        <article class="card"><h3>P · I · D · FF</h3>
+          <p><b>P（比例）</b>：誤差越大、修正越大；太高會抖動與過衝，太低反應鬆軟。</p>
+          <p><b>I（積分）</b>：消除長時間存在的偏差（例如重心偏移、風）；太高會慢速擺盪。</p>
+          <p><b>D（微分）</b>：抑制變化速度，提供阻尼、減少過衝；但會放大高頻雜訊，使馬達發熱。</p>
+          <p><b>FF（前饋）</b>：直接依搖桿變化給出力量，讓響應更跟手，不依賴誤差。</p>
+        </article>
+        <article class="card"><h3>Rate 與控制迴路</h3>
+          <p><b>Rate（目標角速度）</b>：搖桿打到某位置時，飛控希望機體轉多快（deg/s）。</p>
+          <p><b>角速度內環</b>：比較目標角速度與陀螺儀實際角速度，是 PID 調參的主要對象。</p>
+          <p><b>姿態外環</b>（ArduPilot / PX4 自穩模式）：比較目標角度與實際角度，輸出內環的目標角速度。</p>
+        </article>
+        <article class="card"><h3>濾波基礎</h3>
+          <p>陀螺儀會收到馬達與螺旋槳的振動。<b>低通濾波</b>去除高頻雜訊、<b>陷波 / 動態陷波 / RPM 濾波</b>精準去除特定頻率。</p>
+          <p>濾波越強，延遲越大，控制越不穩；所以要先把<b>機械振動</b>處理好，再談濾波。</p>
+        </article>
+        <article class="card"><h3>怎麼讀曲線</h3>
+          <p><b>時間曲線</b>：目標（虛線）與實際（實線）越貼近越好。</p>
+          <p><b>階躍響應</b>：理想為快速上升到 1、過衝小、很快穩定。</p>
+          <p><b>頻譜</b>：橫軸頻率、縱軸雜訊強度；尖峰代表特定振動來源。</p>
+        </article>
+      </div>
+      <h3 class="section-title" id="logging-setup">飛行前準備：讓日誌可以被分析</h3>
+      <p class="muted">日誌記錄頻率太低時，系統只能顯示「資料不足」。下列設定在<b>官方地面站中由學員手動完成</b>（本系統不會寫入參數）；修改前先備份參數，連接飛控時拆下螺旋槳。參數名稱與選項可能隨韌體版本不同，請以該版本官方文件為準。</p>
+      <div class="grid-3">
+        <article class="card"><h3>ArduPilot（Mission Planner）</h3>
+          <p><b>目的</b>：角速度內環需 ≥ 50 Hz；濾波分析需要 IMU 批次取樣。</p>
+          <ol>
+            <li>完整參數表搜尋 <code>LOG_BITMASK</code>，在勾選清單中加入 <b>ATTITUDE_FAST</b> 與 <b>PID</b>（保留原本已勾選的項目）。</li>
+            <li><code>INS_LOG_BAT_MASK</code> = 1（記錄第一顆 IMU 的批次取樣）。</li>
+            <li><code>INS_LOG_BAT_OPT</code> = 4（同時記錄濾波前與濾波後，可比較濾波效果）。</li>
+            <li>寫入參數後重新開機飛控。</li>
+          </ol>
+          <p class="kv">檢查方法：上傳日誌後，「5 PID / 濾波」頁應出現「濾波前 / 濾波後（批次取樣）」頻譜；若角速度仍顯示 10 Hz，請教師確認該韌體版本的記錄選項。批次取樣會增加日誌大小，飛完驗證後可恢復原設定。</p>
+        </article>
+        <article class="card"><h3>Betaflight（Configurator）</h3>
+          <p><b>目的</b>：Blackbox 記錄率足夠高，才能看見 PID 響應與 100 Hz 以上的雜訊。</p>
+          <ol>
+            <li>「Blackbox」頁：記錄裝置選 Onboard Flash 或 SD 卡，飛行前先清除（Erase）Flash。</li>
+            <li>記錄頻率（Blackbox logging rate）至少 <b>1 kHz</b>，2 kHz 更佳（依飛控記憶體容量調整）。</li>
+            <li>CLI 執行 <code>version</code> 與 <code>diff all</code>，把輸出存檔後在實驗室「參數 / CLI 匯入」貼上。</li>
+          </ol>
+          <p class="kv">檢查方法：上傳後「5 PID / 濾波」頁的取樣頻率應 ≥ 1000 Hz，並出現階躍響應曲線。</p>
+        </article>
+        <article class="card"><h3>PX4（QGroundControl）</h3>
+          <p><b>目的</b>：角速度與目標角速度需要高頻記錄。</p>
+          <ol>
+            <li>參數 <code>SDLOG_PROFILE</code>：在勾選清單中加入 <b>High rate</b>（需要系統辨識時再加 <b>System identification</b>），保留預設項目。</li>
+            <li><code>SDLOG_MODE</code>：建議「從解鎖到上鎖」記錄。</li>
+            <li>QGroundControl「參數 → 工具 → 儲存到檔案」匯出參數，在實驗室匯入。</li>
+          </ol>
+          <p class="kv">檢查方法：上傳 ULog 後，角速度取樣頻率應明顯高於 100 Hz。</p>
+        </article>
+      </div>
+      <div class="card">
+        <h3>建議的測試飛行動作（三套飛控通用）</h3>
+        <ol>
+          <li>確認螺旋槳、電池電量與安裝牢固；教師在場、場地淨空。</li>
+          <li>低空懸停 30 秒（供振動與雜訊分析）。</li>
+          <li>橫滾軸：快速左右打桿再回中，重複 3～5 次；俯仰軸、偏航軸同樣各 3～5 次（供階躍響應分析）。</li>
+          <li>再懸停 10 秒後降落，記錄電池編號、螺旋槳與風況。</li>
+          <li>調參前（BASELINE）與調參後（AFTER_TUNING）使用<b>相同的動作、電池與螺旋槳</b>，前後比較才有意義。</li>
+        </ol>
+      </div>
+      <h3 class="section-title">實訓課程</h3>
+      <div id="course-list" class="grid-3"></div>
+      <div class="card notice">
+        <b>安全規範</b>：本實驗室只做離線日誌分析，不會連接飛控、不會寫入參數、不會刷韌體或啟動馬達。任何參數修改都必須經教師審核，並由學員在官方工具（Betaflight Configurator / Mission Planner / QGroundControl）中手動操作；連接飛控時務必拆下螺旋槳。
+      </div>
+    </section>
+
+    <section data-view="aircraft" class="view">
+      <h2>第二步：選擇飛控系統與飛機</h2>
+      <p class="muted">先選擇<b>飛控韌體生態</b>。Pixhawk、APM、F405、H743 是硬體；Mission Planner、QGroundControl 是地面站軟體，都不能代表韌體。系統最後會以日誌內容實際識別的韌體為準。</p>
+      <div id="eco-cards" class="eco-grid"></div>
+      <div class="card">
+        <h3 id="aircraft-form-title">建立飛機檔案</h3>
+        <form id="aircraft-form" class="form-grid">
+          <label>飛機名稱<input name="name" required maxlength="80" placeholder="例如：2.5 寸教學機 A01"></label>
+          <label>飛控生態<select name="ecosystem" id="aircraft-eco"></select></label>
+          <label>硬體系列<input name="hardware_series" placeholder="例如：Pixhawk 2.4.8 / APM 2.8 / F405"></label>
+          <label>地面站軟體<input name="ground_station" placeholder="Betaflight Configurator / Mission Planner / QGC"></label>
+          <label>韌體版本<input name="firmware_version" placeholder="例如：4.4.2（可由日誌自動識別）"></label>
+          <label>飛控型號 / Target<input name="fc_model" placeholder="例如：SPEEDYBEEF405V4"></label>
+          <label>Board ID<input name="board_id"></label>
+          <label>機架類型<input name="frame" placeholder="Quad X / F450"></label>
+          <label>軸距 (mm)<input name="wheelbase_mm" inputmode="numeric"></label>
+          <label>馬達型號<input name="motor"></label>
+          <label>馬達 KV<input name="motor_kv" inputmode="numeric"></label>
+          <label>ESC 型號<input name="esc"></label>
+          <label>螺旋槳<input name="prop" placeholder="2.5 寸三葉 / 1045"></label>
+          <label>電池規格<input name="battery" placeholder="4S 650mAh"></label>
+          <label>飛行模式<input name="flight_mode" placeholder="Acro / Stabilize / Loiter"></label>
+          <label>載荷重量 (g)<input name="payload_g" inputmode="numeric"></label>
+          <label>日誌取樣率<input name="sample_rate" placeholder="例如 2 kHz / 400 Hz"></label>
+          <label>教學機型號<input name="teaching_model" placeholder="FDE 2.5 寸標準教學機"></label>
+          <fieldset id="other-fields" class="hidden full">
+            <legend>其他飛控（手動填寫）</legend>
+            <div class="form-grid">
+              <label>飛控品牌<input name="other_brand"></label>
+              <label>飛控硬體型號<input name="other_hardware"></label>
+              <label>韌體名稱 *<input name="other_firmware"></label>
+              <label>無人機類型<input name="other_vehicle_type" placeholder="多旋翼 / 固定翼 / VTOL"></label>
+            </div>
+            <p class="muted">「其他飛控」可以建立飛機檔案，但系統<b>尚未支援</b>該韌體的日誌分析，不會產生任何分析結果。</p>
+          </fieldset>
+          <label class="full">備註<textarea name="notes" rows="2"></textarea></label>
+          <div class="full actions"><button type="submit" class="btn-primary">儲存飛機檔案</button><button type="button" id="aircraft-new" class="btn-secondary">新增另一架</button></div>
+        </form>
+        <p class="muted">通信端口（USB / COM）只在未來需要連接真實飛控時才使用；離線日誌分析<b>不需要</b>連接飛控。</p>
+      </div>
+      <div class="card"><h3>我的飛機</h3><div id="aircraft-list" class="list"></div></div>
+    </section>
+
+    <section data-view="upload" class="view">
+      <h2>第三步：上傳目前配置與飛行日誌</h2>
+      <div class="card">
+        <label>選擇飛機<select id="upload-aircraft"></select></label>
+        <div id="upload-eco-hint" class="muted"></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>參數 / CLI 匯入（可選，建議）</h3>
+          <p class="muted" id="param-hint">Betaflight：貼上 CLI 的 <code>version</code> 與 <code>diff all</code>；ArduPilot：Mission Planner 匯出的 .param；PX4：QGroundControl 匯出的 .params。</p>
+          <select id="param-kind"><option value="diff_all">diff all</option><option value="dump_all">dump all</option><option value="version">version</option><option value="param_file">參數檔</option></select>
+          <textarea id="param-text" rows="6" placeholder="貼上文字或選擇檔案"></textarea>
+          <input type="file" id="param-file" accept=".txt,.param,.params,.parm">
+          <button type="button" id="param-submit" class="btn-secondary">匯入參數</button>
+          <div id="param-result" class="muted"></div>
+        </div>
+        <div class="card">
+          <h3>飛行日誌</h3>
+          <p class="muted">Betaflight：BBL / BFL；ArduPilot：DataFlash BIN；PX4：ULog (.ulg)。系統依<b>檔案內容</b>判斷格式，不依副檔名。上限 64 MB。</p>
+          <label>測試階段<select id="upload-phase"><option value="BASELINE">BASELINE 調參前</option><option value="AFTER_TUNING">AFTER_TUNING 調參後</option><option value="PRACTICE">PRACTICE 練習</option></select></label>
+          <div class="form-grid">
+            <label>電池編號<input id="cond-battery"></label>
+            <label>螺旋槳<input id="cond-props"></label>
+            <label>載荷<input id="cond-payload"></label>
+            <label>風況<input id="cond-wind" placeholder="無風 / 微風"></label>
+            <label>參數版本<input id="cond-param" placeholder="例如 PID-v1"></label>
+          </div>
+          <input type="file" id="log-file" accept=".bbl,.bfl,.txt,.bin,.log,.ulg,.BBL,.BFL,.BIN,.ULG">
+          <button type="button" id="log-submit" class="btn-primary">上傳並分析</button>
+          <div id="upload-status" class="status-line"></div>
+        </div>
+      </div>
+      <div class="card"><h3>我的日誌</h3><div id="log-list" class="list"></div></div>
+    </section>
+
+    <section data-view="health" class="view">
+      <h2>第四步：Flight Health AI 八大健康指標</h2>
+      <div id="health-head" class="muted">請先在「上傳」或「我的日誌」選擇一份已完成分析的日誌。</div>
+      <div id="health-overall"></div>
+      <div id="health-cards" class="health-grid"></div>
+    </section>
+
+    <section data-view="pid" class="view">
+      <h2>第五步：PID 與濾波分析</h2>
+      <div id="pid-head" class="muted">請先選擇日誌。</div>
+      <div id="pid-axes"></div>
+      <h3 class="section-title">陀螺儀 / D 項頻譜</h3>
+      <div id="pid-spectra" class="grid-2"></div>
+      <div id="pid-attitude"></div>
+    </section>
+
+    <section data-view="advice" class="view">
+      <h2>第六步：AI 調參建議與分析依據</h2>
+      <div id="advice-head"></div>
+      <div id="advice-list"></div>
+      <div class="card actions" id="advice-actions">
+        <textarea id="plan-note" rows="2" placeholder="學員自主判斷：說明你為什麼同意 / 不同意這些建議"></textarea>
+        <button type="button" id="plan-submit" class="btn-primary">送交教師審核</button>
+        <div id="plan-status" class="status-line"></div>
+      </div>
+    </section>
+
+    <section data-view="review" class="view">
+      <h2>第七步：教師審核</h2>
+      <p class="muted">只有教師可以審核本班學員的調參方案。審核時須確認硬體檢查、參數範圍與複測要求。</p>
+      <div id="review-list"></div>
+    </section>
+
+    <section data-view="export" class="view">
+      <h2>第八步：匯出經審核的參數方案</h2>
+      <p class="muted">只有 APPROVED 的方案才能匯出；系統會再次檢查韌體版本、參數名稱與範圍。修改前務必先備份原始配置，且不得改動馬達資源映射、接收機與失控保護設定。</p>
+      <div id="export-list"></div>
+    </section>
+
+    <section data-view="verify" class="view">
+      <h2>第九步：實機安全驗證</h2>
+      <div class="card" id="verify-list"></div>
+    </section>
+
+    <section data-view="compare" class="view">
+      <h2>第十步：上傳複測日誌並比較</h2>
+      <div class="card form-grid">
+        <label>BASELINE 日誌<select id="cmp-base"></select></label>
+        <label>AFTER_TUNING 日誌<select id="cmp-after"></select></label>
+        <div class="full"><button type="button" id="cmp-submit" class="btn-primary">產生前後比較</button></div>
+      </div>
+      <div id="cmp-result"></div>
+    </section>
+
+    <section data-view="records" class="view">
+      <h2>實訓報告與成長檔案</h2>
+      <div class="card actions"><select id="report-log"></select><button type="button" id="report-print" class="btn-secondary">列印 / 另存 PDF</button></div>
+      <div id="report"></div>
+      <div class="card"><h3>成長紀錄</h3><div id="growth"></div></div>
+    </section>
+
+    <section data-view="library" class="view">
+      <h2>FDE-AI 教師標準參數庫</h2>
+      <p class="muted">狀態：DRAFT 草稿 → TESTING 測試中 → APPROVED 教師審核通過 → RETIRED 停止使用。未附 BASELINE、AFTER_TUNING 日誌與「IMPROVED」前後比較者，系統拒絕標記為 APPROVED。學員只能看到與自己飛機飛控與韌體版本相容的已審核參數；同型號仍需逐台安全檢查與複測。</p>
+      <form id="library-form" class="card form-grid teacher-only">
+        <label>飛控<select name="ecosystem"><option value="betaflight">Betaflight</option><option value="ardupilot">ArduPilot</option><option value="px4">PX4</option></select></label>
+        <label>教學機型號 *<input name="teaching_model" required></label>
+        <label>飛控硬體<input name="fc_model"></label>
+        <label>韌體版本 *<input name="firmware_version" required></label>
+        <label>電機<input name="motor"></label>
+        <label>螺旋槳<input name="prop"></label>
+        <label>電池<input name="battery"></label>
+        <label class="full">原始 PID / 濾波 / Rate（文字）<textarea name="original_params" rows="2"></textarea></label>
+        <label class="full">優化 PID（文字）<textarea name="optimized_params" rows="2"></textarea></label>
+        <label>BASELINE 日誌 ID<input name="baseline_log_id"></label>
+        <label>AFTER_TUNING 日誌 ID<input name="after_log_id"></label>
+        <label>前後比較 ID<input name="comparison_id"></label>
+        <div class="full"><button type="submit" class="btn-primary">建立草稿</button></div>
+      </form>
+      <div id="library-list"></div>
+    </section>
+  </main>
+
+  <footer class="footer">本頁所有分析均由本機後端對真實上傳日誌計算；後端離線時不會顯示任何分析結果。演算法版本會標示在每份報告中。</footer>
+  <script src="./js/charts.js?v=20261104"></script>
+  <script src="./js/lab.js?v=20261104"></script>
+</body>
+</html>

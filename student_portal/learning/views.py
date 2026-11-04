@@ -28,6 +28,7 @@ from django.contrib.auth.views import (
     PasswordResetDoneView,
     PasswordResetView,
 )
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files import File
 from django.core.files.base import ContentFile
@@ -84,6 +85,10 @@ from . import vision_submission as vision_api
 from . import vision_preflight
 from .vision_rule_templates import template_choices_for_task, template_for_task
 from . import prop_scan
+from . import rotation_guidance
+from . import rotation_tutor
+from . import power_tutor
+from . import inspection_tutor
 from .vision_verification import runner_state
 from .external_modules import external_modules_for_stage, all_external_modules
 from .golden_set import (
@@ -145,6 +150,7 @@ from .models import (
     GrowthRecordReview,
     GrowthRecordSubmission,
     PhaseProgress,
+    PowerInspectionAnomalyFrame,
     PowerInspectionCohortDeployment,
     PowerInspectionCohortDeploymentEvent,
     PowerInspectionJob,
@@ -944,6 +950,61 @@ def _power_rule_config(raw):
     return config
 
 
+POWER_CLASS_LABELS = {
+    "bird_nest": "鳥巢",
+    "foreign_object": "異物",
+    "insulator_damage": "絕緣子損傷",
+    "conductor_disconnection": "導線斷開",
+}
+# 說明只涵蓋訓練資料的範圍；模型分不出細項時一律標「疑似」並列出可能情況。
+POWER_CLASS_DESCRIPTIONS = {
+    "bird_nest": "疑似電塔鳥巢，請確認是否需要清除。",
+    "foreign_object": "疑似異物，請確認是否需要清除。",
+    "insulator_damage": "疑似絕緣子破損、裂紋或閃絡，請近距離複查。",
+    "conductor_disconnection": "疑似導線斷股或引線脫落，請近距離複查。",
+}
+
+
+def _power_timeline_rows(job):
+    """把異常時間軸轉成可讀的列，並配上該區段的標注截圖；類別未知時保留原始名稱。"""
+    timeline = job.anomaly_timeline
+    frames = [item for item in job.anomaly_frames.all() if item.screenshot]
+    # 舊版模型未拆出鳥巢，foreign_object 同時涵蓋鳥巢與異物。
+    merged_nest = job.model is not None and "bird_nest" not in (job.model.class_contract or [])
+    rows = []
+    for event in timeline if isinstance(timeline, list) else []:
+        name = str(event.get("class") or event.get("class_name") or "")
+        confidence = event.get("max_confidence")
+        start_ms = int(event.get("start_ms") or 0)
+        end_ms = int(event.get("end_ms") or start_ms)
+        time_label = f"{start_ms / 1000:.1f} 秒" if start_ms == end_ms else f"{start_ms / 1000:.1f}–{end_ms / 1000:.1f} 秒"
+        frame = next(
+            (item for item in frames if item.class_name == name and start_ms <= item.timestamp_ms <= end_ms),
+            None,
+        )
+        is_merged = merged_nest and name == "foreign_object"
+        rows.append({
+            "label": "鳥巢或異物" if is_merged else POWER_CLASS_LABELS.get(name, name),
+            "description": "疑似鳥巢或其他異物，請確認是否需要清除。" if is_merged else POWER_CLASS_DESCRIPTIONS.get(name, ""),
+            "time_label": time_label,
+            "confidence_percent": round(float(confidence) * 100) if confidence is not None else None,
+            "frame_id": frame.frame_id if frame else None,
+        })
+    return rows
+
+
+def _power_frame_response(frame):
+    if not frame.screenshot:
+        raise Http404
+    try:
+        response = FileResponse(frame.screenshot.open("rb"), content_type="image/jpeg")
+    except OSError as exc:
+        raise Http404 from exc
+    response["Cache-Control"] = "private, max-age=3600"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 def _power_rule_is_deployable(model):
     config = model.rule_config if isinstance(model.rule_config, dict) else {}
     threshold = config.get("confidence_threshold")
@@ -1166,10 +1227,16 @@ def student_power_inspection_task(request, enrollment_id):
         student=request.student_profile,
         active=True,
     )
-    jobs = PowerInspectionJob.objects.filter(enrollment=enrollment).select_related("model").prefetch_related("reviews")
+    jobs = list(PowerInspectionJob.objects.filter(enrollment=enrollment).select_related("model").prefetch_related("reviews", "anomaly_frames"))
+    for job in jobs:
+        job.timeline_rows = _power_timeline_rows(job)
+        job.analyzed_frames = (job.result_json or {}).get("frame_count")
     return render(request, "learning/student_power_inspection.html", {
         "enrollment": enrollment,
         "jobs": jobs,
+        "has_pending_job": any(
+            job.status in {PowerInspectionJob.Status.QUEUED, PowerInspectionJob.Status.PROCESSING} for job in jobs
+        ),
         "deployment": PowerInspectionCohortDeployment.objects.filter(
             cohort=enrollment.cohort,
             task_type="POWER_INSPECTION_V1",
@@ -1201,6 +1268,72 @@ def student_power_inspection_job(request, job_id):
             for item in job.anomaly_frames.all()
         ],
     })
+
+
+@student_required
+@require_POST
+def student_power_inspection_ai_tutor(request, job_id):
+    """電力巡檢 AI 助教：判定說明＋處理建議＋LLM 解說，供頁面顯示與語音朗讀（2026-11-04）。"""
+    job = get_object_or_404(
+        PowerInspectionJob.objects.select_related("model").prefetch_related("reviews", "anomaly_frames"),
+        job_id=job_id, enrollment__student=request.student_profile, enrollment__active=True,
+    )
+    if job.status != PowerInspectionJob.Status.COMPLETED:
+        return JsonResponse({"ok": False, "error": "巡檢尚未完成，完成後才能請 AI 助教解說。"}, status=409)
+    reviews = [(item.get_decision_display(), item.score) for item in job.reviews.all()]
+    key = "power-ai-tutor:{}:{}".format(job.job_id, len(reviews))
+    answer = cache.get(key)
+    if answer is None:
+        answer = power_tutor.tutor_answer(
+            job, _power_timeline_rows(job), reviews=reviews, analyzed_frames=(job.result_json or {}).get("frame_count"),
+        )
+        cache.set(key, answer, 24 * 3600)
+    return JsonResponse({"ok": True, **answer})
+
+
+EAGLE_TUTOR_LLM_LIMIT_PER_HOUR = 30
+
+
+@require_POST
+def eagle_inspection_ai_tutor(request):
+    """鷹眼 AI 檢測頁的 AI 助教（2026-11-04）：判定說明＋知識庫＋（按鈕觸發）大模型解說。
+
+    需登入（學員或教師），避免公開網址被拿來耗用大模型額度；每人每小時最多 30 次大模型解說。
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"ok": False, "error": "請先登入後再使用 AI 助教。", "login_url": reverse("learning:student_login")}, status=401)
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+        evaluation = inspection_tutor.evaluation_from_payload(payload)
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({"ok": False, "error": "檢測結果格式不正確。"}, status=400)
+    with_llm = bool(payload.get("with_llm"))
+    if with_llm:
+        # 只計算真正要呼叫大模型的請求；超過上限時仍回傳判定與知識庫
+        quota_key = "eagle-ai-tutor-quota:{}".format(request.user.pk)
+        used = cache.get(quota_key, 0)
+        if used >= EAGLE_TUTOR_LLM_LIMIT_PER_HOUR:
+            with_llm = False
+        else:
+            cache.set(quota_key, used + 1, 3600)
+    key = inspection_tutor.cache_key(evaluation, with_llm)
+    answer = cache.get(key)
+    if answer is None:
+        answer = inspection_tutor.tutor_answer(evaluation, with_llm=with_llm)
+        cache.set(key, answer, 24 * 3600)
+    return JsonResponse({"ok": True, **answer})
+
+
+@student_required
+@require_http_methods(["GET"])
+def student_power_inspection_frame(request, frame_id):
+    """學員只能讀取自己工作的異常截圖。"""
+    return _power_frame_response(get_object_or_404(
+        PowerInspectionAnomalyFrame,
+        frame_id=frame_id,
+        job__enrollment__student=request.student_profile,
+        job__enrollment__active=True,
+    ))
 
 
 def _power_active_enrollment(request):
@@ -1348,6 +1481,9 @@ def student_power_inspection_api_upload(request):
 def teacher_power_inspection(request):
     """教師的 POWER_INSPECTION_V1 模型、工作、覆核總覽。"""
     cohorts = teacher_cohorts(request.user)
+    jobs = list(PowerInspectionJob.objects.filter(enrollment__cohort__in=cohorts).select_related("enrollment__cohort", "model").prefetch_related("reviews", "anomaly_frames")[:100])
+    for job in jobs:
+        job.timeline_rows = _power_timeline_rows(job)
     return render(request, "learning/teacher_power_inspection.html", {
         "cohorts": cohorts,
         "models": PowerInspectionModel.objects.filter(imported_by=request.user).prefetch_related("trial_cohorts", "cohort_deployments__cohort"),
@@ -1358,7 +1494,7 @@ def teacher_power_inspection(request):
         "deployment_events": PowerInspectionCohortDeploymentEvent.objects.filter(
             cohort__in=cohorts,
         ).select_related("cohort", "model", "previous_model", "actor", "deployment")[:100],
-        "jobs": PowerInspectionJob.objects.filter(enrollment__cohort__in=cohorts).select_related("enrollment__cohort", "model").prefetch_related("reviews")[:100],
+        "jobs": jobs,
         "reviews": PowerInspectionReview.objects.filter(job__enrollment__cohort__in=cohorts).select_related("job", "reviewer")[:100],
         "real_model_available": PowerInspectionCohortDeployment.objects.filter(
             cohort__in=cohorts,
@@ -1657,6 +1793,17 @@ def teacher_power_inspection_job(request, job_id):
             for item in job.reviews.all()
         ],
     })
+
+
+@teacher_required
+@require_http_methods(["GET"])
+def teacher_power_inspection_frame(request, frame_id):
+    """教師只可讀取自己授權班級的異常截圖。"""
+    return _power_frame_response(get_object_or_404(
+        PowerInspectionAnomalyFrame,
+        frame_id=frame_id,
+        job__enrollment__cohort__in=teacher_cohorts(request.user),
+    ))
 
 
 def ordered_phase_progress(enrollment):
@@ -2496,6 +2643,9 @@ def _save_inspection_record(enrollment, task_type, upload, content, result, *, t
         model_status=str(result.get("model_status") or ""), model_sha256=str(result.get("model_sha256") or ""),
         detections=detections, best_class=str(best.get("class") or ""),
         best_confidence=best.get("confidence"), learning_event_id=str(result.get("learning_event_id") or ""),
+        release_stage=str(result.get("release_stage") or "")[:16],
+        # 候選結果強制非正式：即使上游漏帶也不可能被當成教師確認。
+        rule_evaluation={**(result.get("rule_evaluation") or {}), "is_official": False} if result.get("rule_evaluation") else {},
     )
     record.image.save(upload.name, ContentFile(content), save=False)
     try:
@@ -2664,10 +2814,34 @@ def student_rotation_v5_scan(request, enrollment_id):
         # 推論失敗不建立紀錄：沒有真實結果就沒有檢測紀錄。
         context["error"] = _inspection_error_message(exc)
         return render(request, "learning/student_rotation_v5_scan.html", context, status=503)
+    evaluation = result.get("rule_evaluation") or {}
+    if evaluation.get("candidate") == "ERROR":
+        # 有槳裝錯：向 F450 RAG 知識庫查詢說明；查不到時頁面仍顯示規則引擎的固定修正步驟。
+        result = {**result, "rule_evaluation": {**evaluation, "rag_guidance": rotation_guidance.ask_rotation_guidance(evaluation)}}
     record = _save_inspection_record(
         enrollment, task_type, upload, content, result, token=token,
     )
     return redirect(f"{reverse('learning:student_rotation_v5_scan', args=[enrollment.pk])}?record={record.pk}")
+
+
+@student_required
+@require_POST
+def student_rotation_ai_tutor(request, enrollment_id, record_id):
+    """AI 助教：判定說明＋RAG 知識庫＋LLM 解說，供頁面顯示與語音朗讀（2026-11-04）。"""
+    enrollment = get_object_or_404(Enrollment, pk=enrollment_id, student=request.student_profile, active=True)
+    record = get_object_or_404(
+        enrollment.vision_inspection_records, pk=record_id, task_type=VisionInspectionRecord.TaskType.PROP_ROTATION_V5,
+    )
+    evaluation = record.rule_evaluation or {}
+    if not evaluation.get("candidate"):
+        return JsonResponse({"ok": False, "error": "這筆紀錄沒有 AI 判定結果。"}, status=404)
+    cached = evaluation.get("ai_tutor") or {}
+    if cached.get("review_status") == record.review_status and cached.get("speech_text"):
+        return JsonResponse({"ok": True, **cached})
+    answer = {**rotation_tutor.tutor_answer(evaluation, record.review_status), "review_status": record.review_status}
+    record.rule_evaluation = {**evaluation, "ai_tutor": answer, "is_official": False}
+    record.save(update_fields=["rule_evaluation"])
+    return JsonResponse({"ok": True, **answer})
 
 
 @teacher_required
@@ -4661,7 +4835,7 @@ def teacher_vision_center(request):
     verifiable_models = [
         item
         for item in history_models
-        if item["status"] in {"VALIDATED", "CANDIDATE", "ACTIVE", "DEMO_IMPORTED"}
+        if item["status"] in {"VALIDATED", "CANDIDATE", "REVIEW_REQUIRED", "ACTIVE", "DEMO_IMPORTED"}
     ]
 
     # --- P1：教師畫面必須明確揭露「尚未證實真實辨識品質」的模型 ---
@@ -5162,6 +5336,9 @@ def teacher_vision_center_import(request):
             submission_id=submission_id, teacher_id=request.user.pk
         )
     except RuntimeError as exc:
+        already_imported = _vision_already_imported_redirect(request, exc, task_id=task_id, submission_id=submission_id)
+        if already_imported:
+            return already_imported
         # D2：預檢本身失敗（逾時／連線失敗／提交狀態不可導入）也要留下原因。
         text = _vision_error_text(exc, "導入前檢查失敗，請稍後再試。")
         _vision_record_import_failure(
@@ -5284,6 +5461,22 @@ def _vision_error_text(exc, fallback: str = "導入失敗，請稍後再試。")
     return fallback
 
 
+def _vision_already_imported_redirect(request, exc, *, task_id, submission_id):
+    """重複送出時，另一個請求已完成導入：不當成失敗，直接進入圖片驗證。"""
+    if "submission_not_importable" not in str(exc):
+        return None
+    try:
+        submissions = vision_api.list_submissions(task_id=task_id, teacher_id=request.user.pk)
+    except RuntimeError:
+        return None
+    match = next((item for item in submissions or [] if item.get("submission_id") == submission_id), None)
+    model_id = (match or {}).get("imported_model_id")
+    if (match or {}).get("status") != "IMPORTED" or not model_id:
+        return None
+    messages.success(request, "這個模型已導入完成，請接著做圖片驗證。")
+    return redirect(f"{reverse('learning:teacher_vision_center')}?task={task_id}&scene=2&model={model_id}")
+
+
 def _vision_record_import_failure(request, submission_id, message: str, code: str = "") -> None:
     """D2：把失敗原因寫回 Live 的 import_last_error（供教師頁持久顯示）。
 
@@ -5367,11 +5560,14 @@ def _vision_import_with_dataset(request, *, task_id, submission_id, class_name_m
                 or str(result.get("id") or "")
             )
     except RuntimeError as exc:
+        already_imported = _vision_already_imported_redirect(request, exc, task_id=task_id, submission_id=submission_id)
         # D2：先轉成中文說明，再寫入失敗原因（不把原始例外字串寫進教師可見欄位）。
         text = _vision_error_text(exc)
         code = _vision_error_code(exc)
         # D1 補償：匯入失敗 → 隔離本次剛建立的資料集，不留下可見孤兒。
         quarantined = _vision_quarantine_failed_dataset(request, dataset, submission_id, code)
+        if already_imported:
+            return already_imported
         _vision_record_import_failure(request, submission_id, text, code)
         # 教師指令④：Live 端已保持 submission 為 SUBMITTED，此處僅提示。
         suffix = (

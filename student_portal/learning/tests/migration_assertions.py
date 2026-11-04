@@ -57,6 +57,7 @@ EXPECTED_CHAIN: tuple[str, ...] = (
     "0028_vision_inspection_one_pending",
     "0029_vision_inspection_submission_token",
     "0030_golden_label_two_classes",
+    "0031_vision_inspection_teaching_test",  # 2026-11-03 V1.0 教學測試版：候選結果與發布階段
 )
 
 

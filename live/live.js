@@ -66,7 +66,7 @@
   }
 
   function bindPushToTalk(button, options = {}) {
-    const { recognitionFactory = null, onState = () => {}, onResult = () => {}, onError = () => {}, onNoResult = () => {}, onUnavailable = () => {}, stateMachine = null, readyLabel = '🎙 按住说话' } = options;
+    const { recognitionFactory = null, onState = () => {}, onResult = () => {}, onError = () => {}, onNoResult = () => {}, onUnavailable = () => {}, stateMachine = null, readyLabel = '🎙 按住說話' } = options;
     let recognition = null;
     let listening = false;
     let resultDelivered = false;
@@ -84,12 +84,12 @@
     button.addEventListener('contextmenu', (event) => event.preventDefault());
     button.addEventListener('pointerdown', (event) => {
       event.preventDefault();
-      if (!recognitionFactory) { const message = '当前浏览器不支持语音输入。请使用 Safari 打开，或使用「文字问 AI」。'; reset(); onUnavailable(message); return; }
+      if (!recognitionFactory) { const message = '當前瀏覽器不支持語音輸入。請使用 Safari 打開，或使用「文字問 AI」。'; reset(); onUnavailable(message); return; }
       try {
         recognition = recognitionFactory();
         resultDelivered = false;
         latestTranscript = '';
-        recognition.onstart = () => setState('LISTENING', '🎙 正在听……');
+        recognition.onstart = () => setState('LISTENING', '🎙 正在聽……');
         recognition.onresult = (resultEvent) => {
           latestTranscript = Array.from(resultEvent.results || []).map((result) => result[0]?.transcript || '').join(' ').trim();
           const finalSeen = Array.from(resultEvent.results || []).some((result) => result.isFinal !== false);
@@ -104,7 +104,7 @@
           if (!resultDelivered && recognition && typeof recognition.stop === 'function') {
             listening = false;
             recognition.stop();
-            setState('TRANSCRIBING', '正在识别语音…');
+            setState('TRANSCRIBING', '正在識別語音…');
           }
         };
         recognition.onend = () => {
@@ -121,7 +121,7 @@
         recognition.onerror = (errorEvent) => { reset(); onError(errorEvent.error || 'voice_input_failed'); };
         recognition.start();
         listening = true;
-        setState('LISTENING', '🎙 正在听……');
+        setState('LISTENING', '🎙 正在聽……');
       } catch (error) { reset(); onError(error.message || 'voice_input_failed'); }
     });
     function finish(event, cancelled) {
@@ -130,7 +130,7 @@
       listening = false;
       if (cancelled && typeof recognition.abort === 'function') recognition.abort();
       else if (typeof recognition.stop === 'function') recognition.stop();
-      if (!resultDelivered) setState('TRANSCRIBING', '正在识别语音…');
+      if (!resultDelivered) setState('TRANSCRIBING', '正在識別語音…');
     }
     button.addEventListener('pointerup', (event) => finish(event, false));
     button.addEventListener('pointercancel', (event) => finish(event, true));
@@ -141,11 +141,30 @@
     return Boolean(taskSelected && permissionGranted && !cameraActive);
   }
 
-  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onInterim = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true, endGraceMs = 750, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout } = {}) {
+  // 2026-11-04：學員不講話時語音助教「靜置待命」——瀏覽器回報沒聽到聲音（no-speech／aborted／空白結束）
+  // 不再當成錯誤關閉，而是安靜地重新聆聽；只有麥克風權限或裝置錯誤才真的停止。
+  const SILENT_SPEECH_CODES = new Set(['no-speech', 'aborted']);
+  const RETRYABLE_SPEECH_CODES = new Set(['network']);
+  const FATAL_SPEECH_CODES = new Set(['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported']);
+
+  function createHandsFreeVoiceCoach({ recognitionFactory = null, onTranscript = () => {}, onInterim = () => {}, onState = () => {}, onError = () => {}, isBusy = () => false, isPageActive = () => true, endGraceMs = 750, setTimeoutImpl = setTimeout, clearTimeoutImpl = clearTimeout, silentRestartMs = 400, maxRetryableFailures = 5 } = {}) {
     let enabled = false;
     let activeCycle = null;
     let sequence = 0;
+    let restartTimer = null;
+    let retryableFailures = 0;
     function canListen() { return enabled && isPageActive() && !isBusy() && !activeCycle; }
+    /** 靜置後重新聆聽：保持開啟狀態，不顯示錯誤、不呼叫 AI。 */
+    function restartQuietly(cycle, delayMs = silentRestartMs) {
+      if (!cycle || cycle.submitted || cycle.cancelled) return;
+      if (cycle.graceTimer) clearTimeoutImpl(cycle.graceTimer);
+      cycle.cancelled = true;
+      if (activeCycle === cycle) activeCycle = null;
+      if (!enabled) return;
+      onState('VOICE_STANDBY');
+      if (restartTimer) clearTimeoutImpl(restartTimer);
+      restartTimer = setTimeoutImpl(() => { restartTimer = null; listen(); }, delayMs);
+    }
     function submitCycle(cycle) {
       if (!cycle || cycle.submitted || !cycle.transcript.trim()) return false;
       cycle.submitted = true;
@@ -182,14 +201,23 @@
       };
       recognition.onerror = (event) => {
         const code = event.error || 'voice_input_failed';
+        // 學員沒講話：靜置待命，安靜地重新聆聽
+        if (SILENT_SPEECH_CODES.has(code) && !cycle.transcript.trim()) { restartQuietly(cycle); return; }
+        // 網路短暫失敗：退避重試，連續失敗太多次才停止
+        if (RETRYABLE_SPEECH_CODES.has(code) && retryableFailures < maxRetryableFailures) {
+          retryableFailures += 1;
+          restartQuietly(cycle, silentRestartMs * 2 ** retryableFailures);
+          return;
+        }
+        if (!FATAL_SPEECH_CODES.has(code) && cycle.transcript.trim()) { submitCycle(cycle); return; }
         failCycle(cycle, code);
       };
       recognition.onend = () => {
         if (cycle.cancelled || cycle.submitted || activeCycle !== cycle) return;
         onState('TRANSCRIBING');
         cycle.graceTimer = setTimeoutImpl(() => {
-          if (cycle.transcript.trim()) submitCycle(cycle);
-          else failCycle(cycle, 'speech-unstable');
+          if (cycle.transcript.trim()) { retryableFailures = 0; submitCycle(cycle); }
+          else restartQuietly(cycle);  // 這一輪沒聽到話：繼續靜置待命
         }, endGraceMs);
       };
       try {
@@ -204,6 +232,7 @@
       }
     }
     function stopCurrent() {
+      if (restartTimer) { clearTimeoutImpl(restartTimer); restartTimer = null; }
       const cycle = activeCycle;
       activeCycle = null;
       if (!cycle) return;
@@ -211,7 +240,7 @@
       if (cycle.graceTimer) clearTimeoutImpl(cycle.graceTimer);
       if (typeof cycle.recognition.stop === 'function') cycle.recognition.stop();
     }
-    function enable() { enabled = true; onState('VOICE_STANDBY'); return listen(); }
+    function enable() { enabled = true; retryableFailures = 0; onState('VOICE_STANDBY'); return listen(); }
     function pause() { enabled = false; stopCurrent(); onState('IDLE'); }
     function suspend() { stopCurrent(); if (enabled) onState('VOICE_STANDBY'); }
     function resumeAfterAnswer() { if (enabled) { onState('VOICE_STANDBY'); return listen(); } return false; }
@@ -438,7 +467,7 @@
   }
 
   function detectionResultHtml(detections) {
-    if (!detections.length) return '<li class="empty-result">未识别到目标零件</li>';
+    if (!detections.length) return '<li class="empty-result">未識別到目標零件</li>';
     return detections.map((item) =>
       `<li><strong>${escapeHtml(item.class)}</strong><span>${(item.confidence * 100).toFixed(1)}%</span><code>[${item.box.join(', ')}]</code></li>`
     ).join('');
@@ -602,11 +631,11 @@
   }
 
   const STUDENT_LABELS = Object.freeze({
-    FC_MAIN_OUT_1: '飞控 MAIN OUT 1（1号电机输出接口）',
-    FC_MAIN_OUT_2: '飞控 MAIN OUT 2（2号电机输出接口）',
-    FC_MAIN_OUT_3: '飞控 MAIN OUT 3（3号电机输出接口）',
-    FC_MAIN_OUT_4: '飞控 MAIN OUT 4（4号电机输出接口）',
-    ERR_POWER_POLARITY: '电源正负极需要重新确认。'
+    FC_MAIN_OUT_1: '飛控 MAIN OUT 1（1號電機輸出接口）',
+    FC_MAIN_OUT_2: '飛控 MAIN OUT 2（2號電機輸出接口）',
+    FC_MAIN_OUT_3: '飛控 MAIN OUT 3（3號電機輸出接口）',
+    FC_MAIN_OUT_4: '飛控 MAIN OUT 4（4號電機輸出接口）',
+    ERR_POWER_POLARITY: '電源正負極需要重新確認。'
   });
 
   function studentFacingLabel(identifier) {
@@ -615,16 +644,16 @@
   }
 
   const STUDENT_TASK_STATUS = Object.freeze({
-    NOT_STARTED: '未开始',
-    IN_PROGRESS: '进行中',
-    PENDING_TEACHER_REVIEW: '待教师确认',
-    NEED_REWORK: '需重新检查',
+    NOT_STARTED: '未開始',
+    IN_PROGRESS: '進行中',
+    PENDING_TEACHER_REVIEW: '待教師確認',
+    NEED_REWORK: '需重新檢查',
     COMPLETED: '已完成',
-    BLOCKED: '尚未解锁'
+    BLOCKED: '尚未解鎖'
   });
 
   function studentTaskStatus(status) {
-    return STUDENT_TASK_STATUS[status] || '准备中';
+    return STUDENT_TASK_STATUS[status] || '準備中';
   }
 
   const TASK_COMPLETION_POLICIES = Object.freeze({
@@ -644,7 +673,7 @@
   }
 
   function renderTaskMapLoadError(elements) {
-    if (elements.trainingTaskList) elements.trainingTaskList.innerHTML = '<li class="task-map-error">任务地图载入失败。<button type="button" data-retry-task-map>重新载入</button></li>';
+    if (elements.trainingTaskList) elements.trainingTaskList.innerHTML = '<li class="task-map-error">任務地圖載入失敗。<button type="button" data-retry-task-map>重新載入</button></li>';
     showTaskMap(elements);
   }
 
@@ -664,8 +693,10 @@
 
   function questionRequiresVision(question = '') {
     const value = String(question);
-    if (/上电|通电|解锁|起飞|马达测试|电机测试|failsafe|prearm|飞前|放行|真实飞行|安全/i.test(value)) return false;
-    return /帮我看|幫我看|看一下|画面|畫面|镜头|鏡頭|这个是什么|這個是什麼|对不对|對不對|方向|接对|接對|桨叶|槳葉|螺旋桨|螺旋槳/i.test(value);
+    // 安全相關問題不靠畫面判斷（簡繁體都要排除）
+    if (/上電|上電|通電|通電|解鎖|解鎖|起飛|起飛|馬達測試|馬達測試|電機測試|電機測試|failsafe|prearm|飛前|飛前|放行|真實飛行|真實飛行|安全/i.test(value)) return false;
+    // 2026-11-04：補上繁體與口語說法，鏡頭開著時學員這樣問，AI 會讀取當前畫面
+    return /幫我看|幫我看|看一下|看看|畫面|畫面|鏡頭|鏡頭|這個是什麼|這個是什麼|這是什麼|對不對|對不對|對嗎|對嗎|正不正確|裝好了|裝好了|裝對|裝對|裝錯|裝錯|有沒有問題|有沒有問題|方向|接對|接對|接線|接線|插對|插對|槳葉|槳葉|螺旋槳|螺旋槳|電調|電調|飛控|飛控|馬達|馬達/i.test(value);
   }
 
   function cameraPreviewPolicy() {
@@ -673,21 +704,21 @@
   }
 
   const TRADITIONAL_STUDENT_REPLACEMENTS = [
-    ['需要教师确认', '需要教師確認'],
-    ['目前画面', '目前畫面'],
-    ['实训', '實訓'], ['关键', '關鍵'], ['教师', '教師'], ['复核', '複核'], ['整体', '整體'],
-    ['当前', '當前'], ['任务', '任務'], ['建议', '建議'], ['摄像头', '攝像頭'], ['页面', '頁面'],
-    ['复制', '複製'], ['链接', '連結'], ['服务', '服務'], ['视觉', '視覺'], ['连接', '連線'],
-    ['开启', '開啟'], ['选择', '選擇'], ['学习', '學習'], ['组装', '組裝'], ['调参', '調參'],
-    ['真机', '真機'], ['协助', '協助'], ['环节', '環節'], ['状态', '狀態'], ['图例', '圖例'],
-    ['开始', '開始'], ['进行', '進行'], ['确认', '確認'], ['检查', '檢查'], ['载入', '載入'],
-    ['返回', '返回'], ['准备', '準備'], ['步骤', '步驟'], ['现在', '現在'], ['怎么', '怎麼'],
-    ['为什么', '為什麼'], ['暂无', '暫無'], ['语音', '語音'], ['正在听', '正在聽'], ['识别', '識別'],
-    ['处理', '處理'], ['回答', '回答'], ['画面', '畫面'], ['下一步', '下一步'], ['再试一次', '再試一次'],
-    ['阅读', '閱讀'], ['提醒', '提醒'], ['证据', '證據'], ['总结', '總結'], ['帮助', '幫助'],
-    ['发送', '傳送'], ['关闭', '關閉'], ['切换', '切換'], ['上传', '上傳'], ['设置', '設定'],
-    ['错误', '錯誤'], ['网络', '網路'], ['资料', '資料'], ['无法', '無法'], ['这个', '這個'],
-    ['已经', '已經'], ['内容', '內容'], ['说明', '說明'], ['进入', '進入'], ['完成', '完成']
+    ['需要教師確認', '需要教師確認'],
+    ['目前畫面', '目前畫面'],
+    ['實訓', '實訓'], ['關鍵', '關鍵'], ['教師', '教師'], ['複核', '複核'], ['整體', '整體'],
+    ['當前', '當前'], ['任務', '任務'], ['建議', '建議'], ['攝像頭', '攝像頭'], ['頁面', '頁面'],
+    ['複製', '複製'], ['鏈接', '連結'], ['服務', '服務'], ['視覺', '視覺'], ['連接', '連線'],
+    ['開啟', '開啟'], ['選擇', '選擇'], ['學習', '學習'], ['組裝', '組裝'], ['調參', '調參'],
+    ['真機', '真機'], ['協助', '協助'], ['環節', '環節'], ['狀態', '狀態'], ['圖例', '圖例'],
+    ['開始', '開始'], ['進行', '進行'], ['確認', '確認'], ['檢查', '檢查'], ['載入', '載入'],
+    ['返回', '返回'], ['準備', '準備'], ['步驟', '步驟'], ['現在', '現在'], ['怎麼', '怎麼'],
+    ['為什麼', '為什麼'], ['暫無', '暫無'], ['語音', '語音'], ['正在聽', '正在聽'], ['識別', '識別'],
+    ['處理', '處理'], ['回答', '回答'], ['畫面', '畫面'], ['下一步', '下一步'], ['再試一次', '再試一次'],
+    ['閱讀', '閱讀'], ['提醒', '提醒'], ['證據', '證據'], ['總結', '總結'], ['幫助', '幫助'],
+    ['發送', '傳送'], ['關閉', '關閉'], ['切換', '切換'], ['上傳', '上傳'], ['設置', '設定'],
+    ['錯誤', '錯誤'], ['網絡', '網路'], ['資料', '資料'], ['無法', '無法'], ['這個', '這個'],
+    ['已經', '已經'], ['內容', '內容'], ['說明', '說明'], ['進入', '進入'], ['完成', '完成']
   ];
 
   function toTraditionalStudentText(value) {
@@ -725,36 +756,36 @@
 
   function assistantVisualActionState(cameraActive) {
     return cameraActive
-      ? { action: 'OBSERVE_FRAME', label: '🤖 AI 看当前画面' }
-      : { action: 'OPEN_CAMERA', label: '📷 打开摄像头' };
+      ? { action: 'OBSERVE_FRAME', label: '🤖 AI 看當前畫面' }
+      : { action: 'OPEN_CAMERA', label: '📷 打開攝像頭' };
   }
 
   function voiceEntryState(supported) {
     return supported
-      ? { label: '🎙 按住说话', available: true }
-      : { label: '🎙 语音暂不可用', available: false };
+      ? { label: '🎙 按住說話', available: true }
+      : { label: '🎙 語音暫不可用', available: false };
   }
 
   function genericVisualObservationQuestion() {
-    return '请看一下当前画面，并结合我正在学习的步骤，用简单的话告诉我看到了什么、现在是否需要调整。';
+    return '請看一下當前畫面，並結合我正在學習的步驟，用簡單的話告訴我看到了什麼、現在是否需要調整。';
   }
 
   function studentStepProgressLabel(step) {
-    return step && Number(step.order) > 0 ? `当前第 ${Number(step.order)} 步` : '正在准备当前步骤…';
+    return step && Number(step.order) > 0 ? `當前第 ${Number(step.order)} 步` : '正在準備當前步驟…';
   }
 
   function studentCurrentStepView(step = {}) {
     if (step.step_id === 'T01_WORKSPACE') return {
-      title: '准备工作区域',
-      how: ['清空桌面', '把 F450 零件全部集中摆放', '电池先不要接电', '桨叶暂时不要安装'],
-      doneWhen: ['所有零件都在桌面', '飞机没有接电', '桨叶没有安装', '工作区域没有杂物']
+      title: '準備工作區域',
+      how: ['清空桌面', '把 F450 零件全部集中擺放', '電池先不要接電', '槳葉暫時不要安裝'],
+      doneWhen: ['所有零件都在桌面', '飛機沒有接電', '槳葉沒有安裝', '工作區域沒有雜物']
     };
-    const instruction = step.student_instruction || step.instruction || '依照当前提示完成这一项操作。';
+    const instruction = step.student_instruction || step.instruction || '依照當前提示完成這一項操作。';
     const doneWhen = [];
-    if (step.evidence_required?.length) doneWhen.push('需要的学习证据已经保存');
-    if (step.teacher_gate) doneWhen.push('教师已经现场确认');
-    if (!doneWhen.length) doneWhen.push('当前操作已经完成，并与页面说明一致');
-    return { title: step.title || '正在准备当前步骤…', how: [instruction], doneWhen };
+    if (step.evidence_required?.length) doneWhen.push('需要的學習證據已經保存');
+    if (step.teacher_gate) doneWhen.push('教師已經現場確認');
+    if (!doneWhen.length) doneWhen.push('當前操作已經完成，並與頁面說明一致');
+    return { title: step.title || '正在準備當前步驟…', how: [instruction], doneWhen };
   }
 
   function detectBrowserCapabilities({ userAgent = '', mediaDevices = null, speechRecognition = null, speechSynthesis = null } = {}) {
@@ -831,29 +862,29 @@
 
   function studentCoachMessage(state, teacherRequired = false) {
     const messages = {
-      NO_DETECTION: '目前没有清楚看到目标零件，请把零件完整放到镜头中央。',
-      UNCERTAIN: 'AI 目前看不清楚，请调整角度或请老师确认。',
-      NG: '目前看到的内容与这一步不符，请依照提示调整后再试一次。',
-      PASS_CANDIDATE: 'AI 初步检查没有发现明显问题。',
-      TEACHER_CHECK: '此步骤涉及安全操作，必须由教师确认后才能继续。',
-      TASK_COMPLETED: '这个任务已经完成，可以准备下一项任务。'
+      NO_DETECTION: '目前沒有清楚看到目標零件，請把零件完整放到鏡頭中央。',
+      UNCERTAIN: 'AI 目前看不清楚，請調整角度或請老師確認。',
+      NG: '目前看到的內容與這一步不符，請依照提示調整後再試一次。',
+      PASS_CANDIDATE: 'AI 初步檢查沒有發現明顯問題。',
+      TEACHER_CHECK: '此步驟涉及安全操作，必須由教師確認後才能繼續。',
+      TASK_COMPLETED: '這個任務已經完成，可以準備下一項任務。'
     };
-    const base = messages[state] || 'AI 助教已准备好，可以在需要时帮你检查。';
-    return teacherRequired && state !== 'TEACHER_CHECK' ? `${base} 下一步请等待教师复核。` : base;
+    const base = messages[state] || 'AI 助教已準備好，可以在需要時幫你檢查。';
+    return teacherRequired && state !== 'TEACHER_CHECK' ? `${base} 下一步請等待教師複核。` : base;
   }
 
   function studentTeacherStatus(status) {
     const labels = {
-      NOT_REQUIRED: '当前步骤无需教师确认',
-      REQUIRED: '此步骤需要教师确认',
-      PENDING: '等待教师确认',
-      PENDING_TEACHER_REVIEW: '等待教师确认',
-      APPROVE: '教师已确认',
-      APPROVED: '教师已确认',
-      REJECT_REWORK: '教师要求重新检查',
-      NEED_REWORK: '需依照教师意见重新检查'
+      NOT_REQUIRED: '當前步驟無需教師確認',
+      REQUIRED: '此步驟需要教師確認',
+      PENDING: '等待教師確認',
+      PENDING_TEACHER_REVIEW: '等待教師確認',
+      APPROVE: '教師已確認',
+      APPROVED: '教師已確認',
+      REJECT_REWORK: '教師要求重新檢查',
+      NEED_REWORK: '需依照教師意見重新檢查'
     };
-    return labels[status] || '当前步骤无需教师确认';
+    return labels[status] || '當前步驟無需教師確認';
   }
 
   function shouldTriggerVision(training, reason) {
@@ -863,13 +894,13 @@
   }
 
   const STUDENT_STEP_GROUP_DEFINITIONS = Object.freeze({
-    TASK_01: [['准备区域',['T01_WORKSPACE']],['认识零件',['T01_FRAME','T01_MOTORS','T01_ESC','T01_PIXHAWK','T01_GPS','T01_ACCESSORIES']],['完成清点',['T01_CHECKLIST']],['AI 辅助检查',[]],['证据与总结',['T01_EVIDENCE','T01_REFLECTION']]],
-    TASK_02: [['了解测试',['T02_PURPOSE','T02_NO_PROP']],['准备连接',['T02_TESTER','T02_CONNECT_SET1']],['教师确认',['T02_PREPOWER_TEACHER']],['测试四组',['T02_M1','T02_M2','T02_M3','T02_M4','T02_CROSS_TEST']],['复核与记录',['T02_FINAL_TEACHER','T02_RECORD']]],
-    TASK_03: [['准备机架',['T03_LAYOUT','T03_FORWARD','T03_ARMS','T03_FRAME_CHECK']],['确认位置',['T03_TESTED_MOTORS','T03_POSITIONS']],['安装马达',['T03_SCREW','T03_INSTALL']],['完成检查',['T03_MECHANICAL']],['证据与总结',['T03_EVIDENCE','T03_REFLECTION']]],
-    TASK_04: [['认识与规划',['T04_ESC_SIGNAL','T04_ROUTING']],['极性与绝缘',['T04_HEATSHRINK','T04_PDB_POLARITY','T04_XT60']],['焊接前确认',['T04_PRESOLDER_TEACHER']],['焊接与电气检查',['T04_SOLDER','T04_VISUAL','T04_CONTINUITY','T04_ELECTRICAL_APPROVAL']],['证据与总结',['T04_EVIDENCE','T04_REFLECTION']]],
-    TASK_05: [['安装飞控',['T05_PIXHAWK','T05_ARROW']],['连接马达输出',['T05_MAIN_OUT']],['安装 GPS',['T05_GPS_INSTALL','T05_GPS_DIRECTION','T05_GPS_CONNECT']],['连接外设',['T05_RECEIVER','T05_TELEMETRY','T05_POWER_MODULE']],['证据与复核',['T05_EVIDENCE','T05_REVIEW']]],
-    TASK_06: [['机械检查',['T06_MECHANICAL','T06_MOTOR_SCREW']],['电气检查',['T06_ESC_WIRING','T06_POLARITY']],['飞控与外设',['T06_FC','T06_GPS','T06_RADIO']],['证据与自检',['T06_EVIDENCE','T06_SELF_CHECK']],['教师放行与总结',['T06_TEACHER_RELEASE','T06_REFLECTION']]],
-    TASK_07: [['首次上电前确认',['T07_PREPOWER_REVIEW','T07_FIRST_POWER_TEACHER']],['连接 Mission Planner',['T07_MP_CONNECT']],['飞控与机架确认',['T07_FC_FIRMWARE_AIRFRAME']],['加速度计校准',['T07_ACCEL_PREP','T07_ACCEL_CALIBRATION']],['罗盘校准',['T07_COMPASS_PREP','T07_COMPASS_CALIBRATION']],['遥控器校准',['T07_RADIO_PREP','T07_RADIO_CALIBRATION']],['Receiver 状态',['T07_RECEIVER_STATUS']],['Motor 输出映射',['T07_MOTOR_OUTPUT_MAPPING']],['飞行模式',['T07_FLIGHT_MODES']],['失控保护',['T07_FAILSAFE']],['GPS 状态',['T07_GPS_STATUS']],['RTL 返航',['T07_RTL']],['基础参数',['T07_BASE_PARAMETERS']],['配置总复核',['T07_FINAL_CONFIG_REVIEW']],['证据与总结',['T07_EVIDENCE','T07_REFLECTION']]]
+    TASK_01: [['準備區域',['T01_WORKSPACE']],['認識零件',['T01_FRAME','T01_MOTORS','T01_ESC','T01_PIXHAWK','T01_GPS','T01_ACCESSORIES']],['完成清點',['T01_CHECKLIST']],['AI 輔助檢查',[]],['證據與總結',['T01_EVIDENCE','T01_REFLECTION']]],
+    TASK_02: [['瞭解測試',['T02_PURPOSE','T02_NO_PROP']],['準備連接',['T02_TESTER','T02_CONNECT_SET1']],['教師確認',['T02_PREPOWER_TEACHER']],['測試四組',['T02_M1','T02_M2','T02_M3','T02_M4','T02_CROSS_TEST']],['複核與記錄',['T02_FINAL_TEACHER','T02_RECORD']]],
+    TASK_03: [['準備機架',['T03_LAYOUT','T03_FORWARD','T03_ARMS','T03_FRAME_CHECK']],['確認位置',['T03_TESTED_MOTORS','T03_POSITIONS']],['安裝馬達',['T03_SCREW','T03_INSTALL']],['完成檢查',['T03_MECHANICAL']],['證據與總結',['T03_EVIDENCE','T03_REFLECTION']]],
+    TASK_04: [['認識與規劃',['T04_ESC_SIGNAL','T04_ROUTING']],['極性與絕緣',['T04_HEATSHRINK','T04_PDB_POLARITY','T04_XT60']],['焊接前確認',['T04_PRESOLDER_TEACHER']],['焊接與電氣檢查',['T04_SOLDER','T04_VISUAL','T04_CONTINUITY','T04_ELECTRICAL_APPROVAL']],['證據與總結',['T04_EVIDENCE','T04_REFLECTION']]],
+    TASK_05: [['安裝飛控',['T05_PIXHAWK','T05_ARROW']],['連接馬達輸出',['T05_MAIN_OUT']],['安裝 GPS',['T05_GPS_INSTALL','T05_GPS_DIRECTION','T05_GPS_CONNECT']],['連接外設',['T05_RECEIVER','T05_TELEMETRY','T05_POWER_MODULE']],['證據與複核',['T05_EVIDENCE','T05_REVIEW']]],
+    TASK_06: [['機械檢查',['T06_MECHANICAL','T06_MOTOR_SCREW']],['電氣檢查',['T06_ESC_WIRING','T06_POLARITY']],['飛控與外設',['T06_FC','T06_GPS','T06_RADIO']],['證據與自檢',['T06_EVIDENCE','T06_SELF_CHECK']],['教師放行與總結',['T06_TEACHER_RELEASE','T06_REFLECTION']]],
+    TASK_07: [['首次上電前確認',['T07_PREPOWER_REVIEW','T07_FIRST_POWER_TEACHER']],['連接 Mission Planner',['T07_MP_CONNECT']],['飛控與機架確認',['T07_FC_FIRMWARE_AIRFRAME']],['加速度計校準',['T07_ACCEL_PREP','T07_ACCEL_CALIBRATION']],['羅盤校準',['T07_COMPASS_PREP','T07_COMPASS_CALIBRATION']],['遙控器校準',['T07_RADIO_PREP','T07_RADIO_CALIBRATION']],['Receiver 狀態',['T07_RECEIVER_STATUS']],['Motor 輸出映射',['T07_MOTOR_OUTPUT_MAPPING']],['飛行模式',['T07_FLIGHT_MODES']],['失控保護',['T07_FAILSAFE']],['GPS 狀態',['T07_GPS_STATUS']],['RTL 返航',['T07_RTL']],['基礎參數',['T07_BASE_PARAMETERS']],['配置總複核',['T07_FINAL_CONFIG_REVIEW']],['證據與總結',['T07_EVIDENCE','T07_REFLECTION']]]
   });
 
   function studentStepGroupDefinitions(taskId) {
@@ -878,7 +909,7 @@
 
   function studentStepGroups(taskId, steps = [], currentStepId = '', taskState = 'IN_PROGRESS') {
     let definitions = studentStepGroupDefinitions(taskId);
-    if (!definitions.length) definitions = steps.map((step, index) => ({ id: `${taskId || 'TASK'}_GROUP_${index + 1}`, title: step.title || `步骤 ${index + 1}`, step_ids: [step.step_id || step.id] }));
+    if (!definitions.length) definitions = steps.map((step, index) => ({ id: `${taskId || 'TASK'}_GROUP_${index + 1}`, title: step.title || `步驟 ${index + 1}`, step_ids: [step.step_id || step.id] }));
     const orderById = new Map(steps.map((step, index) => [step.step_id || step.id, index]));
     const currentIndex = orderById.has(currentStepId) ? orderById.get(currentStepId) : 0;
     return definitions.map((group, groupIndex) => {
@@ -898,43 +929,43 @@
       camera: true,
       aiCheck: Boolean(step.vision_task),
       evidence: Boolean(step.evidence_required?.length),
-      reflection: /REFLECTION$/.test(stepId) || /学习总结/.test(step.title || ''),
+      reflection: /REFLECTION$/.test(stepId) || /學習總結/.test(step.title || ''),
       teacher: Boolean(step.teacher_gate),
       safety: Boolean(step.safety_reminders?.length)
     };
   }
 
   function studentPrimaryAction(training = {}) {
-    if (training.task_state === 'COMPLETED') return { kind: 'MAP', label: '返回任务地图' };
-    if (training.task_state === 'PENDING_TEACHER_REVIEW') return { kind: 'WAIT', label: '等待教师确认' };
-    if (training.task_state === 'NEED_REWORK') return { kind: 'REWORK', label: '重新完成这一步' };
-    if (training.task_state === 'NOT_STARTED' || training.task_state === 'BLOCKED') return { kind: 'START', label: '开始任务' };
+    if (training.task_state === 'COMPLETED') return { kind: 'MAP', label: '返回任務地圖' };
+    if (training.task_state === 'PENDING_TEACHER_REVIEW') return { kind: 'WAIT', label: '等待教師確認' };
+    if (training.task_state === 'NEED_REWORK') return { kind: 'REWORK', label: '重新完成這一步' };
+    if (training.task_state === 'NOT_STARTED' || training.task_state === 'BLOCKED') return { kind: 'START', label: '開始任務' };
     const step = training.current_step || {};
     const taskId = training.task?.id || training.current_task_id;
-    if (taskId === 'TASK_08' && step.step_id === 'T08_TEACHER_FINAL_REVIEW') return { kind: 'TEACHER', label: '请教师最终复核' };
-    if (step.teacher_gate) return { kind: 'TEACHER', label: '请教师确认' };
-    if (step.evidence_required?.length) return { kind: 'EVIDENCE', label: '保存学习证据' };
-    if (/REFLECTION$/.test(step.step_id || step.id || '') || /学习总结/.test(step.title || '')) return { kind: 'REFLECTION', label: '保存学习总结' };
+    if (taskId === 'TASK_08' && step.step_id === 'T08_TEACHER_FINAL_REVIEW') return { kind: 'TEACHER', label: '請教師最終複核' };
+    if (step.teacher_gate) return { kind: 'TEACHER', label: '請教師確認' };
+    if (step.evidence_required?.length) return { kind: 'EVIDENCE', label: '保存學習證據' };
+    if (/REFLECTION$/.test(step.step_id || step.id || '') || /學習總結/.test(step.title || '')) return { kind: 'REFLECTION', label: '保存學習總結' };
     if (!training.current_training_step_id && !Object.keys(step).length) return training.task?.teacher_review_required
-      ? { kind: 'TASK_REVIEW', label: '提交教师复核' }
-      : { kind: 'TASK_COMPLETE', label: '完成任务' };
-    if (taskId === 'TASK_08') return { kind: 'STEP', label: '记录检查结果' };
+      ? { kind: 'TASK_REVIEW', label: '提交教師複核' }
+      : { kind: 'TASK_COMPLETE', label: '完成任務' };
+    if (taskId === 'TASK_08') return { kind: 'STEP', label: '記錄檢查結果' };
     return { kind: 'STEP', label: '我完成了' };
   }
 
   function trainingCompletionFeedback(previousStepId, currentStepId, taskState) {
     if (taskState === 'COMPLETED') return { type: 'TASK', title: 'Task 已完成', canContinue: true };
-    if (previousStepId && currentStepId && previousStepId !== currentStepId) return { type: 'STEP', title: '✅ 这一步完成', canContinue: true };
+    if (previousStepId && currentStepId && previousStepId !== currentStepId) return { type: 'STEP', title: '✅ 這一步完成', canContinue: true };
     return null;
   }
 
   // ---- MP-12 Frontend Integration（SELECTIVE PORT from MP-12 repo；Backend 為唯一權威） ----
 
   function mpSubtaskAction(subtask = {}) {
-    if (subtask.status === 'COMPLETED') return { kind: 'DONE', label: '此子任务已完成', disabled: true };
-    if (subtask.status === 'PENDING_TEACHER_REVIEW') return { kind: 'WAIT', label: '等待教师现场确认', disabled: true };
-    if (subtask.teacher_required) return { kind: 'COMPLETE', label: '我已完成，请教师复核', disabled: false };
-    return { kind: 'COMPLETE', label: subtask.status === 'NEED_REWORK' ? '重新完成并提交' : '完成此子任务', disabled: false };
+    if (subtask.status === 'COMPLETED') return { kind: 'DONE', label: '此子任務已完成', disabled: true };
+    if (subtask.status === 'PENDING_TEACHER_REVIEW') return { kind: 'WAIT', label: '等待教師現場確認', disabled: true };
+    if (subtask.teacher_required) return { kind: 'COMPLETE', label: '我已完成，請教師複核', disabled: false };
+    return { kind: 'COMPLETE', label: subtask.status === 'NEED_REWORK' ? '重新完成並提交' : '完成此子任務', disabled: false };
   }
 
   function setMp12View(elements, requestedView, { scroll = false } = {}) {
@@ -966,13 +997,13 @@
         return `<li data-state="${escapeHtml(status)}"><button type="button" data-mp-subtask="${escapeHtml(item.subtask_id)}"><strong>${escapeHtml(item.subtask_id)}</strong><span>${escapeHtml(item.title)}</span><small>${escapeHtml(studentTaskStatus(status))}</small></button></li>`;
       }).join('');
     }
-    if (elements.mp12Title) elements.mp12Title.textContent = `${current.subtask_id || ''}｜${current.title || '等待选择'}`;
+    if (elements.mp12Title) elements.mp12Title.textContent = `${current.subtask_id || ''}｜${current.title || '等待選擇'}`;
     if (elements.mp12Objective) elements.mp12Objective.textContent = current.objective || '—';
     if (elements.mp12Procedure) elements.mp12Procedure.innerHTML = (current.procedure || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     if (elements.mp12Checks) elements.mp12Checks.innerHTML = (current.completion_checks || []).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     // 安全提示僅為顯示；安全放行由 Backend Safety Gate 判定，前端不自行判定
     if (elements.mp12Safety) elements.mp12Safety.innerHTML = (current.safety_rules || []).map((item) => `<p>⚠ ${escapeHtml(item)}</p>`).join('');
-    if (elements.mp12Evidence) elements.mp12Evidence.textContent = (current.evidence_types || []).join(' / ') || '不强制上传';
+    if (elements.mp12Evidence) elements.mp12Evidence.textContent = (current.evidence_types || []).join(' / ') || '不強制上傳';
     const action = mpSubtaskAction(current);
     if (elements.mp12CompleteSubtask) {
       elements.mp12CompleteSubtask.textContent = action.label;
@@ -1000,12 +1031,15 @@
     if (elements.trainingProgress) elements.trainingProgress.textContent = training.progress || '0 / 12';
     if (elements.mapProgress) elements.mapProgress.textContent = training.progress || '0 / 12';
     if (elements.trainingTaskNumber) elements.trainingTaskNumber.textContent = `Task ${String(order).padStart(2, '0')} / 12`;
-    if (elements.trainingTitle) elements.trainingTitle.textContent = task.title || '等待任务资料';
+    if (elements.trainingTitle) elements.trainingTitle.textContent = task.title || '等待任務資料';
     if (elements.trainingObjective) elements.trainingObjective.textContent = task.objective || '—';
     if (elements.trainingStepNumber) elements.trainingStepNumber.textContent = studentStepProgressLabel(step);
     if (elements.trainingAction) elements.trainingAction.textContent = step.student_instruction || step.instruction || task.description || '—';
     if (elements.trainingWhy) elements.trainingWhy.textContent = step.why_it_matters || step.rationale || task.description || '—';
     const taskId = task.id || task.task_id || training.current_task_id || `TASK_${String(order).padStart(2, '0')}`;
+    // AI PID 與濾波實驗室入口：只在 TASK_07 / TASK_08 顯示，純連結，不影響步驟與完成條件。
+    const pidLabLink = elements.trainingObjective?.ownerDocument?.getElementById?.('pidLabLink');
+    if (pidLabLink) pidLabLink.hidden = !(taskId === 'TASK_07' || taskId === 'TASK_08');
     const task08Check = taskId === 'TASK_08' && step.step_id !== 'T08_TEACHER_FINAL_REVIEW';
     // MP-12 只屬於 TASK_07：沒有 mission_planner payload 就一律 hidden（TASK_01～06 / TASK_08～12 不顯示）
     const isMissionPlanner = taskId === 'TASK_07' && Boolean(training.mission_planner);
@@ -1015,11 +1049,11 @@
     const stepView = studentCurrentStepView(step);
     const stepReminders = step.safety_reminders === undefined ? reminders : (step.safety_reminders || []);
     const visibility = studentStepToolVisibility({ ...step, safety_reminders: stepReminders });
-    if (elements.currentStepTitle) elements.currentStepTitle.textContent = step.title || '等待当前步骤';
+    if (elements.currentStepTitle) elements.currentStepTitle.textContent = step.title || '等待當前步驟';
     if (elements.currentStepHow) elements.currentStepHow.innerHTML = stepView.how.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     if (elements.currentStepDoneWhen) elements.currentStepDoneWhen.innerHTML = stepView.doneWhen.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     if (elements.studentGroupProgress) elements.studentGroupProgress.innerHTML = groups.map((group, index) => `<li data-state="${group.state}"><span>${group.state === 'COMPLETED' ? '✓' : index + 1}</span><strong>${escapeHtml(group.title)}</strong></li>`).join('');
-    if (elements.studentGroupCount) elements.studentGroupCount.textContent = `第 ${Math.max(0, activeGroup) + 1} 阶段 · ${groups[Math.max(0, activeGroup)]?.title || '准备'}`;
+    if (elements.studentGroupCount) elements.studentGroupCount.textContent = `第 ${Math.max(0, activeGroup) + 1} 階段 · ${groups[Math.max(0, activeGroup)]?.title || '準備'}`;
     if (elements.trainingSafety) elements.trainingSafety.innerHTML = stepReminders.map((item) => `<p>⚠ ${escapeHtml(item.message || studentFacingLabel(item.id))}</p>`).join('');
     if (elements.safetyCard) elements.safetyCard.hidden = !visibility.safety;
     if (elements.cameraTool) elements.cameraTool.hidden = false;
@@ -1027,13 +1061,13 @@
     if (elements.evidenceCard) elements.evidenceCard.hidden = !visibility.evidence;
     if (elements.reflectionCard) elements.reflectionCard.hidden = !visibility.reflection;
     if (elements.teacherCard) elements.teacherCard.hidden = !visibility.teacher;
-    if (elements.trainingSteps) elements.trainingSteps.innerHTML = step.title ? `<li><strong>${escapeHtml(step.title)}</strong><br>${escapeHtml(step.instruction || '')}</li>` : '<li>等待任务步骤。</li>';
+    if (elements.trainingSteps) elements.trainingSteps.innerHTML = step.title ? `<li><strong>${escapeHtml(step.title)}</strong><br>${escapeHtml(step.instruction || '')}</li>` : '<li>等待任務步驟。</li>';
     if (elements.trainingStepList) elements.trainingStepList.innerHTML = steps.map((item) => `<li data-state="${escapeHtml(item.progress?.status || 'NOT_STARTED')}">${escapeHtml(item.title)}</li>`).join('');
     const conditions = [];
-    if (step.safety_reminders?.length) conditions.push(step.progress?.safety_acknowledged ? '☑ 已阅读安全提醒' : '□ 已阅读安全提醒');
+    if (step.safety_reminders?.length) conditions.push(step.progress?.safety_acknowledged ? '☑ 已閱讀安全提醒' : '□ 已閱讀安全提醒');
     if (step.evidence_required?.length) conditions.push(`□ Evidence：${step.evidence_required.join(', ')}`);
-    if (step.teacher_gate) conditions.push(step.progress?.teacher_decision === 'APPROVE' ? '☑ 教师已通过' : '□ 等待教师确认');
-    if (!conditions.length) conditions.push('□ 学生确认完成实际操作');
+    if (step.teacher_gate) conditions.push(step.progress?.teacher_decision === 'APPROVE' ? '☑ 教師已通過' : '□ 等待教師確認');
+    if (!conditions.length) conditions.push('□ 學生確認完成實際操作');
     if (task08Check && step.step_id === 'T08_PROP_VISION') conditions.push(`PROP Vision：${training.prop_vision_status || 'PENDING'}`);
     if (elements.trainingCompletionConditions) elements.trainingCompletionConditions.innerHTML = conditions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
     if (elements.task08CheckStatusField) elements.task08CheckStatusField.hidden = !task08Check;
@@ -1043,8 +1077,8 @@
       if (indoor) indoor.disabled = step.step_id !== 'T08_GPS_COMPASS_STATUS';
       if (visionPending) visionPending.disabled = step.step_id !== 'T08_PROP_VISION';
       if (step.step_id === 'T08_PROP_VISION' && training.prop_vision_status !== 'READY') elements.task08CheckStatus.value = 'VISION_MODEL_NOT_READY';
-      // 注意：VISION_MODEL_NOT_READY 绝不被自动改写为 PASS（需求 #7：不可用不得伪装成检测通过）。
-      // 仅当 NOT_AVAILABLE_INDOOR 出现在非 GPS 步骤时，才回退为 PASS 默认值。
+      // 注意：VISION_MODEL_NOT_READY 絕不被自動改寫為 PASS（需求 #7：不可用不得偽裝成檢測通過）。
+      // 僅當 NOT_AVAILABLE_INDOOR 出現在非 GPS 步驟時，才回退為 PASS 默認值。
       else if (elements.task08CheckStatus.value === 'NOT_AVAILABLE_INDOOR' && step.step_id !== 'T08_GPS_COMPASS_STATUS') elements.task08CheckStatus.value = 'PASS';
     }
     if (elements.safetyAcknowledgment) elements.safetyAcknowledgment.hidden = !step.safety_reminders?.length;
@@ -1057,14 +1091,14 @@
     }
     if (elements.trainingStatus) elements.trainingStatus.textContent = studentTaskStatus(training.task_state || 'NOT_STARTED');
     if (elements.trainingEvidence) elements.trainingEvidence.textContent = String(training.evidence_count || 0);
-    if (elements.trainingReflection) elements.trainingReflection.textContent = training.reflection_state === 'available' ? '学习总结已保存' : '尚未填写';
+    if (elements.trainingReflection) elements.trainingReflection.textContent = training.reflection_state === 'available' ? '學習總結已保存' : '尚未填寫';
     if (elements.trainingTeacher) elements.trainingTeacher.textContent = studentTeacherStatus(training.teacher_review_state || 'NOT_REQUIRED');
     if (elements.trainingGrowth) elements.trainingGrowth.textContent = `${training.progress || '0 / 12'} · 待同步`;
-    if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.unsafe_action_allowed === false ? '你可以先学习这一部分；当前危险操作需要先完成安全检查并由教师确认。' : '可以开始学习';
+    if (elements.trainingPrerequisite) elements.trainingPrerequisite.textContent = training.unsafe_action_allowed === false ? '你可以先學習這一部分；當前危險操作需要先完成安全檢查並由教師確認。' : '可以開始學習';
     if (elements.cameraWaiting && training.camera_active === true) elements.cameraWaiting.textContent = 'ACTIVE / WAITING';
     if (elements.trainingTaskList && Array.isArray(training.tasks)) elements.trainingTaskList.innerHTML = training.tasks.map((item) => {
       const status = item.status || 'NOT_STARTED';
-      const blocked = status === 'BLOCKED' ? '可学习 / 当前不可正式执行' : studentTaskStatus(status);
+      const blocked = status === 'BLOCKED' ? '可學習 / 當前不可正式執行' : studentTaskStatus(status);
       const stepProgress = item.step_progress || item.progress || '';
       return `<li data-state="${escapeHtml(status)}"><button type="button" data-view-task="${escapeHtml(item.task_id)}"><span class="task-number">${String(item.order).padStart(2, '0')}</span><strong>${escapeHtml(item.short_name || '')}</strong><span class="task-card-title">${escapeHtml(item.title)}</span>${stepProgress ? `<span class="task-step-count">${escapeHtml(stepProgress)}</span>` : ''}<small>${escapeHtml(blocked)}</small></button></li>`;
     }).join('');
@@ -1078,7 +1112,7 @@
     if (task.task_title) elements.task.textContent = task.task_title;
     if (task.progress) elements.progress.textContent = `${task.progress.current} / ${task.progress.total}`;
     if (task.step) { elements.step.textContent = task.step.title; elements.instruction.textContent = task.step.instruction; }
-    else if (session.state === 'TASK_COMPLETED') { elements.step.textContent = 'TASK COMPLETED'; elements.instruction.textContent = '基础零件准备完成。'; }
+    else if (session.state === 'TASK_COMPLETED') { elements.step.textContent = 'TASK COMPLETED'; elements.instruction.textContent = '基礎零件準備完成。'; }
     if (payload.detection) elements.visionResult.textContent = `${payload.detection.class} ${(payload.detection.confidence * 100).toFixed(1)}%`;
     if (payload.sop) elements.sopResult.textContent = payload.sop.status;
     else if (session.state) elements.sopResult.textContent = session.state;
@@ -1086,7 +1120,7 @@
     else if (elements.guidance && session.state) elements.guidance.textContent = studentCoachMessage(session.state, session.state === 'TEACHER_CHECK');
     const rag = payload.rag_explanation || session.rag_explanation;
     if (rag && elements.ragExplanation) {
-      const explanation = rag.explanation || (rag.status === 'pending' ? '正在查询教学知识…' : '目前知识库说明暂时不可用。');
+      const explanation = rag.explanation || (rag.status === 'pending' ? '正在查詢教學知識…' : '目前知識庫說明暫時不可用。');
       elements.ragExplanation.textContent = rag.safety_notice ? `${rag.safety_notice} ${explanation}` : explanation;
       elements.ragSource.textContent = rag.source_type || rag.reference_summary ? 'FDE-AI RAG' : '—';
       elements.ragStatus.textContent = String(rag.status || 'idle').toUpperCase();
@@ -1181,8 +1215,8 @@
         const entry = voiceEntryState(capabilities.speechInput);
         if (elements.pushToTalk) { elements.pushToTalk.textContent = entry.label; elements.pushToTalk.disabled = false; }
         if (elements.liveCoachStatus) elements.liveCoachStatus.textContent = handsFreeVoice?.isEnabled() ? 'AI 已待命' : 'AI 已待命';
-        if (handsFreeVoice?.isEnabled() && elements.voiceStatus && !event.recoveredFromTimeout) elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
-        if (event.recoveredFromTimeout && elements.voiceStatus) elements.voiceStatus.textContent = event.recoveredFromTimeout === 'TRANSCRIBING' || event.recoveredFromTimeout === 'LISTENING' ? '这次语音没有成功处理，请再说一次，或使用文字问 AI。' : event.recoveredFromTimeout === 'VISION_PROCESSING' || event.recoveredFromTimeout === 'CAPTURING_FRAME' ? '这次画面分析没有完成，请重新试一次。' : 'AI 服务暂时没有回应，请稍后再试。';
+        if (handsFreeVoice?.isEnabled() && elements.voiceStatus && !event.recoveredFromTimeout) elements.voiceStatus.textContent = '🎙 語音待命中：有問題直接說，不說話時 AI 會安靜等待。';
+        if (event.recoveredFromTimeout && elements.voiceStatus) elements.voiceStatus.textContent = event.recoveredFromTimeout === 'TRANSCRIBING' || event.recoveredFromTimeout === 'LISTENING' ? '這次語音沒有成功處理，請再說一次，或使用文字問 AI。' : event.recoveredFromTimeout === 'VISION_PROCESSING' || event.recoveredFromTimeout === 'CAPTURING_FRAME' ? '這次畫面分析沒有完成，請重新試一次。' : 'AI 服務暫時沒有回應，請稍後再試。';
       }
     }
     const interaction = createInteractionStateMachine({
@@ -1205,16 +1239,16 @@
     }
     if (elements.browserCapabilityWarning) elements.browserCapabilityWarning.hidden = !(capabilities.embedded || !capabilities.camera || !capabilities.speechInput || !capabilities.speechOutput);
     if (!capabilities.embedded && (!capabilities.camera || !capabilities.speechInput || !capabilities.speechOutput)) {
-      if (elements.browserCapabilityTitle) elements.browserCapabilityTitle.textContent = '部分功能暂不可用';
-      if (elements.browserCapabilityMessage) elements.browserCapabilityMessage.textContent = '当前浏览器的摄像头或语音能力有限；你仍可使用文字问 AI。';
+      if (elements.browserCapabilityTitle) elements.browserCapabilityTitle.textContent = '部分功能暫不可用';
+      if (elements.browserCapabilityMessage) elements.browserCapabilityMessage.textContent = '當前瀏覽器的攝像頭或語音能力有限；你仍可使用文字問 AI。';
     }
     elements.copyCurrentLink?.addEventListener('click', async () => {
       const href = globalThis.location?.href || '';
       try {
         await navigatorRef.clipboard?.writeText(href);
-        elements.copyCurrentLink.textContent = '已复制链接';
+        elements.copyCurrentLink.textContent = '已複製鏈接';
       } catch (_) {
-        elements.copyCurrentLink.textContent = '请从浏览器地址栏复制链接';
+        elements.copyCurrentLink.textContent = '請從瀏覽器地址欄複製鏈接';
       }
     });
 
@@ -1249,9 +1283,9 @@
       currentDeviceId = settings.deviceId || currentDeviceId;
       if (mobileDevice) {
         currentFacingMode = settings.facingMode || requestedFacing || currentFacingMode;
-        elements.currentCameraFacing.textContent = currentFacingMode === 'user' ? '前置镜头' : '后置镜头';
+        elements.currentCameraFacing.textContent = currentFacingMode === 'user' ? '前置鏡頭' : '後置鏡頭';
       } else {
-        elements.currentCameraFacing.textContent = track?.label || elements.cameraDevice.selectedOptions?.[0]?.textContent || '摄像头';
+        elements.currentCameraFacing.textContent = track?.label || elements.cameraDevice.selectedOptions?.[0]?.textContent || '攝像頭';
       }
       if (elements.switchCamera) elements.switchCamera.disabled = !stream || (!mobileDevice && cameras.length < 2);
     }
@@ -1314,7 +1348,7 @@
 
     async function ensureSession(visionSource = 'REAL_VISION') {
       if (sessionId && sessionVisionSource === visionSource) return sessionId;
-      // 重载时复用同一 coach 会话，保留 TrainingProgress（含 VISION_MODEL_NOT_READY）——P1：重载保留。
+      // 重載時複用同一 coach 會話，保留 TrainingProgress（含 VISION_MODEL_NOT_READY）——P1：重載保留。
       if (!sessionId) {
         const persisted = loadPersistedSession();
         if (persisted && persisted.source === visionSource) {
@@ -1338,7 +1372,7 @@
               return sessionId;
             }
           } catch {}
-          // 服务端已无此会话（如未启用持久化而重启过）——回退到新建。
+          // 服務端已無此會話（如未啟用持久化而重啟過）——回退到新建。
         }
       }
       if (sessionId) {
@@ -1395,8 +1429,8 @@
         },
         onFrozen: () => {
           if (!stream) return;
-          if (elements.cameraHint) { elements.cameraHint.textContent = '摄像头画面已暂停，请重新开启。'; elements.cameraHint.hidden = false; elements.cameraHint.classList?.add('camera-frozen'); }
-          setMessage('摄像头画面已暂停，请重新开启。');
+          if (elements.cameraHint) { elements.cameraHint.textContent = '攝像頭畫面已暫停，請重新開啟。'; elements.cameraHint.hidden = false; elements.cameraHint.classList?.add('camera-frozen'); }
+          setMessage('攝像頭畫面已暫停，請重新開啟。');
         }
       });
       previewMonitor.start();
@@ -1432,7 +1466,7 @@
         const activeSession = await ensureSession();
         await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(activeSession)}/camera/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
         elements.start.disabled = true;
-        elements.start.textContent = '相机已启动';
+        elements.start.textContent = '相機已啟動';
         elements.start.hidden = true;
         elements.video.hidden = false;
         elements.uploadPreview.hidden = true;
@@ -1446,27 +1480,27 @@
         elements.cameraDiagnostics.hidden = false;
         elements.cameraDiagnostics.textContent = 'Device: ' + (stream.getVideoTracks()[0]?.label || elements.cameraDevice.selectedOptions[0]?.textContent || 'unknown') + ' | Supported: ' + Object.keys(supported).filter((key) => supported[key]).join(', ');
         setCameraState('ACTIVE', 'online');
-        if (elements.cameraWaiting) elements.cameraWaiting.textContent = '已开启';
+        if (elements.cameraWaiting) elements.cameraWaiting.textContent = '已開啟';
         try { storage?.setItem(cameraPermissionKey, 'true'); } catch {}
         updateAssistantVisualAction();
-        setMessage(opened.fallbackUsed ? '摄像头已启动（兼容模式）。AI 不会持续分析画面，需要时点击「AI 看当前画面」或直接问 AI。' : '摄像头已开启。AI 不会持续分析画面，需要时点击「AI 看当前画面」或直接问 AI。');
+        setMessage(opened.fallbackUsed ? '攝像頭已啟動（兼容模式）。AI 不會持續分析畫面，需要時點擊「AI 看當前畫面」或直接問 AI。' : '攝像頭已開啟。AI 不會持續分析畫面，需要時點擊「AI 看當前畫面」或直接問 AI。');
       } catch (error) {
         stopStream(stream);
         stream = null;
         elements.video.srcObject = null;
         previewMonitor?.stop();
-        if (elements.start) { elements.start.hidden = false; elements.start.disabled = false; elements.start.textContent = '开启实训摄像头'; }
+        if (elements.start) { elements.start.hidden = false; elements.start.disabled = false; elements.start.textContent = '開啟實訓攝像頭'; }
         updateAssistantVisualAction();
         const mapped = cameraErrorState(error);
         setCameraState(mapped.state);
         elements.cameraDiagnostics.hidden = false;
         elements.cameraDiagnostics.textContent = 'Camera Error: ' + mapped.name + ' | Message: ' + mapped.message + ' | Failed Constraint: ' + (mapped.constraint || 'unknown');
-        setMessage(mapped.state === 'PERMISSION REQUIRED' ? '请允许浏览器使用摄像头。' : '摄像头开启失败，请查看诊断信息。');
+        setMessage(mapped.state === 'PERMISSION REQUIRED' ? '請允許瀏覽器使用攝像頭。' : '攝像頭開啟失敗，請查看診斷信息。');
       }
     }
 
     async function switchCameraSource() {
-      if (!stream) { setMessage('请先打开摄像头。'); return false; }
+      if (!stream) { setMessage('請先打開攝像頭。'); return false; }
       const previousFacing = currentFacingMode;
       const previousDeviceId = currentDeviceId || elements.cameraDevice.value;
       let targetFacing = previousFacing === 'user' ? 'environment' : 'user';
@@ -1493,24 +1527,24 @@
         await refreshCameraDevices();
         if (opened.restored) {
           currentFacingMode = previousFacing;
-          setMessage('无法切换到该镜头，请确认浏览器已允许摄像头权限。已恢复原镜头。');
+          setMessage('無法切換到該鏡頭，請確認瀏覽器已允許攝像頭權限。已恢復原鏡頭。');
         } else {
           currentFacingMode = targetFacing;
-          setMessage(`已切换到${targetFacing === 'user' ? '前置镜头' : '后置镜头'}。`);
+          setMessage(`已切換到${targetFacing === 'user' ? '前置鏡頭' : '後置鏡頭'}。`);
         }
         updateCameraSourceLabel(currentFacingMode);
         setCameraState('ACTIVE', 'online');
-        if (elements.cameraWaiting) elements.cameraWaiting.textContent = '已开启';
+        if (elements.cameraWaiting) elements.cameraWaiting.textContent = '已開啟';
         elements.capture.disabled = false;
         elements.stop.disabled = false;
         return !opened.restored;
       } catch (error) {
         stream = null;
         elements.video.srcObject = null;
-        elements.currentCameraFacing.textContent = '切换失败';
+        elements.currentCameraFacing.textContent = '切換失敗';
         elements.switchCamera.disabled = true;
         setCameraState('CAMERA ERROR', 'offline');
-        setMessage('无法切换到该镜头，请确认浏览器已允许摄像头权限。');
+        setMessage('無法切換到該鏡頭，請確認瀏覽器已允許攝像頭權限。');
         return false;
       }
     }
@@ -1540,7 +1574,7 @@
       const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`));
       renderTaskState(elements, { ...result.payload, task: state });
       if (result.payload.rag_explanation?.status === 'pending') void refreshRagExplanation(id);
-      setMessage('检测完成');
+      setMessage('檢測完成');
     }
 
     async function capture() {
@@ -1549,13 +1583,13 @@
         sendImage: (captured) => sendImage(captured.imageData, captured.captureMs, captured.width, captured.height, captured.encodeMs),
         setBusy: (busy) => {
           elements.capture.disabled = busy;
-          elements.capture.textContent = busy ? 'AI 正在检查…' : '🤖 AI 看当前画面';
-          if (busy) setMessage('AI 正在检查当前画面…');
+          elements.capture.textContent = busy ? 'AI 正在檢查…' : '🤖 AI 看當前畫面';
+          if (busy) setMessage('AI 正在檢查當前畫面…');
         },
         onError: (error) => {
           const status = error.status ? `HTTP ${error.status} ` : '';
           const code = error.code ? `${error.code}: ` : '';
-          setMessage(`检测失败：${status}${code}${error.message}`);
+          setMessage(`檢測失敗：${status}${code}${error.message}`);
         },
         log: devLog
       });
@@ -1577,9 +1611,9 @@
       image.close();
     }
 
-    // 纯停相机 hardware/UI：不动 session、不清持久化——pagehide／回任务地图等场景使用。
-    // P1-4 修复：pagehide（刷新／导航离开）不得销毁 coach session 与持久化，
-    // 否则每次重载都丢失训练进度（含 VISION_MODEL_NOT_READY）。
+    // 純停相機 hardware/UI：不動 session、不清持久化——pagehide／回任務地圖等場景使用。
+    // P1-4 修復：pagehide（刷新／導航離開）不得銷燬 coach session 與持久化，
+    // 否則每次重載都丟失訓練進度（含 VISION_MODEL_NOT_READY）。
     function stopCameraStream() {
       stopAutoObservation();
       previewMonitor?.stop();
@@ -1588,8 +1622,8 @@
       elements.video.srcObject = null;
       elements.start.disabled = false;
       elements.start.hidden = false;
-      elements.start.textContent = '开启实训摄像头';
-      elements.currentCameraFacing.textContent = '尚未开启';
+      elements.start.textContent = '開啟實訓攝像頭';
+      elements.currentCameraFacing.textContent = '尚未開啟';
       elements.switchCamera.disabled = true;
       elements.capture.disabled = true;
       elements.stop.disabled = true;
@@ -1600,7 +1634,7 @@
       updateAssistantVisualAction();
     }
 
-    // 用户显式停止摄像头 = 结束训练会话：释放 session（DELETE + 清除持久化）。
+    // 用戶顯式停止攝像頭 = 結束訓練會話：釋放 session（DELETE + 清除持久化）。
     async function stopCamera() {
       stopCameraStream();
       if (sessionId) {
@@ -1623,20 +1657,20 @@
       if (!stream) await startCamera();
       const id = await ensureSession();
       const error = autoStartError(Boolean(stream), id);
-      if (error) { setMessage(error === 'camera_required' ? '请先启动摄像头。' : 'Session 尚未建立。'); return false; }
+      if (error) { setMessage(error === 'camera_required' ? '請先啟動攝像頭。' : 'Session 尚未建立。'); return false; }
       if (!globalThis.FdeAutoObservation) throw new Error('auto_scheduler_unavailable');
       if (!autoScheduler) autoScheduler = globalThis.FdeAutoObservation.createAutoObservationScheduler({
         intervalMs: 1000,
         captureAndSend: capture,
         onMetrics: (metrics) => { elements.autoMetrics.textContent = `1 FPS · Requests ${metrics.requestCount} · Skipped ${metrics.skippedFrameCount} · Max in-flight ${metrics.maxInFlight} · Queue ${metrics.queueLength}`; },
-        onError: (failure) => setMessage(`自动观察失败：${failure.message}`)
+        onError: (failure) => setMessage(`自動觀察失敗：${failure.message}`)
       });
       await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/auto/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
       autoScheduler.start();
       elements.autoMode.checked = true;
       elements.startCoach.disabled = true;
       elements.stopCoach.disabled = false;
-      setMessage('AI 自动观察已启动（1 FPS）。');
+      setMessage('AI 自動觀察已啟動（1 FPS）。');
       return true;
     }
 
@@ -1645,7 +1679,7 @@
       if (sessionId) fetchImpl(`/api/live/sessions/${encodeURIComponent(sessionId)}/auto/stop`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
       elements.startCoach.disabled = false;
       elements.stopCoach.disabled = true;
-      setMessage('AI 自动观察已停止；摄像头保持当前状态。');
+      setMessage('AI 自動觀察已停止；攝像頭保持當前狀態。');
     }
 
     elements.start.addEventListener('click', startCamera);
@@ -1653,11 +1687,11 @@
     elements.capture.addEventListener('click', capture);
     elements.stop.addEventListener('click', stopCamera);
     elements.upload.addEventListener('click', () => triggerFilePicker(elements.file, devLog));
-    elements.file.addEventListener('change', (event) => performUploadInteraction(event.target.files?.[0], useFile, devLog).catch((error) => setMessage(`图片检测失败：${error.message}`)));
+    elements.file.addEventListener('change', (event) => performUploadInteraction(event.target.files?.[0], useFile, devLog).catch((error) => setMessage(`圖片檢測失敗：${error.message}`)));
 
     let voiceControl = null;
     voiceControl = bindPushToTalk(elements.pushToTalk, {
-      recognitionFactory: SpeechRecognitionCtor ? () => { const recognition = new SpeechRecognitionCtor(); recognition.lang = 'zh-CN'; recognition.interimResults = false; recognition.continuous = false; return recognition; } : null,
+      recognitionFactory: SpeechRecognitionCtor ? () => { const recognition = new SpeechRecognitionCtor(); recognition.lang = 'zh-TW'; recognition.interimResults = false; recognition.continuous = false; return recognition; } : null,
       stateMachine: interaction,
       readyLabel: voiceEntryState(capabilities.speechInput).label,
       onResult: (transcript) => {
@@ -1665,8 +1699,8 @@
         if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
         void handleVoiceTranscript(transcript, (value) => { elements.askAiInput.value = value; }, (question) => submitStudentQuestion(question, { source: 'VOICE', autoSpeak: true }));
       },
-      onNoResult: () => { elements.voiceStatus.textContent = '没有听清楚，请再说一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = 'NO_SPEECH_RESULT'; },
-      onError: (code) => { elements.voiceStatus.textContent = code === 'not-allowed' || code === 'service-not-allowed' ? '当前浏览器无法使用麦克风，请允许权限或使用文字问 AI。' : '没有听清楚，请再说一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`; },
+      onNoResult: () => { elements.voiceStatus.textContent = '沒有聽清楚，請再說一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = 'NO_SPEECH_RESULT'; },
+      onError: (code) => { elements.voiceStatus.textContent = code === 'not-allowed' || code === 'service-not-allowed' ? '當前瀏覽器無法使用麥克風，請允許權限或使用文字問 AI。' : '沒有聽清楚，請再說一次。'; if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`; },
       onUnavailable: (message) => { elements.voiceStatus.textContent = message; elements.voiceStatus.dataset.code = 'VOICE_PROVIDER_NOT_CONFIGURED'; elements.askAiPanel.hidden = false; }
     });
     handsFreeVoice = createHandsFreeVoiceCoach({
@@ -1681,16 +1715,16 @@
         else if (state === 'IDLE') interaction.reset();
         else if (state === 'VOICE_STANDBY') {
           if (elements.liveCoachStatus) elements.liveCoachStatus.textContent = 'AI 已待命';
-          if (elements.voiceStatus) elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
+          if (elements.voiceStatus) elements.voiceStatus.textContent = '🎙 語音待命中：有問題直接說，不說話時 AI 會安靜等待。';
         }
       },
       onInterim: (transcript, finalSeen) => {
-        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = finalSeen ? '你刚刚说' : '你正在说';
+        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = finalSeen ? '你剛剛說' : '你正在說';
         if (elements.lastUserTranscript) elements.lastUserTranscript.textContent = `「${transcript}」`;
         if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
       },
       onTranscript: (transcript) => {
-        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = '你刚刚说';
+        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = '你剛剛說';
         if (elements.lastUserTranscript) elements.lastUserTranscript.textContent = `「${transcript}」`;
         if (elements.diagnosticTranscript) elements.diagnosticTranscript.textContent = transcript;
         void submitStudentQuestion(transcript, { source: 'VOICE', autoSpeak: true });
@@ -1699,26 +1733,31 @@
         if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`;
         if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture' || code === 'speech-unstable') {
           handsFreeVoice?.pause();
-          if (elements.voiceStatus) elements.voiceStatus.textContent = code === 'speech-unstable' ? '当前浏览器语音识别不稳定，已切换为按住说话。' : '当前浏览器暂不支持免按键语音，可使用按住说话。';
+          if (elements.voiceStatus) elements.voiceStatus.textContent = code === 'speech-unstable' ? '當前瀏覽器語音識別不穩定，已切換為按住說話。' : '當前瀏覽器暫不支持免按鍵語音，可使用按住說話。';
           if (elements.fallbackMethods) elements.fallbackMethods.open = true;
-        } else if (elements.voiceStatus) elements.voiceStatus.textContent = '没有听清楚，请继续说一次。';
+        } else if (elements.voiceStatus) elements.voiceStatus.textContent = '沒有聽清楚，請繼續說一次。';
       }
     });
+    // 2026-11-04：一鍵「開始 AI 陪做」＝語音助教＋實訓鏡頭同時開啟。
+    // 語音辨識必須在點擊當下啟動（iOS 限制），所以先開語音、再非同步開鏡頭；
+    // 學員不講話時語音靜置待命、鏡頭持續開著，講話時 AI 依問題讀取當前畫面回答。
     elements.enableVoiceCoach?.addEventListener('click', () => {
-      if (!capabilities.speechInput || !handsFreeVoice.enable()) {
-        elements.voiceStatus.textContent = '当前浏览器暂不支持免按键语音，可使用按住说话。';
+      const voiceOn = capabilities.speechInput && handsFreeVoice.enable();
+      if (!stream) startCamera().catch((error) => setMessage(`攝影機無法開啟：${error.message}`));
+      if (!voiceOn) {
+        elements.voiceStatus.textContent = '目前瀏覽器不支援免按鍵語音，可使用「按住說話」或文字提問；鏡頭仍會開啟。';
         elements.fallbackMethods.open = true;
         return;
       }
       elements.enableVoiceCoach.hidden = true;
       if (elements.pauseVoiceCoach) elements.pauseVoiceCoach.hidden = false;
-      elements.voiceStatus.textContent = '🎙 语音助教已开启，有问题直接说。';
+      elements.voiceStatus.textContent = '🎙 AI 陪做中：鏡頭已開、語音待命，有問題直接說；不說話時 AI 會安靜待命。';
     });
     elements.pauseVoiceCoach?.addEventListener('click', () => {
       handsFreeVoice.pause();
       if (elements.pauseVoiceCoach) elements.pauseVoiceCoach.hidden = true;
       elements.enableVoiceCoach.hidden = false;
-      elements.voiceStatus.textContent = '语音助教已暂停。';
+      elements.voiceStatus.textContent = '語音助教已暫停（鏡頭仍開著，可隨時再按「開始 AI 陪做」）。';
     });
     documentRef.addEventListener?.('visibilitychange', () => handsFreeVoice.handleVisibilityChange());
     elements.textAskAi?.addEventListener('click', () => { elements.askAiPanel.hidden = false; elements.askAiInput.focus(); });
@@ -1730,7 +1769,7 @@
       };
     }
     async function submitStudentQuestion(question, { autoSpeak = true, source = 'TEXT' } = {}) {
-      if (!question.trim()) { elements.askAiResponse.textContent = source === 'VOICE' ? '没有听清楚，请再说一次。' : '请先输入问题。'; interaction.reset(); return; }
+      if (!question.trim()) { elements.askAiResponse.textContent = source === 'VOICE' ? '沒有聽清楚，請再說一次。' : '請先輸入問題。'; interaction.reset(); return; }
       currentAskController?.abort();
       const askController = typeof AbortController !== 'undefined' ? new AbortController() : null;
       currentAskController = askController;
@@ -1738,18 +1777,18 @@
       const requestId = `ask-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const visual = questionRequiresVision(question);
       if (visual && !isCameraFrameReady(stream, elements.video)) {
-        elements.askAiResponse.textContent = stream ? '摄像头画面还没准备好，请稍等一秒再试。' : '请先打开摄像头，把目标放到画面中央后再问一次。';
+        elements.askAiResponse.textContent = stream ? '攝像頭畫面還沒準備好，請稍等一秒再試。' : '請先打開攝像頭，把目標放到畫面中央後再問一次。';
         if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = 'CAMERA_NOT_READY';
         interaction.transition('ERROR'); interaction.reset(); voiceControl?.releaseButton(); return;
       }
       interaction.transition(visual ? 'CAPTURING_FRAME' : 'ASKING', { requestId, interactionId });
       if (source === 'VOICE') {
-        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = '你刚刚说';
+        if (elements.userTranscriptLabel) elements.userTranscriptLabel.textContent = '你剛剛說';
         if (elements.lastUserTranscript) elements.lastUserTranscript.textContent = `「${question.trim()}」`;
       }
       if (elements.diagnosticSubmittedQuestion) elements.diagnosticSubmittedQuestion.textContent = question.trim();
       if (elements.diagnosticAskRequest) elements.diagnosticAskRequest.textContent = requestId;
-      elements.askAiResponse.textContent = 'AI 正在根据当前步骤查询教学知识…';
+      elements.askAiResponse.textContent = 'AI 正在根據當前步驟查詢教學知識…';
       const started = performance.now();
       try {
         const id = await ensureSession();
@@ -1769,7 +1808,7 @@
         if (elements.latestAiAnswer) elements.latestAiAnswer.textContent = delivered.text;
         if (elements.diagnosticLastAiAnswer) elements.diagnosticLastAiAnswer.textContent = delivered.text;
         if (elements.answerSourceLabel) {
-          const answerSourceLabels = { AI_REFERENCE: 'AI 參考回答', AI_VISUAL_REFERENCE: 'AI 參考回答', VERIFIED_KNOWLEDGE: '已核對教學資料' };
+          const answerSourceLabels = { AI_REFERENCE: 'AI 參考回答', AI_VISUAL_REFERENCE: 'AI 參考回答', VERIFIED_KNOWLEDGE: '已核對教學資料', VISION_MODEL: 'V7 槳葉模型判讀' };  // 2026-11-04：V7 判讀來源
           elements.answerSourceLabel.textContent = answerSourceLabels[result.answer_source] || '';
           elements.answerSourceLabel.hidden = !elements.answerSourceLabel.textContent;
         }
@@ -1789,15 +1828,15 @@
               interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer();
             }
           }, 1500);
-        } else if (autoSpeak) { elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。'; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
+        } else if (autoSpeak) { elements.voiceStatus.textContent = '此瀏覽器不支持語音播放，請閱讀文字回答。'; interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer(); }
         else { elements.voiceStatus.textContent = 'AI 已回答。'; interaction.reset(); voiceControl?.releaseButton(); }
         elements.voiceStatus.dataset.code = result.vision_used ? 'VISION_SINGLE_FRAME' : 'CONTEXT_ANSWER';
       } catch (error) {
         if (elements.diagnosticAskHttpStatus) elements.diagnosticAskHttpStatus.textContent = String(error.status || 'ERROR');
-        if (error.name === 'AbortError') elements.askAiResponse.textContent = '已取消这次询问。';
-        else if (error.message === 'ask_timeout') elements.askAiResponse.textContent = visual ? '这次画面分析没有完成，请重新试一次。' : 'AI 服务暂时没有回应，请稍后再试。';
-        else if (error.message === 'camera_not_ready' || error.message === 'camera_frame_required') elements.askAiResponse.textContent = '摄像头画面还没准备好，请稍等一秒再试。';
-        else elements.askAiResponse.textContent = visual ? '这次没有成功读取画面，请重新检查镜头后再试。' : 'AI 服务暂时没有回应，请稍后再试。';
+        if (error.name === 'AbortError') elements.askAiResponse.textContent = '已取消這次詢問。';
+        else if (error.message === 'ask_timeout') elements.askAiResponse.textContent = visual ? '這次畫面分析沒有完成，請重新試一次。' : 'AI 服務暫時沒有回應，請稍後再試。';
+        else if (error.message === 'camera_not_ready' || error.message === 'camera_frame_required') elements.askAiResponse.textContent = '攝像頭畫面還沒準備好，請稍等一秒再試。';
+        else elements.askAiResponse.textContent = visual ? '這次沒有成功讀取畫面，請重新檢查鏡頭後再試。' : 'AI 服務暫時沒有回應，請稍後再試。';
         if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = error.message || error.name;
         interaction.transition('ERROR', { requestId, interactionId }); interaction.reset(); voiceControl?.releaseButton(); handsFreeVoice?.resumeAfterAnswer();
       } finally {
@@ -1810,14 +1849,14 @@
       elements.askAiPanel.hidden = false;
       void submitStudentQuestion(genericVisualObservationQuestion(), { source: 'VISUAL_BUTTON' });
     });
-    elements.cancelAiInteraction?.addEventListener('click', () => { currentAskController?.abort(); speechReply.stop(); interaction.reset(); voiceControl?.releaseButton(); elements.voiceStatus.textContent = '已取消这次询问。'; });
+    elements.cancelAiInteraction?.addEventListener('click', () => { currentAskController?.abort(); speechReply.stop(); interaction.reset(); voiceControl?.releaseButton(); elements.voiceStatus.textContent = '已取消這次詢問。'; });
     elements.playAiAnswer?.addEventListener('click', () => {
       if (!lastAiAnswer) return;
-      if (!speechReply.speak(lastAiAnswer, speechCallbacks())) elements.voiceStatus.textContent = '此浏览器不支持语音播放，请阅读文字回答。';
+      if (!speechReply.speak(lastAiAnswer, speechCallbacks())) elements.voiceStatus.textContent = '此瀏覽器不支持語音播放，請閱讀文字回答。';
     });
     elements.stopAiAnswer?.addEventListener('click', () => { speechReply.stop(); if (elements.stopAiAnswer) elements.stopAiAnswer.hidden = true; elements.voiceStatus.textContent = '已停止播放'; });
 
-    elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自动观察启动失败：${error.message}`)));
+    elements.startCoach.addEventListener('click', () => startAutoObservation().catch((error) => setMessage(`自動觀察啟動失敗：${error.message}`)));
     elements.stopCoach.addEventListener('click', stopAutoObservation);
     elements.confirm?.addEventListener('click', async () => { const id = sessionId || await ensureSession(); const result = await confirmStep(fetchImpl, id); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { session: result.session, guidance: result.guidance, task: state }); });
     elements.devPanel.querySelectorAll?.('[data-scenario]').forEach((button) => button.addEventListener('click', async () => { const id = await ensureSession('MOCK_VISION'); const result = await simulateVision(fetchImpl, id, button.dataset.scenario); const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}`)); renderTaskState(elements, { ...result, task: state }); if (result.rag_explanation?.status === 'pending') void refreshRagExplanation(id); }));
@@ -1841,23 +1880,23 @@
         }
         if (action === 'EVIDENCE') {
           const file = elements.evidenceFile?.files?.[0];
-          if (!file) { setMessage('请先拍照或选择学习证据。'); return; }
+          if (!file) { setMessage('請先拍照或選擇學習證據。'); return; }
           const expectedEvidence = currentTrainingState?.current_step?.evidence_required?.[0];
           const result = await saveTrainingEvidence(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, evidence_type: currentTrainingTaskId === 'TASK_08' && expectedEvidence ? expectedEvidence : (file.type.startsWith('video/') ? 'VIDEO' : 'PHOTO'), source: 'STUDENT_UPLOAD', file_reference: `dev-upload://${file.name}`, check_result: currentTrainingTaskId === 'TASK_08' ? (elements.task08CheckStatus?.value || 'PASS') : null, metadata: { name: file.name, size: file.size, type: file.type } });
-          acceptTrainingMutation(result.training); setMessage('学习证据已保存。'); return;
+          acceptTrainingMutation(result.training); setMessage('學習證據已保存。'); return;
         }
         if (action === 'REFLECTION') {
           const result = await saveTrainingReflection(fetchImpl, id, { task_id: currentTrainingTaskId, step_id: currentTrainingStepId, original_text: elements.reflectionOriginal.value, ai_assisted_text: elements.reflectionAssisted.value || null, source_type: 'TEXT' });
-          acceptTrainingMutation(result.training); setMessage('学习总结已保存。'); return;
+          acceptTrainingMutation(result.training); setMessage('學習總結已保存。'); return;
         }
         if (action === 'TASK_REVIEW' || action === 'TASK_COMPLETE') {
           const state = await parseJsonResponse(await fetchImpl(`/api/live/sessions/${encodeURIComponent(id)}/training/tasks/${encodeURIComponent(currentTrainingTaskId)}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
           renderCurrentTraining(state.training);
         }
       } catch (error) {
-        const messages = { unsafe_step_prerequisites: '你可以先学习这一部分；当前危险操作需要先完成安全检查并由教师确认。', student_original_summary_required: '请先填写自己的真实学习总结。' };
+        const messages = { unsafe_step_prerequisites: '你可以先學習這一部分；當前危險操作需要先完成安全檢查並由教師確認。', student_original_summary_required: '請先填寫自己的真實學習總結。' };
         const key = Object.keys(messages).find((item) => String(error.message).includes(item));
-        setMessage(key ? messages[key] : `目前无法继续：${error.message}`);
+        setMessage(key ? messages[key] : `目前無法繼續：${error.message}`);
       }
     });
     elements.teacherApprove?.addEventListener('click', async () => { const id = await ensureSession(); const result = await submitTeacherReview(fetchImpl, id, 'APPROVE', elements.teacherReviewNote?.value || '', currentTrainingTaskId, currentTrainingStepId); acceptTrainingMutation(result.training); void recordClassroomEvent(fetchImpl, id, { event_type: 'TEACHER_REVIEW', task_id: currentTrainingTaskId, step_id: currentTrainingStepId }).catch(() => {}); });
@@ -1871,9 +1910,9 @@
         const id = await ensureSession();
         const result = await selectMpSubtask(fetchImpl, id, subtaskId);
         renderCurrentTraining(result.training);
-        setMessage(`已打开 ${subtaskId}，可以按当前说明学习。`);
+        setMessage(`已打開 ${subtaskId}，可以按當前說明學習。`);
       } catch (error) {
-        setMessage(`无法打开子任务：${error.message}`);
+        setMessage(`無法打開子任務：${error.message}`);
       }
     });
     elements.backToMp12Map?.addEventListener('click', () => {
@@ -1889,21 +1928,21 @@
         const result = await completeMpSubtask(fetchImpl, id, subtaskId);
         renderCurrentTraining(result.training);
         const status = result.training.mission_planner?.subtasks?.[subtaskId]?.status;
-        setMessage(status === 'PENDING_TEACHER_REVIEW' ? '已提交，等待教师现场确认。' : '子任务已完成。');
+        setMessage(status === 'PENDING_TEACHER_REVIEW' ? '已提交，等待教師現場確認。' : '子任務已完成。');
       } catch (error) {
-        setMessage(`目前无法完成此子任务：${error.message}`);
+        setMessage(`目前無法完成此子任務：${error.message}`);
       }
     });
     elements.mp12SaveEvidence?.addEventListener('click', async () => {
       const file = elements.mp12EvidenceFile?.files?.[0];
       const current = currentTrainingState?.mission_planner?.current_subtask;
       if (!file || !current?.subtask_id) {
-        setMessage('请先选择当前子任务的证据文件。');
+        setMessage('請先選擇當前子任務的證據文件。');
         return;
       }
       const evidenceType = current.evidence_types?.[0];
       if (!evidenceType) {
-        setMessage('当前子任务不要求保存证据。');
+        setMessage('當前子任務不要求保存證據。');
         return;
       }
       try {
@@ -1918,9 +1957,9 @@
           metadata: { name: file.name, size: file.size, type: file.type }
         });
         renderCurrentTraining(result.training);
-        setMessage('当前子任务证据已保存。');
+        setMessage('當前子任務證據已保存。');
       } catch (error) {
-        setMessage(`证据保存失败：${error.message}`);
+        setMessage(`證據保存失敗：${error.message}`);
       }
     });
     elements.mp12SubmitTeacherReview?.addEventListener('click', async () => {
@@ -1934,9 +1973,9 @@
           note: elements.mp12TeacherNote?.value?.trim() || ''
         });
         renderCurrentTraining(result.training);
-        setMessage('教师现场复核已提交。');
+        setMessage('教師現場複核已提交。');
       } catch (error) {
-        setMessage(`教师复核失败：${error.message}`);
+        setMessage(`教師複核失敗：${error.message}`);
       }
     });
     elements.mp12BackToTask07?.addEventListener('click', () => {
@@ -1956,7 +1995,7 @@
       showTaskDetail(elements);
       currentStepEnteredAt = performance.now();
       void recordClassroomEvent(fetchImpl, id, { event_type: 'TASK_ENTER', task_id: currentTrainingTaskId, step_id: currentTrainingStepId }).catch(() => {});
-      setMessage(result.training_task_view.unsafe_action_allowed === false ? '可以先学习；到危险操作时需要完成安全检查并由教师确认。' : '此任务可以开始学习。');
+      setMessage(result.training_task_view.unsafe_action_allowed === false ? '可以先學習；到危險操作時需要完成安全檢查並由教師確認。' : '此任務可以開始學習。');
       await maybeAutoStartCamera();
     });
     async function refreshMap() {
@@ -1968,12 +2007,12 @@
       showTaskMap(elements);
     }
     bindTaskMapRetry(elements.trainingTaskList, () => refreshMap().catch(() => renderTaskMapLoadError(elements)));
-    elements.backToTaskMap?.addEventListener('click', () => refreshMap().catch((error) => setMessage(`任务地图刷新失败：${error.message}`)));
+    elements.backToTaskMap?.addEventListener('click', () => refreshMap().catch((error) => setMessage(`任務地圖刷新失敗：${error.message}`)));
     elements.continueTrainingStep?.addEventListener('click', () => { if (!pendingTrainingState) return; const training = pendingTrainingState; pendingTrainingState = null; elements.stepCompleteFeedback.hidden = true; if (elements.completionCard) elements.completionCard.hidden = false; renderCurrentTraining(training); });
     elements.classroomValidationToggle?.addEventListener('change', async () => {
       const id = await ensureSession();
       const state = await setClassroomValidation(fetchImpl, id, elements.classroomValidationToggle.checked);
-      if (elements.classroomValidationReport) elements.classroomValidationReport.textContent = state.enabled ? '课堂验证记录已开启' : '课堂验证记录已关闭';
+      if (elements.classroomValidationReport) elements.classroomValidationReport.textContent = state.enabled ? '課堂驗證記錄已開啟' : '課堂驗證記錄已關閉';
     });
     elements.refreshClassroomValidation?.addEventListener('click', async () => {
       const id = await ensureSession();
@@ -2364,7 +2403,7 @@
       controller.refreshHealth();
       controller.refreshCameraDevices();
       controller.initializeStudentMode().catch(() => renderTaskMapLoadError({ trainingTaskList: document.querySelector('#trainingTaskList'), taskMapScreen: document.querySelector('#taskMapScreen'), taskDetailScreen: document.querySelector('#taskDetailScreen') }));
-      // P1-4：pagehide 只停相机/语音，不销毁 session——刷新/导航后 ensureSession 仍能复用同一会话。
+      // P1-4：pagehide 只停相機/語音，不銷燬 session——刷新/導航後 ensureSession 仍能複用同一會話。
       window.addEventListener('pagehide', () => { controller.pauseVoiceCoach(); controller.stopCameraStream(); });
     });
   }
