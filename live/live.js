@@ -1738,12 +1738,29 @@
         void submitStudentQuestion(transcript, { source: 'VOICE', autoSpeak: true });
       },
       onError: (code) => {
-        if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${String(code).toUpperCase()}`;
-        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture' || code === 'speech-unstable') {
-          handsFreeVoice?.pause();
-          if (elements.voiceStatus) elements.voiceStatus.textContent = code === 'speech-unstable' ? '當前瀏覽器語音識別不穩定，已切換為按住說話。' : '當前瀏覽器暫不支持免按鍵語音，可使用按住說話。';
+        // start() 失敗時傳來的是 Error 物件，辨識錯誤則是字串
+        const name = typeof code === 'string' ? code : String(code?.name || code?.message || 'voice_input_failed');
+        if (elements.diagnosticLastError) elements.diagnosticLastError.textContent = `SPEECH_${name.toUpperCase()}`;
+        if (handsFreeVoice?.isEnabled()) {
+          // 還在待命中（暫時性問題）：繼續聽
+          if (elements.voiceStatus) elements.voiceStatus.textContent = '沒有聽清楚，請繼續說一次。';
+          return;
+        }
+        handsFreeVoice?.pause();
+        if (name === 'audio-capture') {
+          // 麥克風被其他程式佔用或不存在：改用按住說話／文字
+          if (elements.voiceStatus) elements.voiceStatus.textContent = '找不到可用的麥克風，可用「按住說話」或文字提問。';
           if (elements.fallbackMethods) elements.fallbackMethods.open = true;
-        } else if (elements.voiceStatus) elements.voiceStatus.textContent = '沒有聽清楚，請繼續說一次。';
+          return;
+        }
+        // 2026-11-04：手機（特別是 iPhone Safari）規定每次開始聆聽都要由使用者點擊；
+        // AI 回答完自動恢復聆聽會被拒絕。改成顯示「點一下繼續說話」，鏡頭保持開著，不當成故障。
+        if (elements.enableVoiceCoach) {
+          elements.enableVoiceCoach.hidden = false;
+          elements.enableVoiceCoach.textContent = '🎙 點一下繼續說話';
+        }
+        if (elements.pauseVoiceCoach) elements.pauseVoiceCoach.hidden = true;
+        if (elements.voiceStatus) elements.voiceStatus.textContent = '手機需要點一下才能繼續聽：請按下方「🎙 點一下繼續說話」再發問（鏡頭仍開著）。';
       }
     });
     // 2026-11-04：一鍵「開始 AI 陪做」＝語音助教＋實訓鏡頭同時開啟。
