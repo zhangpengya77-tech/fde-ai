@@ -47,6 +47,18 @@
          階段 1: ① 上傳日誌
          ========================================== -->
     <section id="stage-1" class="stage-panel active">
+      <!-- 2026-11-04 多飛控選擇：ArduPilot 沿用原有健康診斷引擎；Betaflight / PX4 使用 PID 實驗室同一套八大指標。 -->
+      <div id="fc-select-card" class="card">
+        <h2 style="font-size:16px; font-weight:800; margin-bottom:4px;">選擇飛控系統</h2>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">依「飛控韌體」選擇；Pixhawk / APM 是硬體，Mission Planner / QGroundControl 是地面站軟體。系統最終以日誌內容識別的韌體為準。</p>
+        <div id="fc-select" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px;">
+          <button type="button" class="btn-secondary" data-fc="ardupilot" aria-pressed="true">ArduPilot<br><small>Pixhawk / Mission Planner，相容 APM</small></button>
+          <button type="button" class="btn-secondary" data-fc="betaflight" aria-pressed="false">Betaflight<br><small>FPV 穿越機 · BBL / BFL</small></button>
+          <button type="button" class="btn-secondary" data-fc="px4" aria-pressed="false">PX4<br><small>PX4 / QGroundControl · ULG</small></button>
+          <button type="button" class="btn-secondary" data-fc="other" aria-pressed="false">其他飛控<br><small>手動填寫</small></button>
+        </div>
+        <div id="fc-select-note" style="display:none; font-size:13px; margin-top:10px;"></div>
+      </div>
       <div id="upload-box-area" class="card">
         <h2 style="font-size:16px; font-weight:800; margin-bottom:4px;">① 上傳飛控日誌</h2>
         <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">
@@ -372,5 +384,28 @@
 
   <script src="./js/config.js?v=20261102c"></script>
   <script src="./js/app.js?v=20261102c"></script>
+  <script>
+    // 多飛控選擇（獨立腳本，不修改原有健康診斷流程）：ArduPilot 走原上傳區。
+    (function () {
+      var notes = {
+        betaflight: 'Betaflight Blackbox 由 <b>AI PID 與濾波實驗室</b>解析，輸出同一套八大健康指標（FPV 無 GPS / 導航時顯示 N/A，不扣分）。<br><a class="btn-primary" style="display:inline-block;margin-top:8px;text-decoration:none" href="/pid-lab/#aircraft">前往上傳 Betaflight 日誌 →</a>',
+        px4: 'PX4 ULog 由 <b>AI PID 與濾波實驗室</b>的 PX4 專用解析器處理，輸出同一套八大健康指標。<br><a class="btn-primary" style="display:inline-block;margin-top:8px;text-decoration:none" href="/pid-lab/#aircraft">前往上傳 PX4 日誌 →</a>',
+        other: '其他飛控可在實驗室建立飛機檔案（品牌、硬體、韌體、機型），但目前<b>不支援</b>該韌體的日誌分析。<br><a class="btn-secondary" style="display:inline-block;margin-top:8px;text-decoration:none" href="/pid-lab/#aircraft">建立飛機檔案 →</a>'
+      };
+      var buttons = document.querySelectorAll('#fc-select [data-fc]');
+      var note = document.getElementById('fc-select-note');
+      var upload = document.getElementById('upload-box-area');
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var fc = btn.getAttribute('data-fc');
+          buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); b.style.borderColor = b === btn ? 'var(--primary)' : ''; });
+          upload.style.display = fc === 'ardupilot' ? '' : 'none';
+          note.style.display = fc === 'ardupilot' ? 'none' : '';
+          note.innerHTML = notes[fc] || '';
+        });
+      });
+      buttons[0].style.borderColor = 'var(--primary)';
+    })();
+  </script>
 </body>
 </html>

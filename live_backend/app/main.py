@@ -46,6 +46,7 @@ from .providers.provider_manager import GeneralAIProviderManager
 from .vision_api import vision_routes
 from .vision_center import VisionCenter
 from .prop_rotation_service import build_rotation_trial_service_from_environment
+from pid_filter_lab.api import PidLabService
 from .benchmark import PropBenchmarkSandbox, runtime_status
 
 
@@ -115,7 +116,7 @@ def portal_proxy_timeout_seconds() -> float:
         return 125.0
 
 
-def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None, live_assertion_key=None, trusted_proxy_key=None, require_live_auth=None) -> Starlette:
+def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, general_ai_provider=None, vision_health_timeout_seconds=None, max_image_bytes=None, dev_mode=None, vision_center=None, benchmark_sandbox=None, download_root=None, download_manifest_path=None, django_portal_url=None, session_store_path: "Path | None" = None, live_assertion_key=None, trusted_proxy_key=None, require_live_auth=None, pid_lab_service=None) -> Starlette:
     config = LiveConfig.from_environment()
     adapter = vision_adapter or VisionAdapter(config.yolo_base_url, timeout_seconds=config.vision_request_timeout_seconds)
     store_path = session_store_path if session_store_path is not None else _default_session_store_path()
@@ -735,7 +736,14 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         Mount("/live", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "live"), html=True), name="live"),
         Mount("/downloads", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "downloads"), html=True), name="downloads"),
     ]
+    # AI PID & Filter Lab（2026-11-04）：獨立模組與路由，掛在既有 /api/live/ 受保護前綴下，
+    # 沿用 Gateway Assertion 身分驗證；不修改任何既有路由或 Flight Health。
+    pid_lab = pid_lab_service or PidLabService(require_identity=require_identity)
+    routes = routes + pid_lab.routes() + [
+        Mount("/pid-lab", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "pid-lab"), html=True, check_dir=False), name="pid-lab"),
+    ]
     app = Starlette(routes=routes)
+    app.state.pid_lab = pid_lab
 
     async def trusted_live_identity(request, call_next):
         """所有受保護 Live Session 路徑先驗證 Gateway 與短效 Assertion。"""
