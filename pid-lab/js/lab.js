@@ -321,9 +321,11 @@
           ${s.risk ? `<dt>風險</dt><dd>${esc(s.risk)}</dd>` : ''}
           ${s.retest ? `<dt>複測方法</dt><dd>${esc(s.retest)}</dd>` : ''}
           <dt>可信度</dt><dd>${esc(s.confidence)} · 證據完整度 ${(s.evidence_completeness * 100).toFixed(0)}%</dd>
+          ${s.level === 'INSUFFICIENT' ? `<dt>改善方法</dt><dd><a href="#learn" data-goto-logging>查看「飛行前準備：讓日誌可以被分析」</a></dd>` : ''}
         </dl>
         ${s.level === 'REVIEW' ? `<label class="actions" style="flex-direction:row"><input type="checkbox" data-sugg="${s.id}" style="width:auto"> 納入送審方案</label>` : ''}
       </article>`).join('');
+    $$('[data-goto-logging]').forEach((a) => a.addEventListener('click', () => setTimeout(() => { const el = $('#logging-setup'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 50)));
     const can = adv.suggestions.some((s) => s.level === 'REVIEW') && !adv.blocked && state.ident && state.ident.role === 'student';
     $('#advice-actions').classList.toggle('hidden', !can);
   }

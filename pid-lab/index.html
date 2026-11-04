@@ -57,6 +57,48 @@
           <p><b>頻譜</b>：橫軸頻率、縱軸雜訊強度；尖峰代表特定振動來源。</p>
         </article>
       </div>
+      <h3 class="section-title" id="logging-setup">飛行前準備：讓日誌可以被分析</h3>
+      <p class="muted">日誌記錄頻率太低時，系統只能顯示「資料不足」。下列設定在<b>官方地面站中由學員手動完成</b>（本系統不會寫入參數）；修改前先備份參數，連接飛控時拆下螺旋槳。參數名稱與選項可能隨韌體版本不同，請以該版本官方文件為準。</p>
+      <div class="grid-3">
+        <article class="card"><h3>ArduPilot（Mission Planner）</h3>
+          <p><b>目的</b>：角速度內環需 ≥ 50 Hz；濾波分析需要 IMU 批次取樣。</p>
+          <ol>
+            <li>完整參數表搜尋 <code>LOG_BITMASK</code>，在勾選清單中加入 <b>ATTITUDE_FAST</b> 與 <b>PID</b>（保留原本已勾選的項目）。</li>
+            <li><code>INS_LOG_BAT_MASK</code> = 1（記錄第一顆 IMU 的批次取樣）。</li>
+            <li><code>INS_LOG_BAT_OPT</code> = 4（同時記錄濾波前與濾波後，可比較濾波效果）。</li>
+            <li>寫入參數後重新開機飛控。</li>
+          </ol>
+          <p class="kv">檢查方法：上傳日誌後，「5 PID / 濾波」頁應出現「濾波前 / 濾波後（批次取樣）」頻譜；若角速度仍顯示 10 Hz，請教師確認該韌體版本的記錄選項。批次取樣會增加日誌大小，飛完驗證後可恢復原設定。</p>
+        </article>
+        <article class="card"><h3>Betaflight（Configurator）</h3>
+          <p><b>目的</b>：Blackbox 記錄率足夠高，才能看見 PID 響應與 100 Hz 以上的雜訊。</p>
+          <ol>
+            <li>「Blackbox」頁：記錄裝置選 Onboard Flash 或 SD 卡，飛行前先清除（Erase）Flash。</li>
+            <li>記錄頻率（Blackbox logging rate）至少 <b>1 kHz</b>，2 kHz 更佳（依飛控記憶體容量調整）。</li>
+            <li>CLI 執行 <code>version</code> 與 <code>diff all</code>，把輸出存檔後在實驗室「參數 / CLI 匯入」貼上。</li>
+          </ol>
+          <p class="kv">檢查方法：上傳後「5 PID / 濾波」頁的取樣頻率應 ≥ 1000 Hz，並出現階躍響應曲線。</p>
+        </article>
+        <article class="card"><h3>PX4（QGroundControl）</h3>
+          <p><b>目的</b>：角速度與目標角速度需要高頻記錄。</p>
+          <ol>
+            <li>參數 <code>SDLOG_PROFILE</code>：在勾選清單中加入 <b>High rate</b>（需要系統辨識時再加 <b>System identification</b>），保留預設項目。</li>
+            <li><code>SDLOG_MODE</code>：建議「從解鎖到上鎖」記錄。</li>
+            <li>QGroundControl「參數 → 工具 → 儲存到檔案」匯出參數，在實驗室匯入。</li>
+          </ol>
+          <p class="kv">檢查方法：上傳 ULog 後，角速度取樣頻率應明顯高於 100 Hz。</p>
+        </article>
+      </div>
+      <div class="card">
+        <h3>建議的測試飛行動作（三套飛控通用）</h3>
+        <ol>
+          <li>確認螺旋槳、電池電量與安裝牢固；教師在場、場地淨空。</li>
+          <li>低空懸停 30 秒（供振動與雜訊分析）。</li>
+          <li>橫滾軸：快速左右打桿再回中，重複 3～5 次；俯仰軸、偏航軸同樣各 3～5 次（供階躍響應分析）。</li>
+          <li>再懸停 10 秒後降落，記錄電池編號、螺旋槳與風況。</li>
+          <li>調參前（BASELINE）與調參後（AFTER_TUNING）使用<b>相同的動作、電池與螺旋槳</b>，前後比較才有意義。</li>
+        </ol>
+      </div>
       <h3 class="section-title">實訓課程</h3>
       <div id="course-list" class="grid-3"></div>
       <div class="card notice">
