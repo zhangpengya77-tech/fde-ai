@@ -15,7 +15,7 @@ BOARD_HINTS = ("Cube", "Pixhawk", "fmuv", "Matek", "Kakute", "SpeedyBee", "Duran
 COPTER_MODES = {0: "STABILIZE", 1: "ACRO", 2: "ALT_HOLD", 3: "AUTO", 4: "GUIDED", 5: "LOITER", 6: "RTL", 7: "CIRCLE", 9: "LAND", 11: "DRIFT", 13: "SPORT", 14: "FLIP", 15: "AUTOTUNE", 16: "POSHOLD", 17: "BRAKE", 18: "THROW", 19: "AVOID_ADSB", 20: "GUIDED_NOGPS", 21: "SMART_RTL", 22: "FLOWHOLD", 23: "FOLLOW", 24: "ZIGZAG", 25: "SYSTEMID", 26: "AUTOROTATE", 27: "AUTO_RTL", 28: "TURTLE"}
 PLANE_MODES = {0: "MANUAL", 1: "CIRCLE", 2: "STABILIZE", 3: "TRAINING", 4: "ACRO", 5: "FBWA", 6: "FBWB", 7: "CRUISE", 8: "AUTOTUNE", 10: "AUTO", 11: "RTL", 12: "LOITER", 13: "TAKEOFF", 15: "GUIDED", 17: "QSTABILIZE", 18: "QHOVER", 19: "QLOITER", 20: "QLAND", 21: "QRTL", 22: "QAUTOTUNE", 23: "QACRO", 24: "THERMAL"}
 
-WANTED = {"RATE", "ATT", "PIDR", "PIDP", "PIDY", "VIBE", "BAT", "GPS", "XKF4", "NKF4", "EKF4", "RCOU", "RCIN", "MODE", "ERR", "EV", "IMU", "VER", "ATUN", "RSSI", "CTUN", "POWR", "MSG"}
+WANTED = {"ISBH", "ISBD", "RATE", "ATT", "PIDR", "PIDP", "PIDY", "VIBE", "BAT", "GPS", "XKF4", "NKF4", "EKF4", "RCOU", "RCIN", "MODE", "ERR", "EV", "IMU", "VER", "ATUN", "RSSI", "CTUN", "POWR", "MSG"}
 
 
 def firmware_info(log: dataflash.DataFlashLog) -> dict:
@@ -55,6 +55,52 @@ def _instance(msg: dict, key: str) -> np.ndarray | None:
     if inst is None:
         return None
     return inst == np.min(inst)
+
+
+def imu_batches(log: dataflash.DataFlashLog) -> list[dict]:
+    """組裝 IMU 批次取樣（ISBH 標頭 + 依 seqno 排序的 ISBD 32 點封包）。
+
+    數值：原始 int16 ÷ mul；陀螺儀為 rad/s（轉為 deg/s），加速度計為 m/s²。
+    INS_LOG_BAT_OPT bit2（=4）同時記錄濾波前後：同類型中較大的 instance 為濾波後。
+    """
+    head, body = log.messages.get("ISBH"), log.messages.get("ISBD")
+    if not head or not body or "x" not in body:
+        return []
+    opt = int(log.params.get("INS_LOG_BAT_OPT", 0) or 0)
+    order = np.lexsort((body["seqno"], body["N"]))
+    bn, bx, by, bz = body["N"][order], body["x"][order], body["y"][order], body["z"][order]
+    starts = np.searchsorted(bn, head["N"], side="left")
+    ends = np.searchsorted(bn, head["N"], side="right")
+    batches = []
+    for i in range(len(head["N"])):
+        s, e = starts[i], ends[i]
+        if e - s < 2:
+            continue
+        mul = float(head["mul"][i]) or 1.0
+        count = int(head["smp_cnt"][i])
+        xyz = [arr[s:e].reshape(-1)[:count].astype(np.float64) / mul for arr in (bx, by, bz)]
+        sensor = "gyro" if int(head["type"][i]) == 1 else "accel"
+        if sensor == "gyro":
+            xyz = [np.degrees(v) for v in xyz]
+        batches.append({
+            "sensor": sensor,
+            "instance": int(head["instance"][i]),
+            "t0": float(head["SampleUS"][i]) / 1e6,
+            "rate_hz": float(head["smp_rate"][i]),
+            "x": xyz[0], "y": xyz[1], "z": xyz[2],
+        })
+    for sensor in ("gyro", "accel"):
+        insts = sorted({b["instance"] for b in batches if b["sensor"] == sensor})
+        for b in batches:
+            if b["sensor"] != sensor:
+                continue
+            if opt & 4 and len(insts) > 1:
+                b["stage"] = "post" if b["instance"] == insts[-1] else "pre"
+            elif opt & 2:
+                b["stage"] = "post"
+            else:
+                b["stage"] = "pre"
+    return batches
 
 
 def adapt(data: bytes) -> FlightData:
@@ -182,6 +228,10 @@ def adapt(data: bytes) -> FlightData:
     if ev:
         for t, eid in zip(tsec(ev), ev.get("Id", [])):
             fd.events.append({"t": round(float(t), 3), "kind": "EV", "id": int(eid)})
+    fd.batches = imu_batches(log)
+    if fd.batches:
+        opt = int(log.params.get("INS_LOG_BAT_OPT", 0) or 0)
+        fd.flags["batch_sampler"] = {"count": len(fd.batches), "opt": opt, "rate_hz": round(float(np.median([b["rate_hz"] for b in fd.batches])), 1)}
     fd.flags["autotune_present"] = "ATUN" in log.messages or any(m["name"] in ("AUTOTUNE", "QAUTOTUNE") for m in fd.modes)
     t0 = min((a[0] for a in all_t if len(a)), default=0.0)
     if t0:
@@ -189,6 +239,8 @@ def adapt(data: bytes) -> FlightData:
             s.t = s.t - t0
         for item in fd.events + fd.modes:
             item["t"] = round(item["t"] - t0, 3)
+        for b in fd.batches:
+            b["t0"] -= t0
     duration = max((s.t[-1] for s in fd.signals.values() if len(s.t)), default=0.0)
     rate_sig = fd.sig("rate.roll.actual")
     fd.log_metadata = {
@@ -204,5 +256,8 @@ def adapt(data: bytes) -> FlightData:
     if log.stats["skipped_bytes"] > 0.05 * log.stats["bytes"]:
         fd.warnings.append("日誌有大量無法解析的位元組，可能損毀或不完整。")
     if rate_sig and rate_sig.rate_hz < 100:
-        fd.warnings.append(f"RATE 記錄頻率僅 {rate_sig.rate_hz:.0f} Hz，只能分析低頻控制響應；高頻振盪與濾波需開啟較高記錄頻率（例如 LOG_BITMASK / INS_LOG_BAT_*）。")
+        if fd.batches:
+            fd.warnings.append(f"RATE 記錄頻率僅 {rate_sig.rate_hz:.0f} Hz，內環 PID 響應無法分析；濾波分析改用 IMU 批次取樣（{fd.flags['batch_sampler']['rate_hz']} Hz）。")
+        else:
+            fd.warnings.append(f"RATE 記錄頻率僅 {rate_sig.rate_hz:.0f} Hz，只能分析低頻控制響應；高頻振盪與濾波需開啟較高記錄頻率（例如 LOG_BITMASK / INS_LOG_BAT_*）。")
     return fd

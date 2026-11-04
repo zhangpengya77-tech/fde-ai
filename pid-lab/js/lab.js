@@ -299,7 +299,9 @@
         <div class="kv">來源 ${esc(s.source)} · ${s.rate_hz} Hz（Nyquist ${s.nyquist_hz} Hz）· Welch / Hann / ${s.window.nperseg} 點 / 50% 重疊 · 使用 ${s.window.seconds_used} s（飛行中）<br>峰值：${fmt(s.peaks_hz, 'Hz')} · 雜訊 RMS 80–200 Hz：${fmt(s.noise_rms['80_200hz'] && s.noise_rms['80_200hz'].toFixed(2))}</div></div>`).join('') : '<p class="muted">沒有頻譜資料。</p>';
     Object.entries(sp).forEach(([k, s]) => { if (s.status === 'OK') LabCharts.drawLines($('#spec-' + k.replace(/\W/g, '_')), [{ x: s.curve.f, y: s.curve.db, color: '#a78bfa' }], { xlabel: 'Hz' }); });
     const att = a.control.attitude_loop;
-    $('#pid-attitude').innerHTML = `<div class="card"><h3>姿態外環</h3>${att.note ? `<p class="muted">${esc(att.note)}</p>` : Object.entries(att).map(([ax, v]) => `<p>${AXIS[ax]}：${v.status === 'OK' ? `誤差 RMS ${v.tracking_rms_deg}°、最大 ${v.max_error_deg}°（${esc(v.sources.actual)} vs ${esc(v.sources.setpoint)}，${v.sample_rate_hz} Hz）` : esc(v.reason)}</p>`).join('')}</div>`;
+    const fe = a.control.filter_effect;
+    const feHtml = fe ? `<div class="card"><h3>濾波實測效果（濾波前 → 濾波後）</h3><div class="table-wrap"><table><tr><th>軸</th><th>20–80 Hz</th><th>80–200 Hz</th><th>200 Hz 以上</th><th>濾波前峰值</th><th>濾波後峰值</th></tr>${Object.entries(fe).map(([ax, r]) => `<tr><td>${AXIS[ax]}</td><td>${fmt(r.attenuation_db['20_80hz'], 'dB')}</td><td>${fmt(r.attenuation_db['80_200hz'], 'dB')}</td><td>${fmt(r.attenuation_db['200hz_plus'], 'dB')}</td><td>${fmt(r.pre_peaks_hz.slice(0, 3), 'Hz')}</td><td>${fmt(r.post_peaks_hz.slice(0, 3), 'Hz')}</td></tr>`).join('')}</table></div><p class="kv">負值代表雜訊被衰減；資料來自 IMU 批次取樣，只計算飛行中的批次。</p></div>` : '';
+    $('#pid-attitude').innerHTML = feHtml + `<div class="card"><h3>姿態外環</h3>${att.note ? `<p class="muted">${esc(att.note)}</p>` : Object.entries(att).map(([ax, v]) => `<p>${AXIS[ax]}：${v.status === 'OK' ? `誤差 RMS ${v.tracking_rms_deg}°、最大 ${v.max_error_deg}°（${esc(v.sources.actual)} vs ${esc(v.sources.setpoint)}，${v.sample_rate_hz} Hz）` : esc(v.reason)}</p>`).join('')}</div>`;
   }
 
   // ---------------------------------------------------------------- 第六步：建議

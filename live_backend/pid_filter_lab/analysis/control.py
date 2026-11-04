@@ -290,9 +290,85 @@ def attitude_loop(fd: FlightData) -> dict:
     return out
 
 
+def batch_spectrum(fd: FlightData, sensor: str, stage: str, axis_key: str, label: str) -> dict | None:
+    """以 IMU 批次取樣計算平均頻譜：每批為連續高頻資料，各批 Welch 後再平均（只取飛行中的批次）。"""
+    batches = [b for b in fd.batches if b["sensor"] == sensor and b.get("stage") == stage and len(b[axis_key]) >= 256]
+    if not batches:
+        return None
+    flying = []
+    for b in batches:
+        fm = flying_mask(fd, np.asarray([b["t0"]]))
+        if fm[0]:
+            flying.append(b)
+    used = flying if len(flying) >= 3 else []
+    if not used:
+        return {"status": "INSUFFICIENT", "reason": f"{label}：飛行中的批次取樣不足 3 批", "rate_hz": round(batches[0]["rate_hz"], 1)}
+    rate = float(np.median([b["rate_hz"] for b in used]))
+    nper = 2 ** int(np.log2(min(len(b[axis_key]) for b in used)))
+    psds = []
+    for b in used:
+        f, p = welch(b[axis_key], b["rate_hz"], nperseg=nper)
+        if len(f):
+            psds.append(p)
+    f = np.fft.rfftfreq(nper, 1.0 / rate)
+    p = np.mean(psds, axis=0)
+    nyq = rate / 2.0
+    db = 10 * np.log10(p + 1e-12)
+    band = f >= 20
+    peaks = []
+    fb, pb = f[band], p[band]
+    floor = np.median(pb) if len(pb) else 0
+    for i in range(1, len(pb) - 1):
+        if pb[i] > pb[i - 1] and pb[i] >= pb[i + 1] and pb[i] > 6 * floor:
+            peaks.append((float(pb[i]), float(fb[i])))
+    peaks.sort(reverse=True)
+    df = f[1] - f[0]
+
+    def band_rms(lo, hi):
+        sel = (f >= lo) & (f < min(hi, nyq))
+        return float(np.sqrt(np.sum(p[sel]) * df)) if np.any(sel) else None
+
+    step = max(1, len(f) // 400)
+    return {
+        "status": "OK",
+        "label": label,
+        "source": f"{'ISBD 陀螺儀' if sensor == 'gyro' else 'ISBD 加速度計'}批次取樣（{'濾波後' if stage == 'post' else '濾波前'}，instance {used[0]['instance']}）",
+        "rate_hz": round(rate, 1),
+        "nyquist_hz": round(nyq, 1),
+        "window": {"type": "hann", "nperseg": nper, "overlap": 0.5, "seconds_used": round(sum(len(b[axis_key]) for b in used) / rate, 1), "batches": len(used)},
+        "peaks_hz": [round(fr, 1) for _, fr in peaks[:5]],
+        "noise_rms": {"0_20hz": band_rms(0, 20), "20_80hz": band_rms(20, 80), "80_200hz": band_rms(80, 200), "200hz_plus": band_rms(200, nyq)},
+        "curve": {"f": [round(float(x), 2) for x in f[::step]], "db": [round(float(x), 2) for x in db[::step]]},
+    }
+
+
+def filter_effect(spectra: dict) -> dict | None:
+    """比較濾波前後同一軸的雜訊，量化濾波器實際衰減。"""
+    out = {}
+    for axis in ("roll", "pitch", "yaw"):
+        pre, post = spectra.get(f"gyro_unfiltered.{axis}"), spectra.get(f"gyro.{axis}")
+        if not (pre and post and pre.get("status") == "OK" and post.get("status") == "OK"):
+            continue
+        row = {}
+        for band in ("20_80hz", "80_200hz", "200hz_plus"):
+            a, b = pre["noise_rms"].get(band), post["noise_rms"].get(band)
+            if a and b:
+                row[band] = round(float(20 * np.log10(b / a)), 1)
+        out[axis] = {"attenuation_db": row, "pre_peaks_hz": pre["peaks_hz"], "post_peaks_hz": post["peaks_hz"]}
+    return out or None
+
+
 def analyze(fd: FlightData) -> dict:
     axes = {axis: analyze_axis(fd, axis) for axis in AXES}
     spectra = {}
+    if fd.batches:
+        for axis, key in zip(AXES, ("x", "y", "z")):
+            pre = batch_spectrum(fd, "gyro", "pre", key, f"{axis} 陀螺儀（濾波前，批次取樣）")
+            post = batch_spectrum(fd, "gyro", "post", key, f"{axis} 陀螺儀（濾波後，批次取樣）")
+            if pre:
+                spectra[f"gyro_unfiltered.{axis}"] = pre
+            if post:
+                spectra[f"gyro.{axis}"] = post
     thr = fd.sig("throttle")
     for axis in AXES:
         src = fd.sig(f"rate.{axis}.actual")
@@ -300,7 +376,7 @@ def analyze(fd: FlightData) -> dict:
             imu = fd.sig(f"imu.gyro.{axis}")
             if src is None or imu.rate_hz > src.rate_hz:
                 src = imu
-        if src is not None:
+        if src is not None and f"gyro.{axis}" not in spectra and f"gyro_unfiltered.{axis}" not in spectra:
             spectra[f"gyro.{axis}"] = spectrum(src, f"{axis} 陀螺儀", thr)
         unf = fd.sig(f"rate.{axis}.unfiltered")
         if unf is not None:
@@ -313,4 +389,5 @@ def analyze(fd: FlightData) -> dict:
         "rate_loop": axes,
         "attitude_loop": attitude_loop(fd) if fd.ecosystem in ("ardupilot", "px4") else {"note": "Betaflight Acro 以角速度內環為主，無姿態外環資料"},
         "spectra": spectra,
+        "filter_effect": filter_effect(spectra),
     }

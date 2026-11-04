@@ -155,6 +155,9 @@ def advise(fd: FlightData, control: dict, health: dict) -> dict:
                                    "可能是 propwash、P/D 比例或機架共振。請教師對照曲線判讀，不自動給出數值。", [{"metric": "峰值頻率", "value": osc["peak_hz"], "unit": "Hz"}, {"metric": "峰值顯著度", "value": osc["prominence"]}], axis=axis, confidence="low"))
     # 濾波
     spectra = control.get("spectra", {})
+    notch = _notch_check(fd, spectra, control.get("filter_effect"))
+    if notch:
+        out.append(notch)
     gyro_specs = [s for k, s in spectra.items() if k.startswith("gyro.") and s.get("status") == "OK"]
     if not gyro_specs:
         out.append(_suggestion("FILTER-DATA", "INSUFFICIENT", "濾波分析：資料不足", "陀螺儀記錄頻率不足（需 ≥ 50 Hz 且足夠長度），無法分析雜訊頻譜。",
@@ -173,6 +176,34 @@ def advise(fd: FlightData, control: dict, health: dict) -> dict:
         else:
             out.append(_suggestion("FILTER-OK", "INFO", "陀螺儀雜訊在可接受範圍", "目前不需要加強濾波；過度濾波會增加控制延遲。", ev, confidence="medium"))
     return _finish(fd, out, blocked=False)
+
+
+def _notch_check(fd: FlightData, spectra: dict, effect: dict | None) -> dict | None:
+    """ArduPilot 諧波陷波：以批次取樣濾波前頻譜的峰值，對照 INS_HNTCH_* 設定（僅教學說明，不自動給頻率）。"""
+    if fd.ecosystem != "ardupilot":
+        return None
+    pre = [s for k, s in spectra.items() if k.startswith("gyro_unfiltered.") and s.get("status") == "OK"]
+    if not pre:
+        return None
+    peaks = sorted({p for s in pre for p in s.get("peaks_hz", [])[:3] if 15 <= p <= 300})
+    enabled = float(fd.params.get("INS_HNTCH_ENABLE", 0) or 0) > 0
+    evidence = [{"metric": "濾波前頻譜主要峰值", "value": peaks[:6], "unit": "Hz"}, {"metric": "批次取樣頻率", "value": pre[0]["rate_hz"], "unit": "Hz"}]
+    if effect:
+        for axis, row in effect.items():
+            evidence.append({"metric": f"{axis} 濾波實測衰減 20–80 / 80–200 Hz", "value": [row["attenuation_db"].get("20_80hz"), row["attenuation_db"].get("80_200hz")], "unit": "dB"})
+    if not enabled:
+        return _suggestion("NOTCH-OFF", "INFO", "諧波陷波未啟用", "批次取樣顯示馬達相關的振動峰值；ArduPilot 官方建議以諧波陷波濾除。啟用與設定須依官方流程（含參考值與模式）在 Mission Planner 中完成。", evidence,
+                           hardware="先確認螺旋槳平衡與馬達狀況。", direction="由教師依官方「Harmonic Notch」文件引導設定，再上傳含批次取樣的新日誌驗證。", confidence="medium")
+    freq = float(fd.params.get("INS_HNTCH_FREQ", 0) or 0)
+    bw = float(fd.params.get("INS_HNTCH_BW", 0) or 0)
+    mode = int(fd.params.get("INS_HNTCH_MODE", 0) or 0)
+    evidence += [{"metric": "INS_HNTCH_FREQ / BW", "value": [freq, bw], "unit": "Hz"}, {"metric": "INS_HNTCH_MODE", "value": mode}]
+    near = [p for p in peaks if freq and min(abs(p - freq * k) for k in (1, 2, 3)) <= max(bw / 2, 5)]
+    if near:
+        text = f"濾波前峰值 {near[:3]} Hz 落在陷波中心 {freq:.0f} Hz 的諧波附近，設定與實測一致。"
+    else:
+        text = f"濾波前峰值 {peaks[:3]} Hz 與陷波中心 {freq:.0f} Hz 的諧波不一致；動態模式（MODE={mode}）下中心頻率會隨油門 / FFT 變化，請教師對照官方文件判讀。"
+    return _suggestion("NOTCH-CHECK", "INFO", "諧波陷波設定與實測頻譜對照", text, evidence, confidence="medium")
 
 
 def _finish(fd: FlightData, items: list[dict], blocked: bool) -> dict:

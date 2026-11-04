@@ -115,11 +115,11 @@ def parse(data: bytes, wanted: set[str] | None = None) -> DataFlashLog:
             defs[t] = MessageDef(t, length, name_s, fmt_s, labels, _make_struct(fmt_s))
         else:
             name = mdef.name
-            if name == "PARM":
+            if name == "PARM" and "a" not in mdef.fmt:
                 labels = mdef.labels
                 pname = values[labels.index("Name")].rstrip(b"\x00").decode("ascii", "replace")
                 params[pname] = float(values[labels.index("Value")])
-            elif name == "MSG":
+            elif name == "MSG" and "a" not in mdef.fmt:
                 labels = mdef.labels
                 tus = values[labels.index("TimeUS")] if "TimeUS" in labels else 0
                 text = values[labels.index("Message")].rstrip(b"\x00").decode("utf-8", "replace")
@@ -131,17 +131,21 @@ def parse(data: bytes, wanted: set[str] | None = None) -> DataFlashLog:
     for name, items in rows.items():
         mdef = next(d for d in defs.values() if d.name == name)
         cols = {}
+        # 'a'（int16[32]）在 struct 中展開為 32 個值，需以偏移量對應欄位，避免後續欄位錯位
+        offset = 0
         for idx, label in enumerate(mdef.labels):
             if idx >= len(mdef.fmt):
                 break
             ch = mdef.fmt[idx]
-            scale = FORMAT_CHARS[ch][1]
-            if scale is None:
-                continue
-            arr = np.asarray([row[idx] for row in items], dtype=np.float64)
-            if scale != 1:
-                arr = arr * scale
-            cols[label] = arr
+            width = 32 if ch == "a" else 1
+            if ch == "a":
+                cols[label] = np.asarray([row[offset:offset + 32] for row in items], dtype=np.int16)
+            else:
+                scale = FORMAT_CHARS[ch][1]
+                if scale is not None:
+                    arr = np.asarray([row[offset] for row in items], dtype=np.float64)
+                    cols[label] = arr * scale if scale != 1 else arr
+            offset += width
         messages[name] = cols
     modes = []
     if "MODE" in messages:

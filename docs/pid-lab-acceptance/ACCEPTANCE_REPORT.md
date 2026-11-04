@@ -87,6 +87,7 @@
 | PIDtoolbox | github.com/bw1129/PIDtoolbox | — | 同類方法參考（階躍響應、頻譜）；未複製 |
 | ArduPilot | github.com/ArduPilot/ardupilot | GPL-3.0 | DataFlash 自描述格式（FMT）、ATC_RAT_* / RATE_* 參數命名、VIBE 判讀建議 |
 | pymavlink | github.com/ArduPilot/pymavlink | LGPL-3.0 | 可用但為減少依賴與授權複雜度，自行實作 DataFlash 解析 |
+| ArduPilot MethodicConfigurator | github.com/ArduPilot/MethodicConfigurator | GPL-3.0 | 其 Tarot X4 範本中的真機 BIN（含 IMU 批次取樣）作為本機測試樣本；未提交 |
 | Mission Planner | github.com/ArduPilot/MissionPlanner | GPL-3.0 | 只參考 .param 匯出格式 |
 | PX4-Autopilot | github.com/PX4/PX4-Autopilot | BSD-3-Clause | ULog 主題（vehicle_angular_velocity、vehicle_rates_setpoint…）、MC_*RATE_*、IMU_GYRO_* 參數、ver_sw_release 編碼 |
 | pyulog | github.com/PX4/pyulog | BSD-3-Clause | 參考 ULog 格式；其測試樣本 `sample_px4_events.ulg`（BSD）用於測試 |
@@ -97,7 +98,7 @@
 ## 6. 測試結果
 
 ### 6.1 自動化測試
-- 實驗室：`python _run_unittests.py test_pid_filter_lab` → **36 / 36 通過**（真實樣本解析、損毀 / 空 / 截斷 / 格式不符、權限隔離、上傳安全、教師審核流程、匯出拒絕、參數不混用、BLOCKED、比較規則、正式模式身分、主程式掛載）。
+- 實驗室：`python _run_unittests.py test_pid_filter_lab` → **37 / 37 通過**（真實樣本解析、損毀 / 空 / 截斷 / 格式不符、權限隔離、上傳安全、教師審核流程、匯出拒絕、參數不混用、BLOCKED、比較規則、正式模式身分、主程式掛載）。
 - 原有 Live 後端回歸：621 項中 29 項失敗；**在原始基線 846ee80 上同樣 29 項失敗、清單完全相同** → 本次修改沒有新增任何失敗。
 - 前端 Node 測試 11 個檔案：10 個通過；`homepage-portal-entry.test.cjs` 失敗，但在基線 846ee80 上同樣失敗（首頁未改動）。
 
@@ -109,6 +110,7 @@
 | ArduCopter 4.5.7 F450 真實飛行 BIN | 版本、板型 fmuv3、1059 參數、八大指標全部可評估 |
 | ArduCopter 4.5.7 / 4.8.0-dev 其他 BIN | 解析成功；地面 / 台架日誌被正確判為「實際角速度≈0」而不給結論 |
 | 2 份損毀 BIN（1 MB / 7.6 MB） | 正確回報無法解析 |
+| ArduCopter 4.5.5 Tarot X4 / Pixhawk6X 真機飛行（ArduPilot MethodicConfigurator 範本日誌，GPL-3.0，僅本機測試、不提交） | 八大指標 8/8 可評估；IMU 批次取樣 221 批 × 1024 點、2025 Hz，自動區分濾波前（instance 0）/ 後（instance 3） |
 | PX4 `sample_log_small.ulg`（CubeOrange） | 識別 PX4 1.11.2、980 參數、八大指標 7 項可評估 |
 | PX4 `sample.ulg`（AUAV_X21 舊版） | 無 ver_sw_release → 版本標「unknown」，不捏造 |
 | PX4 `sample_px4_events.ulg` | 識別 PX4 1.15.0 SITL |
@@ -117,7 +119,9 @@
 
 ### 6.3 PID 分析
 - Betaflight：`stock_tune`（原廠參數）偵測到 Roll 過衝 83.8%、Pitch 55.1% → 產生 D +10% 的 REVIEW 建議；`good_tune`（已調好）判為合理範圍、無 REVIEW。**與樣本作者標示的「原廠 vs 調好」一致**，屬一次真實交叉驗證。
-- ArduPilot：現有真實樣本 RATE 記錄只有 10 Hz → 內環、階躍、頻譜一律 INSUFFICIENT 並提示提高記錄頻率；姿態外環可評估。
+- ArduPilot：現有真實樣本 RATE 記錄只有 10 Hz → 內環、階躍一律 INSUFFICIENT 並提示提高記錄頻率；姿態外環可評估。
+- ArduPilot 濾波（2026-11-04 追加）：新增 ISBH/ISBD 批次取樣解析。Tarot X4 真機日誌顯示濾波前主峰 67.2 Hz、濾波後基頻約 33.6 Hz，與 `INS_HNTCH_FREQ=35` 的諧波一致；濾波實測衰減 20–80 Hz 約 -30～-33 dB、80–200 Hz 約 -35 dB。產生 INFO 級「諧波陷波設定與實測頻譜對照」，不自動給頻率數值。
+- 同時修正 DataFlash 解析器 bug：`a`（int16[32]）欄位原本會讓後續欄位索引錯位（先前樣本未用到陣列欄位，因此未暴露）。
 - PX4：現有樣本皆為台架 / SITL / VTOL，沒有可用的多旋翼操控段 → PID 分析 INSUFFICIENT。
 
 ### 6.4 教師審核、匯出、前後比較（真實頁面操作）
@@ -143,6 +147,7 @@
 | 10 調參前後對比 | `10_調參前後對比.png` |
 | 11 學生報告 | `11_學生報告.png` |
 | 12 移動端 | `12_移動端頁面.png`、`12b_移動端飛控選擇.png`（375 px，無橫向捲動） |
+| ArduPilot 濾波（追加） | `18_ArduPilot濾波批次取樣分析.png`、`19_ArduPilot陷波建議.png` |
 | 補充 | `00_首頁側欄入口.png`、`13_FlightHealth飛控選擇_PX4.png`、`14_PX4日誌上傳.png`、`16_PX4_PID分析.png`、`17_GitHubPages靜態離線狀態.png` |
 
 ## 7. 驗收狀態（嚴格區分）
@@ -154,6 +159,7 @@
 - Betaflight PID 分析（階躍響應、過衝、延遲、追蹤誤差、頻譜）與調參建議（與樣本標示一致）
 - 教師審核、Betaflight CLI 匯出、權限隔離、上傳安全、錯誤 / 損毀日誌處理
 - 左側欄入口、Flight Health 飛控選擇、桌面與移動端顯示、靜態站離線狀態
+- ArduPilot IMU 批次取樣濾波前後頻譜、濾波實測衰減、諧波陷波設定對照（Tarot X4 真機日誌）
 
 ### 已實作但尚未以真實資料驗證
 - Betaflight 4.x（setpoint、FF、gyroUnfilt、新濾波參數名）— 缺 4.x 真實日誌

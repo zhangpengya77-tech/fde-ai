@@ -79,6 +79,8 @@ class FlightData:
     flags: dict = field(default_factory=dict)  # 例如 gps_configured / autotune_present
     log_metadata: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    # 非連續的高頻批次資料（例如 ArduPilot IMU 批次取樣 ISBH/ISBD）
+    batches: list[dict] = field(default_factory=list)
 
     def sig(self, name: str) -> Signal | None:
         s = self.signals.get(name)

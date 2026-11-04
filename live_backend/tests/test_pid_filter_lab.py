@@ -33,6 +33,7 @@ BF_GOOD = SAMPLES / "betaflight" / "plasmatree_good_tune.BBL"
 BF_STOCK = SAMPLES / "betaflight" / "plasmatree_stock_tune.BFL"
 AP_FLIGHT = SAMPLES / "ardupilot" / "f450_flight_4.5.7.bin"
 AP_BENCH = SAMPLES / "ardupilot" / "log_452_2026-9-29-20-38-08.bin"
+AP_TAROT = SAMPLES / "ardupilot" / "tarot_x4_methodic.bin"
 PX4_OLD = SAMPLES / "px4" / "sample.ulg"
 PX4_NEW = SAMPLES / "px4" / "sample_log_small.ulg"
 PX4_115 = SAMPLES / "px4" / "sample_px4_events.ulg"
@@ -126,6 +127,24 @@ class RealSampleAnalysis(unittest.TestCase):
             self.assertEqual(r["control"]["rate_loop"][axis]["status"], "INSUFFICIENT")
         self.assertNotIn("REVIEW", r["advice"]["counts"])
         self.assertEqual(len(r["health"]["indicators"]), 8)
+
+    @need(AP_TAROT)
+    def test_ardupilot_batch_sampler_filter_analysis(self):
+        fd = adapters.adapt(AP_TAROT.read_bytes())
+        self.assertEqual(fd.firmware["version"], "4.5.5")
+        self.assertEqual(fd.hardware["board"], "Pixhawk6X")
+        stages = {(b["sensor"], b["stage"]) for b in fd.batches}
+        self.assertIn(("gyro", "pre"), stages)
+        self.assertIn(("gyro", "post"), stages)
+        full = sum(len(b["x"]) == 1024 for b in fd.batches)
+        self.assertGreater(full / len(fd.batches), 0.9, "大多數批次應為完整 1024 點（日誌結尾可能截斷）")
+        r = pipeline.run(AP_TAROT.read_bytes())
+        effect = r["control"]["filter_effect"]
+        for axis in ("roll", "pitch"):
+            self.assertLess(effect[axis]["attenuation_db"]["80_200hz"], -10, "濾波後雜訊必須明顯低於濾波前")
+        notch = [s for s in r["advice"]["suggestions"] if s["rule_id"] == "NOTCH-CHECK"]
+        self.assertEqual(len(notch), 1)
+        self.assertEqual(notch[0]["level"], "INFO")
 
     @need(AP_BENCH)
     def test_ardupilot_bench_detected(self):
