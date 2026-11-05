@@ -169,11 +169,11 @@
            所有按鈕都連到既有真實頁面。 -->
       <section class="section-block module-page about-page" id="about">
         <!-- 2026-11-06：「關於我們」介紹影片放在最上方（58 秒，台灣口音配音＋繁體字幕），下面才是文字介紹。
-             playsinline：iPhone 在頁面內播放不強制全螢幕；preload="metadata"：先只載入封面與長度，按播放才下載影片 -->
+             playsinline：iPhone 在頁面內播放不強制全螢幕；影片放在 /f450-twin/media/（支援分段下載，iPhone 才能播放）；preload="metadata"：先只載入封面與長度，按播放才下載影片 -->
         <figure class="about-video">
           <video controls playsinline preload="metadata" poster="./src/assets/about-intro-poster.jpg" aria-label="FDE-AI 關於我們介紹影片">
-            <source src="./src/assets/about-intro.mp4" type="video/mp4" />
-            你的瀏覽器無法播放影片，<a href="./src/assets/about-intro.mp4">點這裡下載觀看</a>。
+            <source src="/f450-twin/media/about-intro.mp4" type="video/mp4" />
+            你的瀏覽器無法播放影片，<a href="/f450-twin/media/about-intro.mp4">點這裡下載觀看</a>。
           </video>
           <figcaption>▶ 一分鐘認識 FDE-AI 無人載具實訓平台</figcaption>
         </figure>
