@@ -623,6 +623,9 @@ class EntryHandler(BaseHTTPRequestHandler):
 class EntryServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+    # 2026-11-06：預設佇列只有 5，首頁一次載入約 20 個檔案時，Windows 會直接拒絕多出來的連線，
+    # Cloudflare 通道就回 502（樣式表沒載到、整頁變素頁）。放大到 128 讓瞬間並發的請求排隊等候。
+    request_queue_size = 128
 
 
 def main() -> int:

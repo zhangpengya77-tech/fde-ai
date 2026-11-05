@@ -3288,3 +3288,14 @@ a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba
     grid-template-columns: 1fr;
   }
 }
+
+/* ── 2026-11-06：首頁 3D 無人機改為參考圖風格：近黑底＋青色微光，網格調淡 ── */
+.drone-stage.drone-3d-ready {
+  background:
+    radial-gradient(ellipse at 50% 62%, rgba(0, 170, 230, 0.16), transparent 60%),
+    linear-gradient(160deg, #04101c 0%, #02070e 55%, #010307 100%);
+}
+
+.drone-stage.drone-3d-ready .grid-plane {
+  opacity: 0.35;
+}
