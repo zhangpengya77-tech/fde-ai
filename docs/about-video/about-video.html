@@ -1,0 +1,295 @@
+<!doctype html>
+<!--
+  FDE-AI「關於我們」介紹動畫（2026-11-06）
+  - 直式 1080×1920（手機分享用），30fps 逐格錄製
+  - 畫面完全由 seek(t)（秒）決定，不靠 CSS 動畫，錄製時每一格都可重現
+  - 場景與旁白來自 script.json（可用 ?timing= 帶入實際配音長度）
+  - 風格沿用網站：深藍底、青色霓虹、學練做測證彩色發光徽章、霓虹光環無人機
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>FDE-AI 關於我們 介紹動畫</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Orbitron:wght@700;900&display=swap">
+<style>
+  :root { --bg:#07111f; --cyan:#00c2ff; --blue:#168bff; --text:#ddf3ff; --muted:#94abc2; --mag:#ff3df0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+  body { font-family: "Noto Sans TC", sans-serif; color: var(--text); }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 30%, rgba(22,139,255,.22), transparent 60%), linear-gradient(170deg,#0a1830 0%,#050b18 60%,#02050c 100%); }
+  canvas#fx { position: absolute; inset: 0; }
+  .layer { position: absolute; inset: 0; opacity: 0; }
+  .brand { position: absolute; top: 60px; left: 64px; display: flex; align-items: center; gap: 18px; z-index: 5; }
+  .brand .mark { width: 74px; height: 74px; border: 2px solid var(--cyan); display: grid; place-items: center; color: var(--cyan);
+    font-family: Orbitron; font-weight: 900; font-size: 24px; box-shadow: 0 0 24px rgba(0,194,255,.45); }
+  .brand b { font-family: Orbitron; font-size: 34px; letter-spacing: .06em; }
+  .brand small { display: block; color: var(--cyan); font-size: 22px; margin-top: 4px; }
+  .h1 { position: absolute; left: 0; right: 0; text-align: center; font-weight: 900; }
+  .glow { text-shadow: 0 0 18px rgba(0,194,255,.85), 0 0 46px rgba(0,194,255,.5); }
+  .sub { position: absolute; left: 60px; right: 60px; bottom: 80px; min-height: 200px; display: grid; place-items: center;
+    padding: 26px 34px; border: 1.5px solid rgba(0,194,255,.45); border-radius: 22px; background: rgba(4,12,26,.82);
+    font-size: 40px; line-height: 1.5; text-align: center; font-weight: 700; z-index: 6; box-shadow: 0 0 40px rgba(0,194,255,.15); }
+  .sec-no { display: inline-block; padding: 6px 22px; border: 2px solid var(--cyan); color: var(--cyan); font-family: Orbitron; font-weight: 900; font-size: 34px; }
+  .sec-title { font-size: 76px; font-weight: 900; margin-top: 26px; }
+  .chip { position: absolute; padding: 20px 34px; border: 2px solid var(--cyan); border-radius: 14px; font-size: 46px; font-weight: 900;
+    color: var(--cyan); background: rgba(0,194,255,.08); box-shadow: 0 0 22px rgba(0,194,255,.35); }
+  .badge { position: absolute; width: 190px; height: 190px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 96px; font-weight: 900; color: #fff; background: radial-gradient(circle at 50% 35%, #132b44, #07111f 78%); }
+  .badge-en { position: absolute; width: 260px; text-align: center; font-family: Orbitron; font-weight: 700; font-size: 26px; letter-spacing: .12em; }
+  .badge-desc { position: absolute; font-size: 40px; font-weight: 700; color: var(--text); }
+  .tick { position: absolute; left: 110px; right: 110px; padding: 22px 30px; border: 1.5px solid rgba(0,194,255,.4); border-radius: 14px;
+    background: rgba(10,26,48,.85); font-size: 42px; font-weight: 700; }
+  .tick i { color: #35e6a8; font-style: normal; margin-right: 16px; }
+  .talent { position: absolute; width: 280px; height: 250px; border: 1.5px solid rgba(0,194,255,.4); border-radius: 18px; background: rgba(10,26,48,.85);
+    display: grid; place-items: center; align-content: center; gap: 10px; text-align: center; }
+  .talent b { width: 92px; height: 92px; display: grid; place-items: center; border: 2px solid var(--cyan); color: var(--cyan); font-size: 50px; font-weight: 900; }
+  .talent span { font-size: 34px; font-weight: 700; }
+  .cta-btn { position: absolute; left: 190px; right: 190px; padding: 34px 0; border-radius: 20px; text-align: center; font-size: 56px; font-weight: 900;
+    color: #04111f; background: linear-gradient(90deg, #168bff, #00c2ff); box-shadow: 0 0 50px rgba(0,194,255,.6); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="fx" width="1080" height="1920"></canvas>
+  <!-- 3D 透明無人機背景（three.js，由 seek(t) 逐格算出） -->
+  <canvas id="gl" width="1080" height="1920" style="position:absolute;inset:0"></canvas>
+  <div class="brand"><div class="mark">FDE</div><div><b>FDE-AI</b><small>無人載具實訓平台</small></div></div>
+
+  <!-- 場景 1：開場 -->
+  <div class="layer" id="s-intro">
+    <div class="h1 glow" id="intro-title" style="top:1080px;font-family:Orbitron;font-size:150px;letter-spacing:.04em">FDE-AI</div>
+    <div class="h1" id="intro-sub" style="top:1270px;font-size:72px">無人載具實訓平台</div>
+    <div class="h1" id="intro-en" style="top:1380px;font-family:Orbitron;font-size:30px;letter-spacing:.3em;color:var(--cyan)">UAS TRAINING PLATFORM</div>
+  </div>
+
+  <!-- 場景 2：我們是誰 -->
+  <div class="layer" id="s-who">
+    <div style="position:absolute;top:300px;left:110px"><span class="sec-no">01</span><div class="sec-title">我們是誰？</div></div>
+    <div class="chip" id="chip0" style="left:110px;top:640px">無人機教育</div>
+    <div class="chip" id="chip1" style="left:560px;top:640px">開源技術</div>
+    <div class="chip" id="chip2" style="left:110px;top:800px">AI 應用</div>
+    <div class="chip" id="chip3" style="left:560px;top:800px">產業實作</div>
+    <div id="who-line" style="position:absolute;left:110px;right:110px;top:1000px;font-size:50px;line-height:1.6;font-weight:700">零基礎 <span style="color:var(--cyan)">→</span> 專業進階<br><span style="color:var(--muted);font-size:40px">無人載具人才實訓平台</span></div>
+  </div>
+
+  <!-- 場景 3：學練做測證 -->
+  <div class="layer" id="s-steps">
+    <div style="position:absolute;top:300px;left:110px"><span class="sec-no">02</span><div class="sec-title">學・練・做・測・證</div></div>
+  </div>
+
+  <!-- 場景 4：已經做到 -->
+  <div class="layer" id="s-done">
+    <div style="position:absolute;top:300px;left:110px"><span class="sec-no">03</span><div class="sec-title">我們已經做了什麼</div></div>
+    <div id="done-num" class="glow" style="position:absolute;left:110px;top:560px;font-size:150px;font-weight:900;color:var(--cyan)">數百名</div>
+    <div style="position:absolute;left:560px;top:640px;font-size:42px;color:var(--muted)">學員培訓經驗</div>
+  </div>
+
+  <!-- 場景 5：培養人才 -->
+  <div class="layer" id="s-talent">
+    <div style="position:absolute;top:300px;left:110px"><span class="sec-no">04</span><div class="sec-title">我們能帶給你什麼？</div></div>
+  </div>
+
+  <!-- 場景 6：行動呼籲 -->
+  <div class="layer" id="s-cta">
+    <div class="h1 glow" style="top:560px;font-size:96px">開始你的</div>
+    <div class="h1 glow" style="top:700px;font-size:96px;color:var(--cyan)">無人機實訓之旅</div>
+    <div class="cta-btn" id="cta-btn" style="top:1000px">立即註冊・加入 FDE-AI</div>
+    <div class="h1" style="top:1190px;font-size:34px;color:var(--muted)">zhangpengya77-tech.github.io/fde-ai/v2</div>
+  </div>
+
+  <div class="sub" id="sub"></div>
+</div>
+
+<script>
+// ───── 時間軸（預設值與 script.json 相同；?timing=6.2,8.1,… 可帶入實際配音長度）─────
+const SCENES = [
+  { id: 'intro',  dur: 6.5,  text: '大家好，我是 FDE-AI 無人載具實訓平台。' },
+  { id: 'who',    dur: 8.5,  text: '我們結合無人機教育、開源技術、AI 應用與產業實作，陪你從零基礎走到專業進階。' },
+  { id: 'steps',  dur: 13.5, text: '在這裡，你會跟著「學、練、做、測、證」五個步驟成長：學基礎課程、練模擬飛行、做 F450 組裝、測 AI 評量、證照與成果紀錄。' },
+  { id: 'done',   dur: 10.0, text: '我們已經培訓數百名學員，平台還有 AI 陪做、飛行日誌健康分析、AI PID 調參與學習成長紀錄。' },
+  { id: 'talent', dur: 9.5,  text: '我們能帶給你系統化的實訓與 AI 陪伴，幫你成為職業飛手、巡檢人才、種子教師，或 AI 無人載具研發人才。' },
+  { id: 'cta',    dur: 6.0,  text: '現在就加入 FDE-AI，開始你的無人機實訓之旅！' },
+];
+const timing = new URLSearchParams(location.search).get('timing');
+if (timing) timing.split(',').map(Number).forEach((d, i) => { if (SCENES[i] && d > 0) SCENES[i].dur = d; });
+let acc = 0; SCENES.forEach((s) => { s.start = acc; acc += s.dur; });
+window.TOTAL = acc;
+
+// ───── 小工具 ─────
+const $ = (s) => document.querySelector(s);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);              // 先快後慢
+const prog = (t, a, d) => ease((t - a) / d);                     // t 在 a 之後 d 秒內從 0→1
+function show(el, p, dy = 40) { el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * dy}px) scale(${0.96 + 0.04 * p})`; }
+
+// ───── 動態建立：學練做測證徽章、勾選清單、人才卡片 ─────
+const STEPS = [['學', 'LEARN', '基礎課程', '0,194,255'], ['練', 'PRACTICE', '模擬飛行', '53,230,168'], ['做', 'BUILD', 'F450 組裝', '255,176,46'], ['測', 'TEST', 'AI 評量', '255,61,240'], ['證', 'CERTIFY', '成果紀錄', '155,123,255']];
+const stepsLayer = $('#s-steps');
+STEPS.forEach(([zh, en, desc, rgb], i) => {
+  const y = 500 + i * 205;
+  stepsLayer.insertAdjacentHTML('beforeend',
+    `<div class="badge" id="b${i}" style="left:120px;top:${y}px;border:4px solid rgb(${rgb});text-shadow:0 0 10px #fff,0 0 26px rgb(${rgb})">${zh}</div>` +
+    `<div class="badge-desc" id="bd${i}" style="left:370px;top:${y + 50}px"><span style="font-family:Orbitron;color:rgb(${rgb});font-size:30px;letter-spacing:.14em">${en}</span><br>${desc}</div>`);
+});
+const TICKS = ['F450 AI 陪做（鏡頭＋語音）', '飛行日誌健康分析', 'AI PID 與濾波實驗室', 'AI 視覺檢測＋教師覆核', '學習成長紀錄（R01–R08）'];
+const doneLayer = $('#s-done');
+TICKS.forEach((txt, i) => doneLayer.insertAdjacentHTML('beforeend', `<div class="tick" id="t${i}" style="top:${800 + i * 120}px"><i>✓</i>${txt}</div>`));
+const TALENTS = [['飛', '職業飛手'], ['巡', '巡檢人才'], ['影', '空拍影視'], ['師', '種子教師'], ['控', '飛控工程師'], ['研', 'AI 研發']];
+const talentLayer = $('#s-talent');
+TALENTS.forEach(([c, n], i) => {
+  const col = i % 3, row = Math.floor(i / 3);
+  talentLayer.insertAdjacentHTML('beforeend', `<div class="talent" id="tl${i}" style="left:${110 + col * 300}px;top:${580 + row * 290}px"><b>${c}</b><span>${n}</span></div>`);
+});
+
+// ───── 背景：網格、粒子、霓虹無人機（canvas 畫，依 t 計算）─────
+const cv = $('#fx'), g = cv.getContext('2d');
+const P = Array.from({ length: 70 }, (_, i) => ({ x: (i * 397) % 1080, y: (i * 911) % 1920, s: 1 + (i % 3), v: 20 + (i % 7) * 9 }));
+function drawBg(t) {
+  g.clearRect(0, 0, 1080, 1920);
+  // 透視網格（合成波風格），緩慢往前流動
+  g.save(); g.globalAlpha = 0.22; g.strokeStyle = '#1fbfff'; g.lineWidth = 1.2;
+  const horizon = 1250, off = (t * 40) % 80;
+  for (let k = 0; k < 18; k++) { const y = horizon + Math.pow((k * 80 + off) / 1440, 1.8) * 700; g.beginPath(); g.moveTo(0, y); g.lineTo(1080, y); g.stroke(); }
+  for (let k = -12; k <= 12; k++) { g.beginPath(); g.moveTo(540 + k * 18, horizon); g.lineTo(540 + k * 160, 1920); g.stroke(); }
+  g.restore();
+  // 上升粒子
+  P.forEach((p) => { const y = (p.y - t * p.v) % 1920; g.fillStyle = `rgba(0,194,255,${0.25 + 0.15 * (p.s - 1)})`; g.beginPath(); g.arc(p.x, y < 0 ? y + 1920 : y, p.s, 0, 7); g.fill(); });
+}
+// 霓虹四旋翼（俯視示意，非寫實）：四槳各自旋轉、相鄰反向，外圈霓虹光環
+function drawDrone(cx, cy, sc, t, alpha) {
+  if (alpha <= 0) return;
+  g.save(); g.globalAlpha = alpha; g.translate(cx, cy + Math.sin(t * 2) * 10 * sc); g.scale(sc, sc);
+  // 光環
+  const grad = g.createLinearGradient(-330, 0, 330, 0); grad.addColorStop(0, '#29f0ff'); grad.addColorStop(0.5, '#ff3df0'); grad.addColorStop(1, '#9b7bff');
+  g.save(); g.rotate(t * 0.6); g.strokeStyle = grad; g.lineWidth = 6; g.shadowColor = '#29f0ff'; g.shadowBlur = 30; g.beginPath(); g.ellipse(0, 0, 330, 330, 0, 0, Math.PI * 1.6); g.stroke(); g.restore();
+  g.save(); g.rotate(-t * 0.9); g.strokeStyle = 'rgba(255,61,240,.7)'; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 290, 0.3, 2.4); g.stroke(); g.restore();
+  // 機臂與機身
+  const arms = [[-1, -1, '#ff3df0'], [1, -1, '#ff3df0'], [-1, 1, '#29f0ff'], [1, 1, '#29f0ff']];
+  g.lineCap = 'round';
+  arms.forEach(([sx, sy, c]) => { g.strokeStyle = c; g.shadowColor = c; g.shadowBlur = 24; g.lineWidth = 16; g.beginPath(); g.moveTo(0, 0); g.lineTo(sx * 150, sy * 150); g.stroke(); });
+  g.shadowBlur = 30; g.shadowColor = '#00c2ff'; g.fillStyle = '#0b1b33'; g.strokeStyle = '#7fe3ff'; g.lineWidth = 4;
+  g.beginPath(); g.roundRect(-62, -62, 124, 124, 22); g.fill(); g.stroke();
+  g.fillStyle = '#00c2ff'; g.font = '900 34px Orbitron'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('FDE', 0, 2);
+  // 四槳：前左／後右順時針，前右／後左逆時針
+  arms.forEach(([sx, sy, c], i) => {
+    const dir = (i === 1 || i === 2) ? -1 : 1;
+    g.save(); g.translate(sx * 150, sy * 150);
+    g.strokeStyle = c; g.lineWidth = 3; g.shadowBlur = 18; g.beginPath(); g.arc(0, 0, 78, 0, 7); g.stroke();
+    g.fillStyle = 'rgba(220,250,255,.12)'; g.beginPath(); g.arc(0, 0, 74, 0, 7); g.fill();
+    g.rotate(dir * t * 14); g.fillStyle = 'rgba(230,252,255,.92)'; g.shadowColor = '#bff8ff';
+    g.beginPath(); g.ellipse(0, 0, 70, 9, 0, 0, 7); g.fill();
+    g.globalAlpha *= 0.35; g.rotate(-dir * 0.35); g.beginPath(); g.ellipse(0, 0, 70, 9, 0, 0, 7); g.fill();
+    g.restore();
+  });
+  g.restore();
+}
+
+// ───── 主要函式：把畫面設成第 t 秒 ─────
+window.seek = function (t) {
+  drawBg(t);
+  const cur = SCENES.find((s) => t >= s.start && t < s.start + s.dur) || SCENES[SCENES.length - 1];
+  // 場景淡入淡出（每段前 0.5 秒淡入、後 0.4 秒淡出）
+  SCENES.forEach((s) => {
+    const el = $('#s-' + s.id), lt = t - s.start;
+    const a = clamp(lt / 0.5) * clamp((s.dur - lt) / 0.4 + (s.id === 'cta' ? 1 : 0));
+    el.style.opacity = (lt >= 0 && lt <= s.dur) ? a : 0;
+  });
+  const L = (id) => t - SCENES.find((s) => s.id === id).start;
+  // 開場：無人機飛入＋標題
+  const li = L('intro');
+  const droneIn = SCENES[0].dur;
+  show($('#intro-title'), prog(li, 1.0, 1.0)); show($('#intro-sub'), prog(li, 1.6, 1.0)); show($('#intro-en'), prog(li, 2.2, 1.0));
+  // 我們是誰：四個標籤依序彈出
+  const lw = L('who');
+  for (let i = 0; i < 4; i++) show($('#chip' + i), prog(lw, 0.6 + i * 0.5, 0.6), 60);
+  show($('#who-line'), prog(lw, 3.0, 1.0));
+  // 學練做測證：依序亮起，彩色光暈脈動
+  const ls = L('steps'), per = (SCENES[2].dur - 2.5) / 5;
+  STEPS.forEach(([, , , rgb], i) => {
+    const p = prog(ls, 1.0 + i * per, 0.6);
+    const b = $('#b' + i), d = $('#bd' + i);
+    b.style.opacity = p; d.style.opacity = p;
+    b.style.transform = `scale(${0.6 + 0.4 * p})`; d.style.transform = `translateX(${(1 - p) * 60}px)`;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4 + i);
+    b.style.boxShadow = `0 0 ${20 + 30 * pulse}px rgba(${rgb},${0.5 + 0.4 * pulse}), inset 0 0 24px rgba(${rgb},.45)`;
+  });
+  // 已經做到：數百名放大＋清單逐條打勾
+  const ld = L('done');
+  show($('#done-num'), prog(ld, 0.5, 0.8), 80);
+  TICKS.forEach((_, i) => { const el = $('#t' + i), p = prog(ld, 2.0 + i * 1.0, 0.6); el.style.opacity = p; el.style.transform = `translateX(${(1 - p) * -80}px)`; });
+  // 培養人才：六張卡片依序翻出
+  const lt2 = L('talent');
+  TALENTS.forEach((_, i) => { const el = $('#tl' + i), p = prog(lt2, 0.6 + i * 0.6, 0.6); el.style.opacity = p; el.style.transform = `rotateY(${(1 - p) * 80}deg)`; });
+  // 結尾：無人機回來＋按鈕發光
+  const lc = L('cta');
+  const btn = $('#cta-btn'); show(btn, prog(lc, 1.0, 0.8)); btn.style.boxShadow = `0 0 ${40 + 30 * Math.sin(t * 5)}px rgba(0,194,255,.7)`;
+  // 字幕：目前場景的旁白
+  const sub = $('#sub'); if (sub.dataset.id !== cur.id) { sub.textContent = cur.text; sub.dataset.id = cur.id; }
+  sub.style.opacity = clamp((t - cur.start) / 0.3);
+  if (window.render3d) window.render3d(t, cur.id, t - cur.start, cur.dur);
+};
+// 字型與 3D 模型都載好才算準備完成（錄製程式會等 READY）
+Promise.all([document.fonts.ready, new Promise((r) => { window.__glReady = r; })]).then(() => { window.READY = true; seek(Number(new URLSearchParams(location.search).get('t') || 0)); });
+</script>
+
+<script type="importmap">{"imports":{"three":"/f450-twin/vendor/three/three.module.min.js"}}</script>
+<script type="module">
+// ───── 3D 透明無人機背景：玻璃質感＋青色輪廓，四槳獨立旋轉（相鄰反向），完全依 t 計算 ─────
+import * as THREE from 'three';
+import { GLTFLoader } from '/f450-twin/vendor/three/addons/loaders/GLTFLoader.js';
+const canvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(1080, 1920, false); renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1080 / 1920, 10, 8000);
+scene.add(new THREE.HemisphereLight(0xbfefff, 0x02080f, 1.0));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(300, 600, -400); scene.add(key);
+const rim = new THREE.PointLight(0x22d3ff, 2.4, 0, 0); rim.position.set(-450, 120, 300); scene.add(rim);
+const drone = new THREE.Group(); scene.add(drone);
+const props = [];
+const glass = (o) => new THREE.MeshStandardMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, metalness: 0.2, roughness: 0.08, ...o });
+const gltf = await new GLTFLoader().loadAsync('/f450-twin/models/f450-l2-r4-preview-assembly.glb');
+const meshes = []; gltf.scene.traverse((n) => { if (n.isMesh) meshes.push(n); });
+meshes.forEach((m) => {
+  const label = String(m.name || m.parent?.name || '').replace(/_/g, ' ');
+  m.geometry.computeBoundingBox();
+  const pm = label.match(/propeller\s+(FL|FR|RL|RR)/i);
+  if (pm) {
+    const c = m.geometry.boundingBox.getCenter(new THREE.Vector3());
+    const geo = m.geometry.clone(); geo.translate(-c.x, -c.y, -c.z);
+    const pivot = new THREE.Group(); pivot.position.copy(c).add(m.position);
+    pivot.add(new THREE.Mesh(geo, glass({ color: 0xe8f6ff, emissive: 0x3fc8ff, emissiveIntensity: 0.5, opacity: 0.85 })));
+    [0.22, 0.44].forEach((lag, i) => { const gm = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x8fe8ff, transparent: true, opacity: i ? 0.1 : 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })); gm.rotation.y = lag; pivot.add(gm); });
+    const pos = pm[1].toUpperCase();
+    props.push({ pivot, dir: pos === 'FR' || pos === 'RL' ? 1 : -1, speed: 22 + props.length * 0.9 });
+    drone.add(pivot); m.parent?.remove(m); return;
+  }
+  const n = label.toLowerCase();
+  const mat = n.includes('motor') ? glass({ color: 0x7fe6ff, emissive: 0x16c8ff, emissiveIntensity: 0.9, opacity: 0.8 })
+    : n.includes('pixhawk') ? glass({ color: 0x0c1a26, emissive: 0x0b5f95, emissiveIntensity: 0.6, opacity: 0.85 })
+    : glass({ color: 0xdff4ff, emissive: 0x0a5a7a, emissiveIntensity: 0.3, opacity: n.includes('latticearm') ? 0.3 : 0.26 });
+  m.material = mat;
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 28), new THREE.LineBasicMaterial({ color: 0x7fe3ff, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending })));
+});
+drone.add(gltf.scene);
+// 每個場景的無人機位置／大小／透明度：開場與結尾在前景，中段退到背景當襯底
+const LOOK = { intro: [0, 150, 0.55, 1.0], who: [0, -170, 0.6, 0.3], steps: [70, -120, 0.55, 0.2], done: [-40, -150, 0.6, 0.26], talent: [40, -160, 0.6, 0.26], cta: [0, -270, 0.5, 0.95] };
+let prevLook = LOOK.intro;
+function lerp(a, b, k) { return a + (b - a) * k; }
+window.render3d = function (t, id, lt, dur) {
+  props.forEach((p) => { p.pivot.rotation.y = p.dir * p.speed * t; });          // 四槳各自旋轉
+  const target = LOOK[id] || LOOK.intro, k = Math.min(1, lt / 1.2), e = 1 - Math.pow(1 - k, 3);
+  const L = target.map((v, i) => lerp(prevLook[i], v, e));
+  if (k >= 1) prevLook = target;
+  drone.position.set(L[0], L[1] + Math.sin(t * 1.4) * 8, 0);
+  drone.rotation.set(-0.05 + Math.sin(t * 0.7) * 0.03, 0.5 + t * 0.12, Math.sin(t * 0.55) * 0.05);
+  drone.scale.setScalar(L[2]);
+  canvas.style.opacity = L[3];
+  camera.position.set(0, 520, -1500); camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+};
+window.__glReady();
+</script>
+</body>
+</html>

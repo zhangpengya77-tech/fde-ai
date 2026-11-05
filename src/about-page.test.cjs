@@ -37,10 +37,18 @@ test('關於我們頁：四個層次與分開呈現的教學實績', () => {
 
 test('關於我們頁：所有連結都指向既有真實頁面', () => {
   const about = html.slice(html.indexOf('id="about"'), html.indexOf('</section>', html.indexOf('id="about"')));
-  const allowed = new Set(['./courses', './simulator', './f450', './eagle', './results', '/student/growth/', '/live/', '/flight-health/', '/pid-lab/', '/downloads/', '/register/', '/login/']);
+  // 2026-11-06：加入介紹影片後，影片的備用下載連結也算既有檔案
+  const allowed = new Set(['./courses', './simulator', './f450', './eagle', './results', '/student/growth/', '/live/', '/flight-health/', '/pid-lab/', '/downloads/', '/register/', '/login/', './src/assets/about-intro.mp4']);
   const links = [...about.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
   assert.ok(links.length >= 15);
   for (const link of links) assert.ok(allowed.has(link), `連結 ${link} 必須是既有頁面`);
+});
+
+test('關於我們頁：介紹影片在最上方，影片與封面檔案存在', () => {
+  const about = html.slice(html.indexOf('id="about"'), html.indexOf('</section>', html.indexOf('id="about"')));
+  assert.ok(about.indexOf('class="about-video"') < about.indexOf('class="section-intro"'), '影片要在文字介紹之前');
+  assert.match(about, /<video controls playsinline preload="metadata"/);
+  for (const f of ['about-intro.mp4', 'about-intro-poster.jpg']) assert.ok(fs.existsSync(path.join(__dirname, 'assets', f)), f);
 });
 
 test('首頁與右上角入口未被修改', () => {
