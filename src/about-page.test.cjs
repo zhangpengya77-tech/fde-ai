@@ -9,8 +9,10 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 const router = fs.readFileSync(path.join(__dirname, 'router.js'), 'utf8');
 
-test('左側導航：12 任務地圖改為關於我們，其他項目保留', () => {
-  assert.match(app, /\{ key: 'about', label: '關', title: '關於我們 About FDE-AI' \}/);
+test('關於我們入口在左上角品牌（點我），導航不再有 12 任務地圖，其他項目保留', () => {
+  assert.match(html, /<a class="brand-about" href="\.\/about" data-route="about"/, '左上角品牌連到關於我們');
+  assert.match(html, /<a class="mobile-menu-brand brand-about" href="\.\/about" data-route="about"/, '手機選單最上方連到關於我們');
+  assert.match(html, /class="nav-cta">點我 CLICK/, '有「點我」提示');
   assert.doesNotMatch(app, /title: '12 任務地圖'/, '導航不再顯示 12 任務地圖');
   for (const item of ["label: '健'", "label: '調'", "key: 'cohorts'", "key: 'teacher'", '...moduleSections']) {
     assert.ok(app.includes(item), `保留導航項目 ${item}`);

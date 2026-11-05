@@ -80,20 +80,27 @@ function escapeHtml(value) {
 
 function renderNavigation() {
   const primaryNav = [
-    // 2026-11-05：原「12 任務地圖」入口改為「關於我們」；12 任務資料與 /platform/tasks 路由保留不刪
-    { key: 'about', label: '關', title: '關於我們 About FDE-AI' },
+    // 2026-11-06：「關於我們」入口移到左上角品牌（點我），導航從「學」開始；12 任務資料與 /platform/tasks 路由保留不刪
     ...moduleSections,
     { label: '健', title: '飛行健康 AI / Flight Health', href: '/flight-health/' },
     { label: '調', title: 'AI PID 與濾波實驗室 / AI PID & Filter Lab', href: '/pid-lab/' },
     { key: 'cohorts', label: '展', title: '歷屆學員成果' },
     { key: 'teacher', label: '師', title: '教師復核中心' }
   ];
+  // 2026-11-06：左側導航改為「藍底圓形徽章（繁體楷書大字）＋下方英文小字」，旁邊的項目名稱縮小。
+  // 學練做測證是核心五步，徽章再大一號（is-core）。
+  const NAV_EN = { 關: 'ABOUT', 學: 'LEARN', 練: 'PRACTICE', 做: 'BUILD', 作: 'BUILD', 測: 'TEST', 證: 'CERTIFY', 健: 'HEALTH', 調: 'TUNE', 展: 'SHOWCASE', 師: 'TEACHER' };
+  const CORE = new Set(['學', '練', '做', '作', '測', '證']);
   $('#moduleNav').innerHTML = primaryNav
     .map(
       (section) =>
-        `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''}><span>${section.label}</span>${section.title}</a>`
+        `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''} class="nav-item${CORE.has(section.label) ? ' is-core' : ''}">` +
+        `<span class="nav-badge" aria-hidden="true"><b class="nav-zh">${section.label}</b><small class="nav-en">${NAV_EN[section.label] || ''}</small></span>` +
+        `<em class="nav-title">${section.title}</em></a>`
     )
     .join('');
+  // 系統關閉動畫效果時預設不播放徽章動畫；驗收時可加 ?motion=1 強制播放
+  if (new URLSearchParams(window.location.search).get('motion') === '1') document.documentElement.classList.add('force-motion');
 
   // 手機左側抽屜直接沿用桌面左側欄的導航，避免兩份清單各自維護而走樣。
   const mobileNavList = document.getElementById('mobileNavList');
