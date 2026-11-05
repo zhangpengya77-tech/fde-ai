@@ -1,0 +1,80 @@
+{% comment %}
+2026-11-06：登入欄位的「貼上」「顯示」小按鈕（學員、教師登入共用）
+   起因：iPhone 點欄位時「粘貼」泡泡被擠到最上方狀態列附近，使用者找不到；
+   做法：每個欄位旁放「📋 貼上」按鈕，讀剪貼簿後自動去掉前後空白與換行；密碼欄另有「顯示」切換。
+   不支援讀剪貼簿的瀏覽器會改為提示「請長按欄位選『貼上』」，不影響原本手動輸入。
+{% endcomment %}
+<style>
+  .paste-row { display: flex; gap: 8px; align-items: stretch; }
+  .paste-row input { flex: 1 1 auto; min-width: 0; }
+  .paste-btn {
+    flex: 0 0 auto; padding: 0 12px; border: 1px solid #2c8fa8; border-radius: 6px;
+    background: #eaf6f9; color: #145a6b; font-size: 15px; font-weight: 700; white-space: nowrap;
+  }
+  .paste-btn:active { background: #cfeaf1; }
+  .paste-hint { margin: 6px 0 0; color: #b4541a; font-size: 14px; }
+</style>
+<script>
+  (function () {
+    // 讀剪貼簿並去掉前後空白／換行（例如從 txt 複製密碼時多帶的換行）
+    async function pasteInto(input, hint) {
+      hint.textContent = '';
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.readText) throw new Error('unsupported');
+        const text = (await navigator.clipboard.readText()).trim();
+        if (!text) { hint.textContent = '剪貼簿是空的，請先複製帳號或密碼。'; return; }
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      } catch (error) {
+        // iPhone／部分瀏覽器不允許網頁直接讀剪貼簿時，改為提示手動貼上
+        input.focus();
+        hint.textContent = '請長按這個欄位，再點「粘貼／貼上」。';
+      }
+    }
+
+    const form = document.currentScript.closest('.form-panel')?.querySelector('form');
+    if (!form) return;
+    form.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]').forEach((input) => {
+      const row = document.createElement('div');
+      row.className = 'paste-row';
+      input.parentNode.insertBefore(row, input);
+      row.appendChild(input);
+
+      const hint = document.createElement('p');
+      hint.className = 'paste-hint';
+      hint.setAttribute('aria-live', 'polite');
+      row.after(hint);
+
+      const pasteBtn = document.createElement('button');
+      pasteBtn.type = 'button';
+      pasteBtn.className = 'paste-btn';
+      pasteBtn.textContent = '📋 貼上';
+      pasteBtn.setAttribute('aria-label', '貼上剪貼簿內容到「' + (form.querySelector('label[for="' + input.id + '"]')?.textContent || '此欄位') + '」');
+      pasteBtn.addEventListener('click', () => pasteInto(input, hint));
+      row.appendChild(pasteBtn);
+
+      if (input.type === 'password') {
+        const showBtn = document.createElement('button');
+        showBtn.type = 'button';
+        showBtn.className = 'paste-btn';
+        showBtn.textContent = '顯示';
+        showBtn.addEventListener('click', () => {
+          const hidden = input.type === 'password';
+          input.type = hidden ? 'text' : 'password';
+          showBtn.textContent = hidden ? '隱藏' : '顯示';
+        });
+        row.appendChild(showBtn);
+      }
+
+      // 手動長按貼上時也自動去掉前後空白與換行（只處理帳號欄；密碼欄不改動使用者輸入的內容）
+      if (input.type !== 'password') {
+        input.addEventListener('change', () => { input.value = input.value.trim(); });
+      }
+    });
+    // 送出前再保險一次：帳號欄去前後空白
+    form.addEventListener('submit', () => {
+      form.querySelectorAll('input[type="text"], input[type="email"]').forEach((i) => { i.value = i.value.trim(); });
+    });
+  })();
+</script>
