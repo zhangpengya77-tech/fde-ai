@@ -33,6 +33,8 @@
       }
     }
 
+    // 頁面引入本檔時若帶 no_paste=True，就不顯示「貼上」按鈕（只留「顯示密碼」）
+    const withPaste = {% if no_paste %}false{% else %}true{% endif %};
     const form = document.currentScript.closest('.form-panel')?.querySelector('form');
     if (!form) return;
     form.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]').forEach((input) => {
@@ -52,7 +54,7 @@
       pasteBtn.textContent = '📋 貼上';
       pasteBtn.setAttribute('aria-label', '貼上剪貼簿內容到「' + (form.querySelector('label[for="' + input.id + '"]')?.textContent || '此欄位') + '」');
       pasteBtn.addEventListener('click', () => pasteInto(input, hint));
-      row.appendChild(pasteBtn);
+      if (withPaste) row.appendChild(pasteBtn);
 
       if (input.type === 'password') {
         const showBtn = document.createElement('button');
