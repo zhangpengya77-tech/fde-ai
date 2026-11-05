@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FDE-AI | 無人載具學習控制中心</title>
-    <link rel="stylesheet" href="./src/styles.css?v=1.6-hero-style" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.7-twin12" />
   </head>
   <body class="home-view">
     <aside class="sidebar">
@@ -314,14 +314,16 @@
               <h3>F450 數位孿生</h3>
               <span class="pill">3D 互動拆解</span>
             </div>
-            <p>在瀏覽器裡旋轉、縮放真實比例的 F450 教學模型，拆開看每個零件在哪裡、做什麼。</p>
+            <!-- 2026-11-06：入口說明改為數位孿生 1.2（含真機實拍對照）的實際功能 -->
+            <p>數位孿生 1.2：依教師 F450 實機照片建模，可和真機實拍照片逐一對照，拆開看每個零件在哪裡、做什麼。</p>
             <ul class="f450-twin-feature-list">
-              <li><b>可用</b>360° 旋轉、雙指／滾輪縮放，等軸測、上視、右視、前視</li>
-              <li><b>可用</b>點選零件看中文名稱、功能、型號與驗證狀態；單獨顯示、聚焦</li>
-              <li><b>可用</b>拖動滑桿爆炸拆解，一鍵復原</li>
-              <li><b class="dev">開發中</b>接收機 3D 零件、線材接線教學、槳葉旋向標示、實機尺寸量測</li>
+              <li><b>可用</b>360° 旋轉、縮放，切換視角；「📷 實拍對照」自動顯示同角度的真機照片</li>
+              <li><b>可用</b>點選零件看中文名稱、型號、功能與真機實拍特寫（Pixhawk 2.4.8、R9DS 接收機、A2212 馬達等）</li>
+              <li><b>可用</b>一鍵／逐層爆炸拆解、組裝步驟自動播放、接線圖、檢查清單</li>
+              <li><b>可用</b>兩點量測與 3D 尺寸標註</li>
+              <li><b class="dev">核對中</b>依 F450＋Pixhawk 2.4.8 參照文件逐項核對型號與尺寸（文件待教師提供）</li>
             </ul>
-            <p class="build-legacy-note">教學實機：紅白 F450 機架、Pixhawk 2.4.8、RadioLink AT9S 接收機、2212 馬達、9450 槳、4S LiPo、四顆電調、GPS／羅盤。模型為照片參考級，除 450 mm 軸距外尺寸未量測，不是 1:1 工程復刻。</p>
+            <p class="build-legacy-note">教學實機：紅白 F450 機架、Pixhawk 2.4.8、RadioLink AT9S 遙控器＋R9DS 接收機、A2212 930KV 馬達、945 槳、30A 電調 ×4、4S 電池、M8N 類 GPS。標示「待實機核對」的項目尚未確認，模型不是 1:1 工程復刻。</p>
             <a class="primary-action build-f450-twin-entry" id="buildF450TwinEntry" href="/f450-twin/">打開 F450 數位孿生 →</a>
           </div>
         </div>
