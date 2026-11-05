@@ -3733,3 +3733,28 @@ a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba
 @media (min-width: 1101px) {
   #home.hero { grid-template-columns: minmax(0, 1.3fr) minmax(300px, 460px); gap: 36px; }
 }
+
+/* ── 2026-11-06：「關於我們」最上方的介紹影片（直式 9:16）：置中、霓虹邊框；手機滿版寬 ── */
+.about-video {
+  margin: 0 auto 28px;
+  width: min(100%, 400px);
+  text-align: center;
+}
+.about-video video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 78vh;
+  border-radius: 18px;
+  border: 1.5px solid rgba(0, 194, 255, 0.55);
+  background: #050b18;
+  box-shadow: 0 0 34px rgba(0, 194, 255, 0.28);
+  object-fit: contain;
+}
+.about-video figcaption {
+  margin-top: 12px;
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}

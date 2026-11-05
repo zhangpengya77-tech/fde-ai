@@ -18,7 +18,7 @@
     <!-- 2026-11-06：導航徽章字型：中文用標準楷書（電腦有標楷體就用標楷體，手機用霞鶩文楷 TC，只載入 10 個字）、英文 Orbitron -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@700&text=%E5%AD%B8%E7%B7%B4%E5%81%9A%E4%BD%9C%E6%B8%AC%E8%AD%89%E5%81%A5%E8%AA%BF%E5%B1%95%E5%B8%AB&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" />
-    <link rel="stylesheet" href="./src/styles.css?v=1.14-pages-neon-nav" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.15-pages-about-video" />
   </head>
   <body class="home-view">
     <aside class="sidebar">
@@ -187,6 +187,15 @@
            內容分四層：我們是誰／我們做什麼／已經做到什麼（教學實績與平台功能分開）／培養哪些人才。
            所有按鈕都連到既有真實頁面。 -->
       <section class="section-block module-page about-page" id="about">
+        <!-- 2026-11-06：「關於我們」介紹影片放在最上方（58 秒，台灣口音配音＋繁體字幕），下面才是文字介紹。
+             playsinline：iPhone 在頁面內播放不強制全螢幕；影片放在 /f450-twin/media/（支援分段下載，iPhone 才能播放）；preload="metadata"：先只載入封面與長度，按播放才下載影片 -->
+        <figure class="about-video">
+          <video controls playsinline preload="metadata" poster="./src/assets/about-intro-poster.jpg" aria-label="FDE-AI 關於我們介紹影片">
+            <source src="./f450-twin/media/about-intro.mp4" type="video/mp4" />
+            你的瀏覽器無法播放影片，<a href="./f450-twin/media/about-intro.mp4">點這裡下載觀看</a>。
+          </video>
+          <figcaption>▶ 一分鐘認識 FDE-AI 無人載具實訓平台</figcaption>
+        </figure>
         <div class="section-intro">
           <p class="eyebrow">About FDE-AI · 關於我們</p>
           <h2>關於我們 About FDE-AI</h2>
