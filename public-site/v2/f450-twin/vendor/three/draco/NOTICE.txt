@@ -1,0 +1,5 @@
+Draco 3D 幾何壓縮解碼器（draco_decoder.js、draco_decoder.wasm、draco_wasm_wrapper.js）
+來源：three.js 0.181.2 examples/jsm/libs/draco/gltf（隨 three.js 發布）
+原始專案：https://github.com/google/draco
+授權：Apache License 2.0（Copyright Google LLC）
+用途：解壓縮 f450-l2-r7-twin.glb 的 KHR_draco_mesh_compression 網格。

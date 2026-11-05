@@ -1,0 +1,383 @@
+// F450 數位孿生 2.0｜零件教學資料
+// 原則：
+//   1. 只有 VERIFIED（已核對實機尺寸與外觀）才可宣稱實機 1:1；本版沒有任何零件達到 VERIFIED。
+//   2. 「實際尺寸與重量」只在已實機核實時顯示；其餘一律顯示「待實機核對」。
+//   3. 接線與接口依公開文件整理，標示「待實機核對」，不提供可能造成設備損壞的腳位級指示。
+//   4. 不混用不同版本 Pixhawk 的引腳定義；本頁只列 Pixhawk 1（FMUv2）／2.4.8 相容機的接口名稱與用途。
+
+export const STATUS = {
+  VERIFIED: { zh: '已核對實機', tone: 'ok' },
+  REFERENCE: { zh: '依可信資料建模，待實機核對', tone: 'ref' },
+  PLACEHOLDER: { zh: '暫時示意，待替換', tone: 'ph' },
+};
+
+export const LAYERS = {
+  1: '第一層｜機架、上下中心板、機臂',
+  2: '第二層｜馬達、槳葉、ESC',
+  3: '第三層｜Pixhawk、接收機、GPS',
+  4: '第四層｜電池、電池艙、電源模組、配電',
+  5: '第五層｜線材、固定件、其他配件',
+};
+
+const PENDING = '待實機核對';
+
+export const PARTS = {
+  arm: {
+    zh: 'F450 機臂（紅 ×2、白 ×2）', en: 'Frame arms', layer: 1, status: 'REFERENCE',
+    model: '對應 DJI 手冊 450FAC（彩色）×2、450FAW（白色）×2；實機料號待核對',
+    func: '連接中心板與馬達，承受推力與降落衝擊；端部圓座安裝馬達。',
+    size: PENDING,
+    position: '四支呈 X 型；根部夾在上下中心板之間。紅臂建議朝機頭（DJI 手冊：同色臂同方向），本機機頭方向待教師確認。',
+    ports: '無電氣接口；臂內可走 ESC 線與馬達線。',
+    links: '上下中心板（螺絲固定）、馬達（端部圓座）、ESC（束帶固定於臂下）、腳架。',
+    caution: ['螺絲使用適量螺絲膠，避免鬆脫或滑牙。', '紅白臂方向要一致，否則飛控方向設定會出錯。'],
+    faults: ['機臂裂紋：檢查根部與端部圓座附近。', '馬達座鬆動：手扶槳軸輕搖，聽有無異音。'],
+    source: '教師真機照片（IMG_8263、8277、8352）；DJI F450 手冊 V2.2 p.4、p.8',
+  },
+  bottom_plate: {
+    zh: '下中心板（配電板）', en: 'Bottom board / power distribution', layer: 1, status: 'REFERENCE',
+    model: '對應 DJI 450FBB（含電源焊盤）；實機料號待核對',
+    func: '機架下層結構，同時是配電板：電池電源經此分配給四顆 ESC。',
+    size: PENDING,
+    position: '機臂根部下方；焊盤面朝上（DJI 手冊）。',
+    ports: '四組 ESC 正負極焊盤、一組電池主電源焊盤。',
+    links: '機臂、ESC 電源線、電源模組輸出、電池托板。',
+    caution: ['焊接前斷電；紅線正極、黑線負極，焊點需絕緣。', '確認沒有短路才可接電池。'],
+    faults: ['冷焊或虛焊：輕拉線材檢查；用萬用表量通斷。', '焊錫橋接短路：通電前量正負極間阻值。'],
+    source: 'DJI F450 手冊 V2.2 p.4、p.6–7；教師真機照片',
+  },
+  top_plate: {
+    zh: '上中心板', en: 'Top board', layer: 1, status: 'REFERENCE',
+    model: '對應 DJI 450FBT；實機料號待核對',
+    func: '機架上層結構，提供飛控、接收機、GPS 的安裝平面。',
+    size: PENDING,
+    position: '機臂根部上方，與下中心板夾住機臂。',
+    ports: '無電氣接口。',
+    links: '機臂（螺絲）、Pixhawk（泡棉雙面膠）、GPS 支架、接收機。',
+    caution: ['裝上板前先整理好線材，避免線被板邊壓傷（DJI 手冊）。'],
+    faults: ['螺絲鬆動造成機架晃動：逐一檢查四臂螺絲。'],
+    source: 'DJI F450 手冊 V2.2 p.7；教師真機照片',
+  },
+  motor: {
+    zh: '2212 無刷外轉子馬達', en: 'Brushless outrunner motor 2212', layer: 2, status: 'REFERENCE',
+    model: 'A2212/13T 930KV（照片貼紙 IMG_8379；品牌待核對）',
+    func: '把 ESC 輸出的三相電轉成旋轉動力，帶動槳葉產生推力。',
+    size: PENDING,
+    position: '四支機臂端部圓座上；旋向依 Quad X：右前、左後逆時針（CCW），左前、右後順時針（CW），待實機核對。',
+    ports: '三條相線接 ESC；交換任兩條即可改變旋向（DJI 手冊）。',
+    links: '機臂端部圓座（M3 螺絲）、ESC、槳葉。',
+    caution: ['螺絲過長會頂到線圈，選用正確長度（DJI 手冊）。', '測試轉向一律拆槳。'],
+    faults: ['轉動卡頓或異音：拆槳後手轉檢查軸承。', '馬達過熱：檢查槳是否過大或 ESC 設定。'],
+    source: '教師真機照片 IMG_8379（貼紙 A2212/13T 930KV、金色轉子罩、紅色槳夾）、IMG_8263；DJI F450 手冊 V2.2 p.5',
+  },
+  prop: {
+    zh: '945 雙葉槳（含子彈槳帽）', en: '945 two-blade propeller', layer: 2, status: 'REFERENCE',
+    model: '945（直徑 9.4 吋；螺距 4.5 或 5.0 吋待核對）',
+    func: '把馬達旋轉轉成升力；CW 與 CCW 槳成對使用以抵消反扭力。',
+    size: PENDING,
+    position: '馬達軸頂端；CW／CCW 必須與馬達旋向一致（模型依 Quad X 標準示意）。',
+    ports: '無。',
+    links: '馬達槳軸、子彈型槳帽（正反牙待核對）。',
+    caution: ['⚠ 完成飛控設定、轉向測試後才裝槳（DJI 手冊）。', '⚠ 任何通電調試前先拆槳。', '槳葉的字面朝上，鎖緊方向依槳帽標示。'],
+    faults: ['槳葉裂紋或缺角：立即更換。', '飛行抖動：檢查槳是否裝反或未鎖緊。'],
+    source: 'DJI F450 手冊 V2.2 p.6、p.8；ArduPilot／PX4 Quad X 旋向標準',
+  },
+  esc: {
+    zh: '電子變速器 ESC ×4', en: 'Electronic speed controller', layer: 2, status: 'REFERENCE',
+    model: '30A 級（品牌型號待核對；照片可見黃色熱縮）',
+    func: '依飛控 PWM 訊號，把電池直流電轉成馬達需要的三相驅動。',
+    size: PENDING,
+    position: '以束帶固定在四支機臂下方／側邊。',
+    ports: '電源線（接下中心板焊盤）、三相線（接馬達）、訊號線（接 Pixhawk MAIN OUT）。',
+    links: '下中心板、馬達、Pixhawk MAIN OUT 1–4。',
+    caution: ['訊號線顏色依 ESC 品牌而定，接線前對照說明書，待實機核對。', 'ESC 油門行程校準時必須拆槳。'],
+    faults: ['開機長嗶聲：可能無訊號或油門不在最低（DJI 手冊）。', '單顆馬達不轉：檢查訊號線是否接對 MAIN 編號。'],
+    source: 'DJI F450 手冊 V2.2 p.6、p.8；教師真機照片',
+  },
+  pixhawk: {
+    zh: 'Pixhawk 2.4.8 飛行控制器', en: 'Pixhawk 2.4.8 flight controller', layer: 3, status: 'REFERENCE',
+    model: 'Pixhawk 2.4.8（照片 IMG_8352 外殼印字「pixhawk 2.4.8」）',
+    func: '接收感測器資料與遙控指令，執行姿態控制、導航與飛行模式管理（定高、定點、任務、返航等）。',
+    size: PENDING,
+    position: '上中心板中央，以減震泡棉固定；外殼箭頭指向機頭。教師安裝指導：盡可能靠近機體重心，用附贈泡棉固定，確保機身水平。',
+    ports: [
+      ['MAIN OUT 1–8（尾端排針）', '主輸出；多旋翼接 ESC 訊號（Quad X 用 1–4）'],
+      ['AUX OUT 1–6（尾端排針）', '輔助輸出（雲台、繼電器等）'],
+      ['RC（尾端排針）', '遙控接收機輸入（S.BUS／PPM／Spektrum）；只能接接收機'],
+      ['SB（尾端排針）', 'S.BUS 輸出'],
+      ['POWER', '接電源模組：供電並量測電壓、電流'],
+      ['GPS', '接 GPS 模組（串列埠）'],
+      ['I2C', '外接羅盤或 I2C 分接板'],
+      ['TELEM 1／TELEM 2', '數傳電台、OSD 或機載電腦'],
+      ['SWITCH／BUZZER', '安全開關、蜂鳴器'],
+      ['SPKT/DSM', 'Spektrum DSM 衛星接收機'],
+      ['SERIAL 4/5', '兩組序列埠共用一個接頭（含除錯主控台）'],
+      ['CAN、SPI、ADC 3.3V／6.6V', '擴充匯流排與類比輸入'],
+      ['USB（側面 micro-USB）', '連接地面站調參'],
+    ],
+    portsNote: '接口名稱與排列依 PX4 User Guide 的 Pixhawk 1 接口圖（CC BY 4.0）。尾端排針三列由上到下為地、電源、訊號。2.4.8 相容機常改用 Molex PicoBlade 接頭，與原版 DF13 不可混用；以外殼印字為準，待實機核對。本頁不提供腳位定義。',
+    links: '接收機（RC IN）、GPS（GPS／I2C）、電源模組（POWER）、ESC（MAIN OUT）。',
+    caution: ['箭頭必須朝機頭；若裝反要在地面站設定方向。',
+      '刷韌體：飛控板上有「V3.0」字樣選 fmuv3，否則選 fmuv2（教師安裝指導）。',
+      '解鎖：先長按安全開關到燈由閃爍變常亮，再油門最低＋方向最右維持 5 秒以上；15 秒內沒操作會自動上鎖。上鎖：油門最低＋方向最左（教師安裝指導）。', 'RC 埠只接遙控接收機；絕對不要把伺服機、電源或電池接到 RC 埠或接在它上面的接收機（PX4 文件警告）。', '伺服排針另需供電；PX4 文件註明排針電壓過高時，若沒有電源模組供電，飛控會停止運作。'],
+    faults: ['無法解鎖：檢查安全開關、校準是否完成、GPS 是否定位。', 'USB 連不上：換線或檢查驅動。'],
+    source: 'PX4 User Guide：Pixhawk 1、mRo Pixhawk 頁（CC BY 4.0，docs.px4.io）；教師提供：APM2.8/Pixhawk2.4.8 無人機飛控安裝指導（PIXHAWK V3.0 說明書，2022.6.23）；教師真機照片（IMG_8352、8263、8379）',
+  },
+  receiver: {
+    zh: 'RadioLink R9DS 接收機', en: 'RadioLink R9DS receiver', layer: 3, status: 'REFERENCE',
+    model: 'RadioLink R9DS V2.1（照片標籤 IMG_8263；相容 AT9S）',
+    func: '接收 2.4 GHz 遙控訊號，以 SBUS 或 PWM 輸出給飛控。',
+    size: PENDING,
+    position: '模型放在上中心板右側（實機位置待核對）；天線保持筆直、互成角度，遠離馬達、ESC 與金屬／碳纖材料至少半吋（官方說明）。',
+    ports: '輸出排針；PWM 模式 9 通道、SBUS 模式 10 通道（官方規格）。實際排針順序依說明書，待實機核對。',
+    links: 'Pixhawk RC 埠（建議用 SBUS 模式；接哪一個腳位依 R9DS 說明書與實機核對）。',
+    caution: ['對頻：遙控器與接收機相距 1 m 內，先開遙控器再上電接收機，按住黑色對頻鈕約 1 秒（官方說明）。', '短按 ID SET 兩下可在 PWM 與 SBUS 之間切換；紅燈為 PWM、藍／紫燈為 SBUS（官方說明）。', '輸出模式要和飛控設定一致；接線前拆槳。'],
+    faults: ['飛控收不到遙控：檢查燈號顏色（模式）、對頻狀態、RC 埠接線方向。', '控制距離不足：檢查天線是否折彎或貼近碳纖、電源線。'],
+    source: 'RadioLink 官方 R9DS 規格頁與說明頁（radiolink.com，僅引用規格）；教師真機照片',
+  },
+  gps: {
+    zh: 'GPS／羅盤模組（M8N 類）', en: 'GPS / compass module', layer: 3, status: 'REFERENCE',
+    model: 'M8N 類 GPS（黑色圓餅、白色圓環與白紅箭頭，照片 IMG_8263、IMG_8352）',
+    func: '提供定位與航向資訊，支援定點、返航與任務飛行。',
+    size: PENDING,
+    position: '上中心板前緣的短支架上；箭頭指向機頭（位置依教師驗收的 R4）。',
+    ports: 'GPS 6pin DF13 接 Pixhawk GPS 埠、羅盤 4pin DF13 接 I2C 埠（教師安裝指導；實機接頭待核對）。',
+    links: 'Pixhawk GPS 埠、I2C 埠。',
+    caution: ['遠離電源線與馬達以降低磁干擾；裝好後做羅盤校準。', 'GPS 箭頭方向要與飛控、機架方向一致；外置羅盤沒校準會解鎖失敗（教師安裝指導）。'],
+    faults: ['衛星數少：到開闊處等待；檢查天線朝上。', '羅盤不一致：重新校準、檢查箭頭方向。'],
+    source: '教師真機照片（IMG_8379、8263）；u-blox NEO-M8 官方資料表 UBX-15031086（僅在內部確為原廠 NEO-M8N 時適用）',
+  },
+  power_module: {
+    zh: '電源模組', en: 'Power module', layer: 4, status: 'REFERENCE',
+    model: 'Pixhawk 常用電源模組（含 XT60 進出；型號與電流量程待核對）',
+    func: '把電池電壓降為 5 V 供飛控，並量測電池電壓與電流。',
+    size: PENDING,
+    position: '模型置於上下中心板之間偏後；實機位置待核對。',
+    ports: 'XT60 輸入（電池）、XT60 輸出（配電板）、6P 線（Pixhawk POWER）。',
+    links: '電池、下中心板（配電）、Pixhawk POWER。',
+    caution: ['XT60 有方向性，不可反插；接電前確認極性。', '電源模組只夠飛控、接收機與少量低功耗周邊，不可用來帶伺服機或高耗電裝置（ArduPilot 文件）。', '分流電阻式模組長時間大電流會發熱，持續電流宜遠低於最大額定（ArduPilot 文件）。'],
+    faults: ['電壓讀值不準：在地面站做電壓校準。', '飛控不開機：檢查 6P 線是否插好。'],
+    source: 'ArduPilot 文件「Common Power Module」（ardupilot.org，CC BY-SA 3.0）',
+  },
+  battery: {
+    zh: '4S LiPo 電池 14.8 V', en: '4S LiPo battery', layer: 4, status: 'PLACEHOLDER',
+    model: '4S（黑色外殼、白色條碼標籤，照片 IMG_8383；容量與品牌待核對）',
+    func: '整機電源。',
+    size: PENDING,
+    position: '下中心板下方的電池托板上，以魔鬼氈帶固定；重心應在機體中心。',
+    ports: 'XT60 放電頭、平衡頭。',
+    links: '電源模組 XT60。',
+    caution: ['電池鼓包立即停用。', '不可過放；儲存時保持儲存電壓。', '充電需有人看管，使用防爆袋。'],
+    faults: ['單片電壓差大：平衡充電或汰換。'],
+    source: 'DJI F450 手冊 V2.2 p.8（3S–4S 規格）；外形為示意',
+  },
+  battery_tray: {
+    zh: '電池托板與固定帶（電池艙）', en: 'Battery tray and straps', layer: 4, status: 'PLACEHOLDER',
+    model: '待核對',
+    func: '承載電池並以魔鬼氈帶固定，防止飛行中滑動。',
+    size: PENDING,
+    position: '下中心板下方。',
+    ports: '無。',
+    links: '下中心板、電池。',
+    caution: ['起飛前確認固定帶拉緊、電池不會前後滑動。'],
+    faults: ['電池滑動造成重心偏移：重新固定並檢查重心。'],
+    source: '教師真機照片（下板下方可見黑色托座）',
+  },
+  power_lead: {
+    zh: '電池主電源線（XT60）', en: 'Main power lead (XT60)', layer: 4, status: 'REFERENCE',
+    model: 'XT60-F/M（Amass 原廠規格；實機是否為原廠品待核對）',
+    func: '連接電池與電源模組。',
+    size: PENDING,
+    position: '機體後方下側；走線與插合深度為示意。',
+    ports: 'XT60 公／母頭：截面 8.1 × 16 mm，公頭長 21.3 mm、母頭長 20.5 mm，一側切角防呆（Amass 圖紙）。',
+    links: '電池、電源模組。',
+    caution: ['插拔時握接頭，不要拉電線。', '依切角方向插入，不可反插或強行插拔。', '原廠額定 35 A max（12AWG），長時間大電流要注意發熱；原廠標示壽命 100 次插拔。'],
+    faults: ['接頭發熱或變色：接觸不良、焊點不良或已超過插拔壽命，應更換。'],
+    source: 'Amass（常州市艾迈斯電子有限公司）官網 XT60-F/M 產品頁與圖紙；走線為示意',
+  },
+  wiring: {
+    zh: '線材（訊號線、電源線、GPS 線）', en: 'Wiring harness', layer: 5, status: 'PLACEHOLDER',
+    model: '示意走線',
+    func: '傳遞訊號與電力；本模型只示意連接關係，不代表實機走線長度與路徑。',
+    size: PENDING,
+    position: '依連接關係示意。',
+    ports: '見「接線介紹」模式。',
+    links: 'ESC→MAIN OUT；接收機→RC IN；GPS→GPS／I2C；電源模組→POWER；ESC 電源→下中心板。',
+    caution: ['所有接線待實機核對後才可通電。', '線材遠離槳葉旋轉範圍，用束帶固定。'],
+    faults: ['接觸不良：輕拉接頭檢查；斷線用萬用表量通斷。'],
+    source: '示意',
+  },
+  fixings: {
+    zh: '固定件（螺絲、束帶、膠帶）', en: 'Fasteners and ties', layer: 5, status: 'REFERENCE',
+    model: 'DJI 手冊附件：M2.5×6 ×24、M3×8 ×16；束帶、膠帶依照片',
+    func: '固定機臂、ESC 與線材。',
+    size: PENDING,
+    position: '機臂根部螺絲、臂上束帶與端部膠帶（位置示意）。',
+    ports: '無。',
+    links: '機臂、中心板、ESC。',
+    caution: ['螺絲加適量螺絲膠；槳帽不可加螺絲膠（DJI 手冊）。'],
+    faults: ['束帶斷裂、膠帶脫落：飛行前檢查並更換。'],
+    source: 'DJI F450 手冊 V2.2 p.4–7；教師真機照片',
+  },
+  landing_leg: {
+    zh: '起落腳架', en: 'Landing legs', layer: 5, status: 'PLACEHOLDER',
+    model: '黑色高腳架（型號待核對）',
+    func: '讓機身與電池離地，降落時提供支撐。',
+    size: PENDING,
+    position: '四支機臂端部下方，以膠帶固定（照片）；R6 已依照片比例改細，尺寸仍待量測。',
+    ports: '無。',
+    links: '機臂。',
+    caution: ['確認四腳高度一致、固定牢靠。'],
+    faults: ['腳架鬆脫或斷裂：降落後檢查。'],
+    source: '教師真機照片（IMG_8383、8379）',
+  },
+};
+
+// 組裝順序（依 DJI F450 手冊 V2.2 p.7 的順序整理；細節待實機核對）
+export const STEPS = [
+  { n: 1, title: '下中心板與 ESC 電源', text: '把四顆 ESC 的電源線焊到下中心板焊盤（焊盤面朝上，紅正黑負），焊點做好絕緣，量測無短路。', safety: false },
+  { n: 2, title: '安裝機臂', text: '用螺絲把四支機臂固定在下中心板（加適量螺絲膠）。紅臂建議同在機頭側（本機待教師確認）。', safety: false },
+  { n: 3, title: '安裝馬達', text: '把四顆 2212 馬達鎖到機臂端部圓座，注意螺絲長度不可頂到線圈；三相線接 ESC。', safety: false },
+  { n: 4, title: '整理線材並裝上中心板', text: '先把線整理好，避免被板邊壓傷，再裝上中心板。', safety: false },
+  { n: 5, title: '電源模組、電池托板與腳架', text: '安裝電源模組（XT60 方向）、下方電池托板，以及四支起落腳架。', safety: false },
+  { n: 6, title: '安裝飛控 Pixhawk', text: '以減震泡棉把 Pixhawk 貼在上中心板中央，箭頭指向機頭。', safety: false },
+  { n: 7, title: '接收機與 GPS', text: '安裝 R9DS 接收機與 GPS 支架；GPS 箭頭指向機頭，遠離電源線。', safety: false },
+  { n: 8, title: '接線與固定', text: '依「接線介紹」連接 ESC→MAIN OUT、接收機→RC IN、GPS、電源模組→POWER；全部接線待實機核對。用束帶固定線材。', safety: false },
+  { n: 9, title: '裝上電池', text: '把 4S 電池放上托板並用固定帶拉緊；此時仍然不裝槳。', safety: true },
+  { n: 10, title: '最後安裝槳葉', text: '完成飛控設定、遙控與 ESC 校準、無槳轉向測試後，才依 CW／CCW 安裝槳葉並鎖緊槳帽。', safety: true },
+];
+
+// 接線介紹：只列連接關係與用途，不提供腳位；全部待實機核對。
+export const WIRING = [
+  ['電池 XT60', '電源模組輸入', '整機主電源；XT60 有方向性'],
+  ['電源模組輸出', '下中心板（配電板）', '把電分給四顆 ESC'],
+  ['電源模組 6P 線', 'Pixhawk POWER', '飛控供電＋電壓電流量測'],
+  ['下中心板焊盤', 'ESC ×4 電源線', '焊接；紅正黑負'],
+  ['ESC 右前', 'MAIN OUT 1（排針訊號列＝最下列）', 'Quad X 標準：右前 CCW'],
+  ['ESC 左後', 'MAIN OUT 2', 'Quad X 標準：左後 CCW'],
+  ['ESC 左前', 'MAIN OUT 3', 'Quad X 標準：左前 CW'],
+  ['ESC 右後', 'MAIN OUT 4', 'Quad X 標準：右後 CW'],
+  ['ESC 三相線', '馬達', '轉向不對時交換任兩條'],
+  ['R9DS 接收機', 'Pixhawk RC 埠（尾端排針最左）', 'R9DS 設為 SBUS 模式；腳位依說明書'],
+  ['GPS 串列線（6pin DF13）', 'Pixhawk GPS', '定位資料（教師安裝指導）'],
+  ['羅盤線（4pin DF13）', 'Pixhawk I2C', '航向資料（教師安裝指導）'],
+  ['安全開關（3pin DF13）', 'Pixhawk SWITCH', '解鎖前長按到燈常亮（教師安裝指導）'],
+  ['蜂鳴器（2pin DF13）', 'Pixhawk BUZZER', '解鎖、故障提示音（教師安裝指導）'],
+];
+
+// 完成檢查（第一項必須是拆槳）
+export const CHECKS = [
+  '⚠ 已拆下全部槳葉，才進行任何通電測試',
+  '四支機臂與中心板螺絲已鎖緊（加螺絲膠）',
+  '紅臂朝機頭，Pixhawk 與 GPS 箭頭都指向機頭',
+  '電源極性與焊點已用萬用表確認無短路',
+  'ESC 訊號線依 MAIN OUT 1–4 順序接好（待實機核對）',
+  '地面站完成加速度計、羅盤、遙控器校準',
+  'ESC 油門行程校準完成（拆槳狀態）',
+  '無槳狀態下馬達轉向符合 Quad X（右前、左後 CCW；左前、右後 CW）',
+  '失控保護（Failsafe）已設定並測試；4S 低電壓返航設 15.2 V（教師安裝指導）',
+  '電池電壓正常、固定帶拉緊；最後才依 CW／CCW 裝槳',
+];
+
+// ───────── 參考圖版面用資料 ─────────
+// 規格標記：ref＝依公開資料或型號命名（REFERENCE，非實測）；pending＝待實機核對；verified＝已實機核對（目前沒有）
+export const SPECS = {
+  pixhawk: [['版本', 'Pixhawk 2.4.8（照片可見字樣；Pixhawk 1 相容機）', 'ref'], ['公開外形', '81.5 × 50 × 15.5 mm（PX4 文件）', 'ref'], ['公開重量', '38 g（PX4 文件，mRo Pixhawk）', 'ref'], ['實機尺寸／重量', '待實機核對', 'pending'], ['輸出', 'MAIN 8 路＋AUX 6 路 PWM', 'ref'], ['供電', '電源模組接 POWER 埠', 'ref']],
+  receiver: [['型號（照片）', 'RadioLink R9DS V2.1（IMG_8263 標籤）', 'ref'], ['官方外形', '43 × 24 × 15 mm', 'ref'], ['官方重量', '10.5 g（說明頁寫 9 g，兩頁不一致）', 'ref'], ['輸出', 'SBUS&PWM（PWM 9 通道／SBUS 10 通道）', 'ref'], ['天線長度', '145 mm', 'ref'], ['工作電壓', '官方各頁寫法不一（3.6–12 V／4.8–10 V）', 'pending'], ['實機輸出模式與位置', '待實機核對', 'pending']],
+  motor: [['型號（照片）', 'A2212/13T 930KV（IMG_8379 馬達貼紙）', 'ref'], ['規格', '2212：定子 22 × 12 mm（依型號命名）；13T＝每極 13 匝', 'ref'], ['品牌', '待實機核對', 'pending'], ['固定孔', '常見 16／19 mm、M3（DJI 手冊）', 'ref']],
+  prop: [['規格', '945：直徑 9.4 吋（依型號命名）', 'ref'], ['螺距', '4.5 或 5.0 吋', 'pending'], ['旋向', 'CW ×2、CCW ×2（Quad X）', 'ref']],
+  esc: [['規格', '30A 級', 'ref'], ['品牌／韌體', '待實機核對', 'pending'], ['數量', '4 顆', 'ref']],
+  battery: [['規格', '4S LiPo，標稱 14.8 V', 'ref'], ['低電壓保護', '遠距離每節 3.8 V → 4S 設 15.2 V 返航；近距離每節 3.6 V → 14.4 V（教師安裝指導）', 'ref'], ['容量／放電倍率', '待實機核對', 'pending'], ['接頭', 'XT60', 'ref']],
+  gps: [['型號', 'M8N 類 GPS／羅盤（外殼品牌待核對）', 'ref'], ['接收模組', 'u-blox NEO-M8N：72 通道，預設 GPS＋GLONASS 同時接收', 'ref'], ['水平精度', '2.5 m（有 SBAS 時 2.0 m）', 'ref'], ['更新率', '同時多系統 5 Hz、單一系統最高 10 Hz', 'ref'], ['首次定位', '冷啟動約 26 s、熱啟動約 1 s', 'ref'], ['模組本體', '16.0 × 12.2 × 2.4 mm、1.0 g（僅模組，不是整顆 GPS 外殼）', 'ref'], ['外殼尺寸與實際晶片', '待實機核對', 'pending']],
+  arm: [['對角軸距', '450 mm（DJI 手冊）', 'ref'], ['料號', '450FAC ×2、450FAW ×2', 'ref'], ['機臂長寬厚', '待實機核對', 'pending']],
+  bottom_plate: [['料號', '450FBB（配電板）', 'ref'], ['尺寸', '待實機核對', 'pending']],
+  top_plate: [['料號', '450FBT', 'ref'], ['尺寸', '待實機核對', 'pending']],
+  power_module: [['教師文件規格', '輸入 2–8S、電機輸出最大 90 A、飛控輸出 5.1 V 2 A（教師安裝指導）', 'ref'], ['兩份文件不一致', '教師文件 2–8S／5.1 V 2 A；ArduPilot 文件 18 V／5.37 V 2.25 A，以實機模組標示為準', 'pending'], ['最大輸入電壓', '18 V（4S LiPo；ArduPilot 文件）', 'ref'], ['最大電流', '90 A（量測上限 60 A；分流電阻式不可長時間滿載）', 'ref'], ['供飛控', '5.37 V／2.25 A（可帶飛控、接收機與少量低功耗周邊）', 'ref'], ['介面', '6P 線接 POWER；電池接公頭端、配電板接母頭端', 'ref'], ['實機型號／接頭', '待實機核對', 'pending']],
+  battery_tray: [['外形', '待實機核對', 'pending']],
+  power_lead: [['接頭', 'XT60-F/M（Amass）', 'ref'], ['外形', '截面 8.1 × 16 mm；公 21.3／母 20.5 mm', 'ref'], ['額定電流', '35 A max（12AWG／△≤85K）', 'ref'], ['耐電壓', '600 V DC', 'ref'], ['材料／防護', 'PA／黃銅鍍金；IP40；UL94 V-0', 'ref'], ['插拔壽命', '100 次', 'ref'], ['實機品牌與線徑', '待實機核對', 'pending']],
+  wiring: [['走線', '示意，待實機核對', 'pending']],
+  fixings: [['螺絲', 'M2.5×6 ×24、M3×8 ×16（DJI 手冊附件）', 'ref']],
+  landing_leg: [['高度／型號', '待實機核對', 'pending']],
+};
+
+// 左側「零件選擇」清單：前 7 項對應參考圖，其餘放「其他零件」
+export const PRIMARY = [
+  ['pixhawk', '飛行控制器', 'Pixhawk 2.4.8'],
+  ['receiver', '遙控接收機', 'RadioLink R9DS（AT9S）'],
+  ['motor', '無刷馬達', '2212（945 槳）'],
+  ['esc', '電子變速器（ESC）', '30A'],
+  ['battery', '電池', '4S LiPo（14.8 V）'],
+  ['gps', 'GPS／羅盤模組', 'M8N'],
+  ['arm', '機架', 'F450（紅白臂）'],
+];
+
+// 3D 引線標籤：[零件鍵, 標籤第一行, 第二行, 錨點節點名稱關鍵字]
+export const LABELS = [
+  ['prop', '槳葉', '945（9.4 吋）', 'Prop FL'],
+  ['motor', '無刷馬達', '2212', 'Motor FL'],
+  ['gps', 'GPS／羅盤模組', '', 'GPS M8N'],
+  ['arm', '機臂（紅／白）', '', 'Arm FL'],
+  ['pixhawk', '飛行控制器', 'Pixhawk 2.4.8', 'Pixhawk 2.4.8'],
+  ['receiver', '遙控接收機', 'RadioLink R9DS', 'Receiver R9DS'],
+  ['esc', '電子變速器', 'ESC 30A（×4）', 'ESC RL'],
+  ['bottom_plate', '下層中心板', '（配電板）', 'Bottom plate'],
+  ['battery_tray', '電池固定座', '（電池艙）', 'Battery tray'],
+  ['landing_leg', '起落架', '', 'Landing leg RL'],
+];
+
+// ───────── 接線圖的 3D 連線：對應 WIRING 每一列 [起點零件, 起點節點關鍵字, 終點零件, 終點節點關鍵字, 類型] ─────────
+export const WIRING_LINKS = [
+  ['battery', 'Battery 4S', 'power_module', 'Power module', 'power'],
+  ['power_module', 'Power module', 'bottom_plate', 'Bottom plate', 'power'],
+  ['power_module', 'Power module', 'pixhawk', 'Pixhawk 2.4.8', 'power'],
+  ['bottom_plate', 'Bottom plate', 'esc', 'ESC FR', 'power'],
+  ['esc', 'ESC FR', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+  ['esc', 'ESC RL', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+  ['esc', 'ESC FL', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+  ['esc', 'ESC RR', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+  ['esc', 'ESC FR', 'motor', 'Motor FR', 'power'],
+  ['receiver', 'Receiver R9DS', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+  ['gps', 'GPS M8N', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+  ['gps', 'GPS M8N', 'pixhawk', 'Pixhawk 2.4.8', 'signal'],
+];
+
+// ───────── 尺寸規格：參考尺寸與重量（全部不是本機實測） ─────────
+export const SIZE_REFS = [
+  ['對角軸距', '450 mm', 'DJI F450 手冊 V2.2 p.8', 'ref'],
+  ['相鄰電機間距', '約 318 mm（= 450 ÷ √2，幾何推算）', '由對角軸距推算', 'ref'],
+  ['945 槳直徑', '約 239 mm（9.4 吋，依型號命名）', '型號命名', 'ref'],
+  ['機架重量', '282 g（原廠機架）', 'DJI F450 手冊 V2.2 p.8', 'ref'],
+  ['建議起飛重量', '800–1600 g', 'DJI F450 手冊 V2.2 p.8', 'ref'],
+  ['Pixhawk', '81.5 × 50 × 15.5 mm／38 g', 'PX4 User Guide（CC BY 4.0）', 'ref'],
+  ['R9DS', '43 × 24 × 15 mm／10.5 g（說明頁寫 9 g）', 'RadioLink 官方規格', 'ref'],
+  ['XT60 接頭', '截面 8.1 × 16 mm；公 21.3／母 20.5 mm', 'Amass 官網圖紙', 'ref'],
+  ['GPS 接收模組', '16.0 × 12.2 × 2.4 mm／1.0 g（模組本體）', 'u-blox NEO-M8 資料表', 'ref'],
+  ['本機整機重量', '待實機秤重', '—', 'pending'],
+];
+
+// ───────── 真機實拍（教師 F450圖片，裁切縮小版；教師已同意公開，2026-11-06） ─────────
+export const PHOTOS = {
+  pixhawk: [['photo-pixhawk.jpg', 'IMG_8352：外殼印字「pixhawk 2.4.8」，裝在上中心板中央']],
+  receiver: [['photo-receiver.jpg', 'IMG_8263：標籤「R9DS V2.1」，在飛控旁']],
+  motor: [['photo-motor.jpg', 'IMG_8379：貼紙「A2212/13T 930KV」、金色轉子罩、紅色槳夾']],
+  prop: [['photo-prop.jpg', 'IMG_8263：黑色雙葉槳，葉尖白色三角標記'], ['photo-motor.jpg', 'IMG_8379：銀色子彈槳帽']],
+  gps: [['photo-gps.jpg', 'IMG_8263：黑色圓餅、白色圓環、白底紅線箭頭']],
+  esc: [['photo-esc.jpg', 'IMG_8379：黃色熱縮電調貼在白臂下方']],
+  battery: [['photo-battery.jpg', 'IMG_8383：黑色電池與白色條碼標籤，位於下中心板下方']],
+  battery_tray: [['photo-battery.jpg', 'IMG_8383：電池托座在下中心板下方']],
+  arm: [['photo-arm.jpg', 'IMG_8263：紅色格柵機臂、白色束帶、端部黑膠帶'], ['photo-esc.jpg', 'IMG_8379：白色格柵機臂']],
+  bottom_plate: [['photo-plate.jpg', 'IMG_8352：黑底金邊中心板（上下兩層）']],
+  top_plate: [['photo-plate.jpg', 'IMG_8352：黑底金邊上中心板與飛控']],
+  landing_leg: [['photo-leg.jpg', 'IMG_8383：黑色直立腳架，以膠帶固定在臂端下方']],
+  wiring: [['photo-wiring.jpg', 'IMG_8263：中心的杜邦線與線束走向']],
+  fixings: [['photo-ties.jpg', 'IMG_8263：白色束帶、黑膠帶']],
+  power_lead: [['photo-ties.jpg', 'IMG_8263：黃色 XT60 接頭（左上）']],
+};
+
+// 實拍對照：3D 視角 → 最接近角度的真機照片
+export const VIEW_PHOTOS = {
+  iso: ['photo-view-iso.jpg', 'IMG_8263（斜上 45°）'],
+  top: ['photo-view-top.jpg', 'IMG_8352（近正上方）'],
+  right: ['photo-view-low.jpg', 'IMG_8383（低角度側面）'],
+  front: ['photo-view-iso2.jpg', 'IMG_8379（斜前方）'],
+};

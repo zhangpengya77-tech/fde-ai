@@ -1,0 +1,125 @@
+<!doctype html>
+<!--
+  F450 數位孿生 2.0 — FDE-AI-UAS v2.0 獨立入口頁（/f450-twin/）
+  版面依教師提供的參考圖；3D 模型為 F450-DIGITAL-TWIN-V2 專案 L2-R8（依實機照片、CAD 與原廠公開資料建模；Draco 壓縮）。
+  頁面含教師真機照片（教師已同意公開，2026-11-06），以裁切縮小版放在 img/。three.js 0.181.2（MIT）隨附本地。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>F450 數位孿生 1.2｜FDE-AI-UAS</title>
+<link rel="stylesheet" href="./twin.css?v=1.2.0">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+</head>
+<body>
+<header class="topbar">
+  <a class="logo" href="../f450" title="回 FDE-AI 首頁">
+    <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><circle cx="37" cy="11" r="7"/><circle cx="11" cy="37" r="7"/><circle cx="37" cy="37" r="7"/><path d="M16 16l16 16M32 16L16 32"/><rect x="19" y="19" width="10" height="10" rx="2"/></g></svg>
+    <span><b>FDE-AI UAS</b><br>實訓平台</span>
+  </a>
+  <div class="title">
+    <h1>F450 四旋翼 無人機｜數位孿生 <em>(Digital Twin) 1.2</em></h1>
+    <p>結構拆解・零件介紹・組裝教學・實機對應</p>
+  </div>
+  <nav class="modes" aria-label="模式">
+    <button data-mode="whole"><svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z M3 7l9 5 9-5 M12 12v10"/></svg>整機視圖</button>
+    <button data-mode="explode" class="on"><svg viewBox="0 0 24 24"><path d="M12 3l9 4-9 4-9-4z M3 12l9 4 9-4 M3 17l9 4 9-4"/></svg>爆炸結構</button>
+    <button data-mode="assembly"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>組裝流程</button>
+    <button data-mode="wiring"><svg viewBox="0 0 24 24"><path d="M12 3v6 M6 15v-3h12v3 M6 15a2 2 0 100 4 2 2 0 000-4 M18 15a2 2 0 100 4 2 2 0 000-4 M12 9a2 2 0 100-.1"/></svg>接線圖</button>
+    <button data-mode="size"><svg viewBox="0 0 24 24"><path d="M4 20L20 4 M14 4h6v6 M4 14v6h6"/></svg>尺寸規格</button>
+  </nav>
+</header>
+<details class="truth"><summary>資料狀態</summary>
+  <p>本頁含教師真機照片（裁切縮小版，教師已同意公開，2026-11-06）。本模型依教師真機照片（F450圖片）與原廠公開資料建模，<b>不是</b>實機 1:1 量測模型，目前沒有零件標為 VERIFIED。照片已確認：馬達 A2212/13T 930KV、接收機 RadioLink R9DS V2.1、飛控 Pixhawk 2.4.8、黑色電池與紅色槳夾。標 REFERENCE 的數值來自 DJI 手冊、PX4、RadioLink、Amass、u-blox 等公開資料；未量測的尺寸標「待實機核對」。</p>
+</details>
+
+<main class="layout">
+  <aside class="left">
+    <section class="card hero">
+      <img src="./img/hero.png" alt="F450 R8 模型整機渲染" width="493" height="290">
+      <p>F450 整機（R8 模型渲染，依教師真機照片建模）</p>
+    </section>
+    <section class="card">
+      <h2>零件選擇 <small>（點擊查看詳解）</small></h2>
+      <div id="part-list" class="part-list"></div>
+      <details class="more"><summary>其他零件</summary><div id="part-more" class="part-list"></div></details>
+    </section>
+  </aside>
+
+  <section class="center">
+    <div id="viewer">
+      <div id="loading">正在載入 F450 模型…</div>
+      <svg id="leaders" aria-hidden="true"></svg>
+      <div id="labels" aria-hidden="true"></div>
+      <div id="dimlabels" aria-hidden="true"></div>
+      <div id="pip" hidden><img alt="同角度真機照片"><span></span></div>
+      <div class="viewbar">
+        <button data-view="iso" class="on">等軸</button><button data-view="top">上視</button><button data-view="right">右視</button><button data-view="front">前視</button>
+        <button id="toggle-labels" class="on">標籤</button><button id="toggle-pip">📷 實拍對照</button>
+      </div>
+    </div>
+    <p class="hint">拖曳旋轉｜滾輪或雙指縮放｜右鍵或雙指拖曳平移｜點零件看介紹</p>
+
+    <section class="card strip" id="strip-explode">
+      <div class="row">
+        <button id="ex-all" class="primary">一鍵展開</button><button id="ex-next">逐層展開</button><button id="ex-back">逐層還原</button><button id="ex-reset">全部還原</button>
+        <label class="slider">拆解距離 <span id="ex-scale-val">100%</span><input id="ex-scale" type="range" min="100" max="180" value="100"></label>
+      </div>
+      <div id="layer-chips" class="chips"></div>
+    </section>
+    <section class="card strip" id="strip-whole" hidden>
+      <p>整機視圖：零件在組裝位置。點任何零件看介紹；按「爆炸結構」可分層拆解。</p>
+    </section>
+    <section class="card strip" id="strip-assembly" hidden>
+      <div class="row between"><b id="step-title"></b><span><button id="step-prev">上一步</button> <button id="step-next" class="primary">下一步</button> <button id="step-play">▶ 自動播放</button></span></div>
+      <label class="inline"><input type="checkbox" id="step-follow" checked> 鏡頭跟隨本步零件</label>
+      <div id="step-parts" class="chips"></div>
+      <div id="step-safety" class="safety" hidden>⚠ 涉及電池或槳葉：任何通電測試前必須先拆槳。</div>
+      <p id="step-text"></p>
+      <ol id="step-list" class="steps"></ol>
+      <details class="checkbox-list"><summary>完成檢查清單 <span id="check-progress"></span></summary><ul id="check-list" class="checks"></ul><p class="note">勾選只存在這台裝置的瀏覽器裡。 <button id="check-reset">清除勾選</button></p></details>
+    </section>
+    <section class="card strip" id="strip-wiring" hidden>
+      <div class="safety">⚠ 只列連接關係，全部「待實機核對」；不提供腳位定義。接線前對照實機外殼印字並先拆槳。</div>
+      <div class="row"><span class="legend-line power">━ 電源路徑</span><span class="legend-line signal">━ 訊號路徑</span>
+        <span class="sep"></span><button data-wire="all" class="on">全部</button><button data-wire="power">只看電源</button><button data-wire="signal">只看訊號</button></div>
+      <p class="note">點表格任一列，3D 會只顯示那條連線並高亮兩端零件；光點方向＝電流或訊號流向。</p>
+      <div class="tw"><table id="wiring-table"><thead><tr><th>從</th><th>到</th><th>用途</th></tr></thead><tbody></tbody></table></div>
+    </section>
+    <section class="card strip" id="strip-size" hidden>
+      <div class="row"><button id="measure-toggle">📏 兩點量測</button><button id="dims-toggle" class="on">3D 尺寸標註</button><span id="measure-out" class="note"></span></div>
+      <table class="sizes"><tbody id="size-refs">
+        <tr><th>整機高度</th><td id="sz-h">—</td><td><span class="tag pending">待核對</span> 模型估計（含腳架、GPS），待實機量測</td></tr>
+        <tr><th>含槳寬度</th><td id="sz-w">—</td><td><span class="tag pending">待核對</span> 模型估計（依槳停放角度），待實機量測</td></tr>
+      </tbody></table>
+    </section>
+  </section>
+
+  <aside class="right">
+    <section class="card info" id="info"></section>
+    <section class="card size">
+      <h2>尺寸參考 <small>（F450 整機）</small></h2>
+      <div class="dims">
+        <img src="./img/size-front.png" alt="F450 R5 模型正視圖" width="492" height="128">
+        <svg viewBox="0 0 492 200" preserveAspectRatio="none" aria-hidden="true">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+          <g stroke="currentColor" fill="none" stroke-width="1.4">
+            <line x1="100" y1="22" x2="392" y2="22" marker-start="url(#ar)" marker-end="url(#ar)"/>
+            <line x1="100" y1="16" x2="100" y2="60" stroke-dasharray="3 3"/><line x1="392" y1="16" x2="392" y2="60" stroke-dasharray="3 3"/>
+            <line x1="2" y1="184" x2="490" y2="184" marker-start="url(#ar)" marker-end="url(#ar)"/>
+          </g>
+          <text x="246" y="15" text-anchor="middle">前視電機間距 318 mm（＝ 450 ÷ √2）</text>
+          <text x="246" y="198" text-anchor="middle" id="dim-w">含槳寬 約 — mm（模型估計）</text>
+        </svg>
+        <div class="hdim"><span id="dim-h">高 約 — mm</span></div>
+      </div>
+      <p class="note">對角軸距 450 mm 為 DJI 手冊規格（REFERENCE）；高度、含槳寬為模型估計，待實機量測。</p>
+      <div class="legend"><span class="tag ok">VERIFIED 已核對實機</span><span class="tag ref">REFERENCE 依可信資料</span><span class="tag ph">PLACEHOLDER 暫時示意</span></div>
+    </section>
+  </aside>
+</main>
+
+<script type="module" src="./app.js?v=1.2.1"></script>
+</body>
+</html>

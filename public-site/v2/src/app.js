@@ -157,6 +157,8 @@ function wireBackendLinks(base) {
 function renderNavigation() {
   // 教師確認的 FDE-AI 2.0 首頁左側主導航：學/練/作/測/證/飛行健康，順序固定。
   const primaryNav = [
+    // 2026-11-06：新訪客認識平台的「關於我們」，放在導航第一項（與教學後台一致）
+    { key: 'about', label: '關', title: '關於我們 About FDE-AI' },
     { key: 'learn', label: '學', title: '公開課程' },
     { key: 'practice', label: '練', title: '仿真訓練' },
     { key: 'build', label: '作', title: '實作任務' },
