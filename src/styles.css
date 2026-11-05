@@ -3217,3 +3217,74 @@ a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba
     animation: none;
   }
 }
+
+/* ── 2026-11-05：「做」區 F450 數位孿生入口卡（圖左文右；手機改上下排列）── */
+.f450-twin-feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 22px;
+  align-items: center;
+  margin: 18px 0;
+  border-color: rgba(0, 194, 255, 0.45);
+}
+
+.f450-twin-feature-media {
+  position: relative;
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #061226;
+}
+
+.f450-twin-feature-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.f450-twin-feature-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(0, 194, 255, 0.9);
+  color: #04111f;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.f450-twin-feature-body p {
+  margin: 8px 0;
+}
+
+.f450-twin-feature-list {
+  margin: 10px 0 12px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.f450-twin-feature-list b {
+  display: inline-block;
+  min-width: 52px;
+  margin-right: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(46, 230, 140, 0.16);
+  color: var(--green);
+  font-size: 12px;
+  text-align: center;
+}
+
+.f450-twin-feature-list b.dev {
+  background: rgba(255, 184, 0, 0.16);
+  color: #ffc24d;
+}
+
+@media (max-width: 768px) {
+  .f450-twin-feature {
+    grid-template-columns: 1fr;
+  }
+}

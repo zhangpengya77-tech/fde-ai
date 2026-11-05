@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FDE-AI | 無人載具學習控制中心</title>
-    <link rel="stylesheet" href="./src/styles.css?v=1.4-hero3d" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.5-twin" />
   </head>
   <body class="home-view">
     <aside class="sidebar">
@@ -303,7 +303,29 @@
         </div>
         <!-- Platform Integration：首頁「作 Build」主要 CTA 進入 F450 Main-12 / Student Live Coach -->
         <a class="primary-action build-main12-entry" id="buildMain12Entry" href="/live/">進入 F450 Main-12 實作（AI 即時助教）→</a>
-        <p class="build-legacy-note">左側為 1.0 舊版 F450 組裝流程，保留供參照；右側為 F450 數位孿生互動拆解。</p>
+        <!-- 2026-11-05：F450 數位孿生入口（沿用既有 /f450-twin/ 專案，不另開發），放在教學區最上方，學員一眼可見 -->
+        <div class="panel f450-twin-feature" id="buildF450Twin">
+          <a class="f450-twin-feature-media" href="/f450-twin/" aria-label="打開 F450 數位孿生 3D 模型">
+            <img src="/f450-twin/preview.jpg" alt="F450 數位孿生 3D 模型預覽（紅白機臂、Pixhawk 飛控、GPS）" width="720" height="510" loading="lazy" />
+            <span class="f450-twin-feature-badge">3D</span>
+          </a>
+          <div class="f450-twin-feature-body">
+            <div class="section-head">
+              <h3>F450 數位孿生</h3>
+              <span class="pill">3D 互動拆解</span>
+            </div>
+            <p>在瀏覽器裡旋轉、縮放真實比例的 F450 教學模型，拆開看每個零件在哪裡、做什麼。</p>
+            <ul class="f450-twin-feature-list">
+              <li><b>可用</b>360° 旋轉、雙指／滾輪縮放，等軸測、上視、右視、前視</li>
+              <li><b>可用</b>點選零件看中文名稱、功能、型號與驗證狀態；單獨顯示、聚焦</li>
+              <li><b>可用</b>拖動滑桿爆炸拆解，一鍵復原</li>
+              <li><b class="dev">開發中</b>接收機 3D 零件、線材接線教學、槳葉旋向標示、實機尺寸量測</li>
+            </ul>
+            <p class="build-legacy-note">教學實機：紅白 F450 機架、Pixhawk 2.4.8、RadioLink AT9S 接收機、2212 馬達、9450 槳、4S LiPo、四顆電調、GPS／羅盤。模型為照片參考級，除 450 mm 軸距外尺寸未量測，不是 1:1 工程復刻。</p>
+            <a class="primary-action build-f450-twin-entry" id="buildF450TwinEntry" href="/f450-twin/">打開 F450 數位孿生 →</a>
+          </div>
+        </div>
+        <p class="build-legacy-note">下方左側為 F450 組裝流程（1.0，保留供參照）；右側為 F450 RAG AI 助教，可上傳照片、30 秒影片並語音提問。</p>
         <div class="build-layout">
           <div class="panel">
             <div class="section-head">
@@ -313,23 +335,8 @@
             <div class="meta-row" id="buildMeta"></div>
             <ol class="stage-list" id="buildStages"></ol>
           </div>
-          <!-- F450 數位孿生面板（2026-11-05 教師指定取代此位置的 AI 助教問答） -->
-          <div class="panel f450-twin-panel">
-            <div class="section-head">
-              <h3>F450 數位孿生</h3>
-              <span class="pill">互動拆解</span>
-            </div>
-            <a href="/f450-twin/" aria-label="打開 F450 數位孿生"><img src="./f450-twin/preview.jpg" alt="F450 數位孿生 R4 模型預覽" width="720" height="510" style="width:100%;height:auto;border-radius:10px;display:block"></a>
-            <ul>
-              <li>360° 旋轉、縮放，切換上視、右視、前視</li>
-              <li>拖動滑桿爆炸拆解，一鍵復原</li>
-              <li>點機架、飛控、GPS、電調、電池、電機、槳葉、腳架看功能說明</li>
-            </ul>
-            <p class="build-legacy-note">L2 照片參考級｜教師外觀驗收通過（2026-11-04）｜除 450 mm 軸距外尺寸未量測</p>
-            <a class="primary-action build-f450-twin-entry" id="buildF450TwinEntry" href="/f450-twin/">打開 F450 數位孿生 →</a>
-          </div>
-          <!-- 1.0 舊版 AI 助教問答：依教師指示自首頁畫面移除；元素保留並隱藏，供 app.js 既有綁定使用 -->
-          <div class="panel" hidden>
+          <!-- F450 RAG AI 助教問答（2026-11-05 依使用者要求恢復顯示：保留 RAG 助教、照片／影片上傳與語音） -->
+          <div class="panel">
             <div class="section-head">
               <h3>AI 助教問答</h3>
               <span class="pill pending">F450 RAG V1 API</span>
