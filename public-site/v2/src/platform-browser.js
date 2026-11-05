@@ -104,7 +104,7 @@ function withVideoDescription(video, description) {
 
 const hero = {
   name: 'fde-ai',
-  headline: 'FDE-AI 無人載具學習平台',
+  headline: 'FDE-AI 無人載具實訓平台', // 2026-11-06：改為「實訓平台」，一行顯示
   summary: 'AI 雙師教學｜學・練・做・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
   systems: ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統'],
   systemStatus: [

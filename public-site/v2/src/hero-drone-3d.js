@@ -74,47 +74,74 @@ function holoRingTexture() {
   return tex;
 }
 
-// 依零件名稱給材質。2026-11-06 依使用者參考圖（docs/design-reference/hero-drone-style-reference.jpg）改風格：
-// 透明壓克力機身、銅橘色結構線、青色發光馬達、白灰槳葉；機型維持四旋翼 F450（參考圖為多旋翼概念圖）
+// 依零件名稱給材質。2026-11-06（第二版）改為「霓虹光環競速」未來科技風格：不追求寫實，
+// 深色玻璃機身＋霓虹輪廓線（前臂洋紅、後臂青、中心板紫），機型仍是四旋翼 F450
 function styleFor(name) {
   const n = String(name).replace(/_/g, ' ').toLowerCase();
-  const glass = { transparent: true, depthWrite: false, side: THREE.DoubleSide, metalness: 0.15, roughness: 0.06 };
+  const glass = { transparent: true, depthWrite: false, side: THREE.DoubleSide, metalness: 0.3, roughness: 0.15 };
+  if (n.includes('latticearm fl') || n.includes('latticearm fr')) {
+    return { mat: { ...glass, color: 0x2a0a3a, emissive: 0x8a0a7a, emissiveIntensity: 0.55, opacity: 0.6 }, edge: 0xff3df0, edgeOpacity: 0.95 };
+  }
   if (n.includes('latticearm')) {
-    // 機臂：透明壓克力＋銅橘色輪廓（對應參考圖機臂內的橘色結構）
-    return { mat: { ...glass, color: 0xe6f8ff, emissive: 0x0a5a7a, emissiveIntensity: 0.22, opacity: 0.3 }, edge: 0xffa04a, edgeOpacity: 0.75 };
+    return { mat: { ...glass, color: 0x061c2c, emissive: 0x0a6a9a, emissiveIntensity: 0.55, opacity: 0.6 }, edge: 0x29f0ff, edgeOpacity: 0.95 };
   }
   if (n.includes('motor')) {
-    // 馬達：青色發光半透明外殼
-    return { mat: { ...glass, depthWrite: true, color: 0x7fe6ff, emissive: 0x16c8ff, emissiveIntensity: 0.95, opacity: 0.78 }, edge: 0xc8f6ff, edgeOpacity: 0.55 };
+    return { mat: { ...glass, depthWrite: true, color: 0x0b2a3a, emissive: 0x00e5ff, emissiveIntensity: 1.1, opacity: 0.9 }, edge: 0xbff8ff, edgeOpacity: 0.7 };
   }
   if (n.includes('pixhawk flightcontroller')) {
-    return { mat: { ...glass, depthWrite: true, color: 0x0c1a26, emissive: 0x0b5f95, emissiveIntensity: 0.55, opacity: 0.85 }, edge: 0x7fe9ff, edgeOpacity: 0.9 };
+    return { mat: { ...glass, depthWrite: true, color: 0x05080f, emissive: 0x1a1460, emissiveIntensity: 0.6, opacity: 0.92 }, edge: 0x29f0ff, edgeOpacity: 1 };
   }
   if (n.includes('gps arrow')) {
-    return { mat: { color: 0xffffff, emissive: 0x9fe9ff, emissiveIntensity: 0.9 }, edge: null };
+    return { mat: { color: 0xffffff, emissive: 0xff3df0, emissiveIntensity: 1 }, edge: null };
   }
   if (n.includes('gps compass')) {
-    return { mat: { ...glass, color: 0xdff6ff, emissive: 0x0d7fb0, emissiveIntensity: 0.45, opacity: 0.45 }, edge: 0xa8f0ff, edgeOpacity: 0.8 };
+    return { mat: { ...glass, color: 0x0a0a20, emissive: 0x3a1a8a, emissiveIntensity: 0.6, opacity: 0.8 }, edge: 0xb48cff, edgeOpacity: 0.9 };
   }
   if (n.includes('battery')) {
-    return { mat: { ...glass, color: 0x9fdcff, emissive: 0x0b6aa0, emissiveIntensity: 0.5, opacity: 0.38 }, edge: 0x8fe6ff, edgeOpacity: 0.65 };
+    return { mat: { ...glass, color: 0x1a0a40, emissive: 0x5a2acf, emissiveIntensity: 0.6, opacity: 0.55 }, edge: 0xb48cff, edgeOpacity: 0.8 };
   }
   if (n.includes('esc')) {
-    // 電調：銅橘色（對應參考圖的橘色線條）
-    return { mat: { ...glass, depthWrite: true, color: 0xff9a3c, emissive: 0xc05a10, emissiveIntensity: 0.45, metalness: 0.6, roughness: 0.3, opacity: 0.85 }, edge: null };
+    return { mat: { ...glass, depthWrite: true, color: 0x3a0030, emissive: 0xff2bd6, emissiveIntensity: 0.8, opacity: 0.9 }, edge: null };
   }
   if (n.includes('gold edge')) {
-    return { mat: { ...glass, color: 0xffb066, emissive: 0xc06010, emissiveIntensity: 0.5, opacity: 0.8 }, edge: 0xffa04a, edgeOpacity: 0.8 };
+    return { mat: { ...glass, color: 0x2a1060, emissive: 0x7b5cff, emissiveIntensity: 0.9, opacity: 0.85 }, edge: 0x9b7bff, edgeOpacity: 0.9 };
   }
   if (n.includes('centre plate') || n.includes('powermodule') || n.includes('foam') || n.includes('gps mast')) {
-    return { mat: { ...glass, color: 0xd6f2ff, emissive: 0x0a3a55, emissiveIntensity: 0.35, opacity: 0.26 }, edge: 0x9fe9ff, edgeOpacity: 0.6 };
+    return { mat: { ...glass, color: 0x0a1030, emissive: 0x1a1a6a, emissiveIntensity: 0.5, opacity: 0.5 }, edge: 0x7b5cff, edgeOpacity: 0.85 };
   }
   if (n.includes('landing leg')) {
-    // 腳架：透明並帶青光（參考圖腳架下緣發青光）
-    return { mat: { ...glass, color: 0xbff0ff, emissive: 0x13b6e6, emissiveIntensity: 0.55, opacity: 0.42 }, edge: 0x9ff0ff, edgeOpacity: 0.6 };
+    return { mat: { ...glass, color: 0x08142a, emissive: 0x0a4a7a, emissiveIntensity: 0.5, opacity: 0.5 }, edge: 0x29f0ff, edgeOpacity: 0.7 };
   }
-  // 線束、束帶、膠帶等小件：低調透明
-  return { mat: { ...glass, color: 0x9fb8c8, emissive: 0x06283c, emissiveIntensity: 0.3, opacity: 0.35 }, edge: null };
+  // 線束、束帶、膠帶等小件：低調深色
+  return { mat: { ...glass, color: 0x101428, emissive: 0x10103a, emissiveIntensity: 0.4, opacity: 0.4 }, edge: null };
+}
+
+// 霓虹漸層色：依角度在 青 → 洋紅 → 紫 → 青 之間循環（光環用）
+function neonColor(t) {
+  const stops = [[0, [0.16, 0.94, 1]], [0.33, [1, 0.24, 0.94]], [0.66, [0.48, 0.36, 1]], [1, [0.16, 0.94, 1]]];
+  for (let i = 1; i < stops.length; i += 1) {
+    if (t <= stops[i][0]) {
+      const [t0, c0] = stops[i - 1], [t1, c1] = stops[i], k = (t - t0) / (t1 - t0);
+      return c0.map((v, j) => v + (c1[j] - v) * k);
+    }
+  }
+  return stops[0][1];
+}
+
+// 霓虹光環：沿圓周套上漸層色的細圓環＋外層柔光
+function neonHalo(radius, tube, glowTube) {
+  const group = new THREE.Group();
+  [[tube, 0.95], [glowTube, 0.16]].forEach(([tb, op]) => {
+    const geo = new THREE.TorusGeometry(radius, tb, 10, 256);
+    const pos = geo.attributes.position, colors = [];
+    for (let i = 0; i < pos.count; i += 1) {
+      const ang = (Math.atan2(pos.getY(i), pos.getX(i)) + Math.PI) / (Math.PI * 2);
+      colors.push(...neonColor(ang));
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    group.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })));
+  });
+  return group;
 }
 
 async function init() {
@@ -149,8 +176,8 @@ async function init() {
   // 燈光：冷色環境光＋主光＋兩盞藍色補光
   scene.add(new THREE.HemisphereLight(0xbfefff, 0x02080f, 0.9));
   const key = new THREE.DirectionalLight(0xffffff, 1.8); key.position.set(300, 600, -400); scene.add(key);
-  const rimA = new THREE.PointLight(0x22d3ff, 2.4, 0, 0); rimA.position.set(-450, 120, 300); scene.add(rimA);
-  const rimB = new THREE.PointLight(0x18b8ff, 1.6, 0, 0); rimB.position.set(450, -120, 250); scene.add(rimB);
+  const rimA = new THREE.PointLight(0x22e8ff, 2.6, 0, 0); rimA.position.set(-450, 120, 300); scene.add(rimA);
+  const rimB = new THREE.PointLight(0xff3df0, 2.2, 0, 0); rimB.position.set(450, -120, 250); scene.add(rimB);
 
   const drone = new THREE.Group(); // 只用來做浮動與擺動
   scene.add(drone);
@@ -197,11 +224,11 @@ async function init() {
       // 右前／左後 逆時針（+1），左前／右後 順時針（-1）→ 相鄰兩槳旋向相反
       const dir = pos === 'FR' || pos === 'RL' ? 1 : -1;
       // 槳葉：參考圖的白灰色槳
-      const blade = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xe4eaee, emissive: 0x2a3a44, emissiveIntensity: 0.25, transparent: true, opacity: 0.95, roughness: 0.42, metalness: 0.15, side: THREE.DoubleSide }));
+      const blade = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xdffcff, emissive: 0x29d8ff, emissiveIntensity: 0.6, transparent: true, opacity: 0.8, roughness: 0.3, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false }));
       pivot.add(blade);
       // 輕微動態模糊：兩片同形狀、透明度遞減的殘影跟在槳葉後方
       [0.2, 0.4].forEach((lag, i) => {
-        const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xdfe8ee, transparent: true, opacity: i === 0 ? 0.22 : 0.1, side: THREE.DoubleSide, depthWrite: false }));
+        const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x5ff0ff, transparent: true, opacity: i === 0 ? 0.26 : 0.12, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
         ghost.rotation.y = -dir * lag;
         pivot.add(ghost);
       });
@@ -213,11 +240,13 @@ async function init() {
       discHolder.position.copy(pivot.position);
       discHolder.add(disc);
       // 銅色馬達軸（參考圖馬達上方的銅色軸），不旋轉
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 16, 12), new THREE.MeshStandardMaterial({ color: 0xd98a3a, metalness: 0.85, roughness: 0.25, emissive: 0x5a2a08, emissiveIntensity: 0.4 }));
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 16, 12), new THREE.MeshBasicMaterial({ color: 0xe8fbff }));
       shaft.position.y = -6;
       discHolder.add(shaft);
       // 透明槳護圈（參考圖每個槳外圍的透明圓環），固定不轉
-      const guard = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.07, 1.8, 8, 96), new THREE.MeshStandardMaterial({ color: 0xeaf9ff, emissive: 0x1aa8d8, emissiveIntensity: 0.35, transparent: true, opacity: 0.55, roughness: 0.05, metalness: 0.2, depthWrite: false }));
+      // 霓虹槳護圈：前方兩個洋紅、後方兩個青色（競速機的前後識別色）
+      const guardColor = pos === 'FL' || pos === 'FR' ? 0xff3df0 : 0x29f0ff;
+      const guard = new THREE.Mesh(new THREE.TorusGeometry(radius * 1.07, 2.2, 8, 96), new THREE.MeshBasicMaterial({ color: guardColor, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
       guard.rotation.x = Math.PI / 2;
       guard.position.y = -4;
       discHolder.add(guard);
@@ -253,24 +282,66 @@ async function init() {
     leds.push({ glow, size, offset: leds.length * 0.9 });
   };
   Object.values(motorCenters).forEach((c) => addLed(new THREE.Vector3(c.x, 8, c.z), 95));
-  addLed(new THREE.Vector3(0, 30, 6), 120);   // 機身內部的藍光（參考圖透明機身中的藍色光源）
+  addLed(new THREE.Vector3(0, 30, 6), 140);   // 機身內部的光源（霓虹風格）
   // 透明座艙罩：罩住飛控，呈現參考圖的透明機身外殼
   const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xeaf9ff, emissive: 0x0a6a9a, emissiveIntensity: 0.25, transparent: true, opacity: 0.2, roughness: 0.04, metalness: 0.3, depthWrite: false, side: THREE.DoubleSide }));
   canopy.scale.set(56, 30, 66);
   canopy.position.set(0, 14, 4);
-  const canopyEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(1, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2), 1), new THREE.LineBasicMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const canopyEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(1, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2), 1), new THREE.LineBasicMaterial({ color: 0x9b7bff, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
   canopy.add(canopyEdge);
   drone.add(canopy);
+
+  // ── 霓虹光環：一圈水平環繞機身、一圈傾斜反向旋轉（「霓虹光環中的競速無人機」） ──
+  const haloA = neonHalo(385, 2.4, 11);
+  haloA.rotation.x = Math.PI / 2;
+  haloA.position.y = -6;
+  const haloB = neonHalo(330, 1.6, 8);
+  haloB.rotation.set(Math.PI / 2 - 0.42, 0, 0.25);
+  haloB.position.y = 10;
+  scene.add(haloA, haloB);
+
+  // ── 霓虹地面網格（合成波風格），洋紅中線＋青色格線 ──
+  const grid = new THREE.GridHelper(1800, 36, 0xff3df0, 0x1fbfff);
+  grid.position.y = -130;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.28;
+  grid.material.depthWrite = false;
+  scene.add(grid);
+
+  // ── 速度光流：細光條由機頭往機尾流過，營造競速感（低亮度，不干擾閱讀） ──
+  const STREAKS = 70;
+  const streakPos = new Float32Array(STREAKS * 6), streakCol = new Float32Array(STREAKS * 6), streakData = [];
+  for (let i = 0; i < STREAKS; i += 1) {
+    const d = { x: (Math.random() - 0.5) * 1400, y: -110 + Math.random() * 380, z: (Math.random() - 0.5) * 1800, len: 60 + Math.random() * 140, speed: 500 + Math.random() * 700 };
+    if (Math.abs(d.x) < 260 && d.y > -60 && d.y < 120) d.x += Math.sign(d.x || 1) * 300;   // 避開機身正中央
+    streakData.push(d);
+    const c = neonColor(Math.random());
+    streakCol.set([...c, 0, 0, 0], i * 6);   // 頭亮尾暗（加法混色下黑色＝透明）
+  }
+  const streakGeo = new THREE.BufferGeometry();
+  streakGeo.setAttribute('position', new THREE.BufferAttribute(streakPos, 3));
+  streakGeo.setAttribute('color', new THREE.BufferAttribute(streakCol, 3));
+  const streaks = new THREE.LineSegments(streakGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+  scene.add(streaks);
+  function moveStreaks(dt) {
+    streakData.forEach((d, i) => {
+      d.z += d.speed * dt;
+      if (d.z > 900) d.z -= 1800;
+      streakPos.set([d.x, d.y, d.z, d.x, d.y, d.z - d.len], i * 6);
+    });
+    streakGeo.attributes.position.needsUpdate = true;
+  }
+  moveStreaks(0);
 
   // ── 全息底環與低強度掃描光 ──
   const ringTex = holoRingTexture();
   const holo = new THREE.Mesh(new THREE.PlaneGeometry(560, 560), new THREE.MeshBasicMaterial({ map: ringTex, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
   holo.rotation.x = -Math.PI / 2;
   holo.position.y = -128;
-  holo.material.opacity = 0.3;
+  holo.material.opacity = 0.18;
   scene.add(holo);
   // 參考圖桌面上的青色光暈：每顆馬達正下方一團，緩慢明暗
-  const poolTex = radialTexture([[0, 'rgba(60,220,255,0.75)'], [0.35, 'rgba(0,170,255,0.32)'], [1, 'rgba(0,120,255,0)']]);
+  const poolTex = radialTexture([[0, 'rgba(255,90,240,0.55)'], [0.35, 'rgba(60,200,255,0.28)'], [1, 'rgba(0,120,255,0)']]);
   const pools = Object.values(motorCenters).map((c, i) => {
     const pool = new THREE.Mesh(new THREE.PlaneGeometry(230, 230), new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
     pool.rotation.x = -Math.PI / 2;
@@ -286,7 +357,7 @@ async function init() {
   // ── 鏡頭：前上方 3/4 視角，依容器比例算距離，保證整機（含槳尖與底環）都在畫面內 ──
   const viewDir = new THREE.Vector3(0.62, 0.44, -1).normalize(); // 機頭朝 -Z，從右前上方看
   const target = new THREE.Vector3(0, -42, 0);
-  const fitRadius = 318; // 槳尖水平半徑約 320mm（斜視時投影較小），留少量浮動與擺動餘量
+  const fitRadius = 372; // 霓虹光環半徑 385（斜視時投影較小），整個光環與槳尖都要在畫面內
   function resize() {
     const w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
     renderer.setSize(w, h, false);
@@ -309,8 +380,12 @@ async function init() {
     propellers.forEach((p) => { p.pivot.rotation.y += p.dir * p.speed * dt; });
     // 輕微懸停浮動與姿態擺動（不旋轉整機）
     drone.position.y = Math.sin(t * 1.1) * 7;
-    drone.rotation.x = Math.sin(t * 0.7) * 0.035;
-    drone.rotation.z = Math.sin(t * 0.55 + 1.2) * 0.03;
+    drone.rotation.x = -0.05 + Math.sin(t * 0.7) * 0.03;   // 微微前傾，像正在加速
+    drone.rotation.z = Math.sin(t * 0.55 + 1.2) * 0.08;     // 競速式左右側傾（仍是小角度）
+    haloA.rotation.z = t * 0.35;
+    haloB.rotation.y = -t * 0.5;
+    haloA.children[1].material.opacity = 0.14 + Math.sin(t * 2) * 0.04;
+    moveStreaks(dt);
     drone.rotation.y = Math.sin(t * 0.25) * 0.04;
     // LED 柔和呼吸（不閃爍）
     leds.forEach((l) => { const k = 0.88 + Math.sin(t * 1.6 + l.offset) * 0.12; l.glow.scale.set(l.size * k, l.size * k, 1); l.glow.material.opacity = 0.7 + 0.2 * k; });

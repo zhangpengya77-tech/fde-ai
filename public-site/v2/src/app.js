@@ -157,8 +157,7 @@ function wireBackendLinks(base) {
 function renderNavigation() {
   // 教師確認的 FDE-AI 2.0 首頁左側主導航：學/練/作/測/證/飛行健康，順序固定。
   const primaryNav = [
-    // 2026-11-06：新訪客認識平台的「關於我們」，放在導航第一項（與教學後台一致）
-    { key: 'about', label: '關', title: '關於我們 About FDE-AI' },
+    // 2026-11-06：「關於我們」入口移到左上角品牌（點我），導航從「學」開始
     { key: 'learn', label: '學', title: '公開課程' },
     { key: 'practice', label: '練', title: '仿真訓練' },
     { key: 'build', label: '作', title: '實作任務' },
@@ -172,12 +171,16 @@ function renderNavigation() {
     .map((section) => {
       const rawHref = section.href || router.hrefFor(section.key);
       const resolved = resolvePortalHref(rawHref);
-      const inner = `<span>${section.label}</span>${section.title}`;
+      // 2026-11-06：圓形徽章（標準楷書＋英文小字）；學練作測證為核心五步，彩色發光
+      const NAV_EN = { 學: 'LEARN', 練: 'PRACTICE', 做: 'BUILD', 作: 'BUILD', 測: 'TEST', 證: 'CERTIFY', 飛: 'HEALTH', 健: 'HEALTH', 調: 'TUNE', 展: 'SHOWCASE', 師: 'TEACHER' };
+      const isCore = ['學', '練', '做', '作', '測', '證'].includes(section.label);
+      const inner = `<span class="nav-badge" aria-hidden="true"><b class="nav-zh">${section.label}</b><small class="nav-en">${NAV_EN[section.label] || ''}</small></span><em class="nav-title">${section.title}</em>`;
+      const cls = `nav-item${isCore ? ' is-core' : ''}`;
       const attrs = section.key ? ` data-route="${section.key}"` : '';
       if (!resolved.enabled) {
-        return `<a href="#"` + attrs + ` aria-disabled="true" class="portal-link-disabled" title="需教學系統上線後開放">` + inner + `</a>`;
+        return `<a href="#"` + attrs + ` aria-disabled="true" class="portal-link-disabled ${cls}" title="需教學系統上線後開放">` + inner + `</a>`;
       }
-      return `<a href="${resolved.href}"` + attrs + `>` + inner + `</a>`;
+      return `<a href="${resolved.href}"` + attrs + ` class="${cls}">` + inner + `</a>`;
     })
     .join('');
 
@@ -185,6 +188,8 @@ function renderNavigation() {
   const mobileNavList = document.getElementById('mobileNavList');
   if (mobileNavList) mobileNavList.innerHTML = $('#moduleNav').innerHTML;
   wirePortalLinks();
+  // 系統關閉動畫效果時預設不播放徽章動畫；驗收時可加 ?motion=1 強制播放
+  if (new URLSearchParams(window.location.search).get('motion') === '1') document.documentElement.classList.add('force-motion');
 }
 
 function applyRoute(routeKey) {
