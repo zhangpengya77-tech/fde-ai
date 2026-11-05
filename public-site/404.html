@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FDE-AI｜頁面轉向中</title>
+<script>
+  // 2026-11-06：GitHub Pages 只認網站根目錄的 404.html。
+  // 直接開 /fde-ai/v2/about、/fde-ai/v2/f450 這類單頁應用子頁時，轉回 v2 首頁並帶上原路徑（?p=），
+  // 由 v2 首頁把網址還原後交給前端路由顯示正確頁面；其他不存在的網址顯示一般找不到頁面。
+  (function () {
+    var m = location.pathname.match(/^(\/fde-ai\/v2\/)(.+)$/);
+    if (m) {
+      location.replace(m[1] + '?p=' + encodeURIComponent(m[2]) + location.search.replace(/^\?/, '&') + location.hash);
+    }
+  })();
+</script>
+</head>
+<body style="background:#07111f;color:#ddf3ff;font-family:sans-serif;text-align:center;padding-top:20vh">
+  <p>找不到這個頁面。<a style="color:#00c2ff" href="/fde-ai/v2/">回 FDE-AI 首頁</a></p>
+</body>
+</html>

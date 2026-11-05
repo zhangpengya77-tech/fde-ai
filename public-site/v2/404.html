@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // 2026-11-06：從根目錄 404.html 轉回時（?p=子頁路徑），先把網址還原成 /fde-ai/v2/子頁，前端路由才會顯示正確頁面
+      (function () {
+        var q = new URLSearchParams(location.search), p = q.get('p');
+        if (p && /^[A-Za-z0-9_\-\/]+$/.test(p)) {
+          q.delete('p');
+          var rest = q.toString();
+          history.replaceState(null, '', location.pathname.replace(/[^/]*$/, '') + p + (rest ? '?' + rest : '') + location.hash);
+        }
+      })();
+    </script>
     <title>FDE-AI | 無人載具學習控制中心</title>
     <!-- 2026-11-06：導航徽章字型：中文用標準楷書（電腦有標楷體就用標楷體，手機用霞鶩文楷 TC，只載入 10 個字）、英文 Orbitron -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@700&text=%E5%AD%B8%E7%B7%B4%E5%81%9A%E4%BD%9C%E6%B8%AC%E8%AD%89%E5%81%A5%E8%AA%BF%E5%B1%95%E5%B8%AB&display=swap" />
