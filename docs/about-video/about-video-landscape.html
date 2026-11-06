@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  FDE-AI「關於我們」介紹動畫——橫式 16:9（1920×1080）版本（2026-11-06）
+  左：直式動畫（about-video.html）縮放放入；右：品牌、目前旁白大字、6 段進度條（適合電腦與投影）
+  seek(t) 會同步呼叫左邊直式動畫的 seek(t)，配音與時間軸完全相同
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>FDE-AI 關於我們 介紹動畫（橫式）</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Orbitron:wght@700;900&display=swap">
+<style>
+  :root { --cyan:#00c2ff; --text:#ddf3ff; --muted:#94abc2; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: "Noto Sans TC", sans-serif; color: var(--text);
+    background: radial-gradient(ellipse at 70% 40%, rgba(22,139,255,.22), transparent 60%), linear-gradient(160deg,#0a1830 0%,#050b18 60%,#02050c 100%); }
+  /* 背景格線（淡） */
+  body::before { content: ""; position: absolute; inset: 0; background:
+    linear-gradient(rgba(0,194,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,194,255,.06) 1px, transparent 1px); background-size: 48px 48px; }
+  #frame { position: absolute; left: 150px; top: 0; width: 1080px; height: 1920px; border: 0; transform: scale(0.5625); transform-origin: 0 0;
+    box-shadow: 0 0 60px rgba(0,194,255,.25); }
+  .panel { position: absolute; left: 860px; right: 120px; top: 120px; bottom: 120px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 22px; }
+  .mark { width: 92px; height: 92px; border: 2px solid var(--cyan); display: grid; place-items: center; color: var(--cyan);
+    font-family: Orbitron; font-weight: 900; font-size: 30px; box-shadow: 0 0 30px rgba(0,194,255,.45); }
+  .brand b { font-family: Orbitron; font-size: 64px; letter-spacing: .05em; text-shadow: 0 0 22px rgba(0,194,255,.6); }
+  .brand small { display: block; color: var(--cyan); font-size: 30px; margin-top: 6px; font-weight: 700; }
+  #heading { margin-top: 90px; font-size: 64px; font-weight: 900; text-shadow: 0 0 22px rgba(0,194,255,.5); min-height: 80px; }
+  #caption { margin-top: 30px; font-size: 40px; line-height: 1.6; font-weight: 700; color: var(--text); min-height: 260px; }
+  .bars { margin-top: auto; display: flex; gap: 14px; }
+  .bar { flex: 1; height: 10px; border-radius: 6px; background: rgba(0,194,255,.18); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#168bff,#00c2ff); box-shadow: 0 0 14px #00c2ff; }
+  .labels { display: flex; gap: 14px; margin-top: 12px; }
+  .labels span { flex: 1; text-align: center; font-size: 22px; color: var(--muted); }
+  .labels span.on { color: var(--cyan); font-weight: 700; }
+</style>
+</head>
+<body>
+<iframe id="frame" src="about-video.html" scrolling="no"></iframe>
+<div class="panel">
+  <div class="brand"><div class="mark">FDE</div><div><b>FDE-AI</b><small>無人載具實訓平台</small></div></div>
+  <div id="heading"></div>
+  <div id="caption"></div>
+  <div class="bars" id="bars"></div>
+  <div class="labels" id="labels"></div>
+</div>
+<script>
+// 每段場景在右側顯示的大標題
+const HEADINGS = { intro: '大家好！', who: '我們是誰？', steps: '學・練・做・測・證', done: '我們已經做了什麼', talent: '我們能帶給你什麼？', cta: '加入 FDE-AI' };
+const SHORT = { intro: '開場', who: '我們是誰', steps: '五步成長', done: '已完成', talent: '帶給你', cta: '加入' };
+const frame = document.getElementById('frame');
+const q = location.search;                                  // 把 ?timing=… 原樣傳給直式動畫
+frame.src = 'about-video.html' + q;
+frame.addEventListener('load', async () => {
+  const w = frame.contentWindow;
+  for (let i = 0; i < 120 && !w.READY; i++) await new Promise((r) => setTimeout(r, 250));
+  // 直式動畫的場景資料（長度已依 timing 調整）
+  const scenes = w.eval('SCENES');
+  document.getElementById('bars').innerHTML = scenes.map(() => '<div class="bar"><i></i></div>').join('');
+  document.getElementById('labels').innerHTML = scenes.map((s) => `<span>${SHORT[s.id] || ''}</span>`).join('');
+  window.TOTAL = w.TOTAL;
+  window.seek = (t) => {
+    w.seek(t);
+    const cur = scenes.find((s) => t >= s.start && t < s.start + s.dur) || scenes[scenes.length - 1];
+    const fade = Math.min(1, (t - cur.start) / 0.4);
+    const h = document.getElementById('heading'), c = document.getElementById('caption');
+    if (h.dataset.id !== cur.id) { h.textContent = HEADINGS[cur.id] || ''; c.textContent = cur.text; h.dataset.id = cur.id; }
+    h.style.opacity = c.style.opacity = fade;
+    c.style.transform = `translateY(${(1 - fade) * 20}px)`;
+    document.querySelectorAll('.bar i').forEach((bar, i) => {
+      const s = scenes[i]; bar.style.width = `${Math.max(0, Math.min(1, (t - s.start) / s.dur)) * 100}%`;
+    });
+    document.querySelectorAll('.labels span').forEach((sp, i) => sp.classList.toggle('on', scenes[i] === cur));
+  };
+  window.seek(0);
+  window.READY = true;
+});
+</script>
+</body>
+</html>
