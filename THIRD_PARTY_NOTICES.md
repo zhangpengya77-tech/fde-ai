@@ -9,6 +9,7 @@
 | Vitest | https://github.com/vitest-dev/vitest | MIT | Unit testing |
 | Playwright | https://github.com/microsoft/playwright | Apache-2.0 | Browser acceptance testing |
 | TypeScript | https://github.com/microsoft/TypeScript | Apache-2.0 | Type checking and compilation |
+| qrcode-generator 1.4.4 | https://github.com/kazuhikoarase/qrcode-generator | MIT | 手機遙控器配對 QR 碼（收錄於 `src/vendor/qrcode-generator.js`，保留原作者版權聲明） |
 
 Installed versions are pinned by `package-lock.json`.
 

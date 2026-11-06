@@ -1,0 +1,212 @@
+/**
+ * 「連線方式」面板（2026-11-07）
+ *
+ * 四種操作方式都在這裡切換：
+ *   - 鍵盤（預設）：W/S 前後、A/D 左右、Q/E 轉向、R/F 升降
+ *   - 實體遙控器：USB 插上後撥一下搖桿就會自動接手（沿用既有校正精靈）
+ *   - 原子筆（鏡頭）：點畫面上的筆尖選色，筆移動＝右搖桿
+ *   - 手機遙控器：產生配對 QR 碼，手機掃碼後用雙拇指操作
+ * 優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤（前者有訊號就由前者控制）。
+ */
+import qrcode from '../vendor/qrcode-generator.js';
+import type { PenCameraInputAdapter, PenState } from '../input/adapters/PenCameraInputAdapter';
+import type { PhoneLinkInputAdapter, PhoneState } from '../input/adapters/PhoneLinkInputAdapter';
+
+export interface LinkPanelOptions {
+  root: HTMLElement;
+  pen: PenCameraInputAdapter;
+  phone: PhoneLinkInputAdapter;
+}
+
+const PEN_TEXT: Record<PenState['status'], string> = {
+  off: '鏡頭未開啟',
+  starting: '正在開啟鏡頭…',
+  'need-color': '請在畫面上「點一下」有顏色的筆蓋或筆尖',
+  tracking: '追蹤中：移動筆尖＝右搖桿（R/F 升降、Q/E 轉向）',
+  lost: '看不到筆：已自動懸停，請把筆移回畫面',
+  error: '鏡頭無法使用',
+};
+
+const PHONE_TEXT: Record<PhoneState['status'], string> = {
+  off: '尚未配對',
+  creating: '正在產生配對碼…',
+  waiting: '請用手機相機掃描 QR 碼（3 分鐘內有效）',
+  connecting: '手機已回應，正在直連…',
+  connected: '已連線：手機橫放，用兩個拇指操作',
+  lost: '手機已斷線',
+  error: '配對失敗',
+};
+
+/** 把網址畫成 QR 碼（白底黑點、四周留白，手機才好掃） */
+export function drawQr(canvas: HTMLCanvasElement, text: string, scale = 5): void {
+  const qr = qrcode(0, 'M');
+  qr.addData(text, 'Byte');
+  qr.make();
+  const n = qr.getModuleCount();
+  const margin = 4;
+  const size = (n + margin * 2) * scale;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000';
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (qr.isDark(r, c)) ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
+    }
+  }
+}
+
+export class LinkPanel {
+  readonly el: HTMLElement;
+  private readonly overlay: HTMLCanvasElement;
+  private raf = 0;
+
+  constructor(private readonly opts: LinkPanelOptions) {
+    const el = document.createElement('aside');
+    el.className = 'link-panel';
+    el.hidden = true;
+    el.setAttribute('aria-label', '連線方式');
+    el.innerHTML = `
+<style>
+  .link-panel{position:fixed;right:12px;top:12px;bottom:12px;width:min(360px,calc(100vw - 24px));overflow:auto;z-index:50;
+    background:#0b1520f2;color:#e6f2fa;border:1px solid #2fb4ff55;border-radius:14px;padding:14px 16px;font-size:14px;box-shadow:0 10px 40px #0008}
+  .link-panel h2{margin:0 0 8px;font-size:17px;display:flex;justify-content:space-between;align-items:center}
+  .link-panel h3{margin:14px 0 6px;font-size:15px;color:#5fd4ff}
+  .link-panel p{margin:4px 0;line-height:1.6;color:#b9cfdd}
+  .link-panel button{padding:6px 12px;border-radius:8px;border:1px solid #2fb4ff;background:#0f2b44;color:#e6f6ff;cursor:pointer;margin:4px 6px 4px 0}
+  .link-panel .stage{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;margin-top:6px;cursor:crosshair}
+  .link-panel video,.link-panel .stage canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);object-fit:cover}
+  .link-panel .status{font-weight:700;color:#e6f6ff}
+  .link-panel .err{color:#ff8a8a}
+  .link-panel .qr{display:block;margin:8px auto;width:200px;height:200px;image-rendering:pixelated;border-radius:6px}
+  .link-panel .code{text-align:center;font:700 22px/1.2 ui-monospace,Consolas,monospace;letter-spacing:4px}
+  .link-panel .url{word-break:break-all;font-size:12px;color:#8fb4cc;text-align:center}
+  .link-panel label[data-pen-depth]{display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer}
+  .link-panel label[data-pen-depth][hidden]{display:none}
+  .link-panel kbd{background:#1b3248;border-radius:4px;padding:0 5px;font-family:inherit}
+</style>
+<h2>連線方式 <button type="button" data-close aria-label="關閉">✕</button></h2>
+<p>優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤。</p>
+
+<h3>⌨️ 鍵盤（預設）</h3>
+<p><kbd>W</kbd><kbd>S</kbd> 前後、<kbd>A</kbd><kbd>D</kbd> 左右、<kbd>Q</kbd><kbd>E</kbd> 轉向、<kbd>R</kbd><kbd>F</kbd> 升降</p>
+
+<h3>🎮 實體遙控器（USB）</h3>
+<p>用 USB 線把遙控器接上電腦（模擬器模式），撥一下搖桿就會自動接手；第一次使用請照畫面完成校正。</p>
+
+<h3>🖊️ 原子筆搖桿（筆電鏡頭）</h3>
+<p>拿一支<b>筆蓋有顏色</b>的筆（紅、藍、綠最好）。開鏡頭後在畫面上點一下筆蓋，筆往上下左右移就是右搖桿。影像只在本機計算，不錄影、不上傳。</p>
+<button type="button" data-pen="toggle">開啟鏡頭</button>
+<button type="button" data-pen="center" hidden>設為中心</button>
+<button type="button" data-pen="color" hidden>重新選色</button>
+<label data-pen-depth hidden><input type="checkbox" data-pen="depth"> 遠近控油門（筆靠近＝上升）</label>
+<div class="stage" data-pen-stage hidden></div>
+<p class="status" data-pen-status>${PEN_TEXT.off}</p>
+
+<h3>📱 手機遙控器</h3>
+<p>手機和筆電連<b>同一個 Wi‑Fi</b>（或筆電連手機熱點）。按下面按鈕，用手機相機掃 QR 碼。</p>
+<button type="button" data-phone="pair">產生配對 QR 碼</button>
+<button type="button" data-phone="stop" hidden>中斷手機</button>
+<div data-phone-qr hidden><canvas class="qr"></canvas><div class="code" data-phone-code></div><div class="url" data-phone-url></div></div>
+<p class="status" data-phone-status>${PHONE_TEXT.off}</p>`;
+    opts.root.appendChild(el);
+    this.el = el;
+
+    const stage = el.querySelector<HTMLElement>('[data-pen-stage]')!;
+    stage.appendChild(opts.pen.video);
+    this.overlay = document.createElement('canvas');
+    this.overlay.width = 320;
+    this.overlay.height = 240;
+    stage.appendChild(this.overlay);
+    // 畫面是鏡像顯示：點擊位置要換回「原始影像」座標
+    stage.addEventListener('click', (ev) => {
+      const r = stage.getBoundingClientRect();
+      opts.pen.pickColorAt(1 - (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
+    });
+
+    el.querySelector('[data-close]')!.addEventListener('click', () => this.toggle(false));
+    el.querySelector('[data-pen="toggle"]')!.addEventListener('click', () => {
+      if (opts.pen.state().status === 'off' || opts.pen.state().status === 'error') void opts.pen.connect();
+      else opts.pen.disconnect();
+    });
+    el.querySelector('[data-pen="center"]')!.addEventListener('click', () => opts.pen.recenter());
+    el.querySelector('[data-pen="color"]')!.addEventListener('click', () => opts.pen.resetColor());
+    el.querySelector<HTMLInputElement>('[data-pen="depth"]')!.addEventListener('change', (ev) => {
+      opts.pen.depthThrottle = (ev.target as HTMLInputElement).checked;
+      opts.pen.recenter();
+    });
+    el.querySelector('[data-phone="pair"]')!.addEventListener('click', () => void opts.phone.connect());
+    el.querySelector('[data-phone="stop"]')!.addEventListener('click', () => opts.phone.disconnect());
+  }
+
+  toggle(show = this.el.hidden): void {
+    this.el.hidden = !show;
+    cancelAnimationFrame(this.raf);
+    if (show) this.drawLoop();
+  }
+
+  /** 原子筆狀態更新（由轉接器回呼） */
+  renderPen(s: PenState): void {
+    const q = <T extends HTMLElement>(sel: string): T => this.el.querySelector<T>(sel)!;
+    const on = s.status !== 'off' && s.status !== 'error';
+    q('[data-pen="toggle"]').textContent = on ? '關閉鏡頭' : '開啟鏡頭';
+    q('[data-pen-stage]').hidden = !on;
+    q('[data-pen="center"]').hidden = s.status !== 'tracking' && s.status !== 'lost';
+    q('[data-pen="color"]').hidden = !on || s.status === 'need-color';
+    q('[data-pen-depth]').hidden = !on;
+    const st = q('[data-pen-status]');
+    st.textContent = s.message && (s.status === 'error' || s.status === 'need-color') ? s.message : PEN_TEXT[s.status];
+    st.classList.toggle('err', s.status === 'error' || s.status === 'lost');
+  }
+
+  /** 手機狀態更新（由轉接器回呼） */
+  renderPhone(s: PhoneState): void {
+    const q = <T extends HTMLElement>(sel: string): T => this.el.querySelector<T>(sel)!;
+    const showQr = s.status === 'waiting' && !!s.url;
+    q('[data-phone-qr]').hidden = !showQr;
+    if (showQr && s.url) {
+      drawQr(q<HTMLCanvasElement>('[data-phone-qr] canvas'), s.url);
+      q('[data-phone-code]').textContent = s.code ?? '';
+      q('[data-phone-url]').textContent = s.url;
+      // QR 碼在面板下方，產生後自動捲到看得見的位置
+      q('[data-phone-qr]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    q('[data-phone="pair"]').textContent = s.status === 'off' ? '產生配對 QR 碼' : '重新產生';
+    q('[data-phone="stop"]').hidden = s.status === 'off';
+    const st = q('[data-phone-status]');
+    st.textContent = s.message || PHONE_TEXT[s.status];
+    st.classList.toggle('err', s.status === 'error' || s.status === 'lost');
+  }
+
+  /** 在鏡頭畫面上標出：中心十字、筆尖位置、目前搖桿方向 */
+  private drawLoop = (): void => {
+    this.raf = requestAnimationFrame(this.drawLoop);
+    const ctx = this.overlay.getContext('2d');
+    if (!ctx) return;
+    const { width: w, height: h } = this.overlay;
+    ctx.clearRect(0, 0, w, h);
+    const s = this.opts.pen.state();
+    if (s.center) {
+      const cx = s.center.x * w;
+      const cy = s.center.y * h;
+      ctx.strokeStyle = '#5fd4ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.opts.pen.range * w, 0, Math.PI * 2);
+      ctx.moveTo(cx - 10, cy);
+      ctx.lineTo(cx + 10, cy);
+      ctx.moveTo(cx, cy - 10);
+      ctx.lineTo(cx, cy + 10);
+      ctx.stroke();
+    }
+    if (s.blob) {
+      ctx.fillStyle = s.status === 'tracking' ? '#2ee59d' : '#ff5d5d';
+      ctx.beginPath();
+      ctx.arc(s.blob.x * w, s.blob.y * h, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+}

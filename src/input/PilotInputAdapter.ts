@@ -8,7 +8,8 @@
  * controller brand.
  */
 
-export type PilotInputType = 'keyboard-touch' | 'gamepad' | 'receiver-bridge';
+// 2026-11-07：新增 camera-pen（筆電鏡頭＋原子筆當搖桿）與 phone-link（手機當遙控器）
+export type PilotInputType = 'keyboard-touch' | 'gamepad' | 'receiver-bridge' | 'camera-pen' | 'phone-link';
 
 /** One unfiltered sample exactly as a physical device reported it. */
 export interface RawPilotInput {

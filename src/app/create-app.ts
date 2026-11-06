@@ -5,6 +5,10 @@ import type { FlightSnapshot, FlightState, PilotCommand } from '../flight/types'
 import { SimpleFlightController } from '../flight/adapters/SimpleFlightController';
 import { KeyboardInputAdapter } from '../input/adapters/KeyboardInputAdapter';
 import { GamepadInputAdapter } from '../input/adapters/GamepadInputAdapter';
+// 2026-11-07：原子筆鏡頭搖桿、手機遙控器與「連線方式」面板
+import { PenCameraInputAdapter } from '../input/adapters/PenCameraInputAdapter';
+import { PhoneLinkInputAdapter } from '../input/adapters/PhoneLinkInputAdapter';
+import { LinkPanel } from '../ui/link-panel';
 import { PilotInputPipeline, type PilotInputSource, type PipelineTrace } from '../input/PilotInputPipeline';
 import { ControllerCalibrationPanel, type ActiveProfileInfo } from '../ui/controller-calibration';
 import { describeChain } from '../ui/input-chain';
@@ -231,6 +235,7 @@ function createInterface(root: HTMLElement): HTMLElement {
           <button type="button" data-action="rtl">${L.rtl}</button>
           <button type="button" data-action="land">${L.land}</button>
           <button type="button" class="reports-button" data-action="open-reports">${L.missionRecord}</button>
+          <button type="button" class="link-button" data-action="open-link">🔗 連線方式</button>
         </div>
         <div class="phase-status">
           <span>${L.flightController}</span>
@@ -1108,6 +1113,12 @@ export function createApp(root: HTMLElement): AppHandle {
   const flightController = new SimpleFlightController();
   const keyboard = new KeyboardInputAdapter();
   const gamepad = new GamepadInputAdapter(0);
+  // 原子筆／手機：狀態變化時更新「連線方式」面板（面板稍後建立，先用 ?. 保護）
+  let linkPanel: LinkPanel | null = null;
+  const pen = new PenCameraInputAdapter((state) => linkPanel?.renderPen(state));
+  const phone = new PhoneLinkInputAdapter((state) => linkPanel?.renderPhone(state));
+  linkPanel = new LinkPanel({ root, pen, phone });
+  root.querySelector<HTMLElement>('[data-action="open-link"]')?.addEventListener('click', () => linkPanel?.toggle());
   const { store: profileStore } = resolveProfileStore();
 
   // Device profiles keyed by adapter id. The calibration wizard keeps this in
@@ -1330,9 +1341,13 @@ export function createApp(root: HTMLElement): AppHandle {
   };
 
   const pipeline = new PilotInputPipeline({
-    adapters: [gamepad],
+    // 優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤（有新鮮訊號的第一個接手）
+    adapters: [gamepad, phone, pen],
     keyboard: () => keyboard.poll(),
     profileFor: (id) => {
+      // 手機與原子筆的通道排列固定（美國手），不需校正
+      if (id === phone.id) return phone.profile();
+      if (id === pen.id) return pen.profile();
       const saved = deviceProfiles.get(id);
       if (saved) return saved;
       return calibrationPanel && calibrationPanel.isConnected() && calibrationPanel.getProfile() !== null
@@ -1823,6 +1838,9 @@ export function createApp(root: HTMLElement): AppHandle {
       resizeObserver.disconnect();
       keyboard.dispose();
       gamepad.disconnect();
+      pen.disconnect();
+      phone.disconnect();
+      linkPanel?.el.remove();
       calibrationPanel?.stop();
       droneEntity?.dispose();
       transmissionScene.dispose();
