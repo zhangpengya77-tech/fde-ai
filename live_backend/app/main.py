@@ -20,6 +20,7 @@ from starlette.responses import FileResponse, Response
 from starlette.staticfiles import StaticFiles
 
 from .credential_isolation import ClientCredentialIsolation
+from .simlink import simlink_routes  # 2026-11-07 手機遙控器配對（WebRTC 信令）
 from .download_center import (
     configured_download_root,
     configured_manifest_path,
@@ -746,7 +747,8 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
     # AI PID & Filter Lab（2026-11-04）：獨立模組與路由，掛在既有 /api/live/ 受保護前綴下，
     # 沿用 Gateway Assertion 身分驗證；不修改任何既有路由或 Flight Health。
     pid_lab = pid_lab_service or PidLabService(require_identity=require_identity)
-    routes = routes + pid_lab.routes() + [
+    # 手機遙控器配對（2026-11-07）：只轉交兩段連線描述，不需登入、不碰身分與資料（見 app/simlink.py）
+    routes = routes + pid_lab.routes() + simlink_routes() + [
         Mount("/pid-lab", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "pid-lab"), html=True, check_dir=False), name="pid-lab"),
         # F450 數位孿生（2026-11-04）：純靜態互動拆解頁，獨立入口；不影響其他路由。
         Mount("/f450-twin", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "f450-twin"), html=True, check_dir=False), name="f450-twin"),
