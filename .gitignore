@@ -82,3 +82,6 @@ live_backend/var/
 
 # 2026-11-04：Django 檔案快取（執行期資料，不進版本）
 student_portal/.cache/
+
+# Cloudflare wrangler 本機暫存（不提交）
+.wrangler/
