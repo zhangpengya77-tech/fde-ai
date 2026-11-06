@@ -8,7 +8,9 @@ import { GamepadInputAdapter } from '../input/adapters/GamepadInputAdapter';
 // 2026-11-07：原子筆鏡頭搖桿、手機遙控器與「連線方式」面板
 import { PenCameraInputAdapter } from '../input/adapters/PenCameraInputAdapter';
 import { PhoneLinkInputAdapter } from '../input/adapters/PhoneLinkInputAdapter';
+import { HandGestureInputAdapter } from '../input/adapters/HandGestureInputAdapter';
 import { LinkPanel } from '../ui/link-panel';
+import { normalizeInputSource, showPracticeToast, syncPractice } from '../report/practice-sync';
 import { PilotInputPipeline, type PilotInputSource, type PipelineTrace } from '../input/PilotInputPipeline';
 import { ControllerCalibrationPanel, type ActiveProfileInfo } from '../ui/controller-calibration';
 import { describeChain } from '../ui/input-chain';
@@ -700,6 +702,16 @@ export function createApp(root: HTMLElement): AppHandle {
       controlSamples: sessionRecorder.controlSamples(),
     });
     lastReport = report;
+    // 2026-11-07：登入學員的練習成績自動存入成長日誌（只送成績摘要）
+    void syncPractice({
+      mode: 'inspection',
+      title: report.taskName,
+      score: report.score.totalScore,
+      grade: String(report.score.grade),
+      duration_seconds: Math.round(report.durationMs / 1000),
+      input_source: practiceInputSource,
+      summary: { pathLengthM: Math.round(report.pathLengthM * 10) / 10, maxAltitudeM: Math.round(report.maxAltitudeM * 10) / 10, status: report.status },
+    }).then(showPracticeToast);
     void reportStore.save(report).catch(() => undefined);
   }
 
@@ -1117,7 +1129,8 @@ export function createApp(root: HTMLElement): AppHandle {
   let linkPanel: LinkPanel | null = null;
   const pen = new PenCameraInputAdapter((state) => linkPanel?.renderPen(state));
   const phone = new PhoneLinkInputAdapter((state) => linkPanel?.renderPhone(state));
-  linkPanel = new LinkPanel({ root, pen, phone });
+  const gesture = new HandGestureInputAdapter();
+  linkPanel = new LinkPanel({ root, pen, phone, gesture });
   root.querySelector<HTMLElement>('[data-action="open-link"]')?.addEventListener('click', () => linkPanel?.toggle());
   const { store: profileStore } = resolveProfileStore();
 
@@ -1342,12 +1355,13 @@ export function createApp(root: HTMLElement): AppHandle {
 
   const pipeline = new PilotInputPipeline({
     // 優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤（有新鮮訊號的第一個接手）
-    adapters: [gamepad, phone, pen],
+    adapters: [gamepad, phone, gesture, pen],
     keyboard: () => keyboard.poll(),
     profileFor: (id) => {
       // 手機與原子筆的通道排列固定（美國手），不需校正
       if (id === phone.id) return phone.profile();
       if (id === pen.id) return pen.profile();
+      if (id === gesture.id) return gesture.profile();
       const saved = deviceProfiles.get(id);
       if (saved) return saved;
       return calibrationPanel && calibrationPanel.isConnected() && calibrationPanel.getProfile() !== null
@@ -1546,7 +1560,10 @@ export function createApp(root: HTMLElement): AppHandle {
     COLLISION: 'safety-collision',
   };
 
+  // 記住目前操作方式，練習結束時一併寫進練飛紀錄
+  let practiceInputSource = '鍵盤';
   const updateInputSource = (source: PilotInputSource): void => {
+    practiceInputSource = normalizeInputSource(source.kind, source.label);
     if (readout.inputSource) {
       readout.inputSource.textContent = source.kind === 'adapter' ? `遙控器 · ${source.label}` : '鍵盤';
     }
@@ -1840,6 +1857,7 @@ export function createApp(root: HTMLElement): AppHandle {
       gamepad.disconnect();
       pen.disconnect();
       phone.disconnect();
+      gesture.disconnect();
       linkPanel?.el.remove();
       calibrationPanel?.stop();
       droneEntity?.dispose();

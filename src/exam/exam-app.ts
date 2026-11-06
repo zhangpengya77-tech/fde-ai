@@ -29,6 +29,7 @@ import { ExamHud, type ExamHudMode } from './panel';
 import { ExamSession, type TrajectoryPoint } from './session';
 import { ExamInput } from './exam-input';
 import { mountFloatingLinkPanel } from '../ui/link-panel';
+import { normalizeInputSource, showPracticeToast, syncPractice } from '../report/practice-sync';
 import { GroundCheckPanel } from './ground-panel';
 import {
   addOrbitPitchDeg,
@@ -434,7 +435,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   const examInput = new ExamInput();
   void examInput.start();
   // 2026-11-07：左下角「🔗 連線方式」——原子筆鏡頭搖桿、手機遙控器
-  const unmountLink = examInput.pen && examInput.phone ? mountFloatingLinkPanel(examInput.pen, examInput.phone) : () => undefined;
+  const unmountLink = examInput.pen && examInput.phone ? mountFloatingLinkPanel(examInput.pen, examInput.phone, examInput.gesture ?? undefined) : () => undefined;
 
   // ---- 流程狀態（步驟條／狀態／提示／按鈕）----
   let reportOpen = false;
@@ -652,6 +653,18 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
     lastTrajectory = result.trajectory;
     reportOpen = true;
     renderReport(result.report);
+    // 2026-11-07：登入學員的考場模擬結果自動存入成長日誌（各項 S／U／N 統計＋是否模擬通過）
+    const ratings = { S: 0, U: 0, N: 0 };
+    for (const it of result.report.items) if (it.rating) ratings[it.rating] += 1;
+    const info = examInput.getInfo();
+    void syncPractice({
+      mode: 'exam',
+      title: '考場模擬（A～G 科目）',
+      passed: !!result.report.simulatedPass,
+      duration_seconds: Math.round(simTime),
+      input_source: normalizeInputSource(info.sourceKind, info.sourceLabel),
+      summary: ratings,
+    }).then(showPracticeToast);
     renderFlow(true);
   };
 

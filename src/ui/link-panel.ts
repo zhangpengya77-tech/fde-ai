@@ -11,11 +11,14 @@
 import qrcode from '../vendor/qrcode-generator.js';
 import type { PenCameraInputAdapter, PenState } from '../input/adapters/PenCameraInputAdapter';
 import type { PhoneLinkInputAdapter, PhoneState } from '../input/adapters/PhoneLinkInputAdapter';
+import type { HandGestureInputAdapter, GestureState } from '../input/adapters/HandGestureInputAdapter';
 
 export interface LinkPanelOptions {
   root: HTMLElement;
   pen: PenCameraInputAdapter;
   phone: PhoneLinkInputAdapter;
+  /** 手勢搖桿（可選） */
+  gesture?: HandGestureInputAdapter;
 }
 
 const PEN_TEXT: Record<PenState['status'], string> = {
@@ -25,6 +28,15 @@ const PEN_TEXT: Record<PenState['status'], string> = {
   tracking: '追蹤中：移動筆尖＝右搖桿（R/F 升降、Q/E 轉向）',
   lost: '看不到筆：已自動懸停，請把筆移回畫面',
   error: '鏡頭無法使用',
+};
+
+const GESTURE_TEXT: Record<GestureState['status'], string> = {
+  off: '鏡頭未開啟',
+  loading: '正在載入手部辨識模型…',
+  'no-hand': '請把手伸到鏡頭前（手掌張開）',
+  tracking: '追蹤中：手掌移動＝右搖桿（雙手時左手＝升降與轉向）',
+  fist: '握拳：懸停中（張開手即可繼續）',
+  error: '手勢無法使用',
 };
 
 const PHONE_TEXT: Record<PhoneState['status'], string> = {
@@ -63,8 +75,8 @@ export function drawQr(canvas: HTMLCanvasElement, text: string, scale = 5): void
  * 在沒有控制列的頁面（考場模式）加一顆浮動的「🔗 連線方式」按鈕＋面板。
  * 回傳清除函式。
  */
-export function mountFloatingLinkPanel(pen: PenCameraInputAdapter, phone: PhoneLinkInputAdapter): () => void {
-  const panel = new LinkPanel({ root: document.body, pen, phone });
+export function mountFloatingLinkPanel(pen: PenCameraInputAdapter, phone: PhoneLinkInputAdapter, gesture?: HandGestureInputAdapter): () => void {
+  const panel = new LinkPanel({ root: document.body, pen, phone, gesture });
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.textContent = '🔗 連線方式';
@@ -76,6 +88,7 @@ export function mountFloatingLinkPanel(pen: PenCameraInputAdapter, phone: PhoneL
   return () => {
     pen.disconnect();
     phone.disconnect();
+    gesture?.disconnect();
     panel.el.remove();
     btn.remove();
   };
@@ -84,6 +97,7 @@ export function mountFloatingLinkPanel(pen: PenCameraInputAdapter, phone: PhoneL
 export class LinkPanel {
   readonly el: HTMLElement;
   private readonly overlay: HTMLCanvasElement;
+  private gOverlay: HTMLCanvasElement | null = null;
   private raf = 0;
 
   constructor(private readonly opts: LinkPanelOptions) {
@@ -113,7 +127,7 @@ export class LinkPanel {
   .link-panel kbd{background:#1b3248;border-radius:4px;padding:0 5px;font-family:inherit}
 </style>
 <h2>連線方式 <button type="button" data-close aria-label="關閉">✕</button></h2>
-<p>優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤。</p>
+<p>優先順序：實體遙控器 → 手機 → 手勢 → 原子筆 → 鍵盤。</p>
 
 <h3>⌨️ 鍵盤（預設）</h3>
 <p><kbd>W</kbd><kbd>S</kbd> 前後、<kbd>A</kbd><kbd>D</kbd> 左右、<kbd>Q</kbd><kbd>E</kbd> 轉向、<kbd>R</kbd><kbd>F</kbd> 升降</p>
@@ -131,6 +145,13 @@ export class LinkPanel {
 <div class="stage" data-pen-stage hidden></div>
 <p class="status" data-pen-status>${PEN_TEXT.off}</p>
 
+<h3>✋ 手勢搖桿（筆電鏡頭）</h3>
+<p>不用筆，直接對鏡頭伸手：手掌移動＝前後左右；兩隻手時左手上下＝升降、左右＝轉向；<b>握拳＝懸停</b>。第一次開啟會下載約 17MB 的手部辨識模型。影像只在本機計算，不上傳。</p>
+<button type="button" data-gesture="toggle">開啟手勢</button>
+<button type="button" data-gesture="center" hidden>設為中心</button>
+<div class="stage" data-gesture-stage hidden></div>
+<p class="status" data-gesture-status>${GESTURE_TEXT.off}</p>
+
 <h3>📱 手機遙控器</h3>
 <p>手機和筆電連<b>同一個 Wi‑Fi</b>（或筆電連手機熱點）。按下面按鈕，用手機相機掃 QR 碼。手機頁上方可開「體感」：傾斜手機＝前後左右。</p>
 <button type="button" data-phone="pair">產生配對 QR 碼</button>
@@ -139,6 +160,26 @@ export class LinkPanel {
 <p class="status" data-phone-status>${PHONE_TEXT.off}</p>`;
     opts.root.appendChild(el);
     this.el = el;
+    // 手勢：鏡頭畫面＋關鍵點標示；與原子筆共用鏡頭，開一個就關另一個
+    if (opts.gesture) {
+      const g = opts.gesture;
+      const gStage = el.querySelector<HTMLElement>('[data-gesture-stage]')!;
+      gStage.appendChild(g.video);
+      this.gOverlay = document.createElement('canvas');
+      this.gOverlay.width = 320;
+      this.gOverlay.height = 240;
+      gStage.appendChild(this.gOverlay);
+      g.onState = (s) => this.renderGesture(s);
+      el.querySelector('[data-gesture="toggle"]')!.addEventListener('click', () => {
+        if (g.state().status === 'off' || g.state().status === 'error') {
+          opts.pen.disconnect();
+          void g.connect();
+        } else g.disconnect();
+      });
+      el.querySelector('[data-gesture="center"]')!.addEventListener('click', () => g.recenter());
+    } else {
+      el.querySelectorAll<HTMLElement>('[data-gesture], [data-gesture-stage], [data-gesture-status]').forEach((n) => (n.hidden = true));
+    }
     // 轉接器的狀態變化直接更新本面板
     opts.pen.onState = (s) => this.renderPen(s);
     opts.phone.onState = (s) => this.renderPhone(s);
@@ -157,7 +198,10 @@ export class LinkPanel {
 
     el.querySelector('[data-close]')!.addEventListener('click', () => this.toggle(false));
     el.querySelector('[data-pen="toggle"]')!.addEventListener('click', () => {
-      if (opts.pen.state().status === 'off' || opts.pen.state().status === 'error') void opts.pen.connect();
+      if (opts.pen.state().status === 'off' || opts.pen.state().status === 'error') {
+        opts.gesture?.disconnect();
+        void opts.pen.connect();
+      }
       else opts.pen.disconnect();
     });
     el.querySelector('[data-pen="center"]')!.addEventListener('click', () => opts.pen.recenter());
@@ -201,6 +245,18 @@ export class LinkPanel {
     st.classList.toggle('err', s.status === 'error' || s.status === 'lost');
   }
 
+  /** 手勢狀態更新（由轉接器回呼） */
+  renderGesture(s: GestureState): void {
+    const q = <T extends HTMLElement>(sel: string): T => this.el.querySelector<T>(sel)!;
+    const on = s.status !== 'off' && s.status !== 'error';
+    q('[data-gesture="toggle"]').textContent = on ? '關閉手勢' : '開啟手勢';
+    q('[data-gesture-stage]').hidden = !on || s.status === 'loading';
+    q('[data-gesture="center"]').hidden = s.status !== 'tracking';
+    const st = q('[data-gesture-status]');
+    st.textContent = s.message || GESTURE_TEXT[s.status];
+    st.classList.toggle('err', s.status === 'error' || s.status === 'no-hand');
+  }
+
   /** 手機狀態更新（由轉接器回呼） */
   renderPhone(s: PhoneState): void {
     const q = <T extends HTMLElement>(sel: string): T => this.el.querySelector<T>(sel)!;
@@ -218,6 +274,33 @@ export class LinkPanel {
     const st = q('[data-phone-status]');
     st.textContent = s.message || PHONE_TEXT[s.status];
     st.classList.toggle('err', s.status === 'error' || s.status === 'lost');
+  }
+
+  /** 手勢畫面：每隻手畫出骨架，掌心中立位置畫圈 */
+  private drawGesture(): void {
+    const g = this.opts.gesture;
+    const ctx = this.gOverlay?.getContext('2d');
+    if (!g || !ctx || !this.gOverlay) return;
+    const { width: w, height: h } = this.gOverlay;
+    ctx.clearRect(0, 0, w, h);
+    const s = g.state();
+    const bones = [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20], [5, 9, 13, 17]];
+    s.hands.forEach((hand) => {
+      ctx.strokeStyle = s.status === 'fist' ? '#ffb347' : '#2ee59d';
+      ctx.lineWidth = 2;
+      for (const chain of bones) {
+        ctx.beginPath();
+        chain.forEach((i, k) => (k ? ctx.lineTo(hand[i].x * w, hand[i].y * h) : ctx.moveTo(hand[i].x * w, hand[i].y * h)));
+        ctx.stroke();
+      }
+    });
+    for (const n of [s.rightNeutral, s.leftNeutral]) {
+      if (!n) continue;
+      ctx.strokeStyle = '#5fd4ff';
+      ctx.beginPath();
+      ctx.arc(n.x * w, n.y * h, g.range * w, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   /** 畫一支筆的中心圈與目前位置（左手筆用） */
@@ -250,6 +333,7 @@ export class LinkPanel {
     if (!ctx) return;
     const { width: w, height: h } = this.overlay;
     ctx.clearRect(0, 0, w, h);
+    this.drawGesture();
     const s = this.opts.pen.state();
     if (s.left?.center) this.drawPen(ctx, s.left.center, s.left.blob, '#ffb347', s.status === 'tracking', w, h);
     if (s.center) {

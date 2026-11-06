@@ -20,6 +20,7 @@ import { PilotInputPipeline, type PipelineResult } from '../input/PilotInputPipe
 // 2026-11-07：考場模式也支援原子筆鏡頭搖桿與手機遙控器
 import { PenCameraInputAdapter } from '../input/adapters/PenCameraInputAdapter';
 import { PhoneLinkInputAdapter } from '../input/adapters/PhoneLinkInputAdapter';
+import { HandGestureInputAdapter } from '../input/adapters/HandGestureInputAdapter';
 import { resolveProfileStore, type ProfileStore } from '../ui/profile-store';
 import {
   BUNDLED_RC_PROFILE_ENDPOINT,
@@ -93,6 +94,7 @@ export class ExamInput {
   /** 原子筆與手機（測試注入 adapters 時不建立，維持原行為） */
   readonly pen: PenCameraInputAdapter | null = null;
   readonly phone: PhoneLinkInputAdapter | null = null;
+  readonly gesture: HandGestureInputAdapter | null = null;
 
   private readonly keyboard: KeyboardInputAdapter;
   private readonly store: ProfileStore;
@@ -119,11 +121,12 @@ export class ExamInput {
     if (!options.adapters && typeof document !== 'undefined') {
       this.pen = new PenCameraInputAdapter();
       this.phone = new PhoneLinkInputAdapter();
+      this.gesture = new HandGestureInputAdapter();
     }
     // 優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤
     this.adapters = options.adapters
       ? [...options.adapters]
-      : [this.gamepad, ...(this.phone ? [this.phone] : []), ...(this.pen ? [this.pen] : [])];
+      : [this.gamepad, ...(this.phone ? [this.phone] : []), ...(this.gesture ? [this.gesture] : []), ...(this.pen ? [this.pen] : [])];
     this.keyboard = new KeyboardInputAdapter(options.keyboardTarget ?? window);
     this.store = options.store ?? resolveProfileStore().store;
     this.autoProfileSource =
@@ -137,6 +140,7 @@ export class ExamInput {
         // 手機與原子筆的通道排列固定（美國手），不需校正
         if (this.phone && id === this.phone.id) return this.phone.profile();
         if (this.pen && id === this.pen.id) return this.pen.profile();
+        if (this.gesture && id === this.gesture.id) return this.gesture.profile();
         return this.deviceProfiles.get(id) ?? null;
       },
     });

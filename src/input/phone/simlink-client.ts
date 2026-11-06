@@ -15,8 +15,14 @@ export const ICE_SERVERS: RTCIceServer[] = [
 /** 配對服務的網址前綴：模擬器掛在 /sim/app/ 底下時，API 在同一網域的 /api/simlink */
 export function apiBase(): string {
   const override = (window as unknown as { __fdeSimlinkBase?: string }).__fdeSimlinkBase;
-  return (override ?? `${location.origin}/api/simlink`).replace(/\/+$/, '');
+  if (override) return override.replace(/\/+$/, '');
+  // 放在 GitHub 頁面（github.io）時沒有後台：配對改走固定入口（教學主機開機時才可用）
+  if (location.hostname.endsWith('github.io')) return `${FIXED_ENTRY}/api/simlink`;
+  return `${location.origin}/api/simlink`;
 }
+
+/** 教學主機的固定入口（Cloudflare Worker，網址永遠不變） */
+export const FIXED_ENTRY = 'https://fde-ai-v2.fde-ai-gateway.workers.dev';
 
 /** 等候位址（ICE candidate）收集完成，最多 4 秒；完成後 localDescription 才包含所有位址 */
 export function waitIceComplete(pc: RTCPeerConnection, timeoutMs = 4000): Promise<void> {
