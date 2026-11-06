@@ -7,7 +7,8 @@
     // 2026-11-05：新訪客認識平台的「關於我們 About FDE-AI」頁（/platform/about）
     { key: 'about', sectionId: 'about', path: 'about' },
     { key: 'learn', sectionId: 'learn', path: 'courses' },
-    { key: 'fde-column', sectionId: 'fde-column', path: 'fde' },
+    // 舊 /fde 連結保留相容性，但顯示新版三大「學」專區；原始 FDE 影片資料仍保留。
+    { key: 'fde-column', sectionId: 'learn', path: 'fde' },
     { key: 'practice', sectionId: 'practice', path: 'simulator' },
     { key: 'build', sectionId: 'build', path: 'f450' },
     { key: 'inspection', sectionId: 'inspection', path: 'eagle' },

@@ -118,7 +118,7 @@ function applyRoute(routeKey) {
   });
 
   document.body.classList.toggle('inspection-view', route.key === 'inspection');
-  document.body.classList.toggle('fde-column-view', route.key === 'fde-column');
+  document.body.classList.toggle('fde-column-view', route.key === 'fde-column' && route.sectionId === 'fde-column');
   document.body.classList.toggle('home-view', route.key === 'home');
   document.body.dataset.route = route.key;
   updatePageMetadata(route.key);
@@ -164,8 +164,8 @@ function updatePageMetadata(routeKey) {
     return;
   }
   if (routeKey === 'fde-column') {
-    const title = 'FDE-AI 無人載具實驗室｜無人機 × AI 實作教學';
-    const description = 'FDE-AI 無人載具實驗室，分享無人機、F450、YOLO 目標檢測、RAG 知識庫、飛控與產業應用實作。';
+    const title = 'FDE-AI｜無人載具學習中心';
+    const description = 'FDE-AI 無人載具學習中心，依閉源飛控、開源飛控與 3D 列印整理教師指定課程。';
     document.title = title;
     setMetaContent('name', 'description', description, null);
     setMetaContent('property', 'og:title', title, null);
