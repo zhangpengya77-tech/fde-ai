@@ -25,6 +25,7 @@ const {
 
 const $ = (selector) => document.querySelector(selector);
 const router = window.FdeRouter;
+const learningSections = window.FdeLearningSections || [];
 const fdeVideoData = window.FdeVideoData || {};
 const fdeColumn = window.FdeColumn || {};
 const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
@@ -458,40 +459,88 @@ function renderCohorts() {
     .join('');
 }
 
+function youtubeId(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'youtu.be') return parsed.pathname.slice(1);
+    return parsed.searchParams.get('v') || '';
+  } catch {
+    return '';
+  }
+}
+
 function renderLearningResources() {
-  $('#learningResources').innerHTML = learningTracks
-    .map((track) => {
-      const hiddenCount = Math.max(0, track.items.length - track.previewCount);
-      return `
-        <article class="track-card" data-track="${track.key}">
-          <div class="track-head">
-            <span class="tag">${track.key}</span>
-            <h3>${track.title}</h3>
-            <p>${track.summary}</p>
-          </div>
-          <div class="lesson-list">
-            ${track.items
-              .map((item, index) => {
-                const collapsedClass = index >= track.previewCount ? 'is-extra' : '';
-                return `
-                  <a class="${collapsedClass}" href="${item.url}" target="${item.url.startsWith('#') ? '_self' : '_blank'}" rel="noreferrer">
-                    <span>${item.sourceType || item.type}</span>
-                    <strong>${item.title}</strong>
-                    <small>${item.description}</small>
-                  </a>
-                `;
-              })
-              .join('')}
-          </div>
-          ${
-            hiddenCount > 0
-              ? `<button class="track-toggle" type="button" data-track-toggle="${track.key}" aria-expanded="false">展開全部 ${track.items.length} 個</button>`
-              : ''
-          }
-        </article>
-      `;
-    })
+  const grid = $('#learningResources');
+  const detail = $('#learningSectionDetail');
+  if (!grid || !detail) return;
+
+  grid.hidden = false;
+  detail.hidden = true;
+  detail.innerHTML = '';
+  grid.innerHTML = learningSections
+    .map(
+      (section, index) => `
+        <button class="learning-section-card learning-section-card-${index + 1}" type="button" data-learning-section="${section.id}">
+          <span class="learning-section-index">0${index + 1}</span>
+          <span class="learning-section-label">${escapeHtml(section.label)}</span>
+          <strong>${escapeHtml(section.title)}</strong>
+          <span>${escapeHtml(section.summary)}</span>
+          <small>${section.courses.length} 堂指定課程 <span aria-hidden="true">→</span></small>
+        </button>
+      `,
+    )
     .join('');
+}
+
+function renderLearningSectionDetail(sectionId) {
+  const section = learningSections.find((item) => item.id === sectionId);
+  const grid = $('#learningResources');
+  const detail = $('#learningSectionDetail');
+  if (!section || !grid || !detail) return;
+
+  grid.hidden = true;
+  detail.hidden = false;
+  detail.innerHTML = `
+    <button class="learning-back" type="button" data-learning-back>← 返回學習中心</button>
+    <div class="learning-detail-heading">
+      <span class="learning-section-label">${escapeHtml(section.label)}</span>
+      <h3>${escapeHtml(section.title)}</h3>
+      <p>${escapeHtml(section.summary)}</p>
+    </div>
+    <div class="learning-course-list">
+      ${section.courses
+        .filter((course) => course.enabled)
+        .sort((a, b) => a.order - b.order)
+        .map((course) => {
+          const id = youtubeId(course.youtubeUrl);
+          return `
+            <article class="learning-course-card">
+              <div class="learning-course-number">${String(course.order).padStart(2, '0')}</div>
+              <div class="learning-course-content">
+                <h4>${escapeHtml(course.title)}</h4>
+                ${
+                  id
+                    ? `<div class="learning-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="${escapeHtml(course.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+                    : '<p class="learning-video-missing">影片嵌入待補。</p>'
+                }
+                <a class="learning-youtube-link" href="${escapeHtml(course.youtubeUrl)}" target="_blank" rel="noreferrer">在 YouTube 開啟原始影片 ↗</a>
+              </div>
+            </article>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+}
+
+function handleLearningClick(event) {
+  const sectionButton = event.target.closest('[data-learning-section]');
+  if (sectionButton) {
+    renderLearningSectionDetail(sectionButton.dataset.learningSection);
+    return;
+  }
+
+  if (event.target.closest('[data-learning-back]')) renderLearningResources();
 }
 
 function renderFdeColumn() {
@@ -1132,6 +1181,7 @@ function renderCertificationChecklist() {
 function bindActions() {
   document.addEventListener('click', handleRouteClick);
   document.addEventListener('click', handleFdeColumnClick);
+  document.addEventListener('click', handleLearningClick);
   // AI 回答語音朗讀（事件委託：結果區會被 innerHTML 重新渲染）。
   document.addEventListener('click', (event) => {
     const speakButton = event.target.closest('[data-speak-inspection]');
