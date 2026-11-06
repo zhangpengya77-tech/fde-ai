@@ -374,6 +374,8 @@ const learningTracks = [
     previewCount: learningTrackPreviewCount,
     summary: '學習鳳凰模擬器使用方式；軟體下載需聯繫後台管理員線下取得。',
     items: [
+      // 2026-11-07：站內網頁模擬器（免安裝），支援手機掃碼與原子筆＋鏡頭操作
+      { type: 'web-simulator', title: 'FDE 網頁模擬器（免安裝）', description: '八字飛行考場與電力巡檢訓練；可用鍵盤、USB 遙控器、手機掃 QR 碼或原子筆＋筆電鏡頭操作。', sourceType: '站內模擬器', url: '/sim/' },
       withVideoDescription(youtubeVideos[14], '鳳凰模擬器遙控器設定、場地介紹與練習入口。'),
       { type: 'offline-download', title: '鳳凰模擬器下載說明', description: '此軟體不在網站直接下載，請聯繫後台管理員線下提供安裝包。', sourceType: '閉源/專有', url: 'https://www.flugsimulatoren.ch/' }
     ]
