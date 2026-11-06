@@ -22,7 +22,7 @@
     /* 2026-11-07：四種連線方式 */
     .links { margin-top: 28px; padding: 18px; border: 1px solid rgba(0, 194, 255, .3); border-radius: 8px; background: #0b1a2b; }
     .links h2 { margin-bottom: 4px; }
-    .ways { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    .ways { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
     .way { padding: 12px; border-radius: 8px; background: #102a43; }
     .way b { display: block; color: #fff; font-size: 16px; margin-bottom: 4px; }
     .way .new { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #f59e0b33; color: #fbbf24; font-size: 11px; vertical-align: middle; }
@@ -57,14 +57,16 @@
 
     <!-- 2026-11-07：四種連線方式說明（兩種訓練都適用，畫面上按「🔗 連線方式」切換） -->
     <section class="links" aria-labelledby="links-title">
-      <h2 id="links-title">🔗 四種連線方式</h2>
-      <p class="note">進入任一訓練後，按畫面上的「🔗 連線方式」切換。多種同時連線時的優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤；訊號中斷超過 0.25 秒會自動懸停。</p>
+      <h2 id="links-title">🔗 五種連線方式</h2>
+      <p class="note">進入任一訓練後，按畫面上的「🔗 連線方式」切換。多種同時連線時的優先順序：實體遙控器 → 手機 → 手勢 → 原子筆 → 鍵盤；訊號中斷超過 0.25 秒會自動懸停。</p>
       <div class="ways">
         <div class="way"><b>⌨️ 鍵盤</b><p>W/S 前後、A/D 左右、Q/E 轉向、R/F 升降。打開就能飛。</p></div>
         <div class="way"><b>🎮 實體遙控器</b><p>USB 線接電腦（模擬器模式），撥一下搖桿自動接手；第一次照畫面完成校正。</p></div>
         <div class="way"><b>📱 手機遙控器<span class="new">新</span></b><p>按「產生配對 QR 碼」，手機相機掃碼後橫放，雙拇指操作；也可開「體感」傾斜手機飛行。手機和電腦需連同一個 Wi‑Fi。</p></div>
+        <div class="way"><b>✋ 手勢＋鏡頭<span class="new">新</span></b><p>不用筆，對鏡頭伸手：手掌移動＝搖桿、兩手＝四軸、握拳＝懸停。第一次會下載約 17MB 辨識模型。</p></div>
         <div class="way"><b>🖊️ 原子筆＋鏡頭<span class="new">新</span></b><p>拿一支筆蓋有顏色的筆，在鏡頭畫面點一下筆蓋，筆移動＝搖桿。左手再拿一支不同顏色的筆＝完整四軸。影像只在本機計算、不上傳。</p></div>
       </div>
+      <p class="note" style="margin-top:12px">🛩️ 登入學員帳號後練飛，成績會自動存入「我的成長日誌 → 模擬練飛紀錄」，老師可在後台查看全班紀錄。</p>
     </section>
   </main>
 </body>

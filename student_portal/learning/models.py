@@ -1435,3 +1435,38 @@ class VisionInspectionReviewEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class SimPracticeRecord(models.Model):
+    """模擬器練飛紀錄（2026-11-07）：學員登入後，網頁模擬器每完成一次練習自動存一筆。
+
+    與成長紀錄 R01～R08 分開：練飛一天可能好幾十次，屬於「練習歷程」而非需教師審核的成果。
+    只保存成績摘要（分數、等第、通過與否、時間、操作方式），不保存影像或位置軌跡。
+    """
+
+    class Mode(models.TextChoices):
+        INSPECTION = "inspection", "電力巡檢"
+        EXAM = "exam", "考場模擬"
+
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="sim_practice_records")
+    # 練習當下所屬班級（學員只有一個有效班級時才記；教師依此做班級隔離）
+    cohort = models.ForeignKey(Cohort, on_delete=models.SET_NULL, null=True, blank=True, related_name="sim_practice_records")
+    mode = models.CharField(max_length=16, choices=Mode.choices)
+    title = models.CharField(max_length=120)
+    score = models.PositiveSmallIntegerField(null=True, blank=True)
+    grade = models.CharField(max_length=8, blank=True)
+    passed = models.BooleanField(null=True, blank=True)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    input_source = models.CharField(max_length=40, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["student", "-created_at"], name="sim_practice_student_idx"),
+            models.Index(fields=["cohort", "-created_at"], name="sim_practice_cohort_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.student_id}:{self.mode}:{self.score}"

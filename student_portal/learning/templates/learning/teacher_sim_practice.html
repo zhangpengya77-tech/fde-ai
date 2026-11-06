@@ -1,0 +1,58 @@
+{% extends 'learning/base.html' %}
+{% comment %}
+2026-11-07：全班模擬練飛紀錄（教師）。依 teacher_cohorts 做班級隔離，一般教師只看自己班級。
+{% endcomment %}
+{% block title %}模擬練飛紀錄｜教師後台{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+<section class="page-heading">
+  <p class="eyebrow">練習歷程</p>
+  <h1>🛩️ 全班模擬練飛紀錄</h1>
+  <p class="muted">學員登入後在網頁模擬器練飛，成績會自動記錄在這裡（電力巡檢分數、考場模擬是否通過、操作方式）。</p>
+  <form method="get">
+    <label>班級
+      <select name="cohort" onchange="this.form.submit()">
+        <option value="">全部班級</option>
+        {% for c in cohorts %}<option value="{{ c.pk }}" {% if c.pk == selected %}selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </label>
+  </form>
+</section>
+<section class="panel">
+  <h2>學員總覽</h2>
+  {% if per_student %}
+    <table class="data-table">
+      <thead><tr><th>學員</th><th>練習次數</th><th>最佳分數</th><th>最近練習</th></tr></thead>
+      <tbody>
+        {% for s in per_student %}
+          <tr><td>{{ s.student__nickname }}（{{ s.student__public_user_id }}）</td><td>{{ s.total }}</td><td>{{ s.best|default:"—" }}</td><td>{{ s.last|date:"Y-m-d H:i" }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">目前還沒有學員的練飛紀錄。</p>
+  {% endif %}
+</section>
+<section class="panel">
+  <h2>最近 200 筆</h2>
+  {% if records %}
+    <table class="data-table">
+      <thead><tr><th>時間</th><th>學員</th><th>練習</th><th>成績</th><th>飛行時間</th><th>操作方式</th></tr></thead>
+      <tbody>
+        {% for r in records %}
+          <tr>
+            <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ r.student.nickname }}</td>
+            <td>{{ r.get_mode_display }}・{{ r.title }}</td>
+            <td>{% if r.score is not None %}{{ r.score }} 分{% if r.grade %}（{{ r.grade }}）{% endif %}{% elif r.passed is not None %}{% if r.passed %}模擬通過{% else %}未通過{% endif %}{% else %}—{% endif %}</td>
+            <td>{{ r.duration_seconds }} 秒</td>
+            <td>{{ r.input_source|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">—</p>
+  {% endif %}
+</section>
+{% endblock %}

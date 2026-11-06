@@ -1,0 +1,34 @@
+{% extends 'learning/base.html' %}
+{% comment %}
+2026-11-07：模擬器練飛紀錄（學員）。網頁模擬器每完成一次練習就自動存一筆；只顯示自己的紀錄。
+{% endcomment %}
+{% block title %}模擬練飛紀錄｜成長日誌{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:student_dashboard' %}">返回我的學習</a>
+<section class="page-heading">
+  <p class="eyebrow">成長日誌</p>
+  <h1>🛩️ 模擬練飛紀錄</h1>
+  <p class="muted">在「仿真訓練專區」登入狀態下練飛，每完成一次就會自動記錄在這裡。共 {{ stats.total }} 次{% if stats.best is not None %}，最佳分數 {{ stats.best }} 分{% endif %}。</p>
+  <p><a class="button primary" href="/sim/">前往仿真訓練專區</a></p>
+</section>
+<section class="panel">
+  {% if records %}
+    <table class="data-table">
+      <thead><tr><th>時間</th><th>練習</th><th>成績</th><th>飛行時間</th><th>操作方式</th></tr></thead>
+      <tbody>
+        {% for r in records %}
+          <tr>
+            <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ r.get_mode_display }}・{{ r.title }}</td>
+            <td>{% if r.score is not None %}{{ r.score }} 分{% if r.grade %}（{{ r.grade }}）{% endif %}{% elif r.passed is not None %}{% if r.passed %}模擬通過{% else %}未通過{% endif %}{% else %}—{% endif %}</td>
+            <td>{{ r.duration_seconds }} 秒</td>
+            <td>{{ r.input_source|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">還沒有練飛紀錄。登入後到仿真訓練專區完成一次練習試試看！</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -43,6 +43,15 @@ function corsHeaders(request) {
     : {};
 }
 
+/** 配對 API 的回應加上跨網站許可（只有 GitHub 頁面來的請求才加） */
+function withCors(response, enabled, request) {
+  const extra = enabled ? corsHeaders(request) : {};
+  if (!Object.keys(extra).length) return response;
+  const headers = new Headers(response.headers);
+  for (const [k, v] of Object.entries(extra)) headers.set(k, v);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 function offlineResponse(request) {
   const wantsHtml = (request.headers.get("accept") || "").includes("text/html");
   if (request.method === "GET" && wantsHtml) {
@@ -133,14 +142,23 @@ export default {
       });
     }
 
-    if (!origin) return offlineResponse(request);
+    // 手機配對 API（2026-11-07）：模擬器放在 GitHub 頁面時要跨網站呼叫，只對 GitHub 頁面開放
+    const simlink = incoming.pathname.startsWith("/api/simlink/");
+    if (simlink && request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: { ...corsHeaders(request), "access-control-allow-methods": "GET, POST", "access-control-allow-headers": "content-type", "access-control-max-age": "600" }
+      });
+    }
+
+    if (!origin) return withCors(offlineResponse(request), simlink, request);
     try {
       const response = await fetchImpl(targetRequest(request, origin));
       // 通道本身掛了（Cloudflare 回 530／52x，不是 Django 回的錯誤）→ 顯示離線說明
-      if (isTunnelDown(response.status)) return offlineResponse(request);
-      return rewriteResponse(response, origin, fixedOrigin);
+      if (isTunnelDown(response.status)) return withCors(offlineResponse(request), simlink, request);
+      return withCors(rewriteResponse(response, origin, fixedOrigin), simlink, request);
     } catch {
-      return offlineResponse(request);
+      return withCors(offlineResponse(request), simlink, request);
     }
   }
 };

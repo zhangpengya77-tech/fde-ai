@@ -61,3 +61,26 @@ test("狀態端點：在線／離線，且只允許 GitHub 頁面跨網站讀取
   assert.equal((await res.json()).status, "offline");
   assert.equal(res.headers.get("access-control-allow-origin"), null);
 });
+
+test("配對 API：GitHub 頁面的預檢與回應帶跨網站許可，其他網站不帶", async () => {
+  const gh = "https://zhangpengya77-tech.github.io";
+  let res = await worker.fetch(new Request(`${FIXED}/api/simlink/rooms`, { method: "OPTIONS", headers: { origin: gh } }), env, {}, async () => new Response("x"));
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get("access-control-allow-origin"), gh);
+  assert.match(res.headers.get("access-control-allow-methods"), /POST/);
+  res = await worker.fetch(new Request(`${FIXED}/api/simlink/rooms`, { method: "POST", body: "{}", headers: { origin: gh } }), env, {}, async () => new Response("{}", { status: 201 }));
+  assert.equal(res.status, 201);
+  assert.equal(res.headers.get("access-control-allow-origin"), gh);
+  res = await worker.fetch(new Request(`${FIXED}/api/simlink/rooms`, { method: "POST", body: "{}", headers: { origin: "https://evil.example" } }), env, {}, async () => new Response("{}", { status: 201 }));
+  assert.equal(res.headers.get("access-control-allow-origin"), null);
+  // 其他路徑（例如登入）不因 GitHub 來源而開放
+  res = await worker.fetch(new Request(`${FIXED}/login/`, { headers: { origin: gh } }), env, {}, async () => new Response("ok"));
+  assert.equal(res.headers.get("access-control-allow-origin"), null);
+});
+
+test("主機離線時配對 API 仍回跨網站許可，讓 GitHub 頁面能顯示「主機離線」", async () => {
+  const gh = "https://zhangpengya77-tech.github.io";
+  const res = await worker.fetch(new Request(`${FIXED}/api/simlink/rooms`, { method: "POST", body: "{}", headers: { origin: gh } }), env, {}, async () => new Response("", { status: 530 }));
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get("access-control-allow-origin"), gh);
+});

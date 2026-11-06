@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from . import sim_practice  # 2026-11-07 模擬器練飛紀錄
 from . import public_ai
 
 app_name = "learning"
@@ -71,6 +72,10 @@ urlpatterns = [
     path("teacher/", views.teacher_dashboard, name="teacher_dashboard"),
     # 2026-11-06：待開通學員（驗證信寄不出時由教師一鍵開通）
     path("teacher/pending-students/", views.teacher_pending_students, name="teacher_pending_students"),
+    # 2026-11-07：模擬器練飛紀錄（成績 API、學員紀錄頁、教師全班紀錄頁）
+    path("student/sim-practice/api/", sim_practice.sim_practice_api, name="sim_practice_api"),
+    path("student/sim-practice/", sim_practice.student_sim_practice, name="student_sim_practice"),
+    path("teacher/sim-practice/", sim_practice.teacher_sim_practice, name="teacher_sim_practice"),
     # P3 班級學習成果總覽（2026-10-13 教師指令）：重用 P1 五階段與 P2 成長證據鏈資料。
     path("teacher/class-outcomes/", views.teacher_class_outcomes, name="teacher_class_outcomes"),
     # P5-B／P5-C 班級結訓成果報告（2026-10-13 教師指令）：只讀彙整，支援瀏覽器原生列印。
