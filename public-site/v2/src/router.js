@@ -2,11 +2,10 @@
   const routeDefinitions = [
     { key: 'home', sectionId: 'home', path: '' },
     { key: 'missions', sectionId: 'missions', path: 'tasks' },
-    // 2026-11-06：「關於我們 About FDE-AI」頁（./about）
-    { key: 'about', sectionId: 'about', path: 'about' },
     { key: 'learn', sectionId: 'learn', path: 'courses' },
-    { key: 'fde-column', sectionId: 'fde-column', path: 'fde' },
-    { key: 'practice', sectionId: 'practice', path: 'sim' },
+    // 舊 /fde 連結保留相容性，但顯示新版三大「學」專區；原始 FDE 影片資料仍保留。
+    { key: 'fde-column', sectionId: 'learn', path: 'fde' },
+    { key: 'practice', sectionId: 'practice', path: 'simulator' },
     { key: 'build', sectionId: 'build', path: 'f450' },
     { key: 'inspection', sectionId: 'inspection', path: 'eagle' },
     { key: 'certify', sectionId: 'certify', path: 'github' },

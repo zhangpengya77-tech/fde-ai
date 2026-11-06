@@ -3,34 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      // 2026-11-06：從根目錄 404.html 轉回時（?p=子頁路徑），先把網址還原成 /fde-ai/v2/子頁，前端路由才會顯示正確頁面
-      (function () {
-        var q = new URLSearchParams(location.search), p = q.get('p');
-        if (p && /^[A-Za-z0-9_\-\/]+$/.test(p)) {
-          q.delete('p');
-          var rest = q.toString();
-          history.replaceState(null, '', location.pathname.replace(/[^/]*$/, '') + p + (rest ? '?' + rest : '') + location.hash);
-        }
-      })();
-    </script>
     <title>FDE-AI | 無人載具學習控制中心</title>
-    <!-- 2026-11-06：導航徽章字型：中文用標準楷書（電腦有標楷體就用標楷體，手機用霞鶩文楷 TC，只載入 10 個字）、英文 Orbitron -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@700&text=%E5%AD%B8%E7%B7%B4%E5%81%9A%E4%BD%9C%E6%B8%AC%E8%AD%89%E5%81%A5%E8%AA%BF%E5%B1%95%E5%B8%AB&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" />
-    <link rel="stylesheet" href="./src/styles.css?v=1.17-pages-host-status" />
+    <link rel="stylesheet" href="./src/styles.css?v=1.2-fde-column" />
   </head>
   <body class="home-view">
     <aside class="sidebar">
-      <!-- 2026-11-06：左上角品牌改為「關於我們」入口（點文字＝關於我們；點 FDE 方塊＝回首頁） -->
-      <div class="brand">
-        <a class="brand-mark" href="./" aria-label="回 FDE-AI 首頁" title="回首頁">FDE</a>
-        <a class="brand-about" href="./about" data-route="about" aria-label="關於我們 About FDE-AI">
+      <a class="brand" href="./" aria-label="FDE-AI home">
+        <span class="brand-mark">FDE</span>
+        <span>
           <strong>FDE-AI</strong>
-          <small>關於我們 About</small>
-          <i class="nav-cta">點我 CLICK ›</i>
-        </a>
-      </div>
+          <small>Learning Control Center</small>
+        </span>
+      </a>
       <nav class="nav" id="moduleNav" aria-label="Main navigation"></nav>
       <div class="sidebar-foot">
         <span>v1.1 MVP</span>
@@ -39,32 +23,29 @@
     </aside>
 
     <header class="mobile-header">
-      <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具實訓平台</small></a>
-      <a class="mobile-login-link" href="./student/">學員登入</a>
+      <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習平台</small></a>
+      <a class="mobile-login-link" href="/student/">學員前端</a>
       <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileMenu">選單</button>
     </header>
 
     <nav id="mobileMenu" class="mobile-demo-nav" aria-label="Mobile demo navigation" hidden>
       <div class="mobile-menu-head">
-        <!-- 手機選單最上方同樣改成「關於我們」入口 -->
-        <a class="mobile-menu-brand brand-about" href="./about" data-route="about" aria-label="關於我們 About FDE-AI">FDE-AI <small>關於我們 About</small> <i class="nav-cta">點我 CLICK ›</i></a>
+        <a class="mobile-menu-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習控制中心</small></a>
         <button class="mobile-menu-close" id="mobileMenuClose" type="button" aria-label="關閉選單">✕</button>
       </div>
 
-      <!-- 桌面右上角的 Portal / 工具入口：手機改為可收合群組，預設展開以方便 iPhone 操作。 -->
-      <details class="mobile-portal-group" id="mobilePortalGroup" open>
-        <summary>入口選單 · Portal<span class="mobile-portal-hint">登入 / 註冊 / 教師 / 下載 / 仿真</span></summary>
+      <!-- 桌面右上角的 Portal / 工具入口：手機改為可收合群組，預設收起。 -->
+      <details class="mobile-portal-group" id="mobilePortalGroup">
+        <summary>入口選單 · Portal<span class="mobile-portal-hint">註冊 / 登入 / 教師 / 下載</span></summary>
         <div class="mobile-portal-links">
-          <a href="./student/">學員登入</a>
-          <!-- 2026-11-04：加入學員註冊（連到教學後台） -->
-          <a href="./register/">學員註冊</a>
-          <a href="./teacher/login/">教師登入</a>
-          <a href="./downloads/">下載中心</a>
-          <a href="./sim/">仿真訓練</a>
-          <a href="./student/growth/">學員成長日誌</a>
-          <a href="./flight-health/">飛行健康 AI</a>
-          <!-- 2026-11-04：AI PID 調參入口，連到教學後台（未上線時自動停用） -->
-          <a href="./pid-lab/">AI PID 調參實驗室</a>
+          <a href="/student/">學員前端</a>
+          <a href="/register/">學員註冊</a>
+          <a href="/teacher/login/">教師後台</a>
+          <a href="/downloads/">下載中心</a>
+          <a href="/flight-health/">飛行健康 AI</a>
+          <a href="/sim/">無人機仿真訓練</a>
+          <a href="/m02-simulator/">模擬飛行 M02</a>
+          <a href="/student/growth/">我的成長日誌</a>
         </div>
       </details>
 
@@ -80,12 +61,12 @@
 
     <main>
       <nav class="portal-entry-links" aria-label="Portal and tools">
-        <a href="./student/">學員登入</a>
-        <!-- 2026-11-04：加入學員註冊（連到教學後台） -->
-        <a href="./register/">學員註冊</a>
-        <a href="./teacher/login/">教師登入</a>
-        <a href="./downloads/">下載中心 <small>Download Center</small></a>
-        <a href="./sim/">仿真訓練 <small>Simulation</small></a>
+        <a href="/student/">學員前端</a>
+        <a href="/register/">學員註冊</a>
+        <a href="/teacher/login/">教師後台</a>
+        <a href="/downloads/">下載中心 <small>Download Center</small></a>
+        <a href="/sim/">無人機仿真訓練 <small>Inspection Simulator</small></a>
+        <a href="/m02-simulator/">模擬飛行 M02 <small>Flight Simulation</small></a>
       </nav>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
@@ -95,8 +76,7 @@
           <div class="hero-systems" id="heroSystems"></div>
           <div class="hero-actions" id="heroActions"></div>
         </div>
-        <!-- 2026-11-06：右側改為 Three.js 3D F450（src/hero-drone-3d.js），CSS 線框機只在 3D 載入前顯示 -->
-        <div class="drone-stage" aria-label="F450 四旋翼科技透明展示">
+        <div class="drone-stage" aria-label="transparent blue F450 wireframe animation">
           <div class="grid-plane"></div>
           <div class="scan-ring"></div>
           <div class="drone">
@@ -123,15 +103,15 @@
           <p>手機展示依照首頁、12 任務、學練做測證、歷屆學員成果與教師復核參照的电脑版結構排列。</p>
         </div>
         <div class="mobile-demo-grid">
-          <a href="./"><span>01</span><strong>首頁</strong><small>FDE-AI 無人載具實訓平台</small></a>
+          <a href="./"><span>01</span><strong>首頁</strong><small>FDE-AI 無人載具學習平台</small></a>
           <a href="./tasks"><span>02</span><strong>12 任務</strong><small>四階段成長地圖</small></a>
           <a href="./courses"><span>03</span><strong>學</strong><small>課程影片與學習資源</small></a>
-          <a href="./sim"><span>04</span><strong>練</strong><small>模擬器與考照練習</small></a>
+          <a href="./simulator"><span>04</span><strong>練</strong><small>模擬器與考照練習</small></a>
           <a href="./f450"><span>05</span><strong>做</strong><small>F450、AI 助教與專案實作</small></a>
           <a href="./eagle"><span>06</span><strong>測</strong><small>鷹眼 AI 檢測中心</small></a>
-          <a href="./student/growth/"><span>07</span><strong>證</strong><small>學習成長日誌（R01–R08）</small></a>
+          <a href="/student/growth/"><span>07</span><strong>證</strong><small>學習成長日誌（R01–R08）</small></a>
           <a href="./results"><span>08</span><strong>歷屆學員成果</strong><small>展示歷屆學員影片與作品</small></a>
-          <a href="./teacher/login/"><span>09</span><strong>教師復核參照</strong><small>查看教師複核流程與示例</small></a>
+          <a href="./teacher"><span>09</span><strong>教師復核參照</strong><small>查看教師複核流程與示例</small></a>
         </div>
       </section>
 
@@ -183,103 +163,6 @@
         </div>
       </section>
 
-      <!-- 2026-11-05：關於我們 About FDE-AI（左側導航「關於我們」入口，/platform/about）。
-           內容分四層：我們是誰／我們做什麼／已經做到什麼（教學實績與平台功能分開）／培養哪些人才。
-           所有按鈕都連到既有真實頁面。 -->
-      <section class="section-block module-page about-page" id="about">
-        <!-- 2026-11-06：「關於我們」介紹影片放在最上方（58 秒，台灣口音配音＋繁體字幕），下面才是文字介紹。
-             playsinline：iPhone 在頁面內播放不強制全螢幕；影片放在 /f450-twin/media/（支援分段下載，iPhone 才能播放）；preload="metadata"：先只載入封面與長度，按播放才下載影片 -->
-        <figure class="about-video">
-          <video controls playsinline preload="metadata" poster="./src/assets/about-intro-poster.jpg" aria-label="FDE-AI 關於我們介紹影片">
-            <source src="./f450-twin/media/about-intro.mp4" type="video/mp4" />
-            你的瀏覽器無法播放影片，<a href="./f450-twin/media/about-intro.mp4">點這裡下載觀看</a>。
-          </video>
-          <figcaption>▶ 一分鐘認識 FDE-AI 無人載具實訓平台</figcaption>
-        </figure>
-        <div class="section-intro">
-          <p class="eyebrow">About FDE-AI · 關於我們</p>
-          <h2>關於我們 About FDE-AI</h2>
-          <p>從零基礎到專業進階，用「學、練、做、測、證」培養能上場的無人載具人才。</p>
-        </div>
-
-        <!-- ② 我們是誰？ -->
-        <article class="about-block about-who">
-          <h3><span class="about-step">01</span>我們是誰？</h3>
-          <p class="about-lead">FDE-AI 是結合<strong>無人機教育、開源技術、AI 應用與產業實作</strong>的無人載具人才實訓平台，服務零基礎學員到專業進階人才。</p>
-          <div class="about-chips">
-            <span class="tag">無人機教育</span><span class="tag">開源技術</span><span class="tag">AI 應用</span><span class="tag">產業實作</span>
-          </div>
-        </article>
-
-        <!-- ③ 我們做什麼？（學練做測證，沿用既有五大功能，不重新設計首頁） -->
-        <article class="about-block">
-          <h3><span class="about-step">02</span>我們做什麼？</h3>
-          <p class="about-sub">以「學、練、做、測、證」為核心的完整實訓流程。</p>
-          <div class="about-grid about-grid-5">
-            <a class="about-card" href="./courses" data-route="learn"><span class="about-icon">學</span><strong>無人機基礎學習</strong><small>課程影片、法規安全與工具下載</small></a>
-            <a class="about-card" href="./sim" data-route="practice"><span class="about-icon">練</span><strong>模擬與真機飛行</strong><small>模擬器、考照練習到真機操作</small></a>
-            <a class="about-card" href="./f450" data-route="build"><span class="about-icon">做</span><strong>F450 工程實作</strong><small>組裝、接線、調參與 AI 陪做</small></a>
-            <a class="about-card" href="./eagle" data-route="inspection"><span class="about-icon">測</span><strong>AI 評量</strong><small>槳葉旋向與電力巡檢 AI 檢測</small></a>
-            <a class="about-card" href="./student/growth/"><span class="about-icon">證</span><strong>證照輔導與成果紀錄</strong><small>學習成長日誌與成果存證</small></a>
-          </div>
-        </article>
-
-        <!-- ④ 我們已經做到了什麼？（團隊教學實績與平台已完成功能分開呈現） -->
-        <article class="about-block">
-          <h3><span class="about-step">03</span>我們已經做到了什麼？</h3>
-          <div class="about-split">
-            <div class="about-panel">
-              <span class="pill">團隊教學實績</span>
-              <p class="about-big">數百名</p>
-              <p>團隊多年無人機教學累積的學員培訓經驗，涵蓋入門、考照與實作課程。</p>
-              <small class="about-note">此為團隊歷年教學實績，並非全部透過 FDE-AI V2.0 平台完成培訓。</small>
-            </div>
-            <div class="about-panel">
-              <span class="pill">平台已上線功能</span>
-              <ul class="about-features">
-                <li><a href="./courses" data-route="learn">課程影片與下載說明</a></li>
-                <li><a href="./sim" data-route="practice">模擬器與考照練習</a></li>
-                <li><a href="./eagle" data-route="inspection">AI 視覺檢測（槳葉旋向、電力巡檢）＋教師覆核</a></li>
-                <li><a href="./live/">F450 AI 陪做（鏡頭＋語音）</a></li>
-                <li><a href="./flight-health/">飛行日誌健康分析</a></li>
-                <li><a href="./pid-lab/">AI PID 與濾波實驗室</a></li>
-                <li><a href="./downloads/">下載中心（開源教具與工具）</a></li>
-                <li><a href="./student/growth/">學習成長紀錄（R01–R08）</a></li>
-              </ul>
-            </div>
-          </div>
-        </article>
-
-        <!-- ⑤ 專業職涯發展方向 -->
-        <article class="about-block">
-          <h3><span class="about-step">04</span>我們可以培養哪些人才？</h3>
-          <div class="about-grid about-grid-3">
-            <div class="about-card about-talent"><span class="about-icon">飛</span><strong>職業飛手</strong><small>考照、任務飛行與安全作業</small></div>
-            <div class="about-card about-talent"><span class="about-icon">影</span><strong>空拍影視人才</strong><small>空拍構圖、運鏡與後製</small></div>
-            <div class="about-card about-talent"><span class="about-icon">巡</span><strong>電力／風電巡檢應用人才</strong><small>巡檢飛行與 AI 影像判讀</small></div>
-            <div class="about-card about-talent"><span class="about-icon">師</span><strong>無人機種子教師</strong><small>教學設計與實作帶領</small></div>
-            <div class="about-card about-talent"><span class="about-icon">控</span><strong>飛控軟硬體工程師</strong><small>Pixhawk、調參與日誌分析</small></div>
-            <div class="about-card about-talent"><span class="about-icon">研</span><strong>AI 無人載具應用與研發人才</strong><small>視覺辨識、RAG 與系統整合</small></div>
-          </div>
-          <ol class="about-path" aria-label="人才培養路徑">
-            <li><strong>入門</strong><small>安全與基礎</small></li>
-            <li><strong>考照</strong><small>學科與術科</small></li>
-            <li><strong>實作</strong><small>F450 工程</small></li>
-            <li><strong>專題</strong><small>AI 與飛控</small></li>
-            <li><strong>產業應用</strong><small>巡檢、空拍</small></li>
-            <li><strong>職涯發展</strong><small>就業與教學</small></li>
-          </ol>
-        </article>
-
-        <!-- ⑥ 開始學習（既有真實入口） -->
-        <div class="about-cta">
-          <a class="primary-action" href="./courses" data-route="learn">查看公開課程 →</a>
-          <a class="secondary-action" href="./register/">學員註冊</a>
-          <a class="secondary-action" href="./student/">學員登入</a>
-          <a class="secondary-action" href="./results" data-route="cohorts">歷屆學員成果</a>
-        </div>
-      </section>
-
       <!-- 飛行健康 AI 分析獨立專欄入口 -->
       <section class="section-block flight-health-section" id="flight-health-entry">
         <div class="flight-health-banner">
@@ -296,15 +179,11 @@
       <section class="section-block module-page compact-section" id="learn">
         <div class="section-intro">
           <p class="eyebrow">Learn · 學</p>
-          <h2>課程影片與下載說明</h2>
-          <p>保留 F450、鳳凰模擬器、證照、AI、3D 列印與 GitHub 的學習入口。</p>
+          <h2>無人載具學習中心</h2>
+          <p>依飛控系統與 3D 列印學習路徑整理教師指定課程。</p>
         </div>
-        <a class="fde-column-entry" href="./fde" data-route="fde-column">
-          <span class="tag">FDE 專欄</span>
-          <strong>FDE-AI 無人載具實驗室</strong>
-          <small>查看無人機、AI 與工程實作影片</small>
-        </a>
-        <div class="resource-grid" id="learningResources"></div>
+        <div class="learning-sections" id="learningResources"></div>
+        <div class="learning-section-detail" id="learningSectionDetail" hidden></div>
       </section>
 
       <section class="section-block module-page compact-section fde-column-page" id="fde-column">
@@ -338,31 +217,7 @@
           <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教透過 F450 RAG 知識庫協助排錯。</p>
         </div>
         <!-- Platform Integration：首頁「作 Build」主要 CTA 進入 F450 Main-12 / Student Live Coach -->
-        <a class="primary-action build-main12-entry" id="buildMain12Entry" href="./live/">進入 F450 Main-12 實作（AI 即時助教）→</a>
-        <!-- 2026-11-05：F450 數位孿生入口（沿用既有 /f450-twin/ 專案，不另開發），放在教學區最上方，學員一眼可見 -->
-        <div class="panel f450-twin-feature" id="buildF450Twin">
-          <a class="f450-twin-feature-media" href="./f450-twin/" aria-label="打開 F450 數位孿生 3D 模型">
-            <img src="./f450-twin/preview.jpg" alt="F450 數位孿生 3D 模型預覽（紅白機臂、Pixhawk 飛控、GPS）" width="720" height="510" loading="lazy" />
-            <span class="f450-twin-feature-badge">3D</span>
-          </a>
-          <div class="f450-twin-feature-body">
-            <div class="section-head">
-              <h3>F450 數位孿生</h3>
-              <span class="pill">3D 互動拆解</span>
-            </div>
-            <!-- 2026-11-06：入口說明改為數位孿生 1.2（含真機實拍對照）的實際功能 -->
-            <p>數位孿生 1.2：依教師 F450 實機照片建模，可和真機實拍照片逐一對照，拆開看每個零件在哪裡、做什麼。</p>
-            <ul class="f450-twin-feature-list">
-              <li><b>可用</b>360° 旋轉、縮放，切換視角；「📷 實拍對照」自動顯示同角度的真機照片</li>
-              <li><b>可用</b>點選零件看中文名稱、型號、功能與真機實拍特寫（Pixhawk 2.4.8、R9DS 接收機、A2212 馬達等）</li>
-              <li><b>可用</b>一鍵／逐層爆炸拆解、組裝步驟自動播放、接線圖、檢查清單</li>
-              <li><b>可用</b>兩點量測與 3D 尺寸標註</li>
-              <li><b class="dev">核對中</b>依 F450＋Pixhawk 2.4.8 參照文件逐項核對型號與尺寸（文件待教師提供）</li>
-            </ul>
-            <p class="build-legacy-note">教學實機：紅白 F450 機架、Pixhawk 2.4.8、RadioLink AT9S 遙控器＋R9DS 接收機、A2212 930KV 馬達、945 槳、30A 電調 ×4、4S 電池、M8N 類 GPS。標示「待實機核對」的項目尚未確認，模型不是 1:1 工程復刻。</p>
-            <a class="primary-action build-f450-twin-entry" id="buildF450TwinEntry" href="./f450-twin/">打開 F450 數位孿生 →</a>
-          </div>
-        </div>
+        <a class="primary-action build-main12-entry" id="buildMain12Entry" href="/live/">進入 F450 Main-12 實作（AI 即時助教）→</a>
         <p class="build-legacy-note">以下為 1.0 舊版 F450 組裝流程與 RAG 助教，保留供參照。</p>
         <div class="build-layout">
           <div class="panel">
@@ -414,25 +269,10 @@
         <div class="section-intro">
           <p class="eyebrow">AI Inspection Center · 測</p>
           <h2>鷹眼 AI 檢測中心</h2>
-          <p>本頁兩個正式檢測入口：F450 槳葉正反及方向檢查（V7 模型）、電力巡檢影片上傳與分析。檢測在教學後台執行，需先登入；結果交老師覆核。</p>
+          <p>本頁只保留兩個正式檢測入口：F450 槳葉正反及方向檢查、電力巡檢 MP4 影片上傳與分析。四面懸停檢測移至下方「歷史／擴充檢測」區，不再佔用正式入口。</p>
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
-        <!-- 2026-11-04：GitHub 靜態站無法安全地跨站上傳到後台，兩個入口改為登入後到後台檢測頁執行；
-             網址由 wireBackendLinks() 依 portalBaseUrl 產生，後台未上線時自動停用。 -->
         <div class="inspection-layout">
-          <div class="panel upload-panel">
-            <h3>F450 槳葉正反及方向檢查</h3>
-            <p class="muted">上傳 F450 俯視照片，V7 模型判斷 M1～M4 的 CW／CCW；未通過時會說明哪一支槳裝錯、正確應是什麼，並由 AI 助教與知識庫說明修正步驟。</p>
-            <a class="primary-action button" data-backend-path="/platform/eagle" href="#">登入後執行槳葉檢測</a>
-          </div>
-          <div class="panel upload-panel">
-            <h3>電力巡檢影片上傳與分析</h3>
-            <p class="muted">上傳無人機巡檢影片（MP4、MOV 等），教師審核過的電力巡檢模型偵測鳥巢、異物、絕緣子損傷、導線斷開，結果進入教師覆核。</p>
-            <a class="primary-action button" data-backend-path="/student/power-inspection/" href="#">登入後上傳巡檢影片</a>
-          </div>
-        </div>
-        <!-- 原本的上傳元件保留但隱藏：既有程式仍綁定這些元素，移除會讓頁面腳本出錯 -->
-        <div class="inspection-layout" hidden aria-hidden="true" style="display:none">
           <div class="panel upload-panel">
             <h3>F450 槳葉正反及方向檢查</h3>
             <label class="dropzone">
@@ -443,23 +283,43 @@
             <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
           </div>
           <div class="panel upload-panel">
-            <h3>四面懸停檢測</h3>
+            <h3>電力巡檢 MP4 影片上傳與分析</h3>
             <label class="dropzone">
-              <input type="file" id="hoverInput" accept="video/*" />
-              <span>上傳 30 秒影片</span>
-              <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
+              <input type="file" id="powerInspectionInput" accept="video/mp4,.mp4" />
+              <span>上傳巡檢 MP4 影片</span>
+              <small>影片只會進入本人的隔離巡檢工作與教師覆核流程；尚未載入真實模型時不會產生任何虛構推論結果。</small>
             </label>
-            <button class="primary-action button" id="hoverButton">執行懸停評分</button>
+            <button class="primary-action button" id="powerInspectionButton">上傳並建立巡檢工作</button>
           </div>
           <div class="panel result-panel propeller-result-panel">
             <h3>F450 槳葉檢測結果</h3>
             <div class="result" id="propellerResult"></div>
           </div>
           <div class="panel result-panel">
-            <h3>飛行分析儀表板</h3>
-            <div class="result" id="hoverResult"></div>
+            <h3>電力巡檢結果</h3>
+            <div class="result" id="powerInspectionResult"></div>
           </div>
         </div>
+        <details class="inspection-legacy-panel">
+          <summary>歷史／擴充檢測：F450 四面懸停（正式入口已讓給電力巡檢）</summary>
+          <p class="muted">此區保留既有四面懸停評分流程，供舊課程與擴充教學使用，不會顯示為本頁的正式檢測入口。</p>
+          <div class="workflow-grid" id="legacyAssessmentWorkflows"></div>
+          <div class="inspection-layout">
+            <div class="panel upload-panel">
+              <h3>四面懸停檢測</h3>
+              <label class="dropzone">
+                <input type="file" id="hoverInput" accept="video/*" />
+                <span>上傳 30 秒影片</span>
+                <small>拍攝機頭朝前、右、後、左四個方向的懸停練習。</small>
+              </label>
+              <button class="primary-action button" id="hoverButton">執行懸停評分</button>
+            </div>
+            <div class="panel result-panel">
+              <h3>飛行分析儀表板</h3>
+              <div class="result" id="hoverResult"></div>
+            </div>
+          </div>
+        </details>
       </section>
 
       <section class="section-block light-section" id="teacher">
@@ -491,20 +351,14 @@
                原先由 renderStageGuides 注入的 stage-guide 改為靜態輸出，頁面外觀與內容不變。 -->
           <div class="stage-guide"><span>證</span><strong>GitHub 成果存證</strong><p>把學習紀錄、檢測截圖、影片與作品整理成 GitHub 倉庫，形成能力證據。</p></div>
         </div>
-        <div class="certify-entries">
-          <a class="certify-entry" href="./student/growth/"><strong>學員成長日誌</strong><small>R01–R08 成長紀錄</small></a>
-          <a class="certify-entry" href="./courses/"><strong>證照 SOP</strong><small>考照流程與標準</small></a>
-          <a class="certify-entry" href="./github/"><strong>成果紀錄</strong><small>GitHub 能力檔案</small></a>
-        </div>
         <div class="cert-grid" id="certificationChecklist"></div>
       </section>
     </main>
 
-    <!-- 發布設定：portalBaseUrl / visionApiUrl 等；必須在本站其他腳本之前載入。 -->
-    <script src="./assets/config.js?v=1.0-r2"></script>
-    <script src="./src/router.js?v=1.3-pages-about"></script>
+    <script src="./src/router.js?v=1.2-fde-column"></script>
     <script src="./src/course-definitions.js?v=1.5b-course-sync"></script>
-    <script src="./src/platform-browser.js?v=1.5g-pages-oneline"></script>
+    <script src="./src/platform-browser.js?v=1.5d-stage-rename"></script>
+    <script src="./src/learning-sections.js?v=2.0c-learning-sections"></script>
     <script src="./src/data/fdeVideos.js?v=1.2-fde-column-suffix"></script>
     <script src="./src/fde-column.js?v=1.2-fde-column-tags"></script>
     <script>
@@ -512,11 +366,6 @@
     </script>
     <script src="./src/rag-client.js?v=1.2.3-mobile-speech"></script>
     <script src="./src/vision-client.js?v=1.0.3-mobile-speech"></script>
-    <script src="./src/app.js?v=1.2.9-pages-host"></script>
-    <!-- 2026-11-06：主機在線偵測：主機關機時互動功能顯示離線提示，開機後自動恢復 -->
-    <script src="./src/host-status.js?v=1.0"></script>
-    <!-- 首頁右側 3D 無人機：three.js 與模型放在同站 ./f450-twin/，頁面載完才載入，不拖慢首頁 -->
-    <script type="importmap">{"imports":{"three":"./f450-twin/vendor/three/three.module.min.js"}}</script>
-    <script type="module" src="./src/hero-drone-3d.js?v=3.0-pages-neon"></script>
+    <script src="./src/app.js?v=1.2.3-mobile-speech&fde=1.2-fde-column"></script>
   </body>
 </html>

@@ -25,13 +25,11 @@ const {
 
 const $ = (selector) => document.querySelector(selector);
 const router = window.FdeRouter;
+const learningSections = window.FdeLearningSections || [];
 const fdeVideoData = window.FdeVideoData || {};
 const fdeColumn = window.FdeColumn || {};
-// 公開發布產物不含本機推論後端；視覺端點改由發布設定驅動，未設定時功能離線且不產生假結果。
-const publicConfig = window.FDE_PUBLIC_CONFIG || {};
-const visionApiUrl = (publicConfig.visionApiUrl || '').replace(/\/+$/, '');
-const localYoloEndpoint = visionApiUrl ? `${visionApiUrl}/api/detect` : '';
-const localHoverEndpoint = visionApiUrl ? `${visionApiUrl}/api/hover` : '';
+const localYoloEndpoint = 'http://127.0.0.1:8765/api/detect';
+const localHoverEndpoint = 'http://127.0.0.1:8765/api/hover';
 const ragConfig = window.FdeRagConfig || {};
 const ragClient = window.FdeRagClient?.createRagClient(ragConfig);
 const assistantService = ragClient && window.FdeRagClient?.createF450AssistantService(ragClient);
@@ -81,115 +79,24 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function resolvePortalHref(rawHref) {
-  const cfg = window.FDE_PUBLIC_CONFIG || {};
-  const base = (cfg.portalBaseUrl || '').replace(/\/+$/, '');
-  if (typeof rawHref === 'string' && rawHref.startsWith('portal:')) {
-    const key = rawHref.slice('portal:'.length);
-    const pathMap = {
-      growth: '/student/growth/',
-      student: '/student/',
-      'teacher-login': '/teacher/login/',
-      register: '/register/'
-    };
-    const path = pathMap[key] || '/';
-    if (!base) return { enabled: false, href: '#' };
-    return { enabled: true, href: base + path };
-  }
-  return { enabled: true, href: rawHref };
-}
-
-function wirePortalLinks() {
-  const cfg = window.FDE_PUBLIC_CONFIG || {};
-  const base = (cfg.portalBaseUrl || '').replace(/\/+$/, '');
-  const pathMap = {
-    student: '/student/',
-    register: '/register/',
-    'teacher-login': '/teacher/login/',
-    growth: '/student/growth/',
-    // 2026-11-04：AI PID 與濾波實驗室在教學後台（需登入），靜態站只放連結
-    'pid-lab': '/pid-lab/',
-    // 2026-11-04：F450 AI 陪做與飛行健康分析需要後台服務；靜態站的副本連不到後台，改導向後台
-    live: '/live/',
-    'flight-health': '/flight-health/'
-  };
-  const selectors = {
-    student: 'a[href="./student/"]',
-    register: 'a[href="./register/"]',
-    'teacher-login': 'a[href="./teacher/login/"]',
-    growth: 'a[href="./student/growth/"]',
-    'pid-lab': 'a[href="./pid-lab/"]',
-    live: 'a[href="./live/"], a[href="/live/"]',
-    'flight-health': 'a[href="./flight-health/"]'
-  };
-  Object.keys(pathMap).forEach((key) => {
-    const path = pathMap[key];
-    document.querySelectorAll(selectors[key]).forEach((el) => {
-      if (!base) {
-        el.setAttribute('aria-disabled', 'true');
-        el.classList.add('portal-link-disabled');
-        el.removeAttribute('href');
-        el.title = '需教學系統上線後開放';
-      } else {
-        el.href = base + path;
-      }
-    });
-  });
-  wireBackendLinks(base);
-}
-
-// 2026-11-04：檢測入口（槳葉 V7、電力巡檢）改到教學後台執行。
-// 先經登入頁，登入後由 next 參數直接帶到對應的後台檢測頁；後台未設定時停用按鈕。
-function wireBackendLinks(base) {
-  document.querySelectorAll('a[data-backend-path]').forEach((el) => {
-    const path = el.getAttribute('data-backend-path') || '/';
-    if (!base) {
-      el.setAttribute('aria-disabled', 'true');
-      el.classList.add('portal-link-disabled');
-      el.removeAttribute('href');
-      el.title = '需教學系統上線後開放';
-      return;
-    }
-    el.href = `${base}/login/?next=${encodeURIComponent(path)}`;
-  });
-}
-
 function renderNavigation() {
-  // 教師確認的 FDE-AI 2.0 首頁左側主導航：學/練/作/測/證/飛行健康，順序固定。
   const primaryNav = [
-    // 2026-11-06：「關於我們」入口移到左上角品牌（點我），導航從「學」開始
-    { key: 'learn', label: '學', title: '公開課程' },
-    { key: 'practice', label: '練', title: '仿真訓練' },
-    { key: 'build', label: '作', title: '實作任務' },
-    { key: 'inspection', label: '測', title: 'AI 視覺檢測' },
-    { key: 'certify', label: '證', title: '證照 SOP、學員成長日誌與成果紀錄' },
-    { label: '飛', title: '飛行健康分析｜Flight Health AI', href: './flight-health/' },
-    // 2026-11-04：飛行健康正下方新增 AI PID 調參入口；網址由 wirePortalLinks() 改成教學後台 /pid-lab/
-    { label: '調', title: 'AI PID 與濾波實驗室｜AI PID & Filter Lab', href: './pid-lab/' }
+    { key: 'missions', label: '任', title: '12 任務地圖' },
+    ...moduleSections,
+    { label: '健', title: '飛行健康 AI / Flight Health', href: '/flight-health/' },
+    { key: 'cohorts', label: '展', title: '歷屆學員成果' },
+    { key: 'teacher', label: '師', title: '教師復核中心' }
   ];
   $('#moduleNav').innerHTML = primaryNav
-    .map((section) => {
-      const rawHref = section.href || router.hrefFor(section.key);
-      const resolved = resolvePortalHref(rawHref);
-      // 2026-11-06：圓形徽章（標準楷書＋英文小字）；學練作測證為核心五步，彩色發光
-      const NAV_EN = { 學: 'LEARN', 練: 'PRACTICE', 做: 'BUILD', 作: 'BUILD', 測: 'TEST', 證: 'CERTIFY', 飛: 'HEALTH', 健: 'HEALTH', 調: 'TUNE', 展: 'SHOWCASE', 師: 'TEACHER' };
-      const isCore = ['學', '練', '做', '作', '測', '證'].includes(section.label);
-      const inner = `<span class="nav-badge" aria-hidden="true"><b class="nav-zh">${section.label}</b><small class="nav-en">${NAV_EN[section.label] || ''}</small></span><em class="nav-title">${section.title}</em>`;
-      const cls = `nav-item${isCore ? ' is-core' : ''}`;
-      const attrs = section.key ? ` data-route="${section.key}"` : '';
-      if (!resolved.enabled) {
-        return `<a href="#"` + attrs + ` aria-disabled="true" class="portal-link-disabled ${cls}" title="需教學系統上線後開放">` + inner + `</a>`;
-      }
-      return `<a href="${resolved.href}"` + attrs + ` class="${cls}">` + inner + `</a>`;
-    })
+    .map(
+      (section) =>
+        `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''}><span>${section.label}</span>${section.title}</a>`
+    )
     .join('');
 
   // 手機左側抽屜直接沿用桌面左側欄的導航，避免兩份清單各自維護而走樣。
   const mobileNavList = document.getElementById('mobileNavList');
   if (mobileNavList) mobileNavList.innerHTML = $('#moduleNav').innerHTML;
-  wirePortalLinks();
-  // 系統關閉動畫效果時預設不播放徽章動畫；驗收時可加 ?motion=1 強制播放
-  if (new URLSearchParams(window.location.search).get('motion') === '1') document.documentElement.classList.add('force-motion');
 }
 
 function applyRoute(routeKey) {
@@ -202,7 +109,7 @@ function applyRoute(routeKey) {
   });
 
   document.body.classList.toggle('inspection-view', route.key === 'inspection');
-  document.body.classList.toggle('fde-column-view', route.key === 'fde-column');
+  document.body.classList.toggle('fde-column-view', route.key === 'fde-column' && route.sectionId === 'fde-column');
   document.body.classList.toggle('home-view', route.key === 'home');
   document.body.dataset.route = route.key;
   updatePageMetadata(route.key);
@@ -236,8 +143,8 @@ function setMetaContent(attribute, key, value, fallback) {
 
 function updatePageMetadata(routeKey) {
   if (routeKey === 'fde-column') {
-    const title = 'FDE-AI 無人載具實驗室｜無人機 × AI 實作教學';
-    const description = 'FDE-AI 無人載具實驗室，分享無人機、F450、YOLO 目標檢測、RAG 知識庫、飛控與產業應用實作。';
+    const title = 'FDE-AI｜無人載具學習中心';
+    const description = 'FDE-AI 無人載具學習中心，依閉源飛控、開源飛控與 3D 列印整理教師指定課程。';
     document.title = title;
     setMetaContent('name', 'description', description, null);
     setMetaContent('property', 'og:title', title, null);
@@ -284,16 +191,9 @@ function renderHero() {
   $('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
 
   const primaryAction = hero.actions.find((action) => action.kind === 'primary');
-  if (primaryAction) {
-    const resolved = resolvePortalHref(primaryAction.target);
-    const heroHref = resolved.enabled ? resolved.href : '#';
-    const heroAttrs = resolved.enabled ? '' : ' aria-disabled="true" class="portal-link-disabled" title="需教學系統上線後開放"';
-    $('#heroActions').innerHTML = `<a class="${primaryAction.kind}-action"${heroAttrs} href="${heroHref}">${primaryAction.label}</a>`;
-  } else {
-    $('#heroActions').innerHTML = '';
-  }
-  // 2026-11-06：「一分鐘認識 FDE-AI」入口（影片放在 GitHub 頁面上，主機關機時也能看）
-  $('#heroActions').insertAdjacentHTML('beforeend', '<a class="secondary-action hero-video-entry" href="./about" data-route="about">▶ 一分鐘認識 FDE-AI</a>');
+  $('#heroActions').innerHTML = primaryAction
+    ? `<a class="${primaryAction.kind}-action" href="${router.hrefForTarget(primaryAction.target)}">${primaryAction.label}</a>`
+    : '';
 
   const motionStrip = $('#designMotion');
   if (motionStrip) {
@@ -407,6 +307,7 @@ function renderMissionMap() {
                     <strong>${task.title}</strong>
                     <small>${task.subtitle}</small>
                     <span class="difficulty">${displayTaskMeta(task)}</span>
+                    ${task.entryHref ? '<span class="difficulty">進入單元 →</span>' : ''}
                   </button>
                 `
               )
@@ -558,40 +459,88 @@ function renderCohorts() {
     .join('');
 }
 
+function youtubeId(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'youtu.be') return parsed.pathname.slice(1);
+    return parsed.searchParams.get('v') || '';
+  } catch {
+    return '';
+  }
+}
+
 function renderLearningResources() {
-  $('#learningResources').innerHTML = learningTracks
-    .map((track) => {
-      const hiddenCount = Math.max(0, track.items.length - track.previewCount);
-      return `
-        <article class="track-card" data-track="${track.key}">
-          <div class="track-head">
-            <span class="tag">${track.key}</span>
-            <h3>${track.title}</h3>
-            <p>${track.summary}</p>
-          </div>
-          <div class="lesson-list">
-            ${track.items
-              .map((item, index) => {
-                const collapsedClass = index >= track.previewCount ? 'is-extra' : '';
-                return `
-                  <a class="${collapsedClass}" href="${item.url}" target="${item.url.startsWith('#') ? '_self' : '_blank'}" rel="noreferrer">
-                    <span>${item.sourceType || item.type}</span>
-                    <strong>${item.title}</strong>
-                    <small>${item.description}</small>
-                  </a>
-                `;
-              })
-              .join('')}
-          </div>
-          ${
-            hiddenCount > 0
-              ? `<button class="track-toggle" type="button" data-track-toggle="${track.key}" aria-expanded="false">展開全部 ${track.items.length} 個</button>`
-              : ''
-          }
-        </article>
-      `;
-    })
+  const grid = $('#learningResources');
+  const detail = $('#learningSectionDetail');
+  if (!grid || !detail) return;
+
+  grid.hidden = false;
+  detail.hidden = true;
+  detail.innerHTML = '';
+  grid.innerHTML = learningSections
+    .map(
+      (section, index) => `
+        <button class="learning-section-card learning-section-card-${index + 1}" type="button" data-learning-section="${section.id}">
+          <span class="learning-section-index">0${index + 1}</span>
+          <span class="learning-section-label">${escapeHtml(section.label)}</span>
+          <strong>${escapeHtml(section.title)}</strong>
+          <span>${escapeHtml(section.summary)}</span>
+          <small>${section.courses.length} 堂指定課程 <span aria-hidden="true">→</span></small>
+        </button>
+      `,
+    )
     .join('');
+}
+
+function renderLearningSectionDetail(sectionId) {
+  const section = learningSections.find((item) => item.id === sectionId);
+  const grid = $('#learningResources');
+  const detail = $('#learningSectionDetail');
+  if (!section || !grid || !detail) return;
+
+  grid.hidden = true;
+  detail.hidden = false;
+  detail.innerHTML = `
+    <button class="learning-back" type="button" data-learning-back>← 返回學習中心</button>
+    <div class="learning-detail-heading">
+      <span class="learning-section-label">${escapeHtml(section.label)}</span>
+      <h3>${escapeHtml(section.title)}</h3>
+      <p>${escapeHtml(section.summary)}</p>
+    </div>
+    <div class="learning-course-list">
+      ${section.courses
+        .filter((course) => course.enabled)
+        .sort((a, b) => a.order - b.order)
+        .map((course) => {
+          const id = youtubeId(course.youtubeUrl);
+          return `
+            <article class="learning-course-card">
+              <div class="learning-course-number">${String(course.order).padStart(2, '0')}</div>
+              <div class="learning-course-content">
+                <h4>${escapeHtml(course.title)}</h4>
+                ${
+                  id
+                    ? `<div class="learning-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="${escapeHtml(course.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+                    : '<p class="learning-video-missing">影片嵌入待補。</p>'
+                }
+                <a class="learning-youtube-link" href="${escapeHtml(course.youtubeUrl)}" target="_blank" rel="noreferrer">在 YouTube 開啟原始影片 ↗</a>
+              </div>
+            </article>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+}
+
+function handleLearningClick(event) {
+  const sectionButton = event.target.closest('[data-learning-section]');
+  if (sectionButton) {
+    renderLearningSectionDetail(sectionButton.dataset.learningSection);
+    return;
+  }
+
+  if (event.target.closest('[data-learning-back]')) renderLearningResources();
 }
 
 function renderFdeColumn() {
@@ -679,18 +628,22 @@ function renderVoiceAssistantPanel() {
 }
 
 function renderAssessmentWorkflows() {
-  $('#assessmentWorkflows').innerHTML = assessmentWorkflows
-    .map(
-      (workflow) => `
+  // 正式入口只顯示前兩項（槳葉方向、電力巡檢）；帶 legacy 標記的流程
+  // （四面懸停）改在「歷史／擴充檢測」區呈現，不佔用正式檢測入口。
+  const formal = assessmentWorkflows.filter((workflow) => !workflow.legacy);
+  const legacy = assessmentWorkflows.filter((workflow) => workflow.legacy);
+  const card = (workflow) => `
         <article class="workflow-card">
           <span class="tag">${workflow.engine}</span>
           <h3>${workflow.title}</h3>
           <p>可上傳：${workflow.acceptedEvidence.join(' / ')}</p>
           <ul>${workflow.checks.map((check) => `<li>${check}</li>`).join('')}</ul>
         </article>
-      `
-    )
-    .join('');
+      `;
+  const grid = $('#assessmentWorkflows');
+  if (grid) grid.innerHTML = formal.map(card).join('');
+  const legacyGrid = $('#legacyAssessmentWorkflows');
+  if (legacyGrid) legacyGrid.innerHTML = legacy.map(card).join('');
 }
 
 function renderAssistantResult(result) {
@@ -1161,17 +1114,11 @@ function renderBuildMain12Entry() {
   if (!link) return;
   const config = window.FdeRagConfig || {};
   const publicUrl = String(config.PUBLIC_LIVE_COACH_URL || '').trim();
-  // 2026-11-04 修正：原本退回 '/live/'，在 GitHub 頁面會變成 github.io/live/（404）。
-  // 有設定教學後台網址時，一律導向後台的 AI 陪做頁。
-  const portalBase = String((window.FDE_PUBLIC_CONFIG || {}).portalBaseUrl || '').replace(/\/+$/, '');
   const localUrl = String(config.LIVE_COACH_URL || '/live/').trim();
-  link.href = publicUrl || (portalBase ? `${portalBase}/live/` : localUrl);
+  link.href = publicUrl || localUrl;
 }
 
 async function runLocalYoloDetection(file) {
-  if (!localYoloEndpoint) {
-    throw new Error('視覺推論服務尚未上線，請於教學系統可用時再試。');
-  }
   const imageData = await fileToDataUrl(file);
   const response = await fetch(localYoloEndpoint, {
     method: 'POST',
@@ -1186,9 +1133,6 @@ async function runLocalYoloDetection(file) {
 }
 
 async function runLocalHoverScoring(file) {
-  if (!localHoverEndpoint) {
-    throw new Error('四面懸停評分服務尚未上線，請於教學系統可用時再試。');
-  }
   const videoData = await fileToDataUrl(file);
   const response = await fetch(localHoverEndpoint, {
     method: 'POST',
@@ -1237,6 +1181,7 @@ function renderCertificationChecklist() {
 function bindActions() {
   document.addEventListener('click', handleRouteClick);
   document.addEventListener('click', handleFdeColumnClick);
+  document.addEventListener('click', handleLearningClick);
   // AI 回答語音朗讀（事件委託：結果區會被 innerHTML 重新渲染）。
   document.addEventListener('click', (event) => {
     const speakButton = event.target.closest('[data-speak-inspection]');
@@ -1252,6 +1197,9 @@ function bindActions() {
     button.addEventListener('click', () => {
       selectedTaskId = button.dataset.taskId;
       renderTaskDetail(selectedTaskId);
+      // 具備 entryHref 的任務（如 M02）直接前往獨立單元頁；其餘任務行為不變。
+      const entryTask = missionTasks.find((item) => item.id === selectedTaskId);
+      if (entryTask && entryTask.entryHref) window.location.href = entryTask.entryHref;
     });
   });
 
@@ -1444,7 +1392,66 @@ function bindActions() {
     }
   });
 
+  // POWER_INSPECTION_V1：正式走 Django /student/power-inspection/upload/（JSON）。
+  // 沒有真實模型時後端會回 WAITING_FOR_REAL_MODEL / BLOCKED，前端如實顯示，
+  // 絕不顯示任何模擬異常結果。
+  $('#powerInspectionButton').addEventListener('click', async () => {
+    const file = $('#powerInspectionInput').files[0];
+    const target = $('#powerInspectionResult');
+    if (!file) {
+      target.innerHTML = missingFileCard('請先上傳巡檢 MP4 影片，再點擊「上傳並建立巡檢工作」。');
+      return;
+    }
+    if (!/\.mp4$/i.test(file.name)) {
+      target.innerHTML = missingFileCard('電力巡檢僅接受 MP4 影片格式。');
+      return;
+    }
+
+    target.innerHTML = '<article class="result-card"><p>正在上傳巡檢影片並建立隔離工作...</p></article>';
+    try {
+      const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+      const body = new FormData();
+      body.append('video', file, file.name);
+      const response = await fetch('/student/power-inspection/upload/', {
+        method: 'POST',
+        headers: csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {},
+        credentials: 'same-origin',
+        body,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        if (payload.code === 'login_required') {
+          const loginUrl = payload.login_url || '/login/';
+          target.innerHTML = `
+            <article class="result-card local-service-note">
+              <h3>請先以學員身分登入</h3>
+              <p>${escapeHtml(payload.detail || '登入後才能上傳電力巡檢影片。')}</p>
+              <p><a class="primary-action button" href="${escapeHtml(loginUrl)}?next=%2Fstudent%2Fpower-inspection%2F">前往學員登入</a></p>
+            </article>
+          `;
+          return;
+        }
+        target.innerHTML = unavailableCard(payload.detail || '巡檢影片上傳未完成，請稍後再試或聯絡教師。');
+        return;
+      }
+      const blocked = payload.inference_mode === 'BLOCKED' || payload.status === 'WAITING_FOR_REAL_MODEL';
+      target.innerHTML = `
+        <article class="result-card${blocked ? ' local-service-note' : ''}">
+          <h3>${blocked ? '已建立巡檢工作，但尚未載入真實模型' : '巡檢工作已建立'}</h3>
+          <p>工作編號：${escapeHtml(payload.job_id || '')}</p>
+          <p>狀態：${escapeHtml(payload.status || '')}｜推論模式：${escapeHtml(payload.inference_mode || '')}</p>
+          <p>${escapeHtml(payload.detail || '')}</p>
+          ${blocked ? '<p><strong>目前不會產生任何 AI 異常結果；待教師部署真實模型後才會實際分析。</strong></p>' : ''}
+          <p><a href="/student/power-inspection/">前往我的巡檢紀錄</a></p>
+        </article>
+      `;
+    } catch (error) {
+      target.innerHTML = unavailableCard('巡檢影片上傳失敗（連線異常），未確認建立任何工作。', error.message);
+    }
+  });
+
   // FOUR_SIDE_HOVER：正式走 /api/v1/vision/hover-video（後端抽幀 + 分析）。
+  // 2026-11-01 起此流程移至「歷史／擴充檢測」區，不再是本頁正式入口。
   $('#hoverButton').addEventListener('click', async () => {
     const file = $('#hoverInput').files[0];
     const client = window.FdeVisionClient;
