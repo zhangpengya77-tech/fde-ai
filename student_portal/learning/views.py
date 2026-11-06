@@ -184,7 +184,7 @@ from .growth_task_map import (
     task_record_slot,
     task_related_records,
 )
-from .services import issue_activation_code
+from .services import EmailDeliveryError, issue_activation_code
 from .survey_recommendations import recommend_paths, recommend_v2_paths
 from .survey_analytics import (
     PATH_INTEREST_CHOICES,
@@ -653,6 +653,8 @@ def register(request):
             logger.exception("Student registration failed while issuing verification email (%s).", type(exc).__name__)
             form.add_error(None, "驗證碼寄送失敗，請稍後重試。")
         else:
+            if getattr(form, "email_delivery_failed", False):
+                messages.info(request, "帳號已建立！驗證信暫時寄不出，請等待教師在後台開通，開通後即可登入。")
             activation_url = reverse("learning:activate", args=[profile.public_user_id])
             if next_url:
                 activation_url = f"{activation_url}?{urlencode({'next': next_url})}"
@@ -738,11 +740,13 @@ def resend_activation(request, public_user_id):
     if profile and profile.user_id:
         try:
             issue_activation_code(profile.user)
+        except EmailDeliveryError:
+            messages.info(request, "驗證信暫時寄不出，請等待教師在後台開通，開通後即可登入。")
         except ValidationError as exc:
             messages.error(request, exc.messages[0])
         except Exception as exc:
             logger.exception("Activation email resend failed (%s).", type(exc).__name__)
-            messages.error(request, "驗證碼寄送失敗，請稍後重試。")
+            messages.error(request, "驗證碼寄送失敗，請稍後重試，或等待教師在後台開通。")
         else:
             if settings.EMAIL_BACKEND == "django.core.mail.backends.console.EmailBackend":
                 messages.success(request, "開發模式：驗證碼已輸出至伺服器控制台。")
@@ -774,6 +778,8 @@ def resend_activation_by_email(request):
     if profile and profile.user_id:
         try:
             issue_activation_code(profile.user)
+        except EmailDeliveryError:
+            messages.info(request, "驗證信暫時寄不出，請等待教師在後台開通，開通後即可登入。")
         except ValidationError as exc:
             messages.error(request, exc.messages[0])
         except Exception as exc:
@@ -865,6 +871,37 @@ def teacher_required(view_func):
         return view_func(request, *args, **kwargs)
 
     return wrapped
+
+
+@teacher_required
+@require_http_methods(["GET", "POST"])
+def teacher_pending_students(request):
+    """2026-11-06：待開通學員。驗證信寄不出時，學員註冊後在這裡由教師一鍵開通。
+
+    班級隔離：一般教師只看得到自己班級的學員；超級使用者另外看得到尚未加入班級的學員。
+    """
+    cohorts = teacher_cohorts(request.user)
+    pending = StudentProfile.objects.filter(active=True, user__isnull=False, user__is_active=False)
+    if request.user.is_superuser:
+        pending = pending.filter(Q(enrollments__cohort__in=cohorts) | Q(enrollments__isnull=True))
+    else:
+        pending = pending.filter(enrollments__cohort__in=cohorts)
+    pending = pending.select_related("user").prefetch_related("enrollments__cohort").distinct().order_by("-created_at")
+    if request.method == "POST":
+        target = pending.filter(public_user_id=request.POST.get("public_user_id", "")).first()
+        if target is None:
+            messages.error(request, "找不到這位待開通學員，或不在你負責的班級。")
+        else:
+            with transaction.atomic():
+                user = type(target.user).objects.select_for_update().get(pk=target.user_id)
+                user.is_active = True
+                user.save(update_fields=["is_active"])
+                # 已用不到的驗證碼一併作廢，避免之後被誤用
+                EmailVerificationCode.objects.filter(user=user, consumed_at__isnull=True).update(consumed_at=timezone.now())
+            logger.info("Teacher %s activated student %s.", request.user.pk, target.public_user_id)
+            messages.success(request, f"已開通：{target.nickname}（{target.email}），學員現在可以登入。")
+        return redirect("learning:teacher_pending_students")
+    return render(request, "learning/teacher_pending_students.html", {"pending": pending})
 
 
 def teacher_cohorts(user):

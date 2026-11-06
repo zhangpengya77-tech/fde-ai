@@ -13,7 +13,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from learning.models import ClassCode, Cohort, EmailVerificationCode, StudentProfile
+from learning.models import TeacherCohortAccess, ClassCode, Cohort, EmailVerificationCode, StudentProfile
 from learning.tests.helpers import create_student_account
 
 
@@ -208,25 +208,61 @@ class StudentRegistrationTests(TestCase):
         self.assertContains(activation, "開發模式：驗證碼已輸出至伺服器控制台")
         self.assertRegex(console_output.getvalue(), r"驗證碼是：\d{6}")
 
-    def test_registration_mail_failure_is_visible_logged_and_rolls_back(self):
+    # 2026-11-06：驗證信寄不出時不再取消註冊——帳號保留為未啟用，提示等待教師開通（之後仍可用驗證碼啟用）
+    def test_registration_mail_failure_keeps_account_waiting_for_teacher(self):
         with patch("learning.services.send_mail", side_effect=OSError("SMTP connection refused")):
-            with self.assertLogs("learning.views", level="ERROR") as captured:
+            with self.assertLogs("learning.services", level="ERROR") as captured:
                 response = self.register("failure@example.com")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "驗證碼寄送失敗，請稍後重試。")
+        self.assertEqual(response.status_code, 302)
         self.assertIn("SMTP connection refused", "\n".join(captured.output))
-        self.assertFalse(StudentProfile.objects.filter(email="failure@example.com").exists())
-        self.assertFalse(get_user_model().objects.filter(email="failure@example.com").exists())
+        profile = StudentProfile.objects.get(email="failure@example.com")
+        self.assertFalse(profile.user.is_active)
+        activation = self.client.get(response["Location"])
+        self.assertContains(activation, "等待教師在後台開通")
 
-    def test_registration_rejects_a_mail_backend_that_accepts_zero_messages(self):
+    def test_registration_with_backend_accepting_zero_messages_waits_for_teacher(self):
         with patch("learning.services.send_mail", return_value=0):
             with self.assertLogs("learning.services", level="ERROR"):
                 response = self.register("not-sent@example.com")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "驗證碼寄送失敗，請稍後重試。")
-        self.assertFalse(StudentProfile.objects.filter(email="not-sent@example.com").exists())
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(StudentProfile.objects.get(email="not-sent@example.com").user.is_active)
+
+    def test_teacher_can_activate_pending_student_of_own_cohort_only(self):
+        with patch("learning.services.send_mail", side_effect=OSError("SMTP down")):
+            with self.assertLogs("learning.services", level="ERROR"):
+                self.register("pending@example.com", "Pending")
+        profile = StudentProfile.objects.get(email="pending@example.com")
+        user_model = get_user_model()
+        # 別班老師：看不到、也開通不了
+        other_cohort = Cohort.objects.create(cohort_id="2026-02", name="2026 第二梯")
+        other = user_model.objects.create_user("other-teacher", password=self.password, is_staff=True)
+        TeacherCohortAccess.objects.create(teacher=other, cohort=other_cohort)
+        self.client.force_login(other)
+        page = self.client.get(reverse("learning:teacher_pending_students"))
+        self.assertNotContains(page, "pending@example.com")
+        self.client.post(reverse("learning:teacher_pending_students"), {"public_user_id": profile.public_user_id})
+        profile.user.refresh_from_db()
+        self.assertFalse(profile.user.is_active)
+        # 本班老師：看得到並可一鍵開通
+        teacher = user_model.objects.create_user("own-teacher", password=self.password, is_staff=True)
+        TeacherCohortAccess.objects.create(teacher=teacher, cohort=self.cohort)
+        self.client.force_login(teacher)
+        page = self.client.get(reverse("learning:teacher_pending_students"))
+        self.assertContains(page, "pending@example.com")
+        response = self.client.post(reverse("learning:teacher_pending_students"), {"public_user_id": profile.public_user_id})
+        self.assertEqual(response.status_code, 302)
+        profile.user.refresh_from_db()
+        self.assertTrue(profile.user.is_active)
+
+    def test_student_cannot_open_pending_students_page(self):
+        self.register("someone@example.com")
+        profile = StudentProfile.objects.get(email="someone@example.com")
+        self.activate(profile)
+        self.client.force_login(profile.user)
+        response = self.client.get(reverse("learning:teacher_pending_students"))
+        self.assertEqual(response.status_code, 403)
 
     def test_duplicate_email_is_rejected_case_insensitively(self):
         self.register()
@@ -275,12 +311,13 @@ class StudentRegistrationTests(TestCase):
         )
 
         with patch("learning.services.send_mail", side_effect=OSError("SMTP unavailable")):
-            with self.assertLogs("learning.views", level="ERROR") as captured:
+            # 2026-11-06：寄信失敗由 services 記錄錯誤，畫面改提示「等待教師開通」（不再只說稍後重試）
+            with self.assertLogs("learning.services", level="ERROR") as captured:
                 response = self.client.post(
                     reverse("learning:resend_activation", args=[profile.public_user_id]), follow=True
                 )
 
-        self.assertContains(response, "驗證碼寄送失敗，請稍後重試。")
+        self.assertContains(response, "驗證信暫時寄不出，請等待教師在後台開通")
         self.assertIn("SMTP unavailable", "\n".join(captured.output))
         self.assertNotContains(response, "若帳號符合驗證條件，系統已寄送驗證碼")
 

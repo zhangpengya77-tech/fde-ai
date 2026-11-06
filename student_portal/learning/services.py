@@ -15,6 +15,14 @@ from .models import EmailVerificationCode
 logger = logging.getLogger(__name__)
 
 
+class EmailDeliveryError(ValidationError):
+    """驗證信寄不出去（例如正式站尚未設定寄信伺服器）。
+
+    2026-11-06：註冊時遇到這個錯誤不取消註冊，帳號保留為未啟用，改由教師在後台「待開通學員」開通；
+    之後設定好 Gmail 寄信，學員仍可用驗證碼自行啟用。
+    """
+
+
 def send_activation_code(email, code):
     return send_mail(
         subject="FDE-AI 學員帳號電子郵件驗證",
@@ -45,7 +53,11 @@ def issue_activation_code(user):
         code_hash=make_password(code),
         expires_at=now + timedelta(minutes=15),
     )
-    sent_count = send_activation_code(user.email, code)
+    try:
+        sent_count = send_activation_code(user.email, code)
+    except Exception as exc:
+        logger.exception("Verification email delivery failed (%s).", type(exc).__name__)
+        raise EmailDeliveryError("驗證碼寄送失敗，請稍後重試。") from exc
     if sent_count != 1:
         logger.error("Verification email backend accepted %s messages; expected 1.", sent_count)
-        raise ValidationError("驗證碼寄送失敗，請稍後重試。")
+        raise EmailDeliveryError("驗證碼寄送失敗，請稍後重試。")

@@ -243,6 +243,12 @@ EMAIL_HOST_PASSWORD = os.environ.get('DJANGO_EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('DJANGO_EMAIL_USE_TLS', 'true').lower() == 'true'
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'FDE-AI 學習平台 <no-reply@example.invalid>')
 
+# 2026-11-06：寄信時 SMTP 會用電腦名稱向郵件伺服器打招呼（EHLO），但本機名稱「KIWI的电脑」含中文，
+# 送出前就會因非英文字元失敗。這裡固定改用英文主機名（可用環境變數 DJANGO_EMAIL_LOCAL_HOSTNAME 調整）。
+from django.core.mail.utils import DNS_NAME as _DJANGO_MAIL_DNS_NAME  # noqa: E402
+
+_DJANGO_MAIL_DNS_NAME._fqdn = os.environ.get('DJANGO_EMAIL_LOCAL_HOSTNAME', 'fde-ai.local')
+
 PUBLIC_RAG_UPSTREAM_URL = os.environ.get(
     'DJANGO_PUBLIC_RAG_UPSTREAM_URL',
     'http://127.0.0.1:8770' if DEBUG else '',

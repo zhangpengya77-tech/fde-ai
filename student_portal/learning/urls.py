@@ -69,6 +69,8 @@ urlpatterns = [
     path("evidence/<uuid:evidence_id>/download/", views.evidence_download, name="evidence_download"),
     path("student/courses/<int:enrollment_id>/phases/<str:phase>/", views.update_phase, name="update_phase"),
     path("teacher/", views.teacher_dashboard, name="teacher_dashboard"),
+    # 2026-11-06：待開通學員（驗證信寄不出時由教師一鍵開通）
+    path("teacher/pending-students/", views.teacher_pending_students, name="teacher_pending_students"),
     # P3 班級學習成果總覽（2026-10-13 教師指令）：重用 P1 五階段與 P2 成長證據鏈資料。
     path("teacher/class-outcomes/", views.teacher_class_outcomes, name="teacher_class_outcomes"),
     # P5-B／P5-C 班級結訓成果報告（2026-10-13 教師指令）：只讀彙整，支援瀏覽器原生列印。

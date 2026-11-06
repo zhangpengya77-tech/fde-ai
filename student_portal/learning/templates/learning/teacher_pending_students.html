@@ -1,0 +1,39 @@
+{% extends 'learning/base.html' %}
+{% comment %}
+2026-11-06：待開通學員。驗證信寄不出（尚未設定 Gmail 寄信）時，學員註冊後在這裡由教師一鍵開通；
+班級隔離沿用 teacher_cohorts：一般教師只看自己班級的學員。
+{% endcomment %}
+{% block title %}待開通學員｜教師後台{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+<section class="page-heading">
+  <p class="eyebrow">帳號開通</p>
+  <h1>待開通學員</h1>
+  <p class="muted">學員註冊後若沒有完成電子郵件驗證，會出現在這裡。確認是本班學員後按「開通」，學員就能用註冊的電子郵件和密碼登入。</p>
+</section>
+<section class="panel">
+  {% if pending %}
+    <table class="data-table">
+      <thead><tr><th>暱稱</th><th>電子郵件</th><th>班級</th><th>註冊時間</th><th></th></tr></thead>
+      <tbody>
+        {% for p in pending %}
+          <tr>
+            <td>{{ p.nickname }}</td>
+            <td>{{ p.email }}</td>
+            <td>{% for e in p.enrollments.all %}{{ e.cohort }}{% if not forloop.last %}、{% endif %}{% empty %}未加入班級{% endfor %}</td>
+            <td>{{ p.created_at|date:"Y-m-d H:i" }}</td>
+            <td>
+              <form method="post">{% csrf_token %}
+                <input type="hidden" name="public_user_id" value="{{ p.public_user_id }}">
+                <button class="button primary" type="submit">開通</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">目前沒有待開通的學員。</p>
+  {% endif %}
+</section>
+{% endblock %}

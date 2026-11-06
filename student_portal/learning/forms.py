@@ -23,7 +23,7 @@ from .models import (
     TeacherReviewEvent,
     EmailVerificationCode,
 )
-from .services import issue_activation_code
+from .services import EmailDeliveryError, issue_activation_code
 from .project_directions import learner_direction_options
 
 
@@ -152,7 +152,12 @@ class StudentRegistrationForm(forms.Form):
                 enrollment.save(update_fields=list(updates))
             code.use_count += 1
             code.save(update_fields=["use_count"])
-        issue_activation_code(user)
+        # 2026-11-06：寄信失敗不取消註冊；帳號保留未啟用，等待教師開通（之後收到驗證碼也可自行啟用）
+        self.email_delivery_failed = False
+        try:
+            issue_activation_code(user)
+        except EmailDeliveryError:
+            self.email_delivery_failed = True
         return profile
 
 
@@ -238,7 +243,7 @@ class StudentLoginForm(AuthenticationForm):
             else:
                 logger.info("Student login diagnostic: %s", diagnostic)
                 self.unverified_email = email
-                self.add_error(None, "此帳號尚未完成電子郵件驗證，請先完成驗證。")
+                self.add_error(None, "此帳號尚未開通：請輸入電子郵件驗證碼，或等待教師在後台開通。")
                 return cleaned_data
 
         diagnostic["check_password"] = user.check_password(password)
