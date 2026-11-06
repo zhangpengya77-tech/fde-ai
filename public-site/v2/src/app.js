@@ -292,6 +292,8 @@ function renderHero() {
   } else {
     $('#heroActions').innerHTML = '';
   }
+  // 2026-11-06：「一分鐘認識 FDE-AI」入口（影片放在 GitHub 頁面上，主機關機時也能看）
+  $('#heroActions').insertAdjacentHTML('beforeend', '<a class="secondary-action hero-video-entry" href="./about" data-route="about">▶ 一分鐘認識 FDE-AI</a>');
 
   const motionStrip = $('#designMotion');
   if (motionStrip) {

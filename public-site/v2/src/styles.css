@@ -3758,3 +3758,51 @@ a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba
   font-size: 15px;
   letter-spacing: 0.04em;
 }
+
+/* ── 2026-11-06：主機在線偵測（src/host-status.js）：狀態燈、離線時互動按鈕變淡、離線提示 ── */
+.host-status {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 80;
+  max-width: calc(100vw - 24px);
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 194, 255, 0.4);
+  background: rgba(4, 12, 26, 0.88);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+.host-status--online { border-color: rgba(53, 230, 168, 0.6); color: #b9f7e0; }
+.host-status--online::first-letter { color: #35e6a8; }
+.host-status--offline { border-color: rgba(148, 171, 194, 0.5); color: #c9d6e3; }
+.host-status--offline::first-letter { color: #94abc2; }
+.host-offline a[data-needs-host="1"] { opacity: 0.5; filter: grayscale(0.6); }
+.host-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 60px;
+  transform: translateX(-50%);
+  z-index: 90;
+  width: min(92vw, 460px);
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 194, 255, 0.55);
+  background: rgba(6, 16, 32, 0.96);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 194, 255, 0.25);
+}
+.host-toast[hidden] { display: none; } /* 沒按需要主機的按鈕時不顯示提示框（避免 display:grid 蓋過 hidden） */
+.host-toast b { color: var(--cyan); font-size: 16px; }
+.host-toast button { justify-self: end; padding: 6px 16px; border-radius: 8px; border: 1px solid var(--cyan); background: transparent; color: var(--cyan); font-weight: 700; }
