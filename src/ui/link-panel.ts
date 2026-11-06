@@ -59,6 +59,28 @@ export function drawQr(canvas: HTMLCanvasElement, text: string, scale = 5): void
   }
 }
 
+/**
+ * 在沒有控制列的頁面（考場模式）加一顆浮動的「🔗 連線方式」按鈕＋面板。
+ * 回傳清除函式。
+ */
+export function mountFloatingLinkPanel(pen: PenCameraInputAdapter, phone: PhoneLinkInputAdapter): () => void {
+  const panel = new LinkPanel({ root: document.body, pen, phone });
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = '🔗 連線方式';
+  btn.setAttribute('data-action', 'open-link');
+  btn.style.cssText =
+    'position:fixed;left:12px;bottom:12px;z-index:49;padding:8px 14px;border-radius:10px;border:1px solid #2fb4ff;background:#0f2b44e6;color:#e6f6ff;font-size:14px;cursor:pointer';
+  btn.addEventListener('click', () => panel.toggle());
+  document.body.appendChild(btn);
+  return () => {
+    pen.disconnect();
+    phone.disconnect();
+    panel.el.remove();
+    btn.remove();
+  };
+}
+
 export class LinkPanel {
   readonly el: HTMLElement;
   private readonly overlay: HTMLCanvasElement;
@@ -86,6 +108,8 @@ export class LinkPanel {
   .link-panel .url{word-break:break-all;font-size:12px;color:#8fb4cc;text-align:center}
   .link-panel label[data-pen-depth]{display:flex;align-items:center;gap:6px;margin:4px 0;cursor:pointer}
   .link-panel label[data-pen-depth][hidden]{display:none}
+  .link-panel label[data-pen-dual]{display:flex;align-items:flex-start;gap:6px;margin:4px 0;cursor:pointer}
+  .link-panel label[data-pen-dual][hidden]{display:none}
   .link-panel kbd{background:#1b3248;border-radius:4px;padding:0 5px;font-family:inherit}
 </style>
 <h2>連線方式 <button type="button" data-close aria-label="關閉">✕</button></h2>
@@ -103,17 +127,21 @@ export class LinkPanel {
 <button type="button" data-pen="center" hidden>設為中心</button>
 <button type="button" data-pen="color" hidden>重新選色</button>
 <label data-pen-depth hidden><input type="checkbox" data-pen="depth"> 遠近控油門（筆靠近＝上升）</label>
+<label data-pen-dual hidden><input type="checkbox" data-pen="dual"> <span>雙筆四軸：左手再拿一支<b>不同顏色</b>的筆（上下＝升降、左右＝轉向）</span></label>
 <div class="stage" data-pen-stage hidden></div>
 <p class="status" data-pen-status>${PEN_TEXT.off}</p>
 
 <h3>📱 手機遙控器</h3>
-<p>手機和筆電連<b>同一個 Wi‑Fi</b>（或筆電連手機熱點）。按下面按鈕，用手機相機掃 QR 碼。</p>
+<p>手機和筆電連<b>同一個 Wi‑Fi</b>（或筆電連手機熱點）。按下面按鈕，用手機相機掃 QR 碼。手機頁上方可開「體感」：傾斜手機＝前後左右。</p>
 <button type="button" data-phone="pair">產生配對 QR 碼</button>
 <button type="button" data-phone="stop" hidden>中斷手機</button>
 <div data-phone-qr hidden><canvas class="qr"></canvas><div class="code" data-phone-code></div><div class="url" data-phone-url></div></div>
 <p class="status" data-phone-status>${PHONE_TEXT.off}</p>`;
     opts.root.appendChild(el);
     this.el = el;
+    // 轉接器的狀態變化直接更新本面板
+    opts.pen.onState = (s) => this.renderPen(s);
+    opts.phone.onState = (s) => this.renderPhone(s);
 
     const stage = el.querySelector<HTMLElement>('[data-pen-stage]')!;
     stage.appendChild(opts.pen.video);
@@ -138,6 +166,9 @@ export class LinkPanel {
       opts.pen.depthThrottle = (ev.target as HTMLInputElement).checked;
       opts.pen.recenter();
     });
+    el.querySelector<HTMLInputElement>('[data-pen="dual"]')!.addEventListener('change', (ev) => {
+      opts.pen.setDual((ev.target as HTMLInputElement).checked);
+    });
     el.querySelector('[data-phone="pair"]')!.addEventListener('click', () => void opts.phone.connect());
     el.querySelector('[data-phone="stop"]')!.addEventListener('click', () => opts.phone.disconnect());
   }
@@ -156,9 +187,17 @@ export class LinkPanel {
     q('[data-pen-stage]').hidden = !on;
     q('[data-pen="center"]').hidden = s.status !== 'tracking' && s.status !== 'lost';
     q('[data-pen="color"]').hidden = !on || s.status === 'need-color';
-    q('[data-pen-depth]').hidden = !on;
+    // 雙筆模式時升降轉向由左手筆負責，遠近控油門不適用
+    q('[data-pen-depth]').hidden = !on || this.opts.pen.isDual;
+    q('[data-pen-dual]').hidden = !on;
     const st = q('[data-pen-status]');
-    st.textContent = s.message && (s.status === 'error' || s.status === 'need-color') ? s.message : PEN_TEXT[s.status];
+    st.textContent = s.message
+      ? s.message
+      : s.picking === 'left'
+        ? '請在畫面上點一下「左手」那支筆的筆蓋'
+        : s.left
+          ? PEN_TEXT[s.status].replace('（R/F 升降、Q/E 轉向）', '；左手筆＝升降與轉向')
+          : PEN_TEXT[s.status];
     st.classList.toggle('err', s.status === 'error' || s.status === 'lost');
   }
 
@@ -181,6 +220,29 @@ export class LinkPanel {
     st.classList.toggle('err', s.status === 'error' || s.status === 'lost');
   }
 
+  /** 畫一支筆的中心圈與目前位置（左手筆用） */
+  private drawPen(
+    ctx: CanvasRenderingContext2D,
+    center: { x: number; y: number },
+    blob: { x: number; y: number } | null,
+    color: string,
+    ok: boolean,
+    w: number,
+    h: number,
+  ): void {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(center.x * w, center.y * h, this.opts.pen.range * w, 0, Math.PI * 2);
+    ctx.stroke();
+    if (blob) {
+      ctx.fillStyle = ok ? color : '#ff5d5d';
+      ctx.beginPath();
+      ctx.arc(blob.x * w, blob.y * h, 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   /** 在鏡頭畫面上標出：中心十字、筆尖位置、目前搖桿方向 */
   private drawLoop = (): void => {
     this.raf = requestAnimationFrame(this.drawLoop);
@@ -189,6 +251,7 @@ export class LinkPanel {
     const { width: w, height: h } = this.overlay;
     ctx.clearRect(0, 0, w, h);
     const s = this.opts.pen.state();
+    if (s.left?.center) this.drawPen(ctx, s.left.center, s.left.blob, '#ffb347', s.status === 'tracking', w, h);
     if (s.center) {
       const cx = s.center.x * w;
       const cy = s.center.y * h;

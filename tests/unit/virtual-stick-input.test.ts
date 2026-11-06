@@ -109,3 +109,37 @@ describe('手機搖桿數學', () => {
     expect(isStickMessage(null)).toBe(false);
   });
 });
+
+import { screenTilt, tiltToStick } from '../../src/phone/stick-math';
+
+describe('手機體感操控', () => {
+  const flat = { right: 0, toward: 30 };
+
+  it('直向：右側往下傾 → 向右；上緣往前壓 → 前進', () => {
+    const t = screenTilt(30, 0, 0);
+    expect(t).toEqual({ right: 0, toward: 30 });
+    expect(tiltToStick(screenTilt(30, 25, 0), flat).x).toBeCloseTo(1);
+    expect(tiltToStick(screenTilt(5, 0, 0), flat).y).toBeCloseTo(1);
+  });
+
+  it('橫向 90°：手機本身的 beta 變成畫面左右', () => {
+    expect(screenTilt(20, -30, 90)).toEqual({ right: 20, toward: 30 });
+    expect(screenTilt(20, -30, -90)).toEqual({ right: -20, toward: -30 });
+  });
+
+  it('中立姿勢附近（死區內）不動作', () => {
+    expect(tiltToStick({ right: 1, toward: 31 }, flat)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('方向反轉開關', () => {
+    const s = tiltToStick({ right: 25, toward: 5 }, flat, 25, { roll: true, pitch: true });
+    expect(s.x).toBeCloseTo(-1);
+    expect(s.y).toBeCloseTo(-1);
+  });
+
+  it('傾斜超過範圍也不超過 ±1', () => {
+    const s = tiltToStick({ right: 80, toward: -60 }, flat);
+    expect(s.x).toBeLessThanOrEqual(1);
+    expect(s.y).toBeLessThanOrEqual(1);
+  });
+});

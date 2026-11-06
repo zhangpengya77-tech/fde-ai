@@ -28,6 +28,7 @@ import { SAFETY_DECLARATION, WindField } from './wind';
 import { ExamHud, type ExamHudMode } from './panel';
 import { ExamSession, type TrajectoryPoint } from './session';
 import { ExamInput } from './exam-input';
+import { mountFloatingLinkPanel } from '../ui/link-panel';
 import { GroundCheckPanel } from './ground-panel';
 import {
   addOrbitPitchDeg,
@@ -432,6 +433,8 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
   // ---- 輸入：既有輸入管線（搖桿標定 → InputNormalizer → ChannelMapper；鍵盤備援）----
   const examInput = new ExamInput();
   void examInput.start();
+  // 2026-11-07：左下角「🔗 連線方式」——原子筆鏡頭搖桿、手機遙控器
+  const unmountLink = examInput.pen && examInput.phone ? mountFloatingLinkPanel(examInput.pen, examInput.phone) : () => undefined;
 
   // ---- 流程狀態（步驟條／狀態／提示／按鈕）----
   let reportOpen = false;
@@ -858,6 +861,7 @@ export function createExamApp(root: HTMLElement, options: CreateExamAppOptions =
       canvas.removeEventListener('pointercancel', stopCameraDrag);
       delete (window as unknown as Record<string, unknown>).__examTestHook;
       examInput.dispose();
+      unmountLink();
       groundPanel.dispose();
       hud.dispose();
       sceneHandle.dispose();

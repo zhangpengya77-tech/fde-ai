@@ -30,7 +30,8 @@ export class PhoneLinkInputAdapter extends VirtualStickAdapter {
   private code: string | null = null;
   private lastSeq = -1;
 
-  constructor(private readonly onState?: (state: PhoneState) => void) {
+  /** 狀態變化回呼（「連線方式」面板建立時會自動掛上） */
+  constructor(public onState?: (state: PhoneState) => void) {
     super();
   }
 

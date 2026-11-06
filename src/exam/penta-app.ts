@@ -25,6 +25,7 @@ import { buildTeachingPentaRoute, pentaAirspaceForLevel, pentaFlightOrder } from
 import { createPentaScene, type PentaSceneHandle } from './penta-scene';
 import { ExamFlightController } from './flight-controller';
 import { ExamInput } from './exam-input';
+import { mountFloatingLinkPanel } from '../ui/link-panel';
 import type { ExamStickCommand } from './types';
 import {
   PENTA_PRACTICE_NOTE,
@@ -81,6 +82,8 @@ export function createPentaApp(root: HTMLElement): AppHandle {
   const controller = new ExamFlightController(aircraft);
   const examInput = new ExamInput();
   void examInput.start();
+  // 2026-11-07：左下角「🔗 連線方式」——原子筆鏡頭搖桿、手機遙控器
+  const unmountLink = examInput.pen && examInput.phone ? mountFloatingLinkPanel(examInput.pen, examInput.phone) : () => undefined;
   /** 練習狀態機（不可變資料；轉換皆為純函式）。 */
   let training: PentaTrainingState = createPentaTrainingState();
   /** 最近一次訓練取樣（驅動 UI 與場景覆疊）。 */
@@ -527,6 +530,7 @@ export function createPentaApp(root: HTMLElement): AppHandle {
       canvas.removeEventListener('wheel', onWheel);
       delete (window as unknown as Record<string, unknown>).__pentaTestHook;
       examInput.dispose();
+      unmountLink();
       trainingUI.dispose();
       pentaHandle.dispose();
       renderer.dispose();

@@ -8,7 +8,7 @@
  * 搖桿數值每秒送 30 次，直接傳到筆電（點對點），不經過伺服器。
  */
 import { ICE_SERVERS, apiBase, postJson, waitIceComplete, type PhoneStickMessage } from '../input/phone/simlink-client';
-import { sticksToCommand, touchToStick, type StickXY } from './stick-math';
+import { screenTilt, sticksToCommand, tiltToStick, touchToStick, type StickXY, type Tilt } from './stick-math';
 
 const root = document.getElementById('phone')!;
 root.innerHTML = `
@@ -24,10 +24,14 @@ root.innerHTML = `
   .ring{width:min(42vw,42vh,240px);aspect-ratio:1;border-radius:50%;border:2px solid #1fb8ff66;background:radial-gradient(circle,#0e2a44 0%,#081626 70%);position:relative}
   .knob{position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;margin:-17% 0 0 -17%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#5fd4ff,#0a7bc0);box-shadow:0 0 18px #1fb8ff88}
   .cap{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:#8fb4cc}
+  .bar button{margin-left:auto;padding:5px 10px;border-radius:8px;border:1px solid #1fb8ff;background:#0f2b44;color:#e6f6ff;font-size:13px}
+  .bar button+button{margin-left:0}
+  .bar button[aria-pressed="true"]{background:#1fb8ff;color:#001428;font-weight:700}
+  .pad.tilt .ring{border-style:dashed}
   .rotate{display:none;position:fixed;inset:0;background:#06111fee;place-items:center;text-align:center;font-size:18px;padding:24px}
   @media (orientation:portrait){.rotate{display:grid}}
 </style>
-<div class="bar" data-s="connecting"><span class="dot"></span><b data-msg>正在配對…</b></div>
+<div class="bar" data-s="connecting"><span class="dot"></span><b data-msg>正在配對…</b><button type="button" data-tilt aria-pressed="false">體感：關</button><button type="button" data-inv="pitch" aria-pressed="false" hidden>前後反轉</button><button type="button" data-inv="roll" aria-pressed="false" hidden>左右反轉</button></div>
 <div class="pads">
   <div class="pad" data-pad="left"><div class="ring"><div class="knob"></div></div><div class="cap">左：上升／下降・左轉／右轉</div></div>
   <div class="pad" data-pad="right"><div class="ring"><div class="knob"></div></div><div class="cap">右：前進／後退・左移／右移</div></div>
@@ -62,6 +66,11 @@ for (const side of ['left', 'right'] as const) {
     knob.style.transform = '';
   };
   pad.addEventListener('pointerdown', (ev) => {
+    // 體感模式下，右搖桿改由傾斜控制；點右邊區域＝以目前姿勢重新歸零
+    if (side === 'right' && tilt.on) {
+      tilt.neutral = tilt.last;
+      return;
+    }
     if (pointer !== null) return;
     pointer = ev.pointerId;
     try {
@@ -77,6 +86,59 @@ for (const side of ['left', 'right'] as const) {
   pad.addEventListener('pointerup', release);
   pad.addEventListener('pointercancel', release);
 }
+
+// ── 體感操控（傾斜手機＝右搖桿）──
+const tilt = {
+  on: false,
+  neutral: null as Tilt | null,
+  last: null as Tilt | null,
+  invert: { roll: false, pitch: false },
+};
+const rightPad = root.querySelector<HTMLElement>('[data-pad="right"]')!;
+const rightKnob = rightPad.querySelector<HTMLElement>('.knob')!;
+const rightCap = rightPad.querySelector<HTMLElement>('.cap')!;
+const tiltBtn = root.querySelector<HTMLButtonElement>('[data-tilt]')!;
+const onOrientation = (ev: DeviceOrientationEvent): void => {
+  if (ev.beta === null || ev.gamma === null) return;
+  const angle = screen.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0;
+  tilt.last = screenTilt(ev.beta, ev.gamma, angle);
+  tilt.neutral ??= tilt.last; // 第一筆＝啟用當下的姿勢當中立
+  if (!tilt.on) return;
+  const s = tiltToStick(tilt.last, tilt.neutral, 25, tilt.invert);
+  sticks.right = s;
+  const r = rightPad.querySelector<HTMLElement>('.ring')!.getBoundingClientRect().width / 2;
+  rightKnob.style.transform = `translate(${s.x * r * 0.8}px, ${-s.y * r * 0.8}px)`;
+};
+tiltBtn.addEventListener('click', async () => {
+  if (!tilt.on) {
+    // iPhone 需要使用者按按鈕後明確允許「動作與方向」權限
+    const req = (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission;
+    if (typeof req === 'function') {
+      const ok = await req().catch(() => 'denied');
+      if (ok !== 'granted') return status(bar.dataset.s ?? 'error', '沒有取得「動作與方向」權限，無法使用體感操控。');
+    }
+    tilt.on = true;
+    tilt.neutral = null;
+    window.addEventListener('deviceorientation', onOrientation);
+  } else {
+    tilt.on = false;
+    window.removeEventListener('deviceorientation', onOrientation);
+    sticks.right = { x: 0, y: 0 };
+    rightKnob.style.transform = '';
+  }
+  tiltBtn.setAttribute('aria-pressed', String(tilt.on));
+  tiltBtn.textContent = tilt.on ? '體感：開' : '體感：關';
+  rightPad.classList.toggle('tilt', tilt.on);
+  rightCap.textContent = tilt.on ? '體感中：傾斜手機飛行（點這裡＝重新歸零）' : '右：前進／後退・左移／右移';
+  root.querySelectorAll<HTMLButtonElement>('[data-inv]').forEach((b) => (b.hidden = !tilt.on));
+});
+root.querySelectorAll<HTMLButtonElement>('[data-inv]').forEach((b) =>
+  b.addEventListener('click', () => {
+    const axis = b.dataset.inv as 'roll' | 'pitch';
+    tilt.invert[axis] = !tilt.invert[axis];
+    b.setAttribute('aria-pressed', String(tilt.invert[axis]));
+  }),
+);
 
 // ── 配對 ──
 async function pair(): Promise<void> {

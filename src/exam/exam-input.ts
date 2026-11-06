@@ -17,6 +17,9 @@ import { GamepadInputAdapter } from '../input/adapters/GamepadInputAdapter';
 import { KeyboardInputAdapter } from '../input/adapters/KeyboardInputAdapter';
 import type { PilotInputAdapter } from '../input/PilotInputAdapter';
 import { PilotInputPipeline, type PipelineResult } from '../input/PilotInputPipeline';
+// 2026-11-07：考場模式也支援原子筆鏡頭搖桿與手機遙控器
+import { PenCameraInputAdapter } from '../input/adapters/PenCameraInputAdapter';
+import { PhoneLinkInputAdapter } from '../input/adapters/PhoneLinkInputAdapter';
 import { resolveProfileStore, type ProfileStore } from '../ui/profile-store';
 import {
   BUNDLED_RC_PROFILE_ENDPOINT,
@@ -87,6 +90,9 @@ const EMPTY_INFO: ExamInputInfo = {
 
 export class ExamInput {
   readonly gamepad: PilotInputAdapter;
+  /** 原子筆與手機（測試注入 adapters 時不建立，維持原行為） */
+  readonly pen: PenCameraInputAdapter | null = null;
+  readonly phone: PhoneLinkInputAdapter | null = null;
 
   private readonly keyboard: KeyboardInputAdapter;
   private readonly store: ProfileStore;
@@ -110,7 +116,14 @@ export class ExamInput {
 
   constructor(options: ExamInputOptions = {}) {
     this.gamepad = options.adapters?.[0] ?? new GamepadInputAdapter(0);
-    this.adapters = options.adapters ? [...options.adapters] : [this.gamepad];
+    if (!options.adapters && typeof document !== 'undefined') {
+      this.pen = new PenCameraInputAdapter();
+      this.phone = new PhoneLinkInputAdapter();
+    }
+    // 優先順序：實體遙控器 → 手機 → 原子筆 → 鍵盤
+    this.adapters = options.adapters
+      ? [...options.adapters]
+      : [this.gamepad, ...(this.phone ? [this.phone] : []), ...(this.pen ? [this.pen] : [])];
     this.keyboard = new KeyboardInputAdapter(options.keyboardTarget ?? window);
     this.store = options.store ?? resolveProfileStore().store;
     this.autoProfileSource =
@@ -120,7 +133,12 @@ export class ExamInput {
     this.pipeline = new PilotInputPipeline({
       adapters: this.adapters,
       keyboard: () => this.keyboard.poll(),
-      profileFor: (id) => this.deviceProfiles.get(id) ?? null,
+      profileFor: (id) => {
+        // 手機與原子筆的通道排列固定（美國手），不需校正
+        if (this.phone && id === this.phone.id) return this.phone.profile();
+        if (this.pen && id === this.pen.id) return this.pen.profile();
+        return this.deviceProfiles.get(id) ?? null;
+      },
     });
   }
 
