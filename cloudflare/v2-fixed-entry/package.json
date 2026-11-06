@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "name": "fde-ai-v2-fixed-entry",
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}

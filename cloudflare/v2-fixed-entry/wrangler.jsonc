@@ -1,0 +1,10 @@
+// FDE-AI 2.0 固定入口 Worker 設定（比照 V1.5C 的 fde-ai-gateway）
+// 固定網址：https://fde-ai-v2.fde-ai-gateway.workers.dev
+// ORIGIN_URL（目前通道網址）用 `wrangler secret put ORIGIN_URL` 設定，不寫在這裡
+{
+  "name": "fde-ai-v2",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-16",
+  "workers_dev": true,
+  "preview_urls": false
+}
