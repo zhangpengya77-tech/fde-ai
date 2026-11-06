@@ -211,9 +211,12 @@ function renderHero() {
   $('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
 
   const primaryAction = hero.actions.find((action) => action.kind === 'primary');
-  $('#heroActions').innerHTML = primaryAction
-    ? `<a class="${primaryAction.kind}-action" href="${router.hrefForTarget(primaryAction.target)}">${primaryAction.label}</a>`
-    : '';
+  $('#heroActions').innerHTML =
+    (primaryAction
+      ? `<a class="${primaryAction.kind}-action" href="${router.hrefForTarget(primaryAction.target)}">${primaryAction.label}</a>`
+      : '') +
+    // 2026-11-06：首頁加「一分鐘認識 FDE-AI」入口，點了進入「關於我們」頁（最上方就是介紹影片）
+    `<a class="secondary-action hero-video-entry" href="./about" data-route="about">▶ 一分鐘認識 FDE-AI</a>`;
 
   const motionStrip = $('#designMotion');
   if (motionStrip) {

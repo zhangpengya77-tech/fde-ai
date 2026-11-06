@@ -83,7 +83,8 @@
     <section class="card strip" id="strip-wiring" hidden>
       <div class="safety">⚠ 只列連接關係，全部「待實機核對」；不提供腳位定義。接線前對照實機外殼印字並先拆槳。</div>
       <div class="row"><span class="legend-line power">━ 電源路徑</span><span class="legend-line signal">━ 訊號路徑</span>
-        <span class="sep"></span><button data-wire="all" class="on">全部</button><button data-wire="power">只看電源</button><button data-wire="signal">只看訊號</button></div>
+        <span class="sep"></span><button data-wire="all" class="on">全部</button><button data-wire="power">只看電源</button><button data-wire="signal">只看訊號</button><span class="sep"></span><button id="wire-play" class="primary">▶ 接線教學</button></div>
+      <p class="note" id="wire-caption" aria-live="polite" hidden></p>
       <p class="note">點表格任一列，3D 會只顯示那條連線並高亮兩端零件；光點方向＝電流或訊號流向。</p>
       <div class="tw"><table id="wiring-table"><thead><tr><th>從</th><th>到</th><th>用途</th></tr></thead><tbody></tbody></table></div>
     </section>
@@ -120,6 +121,6 @@
   </aside>
 </main>
 
-<script type="module" src="./app.js?v=1.2.1"></script>
+<script type="module" src="./app.js?v=1.2.2"></script>
 </body>
 </html>

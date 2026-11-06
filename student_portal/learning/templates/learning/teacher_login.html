@@ -13,7 +13,7 @@
     {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>{% endfor %}
     <button class="button primary full" type="submit">登入教師後台</button>
   </form>
-  {# 2026-11-06：欄位旁加「貼上」「顯示」按鈕，解決 iPhone 找不到貼上選單的問題 #}
-  {% include 'learning/_login_paste_helper.html' %}
+  {# 2026-11-06：教師登入也拿掉「貼上」按鈕（與學員登入一致，自行長按貼上），只保留「顯示密碼」與自動去空白 #}
+  {% include 'learning/_login_paste_helper.html' with no_paste=True %}
 </section>
 {% endblock %}

@@ -472,6 +472,33 @@ function selectWire(i) {
 document.querySelectorAll('[data-wire]').forEach((b) => (b.onclick = () => {
   wireFilter = b.dataset.wire; document.querySelectorAll('[data-wire]').forEach((x) => x.classList.toggle('on', x === b)); selectWire(-1);
 }));
+// 2026-11-06：「▶ 接線教學」——依序播放每一條連線：3D 只顯示該線並高亮兩端零件，下方顯示「從 → 到：用途」
+let wirePlayTimer = null;
+function stopWirePlay() {
+  if (wirePlayTimer) { clearInterval(wirePlayTimer); wirePlayTimer = null; }
+  $('wire-play').textContent = '▶ 接線教學';
+}
+$('wire-play').onclick = () => {
+  if (wirePlayTimer) { stopWirePlay(); return; }
+  let k = -1;
+  const total = WIRING.length;
+  const step = () => {
+    k += 1;
+    if (k >= total) { stopWirePlay(); selectWire(-1); $('wire-caption').textContent = '接線教學播放完畢。接線前務必先拆槳，並對照實機外殼印字。'; return; }
+    selectWire(k);
+    const [a, b, c] = WIRING[k];
+    $('wire-caption').hidden = false;
+    $('wire-caption').textContent = `第 ${k + 1}／${total} 條：${a} → ${b}｜${c}`;
+    $('wiring-table').tBodies[0].rows[k]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  $('wire-play').textContent = '⏸ 暫停';
+  step();
+  wirePlayTimer = setInterval(step, 3000);
+};
+// 手動點表格列或切換篩選時，停止自動播放
+$('wiring-table').addEventListener('click', stopWirePlay);
+document.querySelectorAll('[data-wire]').forEach((b) => b.addEventListener('click', stopWirePlay));
+
 function updateWiring() {
   wireGroup.visible = mode === 'wiring'; if (!wireGroup.visible) return;
   const t = performance.now() / 1600;
