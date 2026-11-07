@@ -555,6 +555,8 @@ function renderLearningSectionDetail(sectionId) {
         .join('')}
     </div>
   `;
+  // 手機上卡片在畫面下方：切換後捲回課程清單開頭，學員才看得到內容
+  detail.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function handleLearningClick(event) {
@@ -564,7 +566,11 @@ function handleLearningClick(event) {
     return;
   }
 
-  if (event.target.closest('[data-learning-back]')) renderLearningResources();
+  if (event.target.closest('[data-learning-back]')) {
+    renderLearningResources();
+    // 返回時捲回三大專區卡片
+    $('#learningResources')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 }
 
 function renderFdeColumn() {

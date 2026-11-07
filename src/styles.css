@@ -3864,6 +3864,9 @@ a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba
 .learning-section-card small span { margin-left: 8px; font-size: 1rem; }
 
 .learning-section-detail { display: block; }
+/* 2026-11-07：display:grid／block 會蓋過 hidden 屬性，導致點卡片後畫面不變；明確讓 hidden 生效 */
+.learning-sections[hidden],
+.learning-section-detail[hidden] { display: none; }
 
 .learning-back {
   border: 1px solid rgba(0, 194, 255, 0.5);
