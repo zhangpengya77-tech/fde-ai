@@ -39,3 +39,9 @@ git -C D:/FDE-AI push origin 99ef710:codex/github-pages-public --force-with-leas
 
 ## 不受影響
 登入、Gateway、資料庫、AI 電力巡檢、學員上傳與權限隔離：本次**沒有修改任何後端或其他頁面**。
+
+## 正式部署紀錄（2026-11-07，教師批准後執行）
+- 推送 `codex/github-pages-public`：99ef710 → **f8a5430**；Actions run 42345573055：success。
+- 線上狀態：`/v2/`、`/v2/courses/`、`/v2/sim/`、`/v2/sim/app/?mode=exam&exam=0`、`/v2/f450-twin/`、`/v2/downloads/` 皆 HTTP 200；線上 `main-B63gZDQn.js` 與本機建置一致。
+- 線上自動驗收（Playwright 直連 GitHub Pages，`tests/live/rea-live.spec.ts`）：**7 / 7 通過**（`evidence-live-desktop.txt`）。
+- 回滾點：99ef710。

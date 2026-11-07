@@ -1,0 +1,12 @@
+
+Running 7 tests using 1 worker
+
+  ok 1 [desktop-chrome] › tests\live\rea-live.spec.ts:32:3 › REA 考照模擬器 › 入口顯示新科目系統，舊 F450 考照介面已被取代 (2.0s)
+  ok 2 [desktop-chrome] › tests\live\rea-live.spec.ts:45:3 › REA 考照模擬器 › 五種連線方式的面板仍在 (951ms)
+  ok 3 [desktop-chrome] › tests\live\rea-live.spec.ts:53:3 › REA 考照模擬器 › 看示範：8 字飛完出現練習評等與回放（加速 30 倍） (3.6s)
+  ok 4 [desktop-chrome] › tests\live\rea-live.spec.ts:67:3 › REA 考照模擬器 › 鍵盤：R 升高、W 前進會改變高度與位置 (7.4s)
+  ok 5 [desktop-chrome] › tests\live\rea-live.spec.ts:86:3 › REA 考照模擬器 › 模擬 USB 遙控器（RadioMaster Pocket 標定檔）：油門與俯仰實際控制新飛行引擎 (9.9s)
+  ok 6 [desktop-chrome] › tests\live\rea-live.spec.ts:109:3 › REA 考照模擬器 › 日本手（Mode 1）：右手垂直軸變成油門 (6.1s)
+  ok 7 [desktop-chrome] › tests\live\rea-live.spec.ts:124:3 › REA 考照模擬器 › 舊版 F450 考照模擬器仍可從 exam-legacy 開啟（歷史版本） (1.1s)
+
+  7 passed (32.3s)
