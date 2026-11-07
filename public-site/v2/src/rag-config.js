@@ -12,7 +12,8 @@
     // classroom-start.ps1 可發布目前 HTTPS URL 到 gh-pages。
     PUBLIC_VISION_API_URL: '',
     LIVE_COACH_URL: '/live/',
-    PUBLIC_LIVE_COACH_URL: '',
+    // 2026-11-07：GitHub 頁面上改走固定入口（主機離線時由 host-status 顯示提示，不再跳 GitHub 404）
+    PUBLIC_LIVE_COACH_URL: 'https://fde-ai-v2.fde-ai-gateway.workers.dev/live/',
     // 僅開發測試用；正式學生流程永遠不走模擬結果。
     ASSESS_DEV_MODE: false
   });

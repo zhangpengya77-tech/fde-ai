@@ -24,7 +24,7 @@
 
     <header class="mobile-header">
       <a class="mobile-brand" href="./" aria-label="FDE-AI 首頁">FDE-AI <small>無人載具學習平台</small></a>
-      <a class="mobile-login-link" href="/student/">學員前端</a>
+      <a class="mobile-login-link" href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/">學員前端</a>
       <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="mobileMenu">選單</button>
     </header>
 
@@ -38,14 +38,14 @@
       <details class="mobile-portal-group" id="mobilePortalGroup">
         <summary>入口選單 · Portal<span class="mobile-portal-hint">註冊 / 登入 / 教師 / 下載</span></summary>
         <div class="mobile-portal-links">
-          <a href="/student/">學員前端</a>
-          <a href="/register/">學員註冊</a>
-          <a href="/teacher/login/">教師後台</a>
-          <a href="/downloads/">下載中心</a>
-          <a href="/flight-health/">飛行健康 AI</a>
-          <a href="/sim/">無人機仿真訓練</a>
-          <a href="/m02-simulator/">模擬飛行 M02</a>
-          <a href="/student/growth/">我的成長日誌</a>
+          <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/">學員前端</a>
+          <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/register/">學員註冊</a>
+          <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/teacher/login/">教師後台</a>
+          <a href="./downloads/">下載中心</a>
+          <a href="./flight-health/">飛行健康 AI</a>
+          <a href="./sim/">無人機仿真訓練</a>
+          <a href="./m02-simulator/">模擬飛行 M02</a>
+          <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/growth/">我的成長日誌</a>
         </div>
       </details>
 
@@ -61,12 +61,12 @@
 
     <main>
       <nav class="portal-entry-links" aria-label="Portal and tools">
-        <a href="/student/">學員前端</a>
-        <a href="/register/">學員註冊</a>
-        <a href="/teacher/login/">教師後台</a>
-        <a href="/downloads/">下載中心 <small>Download Center</small></a>
-        <a href="/sim/">無人機仿真訓練 <small>Inspection Simulator</small></a>
-        <a href="/m02-simulator/">模擬飛行 M02 <small>Flight Simulation</small></a>
+        <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/">學員前端</a>
+        <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/register/">學員註冊</a>
+        <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/teacher/login/">教師後台</a>
+        <a href="./downloads/">下載中心 <small>Download Center</small></a>
+        <a href="./sim/">無人機仿真訓練 <small>Inspection Simulator</small></a>
+        <a href="./m02-simulator/">模擬飛行 M02 <small>Flight Simulation</small></a>
       </nav>
       <section class="hero section-block" id="home">
         <div class="hero-copy">
@@ -109,7 +109,7 @@
           <a href="./simulator"><span>04</span><strong>練</strong><small>模擬器與考照練習</small></a>
           <a href="./f450"><span>05</span><strong>做</strong><small>F450、AI 助教與專案實作</small></a>
           <a href="./eagle"><span>06</span><strong>測</strong><small>鷹眼 AI 檢測中心</small></a>
-          <a href="/student/growth/"><span>07</span><strong>證</strong><small>學習成長日誌（R01–R08）</small></a>
+          <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/growth/"><span>07</span><strong>證</strong><small>學習成長日誌（R01–R08）</small></a>
           <a href="./results"><span>08</span><strong>歷屆學員成果</strong><small>展示歷屆學員影片與作品</small></a>
           <a href="./teacher"><span>09</span><strong>教師復核參照</strong><small>查看教師複核流程與示例</small></a>
         </div>
@@ -217,7 +217,7 @@
           <p>1.0 先做 Pixhawk 2.4.8 版本，上傳照片或 30 秒影片，AI 助教透過 F450 RAG 知識庫協助排錯。</p>
         </div>
         <!-- Platform Integration：首頁「作 Build」主要 CTA 進入 F450 Main-12 / Student Live Coach -->
-        <a class="primary-action build-main12-entry" id="buildMain12Entry" href="/live/">進入 F450 Main-12 實作（AI 即時助教）→</a>
+        <a class="primary-action build-main12-entry" id="buildMain12Entry" href="https://fde-ai-v2.fde-ai-gateway.workers.dev/live/">進入 F450 Main-12 實作（AI 即時助教）→</a>
         <p class="build-legacy-note">以下為 1.0 舊版 F450 組裝流程與 RAG 助教，保留供參照。</p>
         <div class="build-layout">
           <div class="panel">
@@ -357,7 +357,7 @@
 
     <script src="./src/router.js?v=1.2-fde-column"></script>
     <script src="./src/course-definitions.js?v=1.5b-course-sync"></script>
-    <script src="./src/platform-browser.js?v=1.5d-stage-rename"></script>
+    <script src="./src/platform-browser.js?v=2.0d-sim-entry"></script>
     <script src="./src/learning-sections.js?v=2.0c-learning-sections"></script>
     <script src="./src/data/fdeVideos.js?v=1.2-fde-column-suffix"></script>
     <script src="./src/fde-column.js?v=1.2-fde-column-tags"></script>
@@ -366,6 +366,6 @@
     </script>
     <script src="./src/rag-client.js?v=1.2.3-mobile-speech"></script>
     <script src="./src/vision-client.js?v=1.0.3-mobile-speech"></script>
-    <script src="./src/app.js?v=1.2.3-mobile-speech&fde=1.2-fde-column"></script>
+    <script src="./src/app.js?v=2.0d-sim-entry"></script>
   </body>
 </html>

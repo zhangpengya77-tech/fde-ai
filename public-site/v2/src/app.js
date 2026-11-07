@@ -83,7 +83,7 @@ function renderNavigation() {
   const primaryNav = [
     { key: 'missions', label: '任', title: '12 任務地圖' },
     ...moduleSections,
-    { label: '健', title: '飛行健康 AI / Flight Health', href: '/flight-health/' },
+    { label: '健', title: '飛行健康 AI / Flight Health', href: './flight-health/' },
     { key: 'cohorts', label: '展', title: '歷屆學員成果' },
     { key: 'teacher', label: '師', title: '教師復核中心' }
   ];

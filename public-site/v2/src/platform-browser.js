@@ -115,7 +115,7 @@ const hero = {
   status: 'v1.0 MVP frontend',
   showMotionStrip: false,
   actions: [
-    { label: '我的成長日誌', target: '/student/growth/', kind: 'primary' },
+    { label: '我的成長日誌', target: 'https://fde-ai-v2.fde-ai-gateway.workers.dev/student/growth/', kind: 'primary' },
     { label: '觀看系統 Demo', target: '#inspection', kind: 'secondary' }
   ]
 };
@@ -171,7 +171,7 @@ const moduleSections = [
     title: '學習成長日誌（R01–R08）',
     summary: '八項成長紀錄的真實進度與教師複核結果，資料取自學員端 Django 成長紀錄。',
     goal: '逐項完成 R01–R08 成長紀錄並提交證據，教師複核後形成完整學習歷程。',
-    href: '/student/growth/'
+    href: 'https://fde-ai-v2.fde-ai-gateway.workers.dev/student/growth/'
     // 教師 2026-10-15 裁決：原版左側 #moduleNav 為唯一主導航，「證」= R01–R08 真實成長日誌（學員端 Django），
     // 不再指向靜態 GitHub 示範頁（./github 展示頁保留，直達網址仍可開啟）。
   }
@@ -431,6 +431,14 @@ const learningResources = learningTracks.flatMap((track) =>
 );
 
 const practiceResources = [
+  // 2026-11-07：站內考照模擬器（REA 重建版），放在第一項
+  {
+    category: 'fde-exam-simulator',
+    title: 'FDE-AI 考照模擬器（術科）',
+    description: '免安裝，打開網頁就能練：四面停懸、8 字水平圓、側飛、五邊、緊急返航、矩形航線，飛完逐段練習評等與 3D 回放（非民航局官方評分）。',
+    url: './sim/app/?mode=exam&exam=0',
+    steps: ['選科目與機型', '用 USB 遙控器、手機、原子筆、手勢或鍵盤連線', '先看示範，再自己飛', '看逐段評等與回放找出要改進的地方']
+  },
   {
     category: 'phoenix-simulator',
     title: '鳳凰模擬器飛行練習',
