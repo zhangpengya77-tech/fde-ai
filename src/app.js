@@ -544,7 +544,7 @@ function renderLearningSectionDetail(sectionId) {
                 <h4>${escapeHtml(course.title)}</h4>
                 ${
                   id
-                    ? `<div class="learning-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="${escapeHtml(course.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+                    ? `<div class="learning-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="${escapeHtml(course.title)}" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
                     : '<p class="learning-video-missing">影片嵌入待補。</p>'
                 }
                 <a class="learning-youtube-link" href="${escapeHtml(course.youtubeUrl)}" target="_blank" rel="noreferrer">在 YouTube 開啟原始影片 ↗</a>
@@ -555,6 +555,7 @@ function renderLearningSectionDetail(sectionId) {
         .join('')}
     </div>
   `;
+  // 正式站 Referrer-Policy 為 same-origin；YouTube 嵌入需要來源網址才能播放，所以 iframe 個別設定 referrerpolicy（同 FDE 專欄做法）
   // 手機上卡片在畫面下方：切換後捲回課程清單開頭，學員才看得到內容
   detail.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
