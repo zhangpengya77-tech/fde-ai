@@ -12,7 +12,8 @@
     header a { color: #00c2ff; font-weight: 700; text-decoration: none; }
     main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
     h1 { margin: 0 0 4px; color: #fff; font-size: 28px; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+    @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     article { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1px solid rgba(0, 194, 255, .3); border-radius: 8px; background: #0f2033; }
     h2 { margin: 0; color: #fff; font-size: 20px; }
     p { margin: 0; }
@@ -39,14 +40,14 @@
     <h1>仿真訓練專區</h1>
     <p class="note">僅供教學練習，非民航局官方考試系統。</p>
     <div class="grid">
+      <!-- 2026-11-08：考照模擬改為 REA 重建版（選科目 → 選機型 → 設定 → 開始飛 → 評等／回放） -->
       <article>
         <span class="tag">可使用</span>
         <h2>無人機考照模擬訓練</h2>
-        <!-- 2026-11-08：改為 REA 重建版考照系統（選科目 → 選機型 → 設定 → 開始飛 → 評等／回放），與 GitHub 公開網站同版 -->
-        <p>依民航局 AC 107-005D 考場尺寸：四面停懸、8 字水平圓、側飛、五邊、緊急返航、矩形航線（含 I2 小場地），三種機型、定位／姿態模式、風況設定，飛完逐段練習評等並可 3D 回放。練習評等為本站自訂，<b>不是民航局官方評分</b>。</p>
-        <p class="note">USB 遙控器（如 RadioMaster）請用 Windows Chrome／Edge，設定為 USB Joystick (HID) 後輕推搖桿。沒有遙控器也可以用手機、手勢或原子筆操作（見下方「五種連線方式」）。</p>
+        <p>依民航局 AC 107-005D 考場尺寸：四面停懸、8 字水平圓、側飛、五邊、緊急返航、矩形航線（含 I2 小場地），三種機型、定位／姿態模式、風況設定，飛完逐段練習評等並可 3D 回放。</p>
+        <p class="note">練習評等為本站自訂，不是民航局官方評分。USB 遙控器（如 RadioMaster）請用 Windows Chrome／Edge，設定為 USB Joystick (HID) 後輕推搖桿；也可用下方其他連線方式。</p>
         <a class="go" href="app/?mode=exam&amp;exam=0">開始考照模擬練習</a>
-        <a class="go" style="margin-top:.5rem;background:transparent;border:1px solid currentColor" href="app/?mode=exam-legacy&amp;exam=0">舊版 F450 八字訓練（歷史版本）</a>
+        <a class="note" href="app/?mode=exam-legacy&amp;exam=0" style="text-align:center;color:#7dd3fc">舊版 F450 八字飛行（歷史版本）</a>
       </article>
       <article>
         <span class="tag">可使用</span>
@@ -54,6 +55,13 @@
         <p>輸電塔與輸電線 3D 場景：巡檢任務、拍照、安全距離提示與教學評分。</p>
         <p class="note">畫面中的 AI 判讀為模擬事件，不是真實模型結果。</p>
         <a class="go" href="app/">進入電力巡檢訓練</a>
+      </article>
+      <!-- 2026-11-08：首頁只保留一個「仿真訓練」入口，模擬飛行 M02 移到這裡（教學主機沒有 M02，連到公開網站版，電腦關機也能用） -->
+      <article>
+        <span class="tag">可使用</span>
+        <h2>模擬飛行 M02</h2>
+        <p>M02 課程的飛行模擬練習（Flight Simulation）：基本起降、方向與航線操作。</p>
+        <a class="go" href="https://zhangpengya77-tech.github.io/fde-ai/v2/m02-simulator/">進入模擬飛行 M02</a>
       </article>
     </div>
 
