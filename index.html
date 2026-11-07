@@ -277,15 +277,11 @@
       <section class="section-block module-page compact-section" id="learn">
         <div class="section-intro">
           <p class="eyebrow">Learn · 學</p>
-          <h2>課程影片與下載說明</h2>
-          <p>保留 F450、鳳凰模擬器、證照、AI、3D 列印與 GitHub 的學習入口。</p>
+          <h2>無人載具學習中心</h2>
+          <p>依飛控系統與 3D 列印學習路徑整理教師指定課程。</p>
         </div>
-        <a class="fde-column-entry" href="./fde" data-route="fde-column">
-          <span class="tag">FDE 專欄</span>
-          <strong>FDE-AI 無人載具實驗室</strong>
-          <small>查看無人機、AI 與工程實作影片</small>
-        </a>
-        <div class="resource-grid" id="learningResources"></div>
+        <div class="learning-sections" id="learningResources"></div>
+        <div class="learning-section-detail" id="learningSectionDetail" hidden></div>
       </section>
 
       <section class="section-block module-page compact-section fde-column-page" id="fde-column">
@@ -486,6 +482,7 @@
     <script src="./src/router.js?v=1.3-about"></script>
     <script src="./src/course-definitions.js?v=1.5b-course-sync"></script>
     <script src="./src/platform-browser.js?v=1.5h-web-sim"></script>
+    <script src="./src/learning-sections.js?v=2.0c-learning-sections"></script>
     <script src="./src/data/fdeVideos.js?v=1.2-fde-column-suffix"></script>
     <script src="./src/fde-column.js?v=1.2-fde-column-tags"></script>
     <script>

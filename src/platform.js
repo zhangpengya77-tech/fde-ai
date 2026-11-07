@@ -293,6 +293,11 @@ export const cohorts = [
         url: 'https://www.youtube.com/watch?v=gW5HTVLLKJY'
       },
       {
+        phase: '07',
+        title: 'FD-AI无人载具在职培训2026-06-7',
+        url: 'https://youtu.be/O_QmYD-b4QU?si=ej5g6w67y-7D77lv'
+      },
+      {
         phase: '職前',
         title: '2026風電無人機巡檢ai應用職前教育（嘉義）',
         url: 'https://www.youtube.com/watch?v=oXK6lE6KFmI'
