@@ -42,13 +42,15 @@ interface Prefs {
   narration: boolean;
   /** 2026-11-08：槳葉旋轉聲音 */
   rotorSound: boolean;
+  /** 2026-11-08：解說字幕（預設關：以語音為主，畫面留給無人機） */
+  captions: boolean;
 }
 
 const PREFS_KEY = 'fde-rea-exam-prefs-v1';
 const DEFAULT_PREFS: Prefs = {
   subjectId: 'figure-eight', airframeId: 'quad-4kg', airframeFixed: false, mode: 'attitude', wind: { ...DEFAULT_WIND },
   sunny: true, hour: 10, facingDeg: 0, stickMode: 'mode2', examineeCam: 'follow', showSticks: true, showHud: true, license: 'all',
-  narration: true, rotorSound: true,
+  narration: true, rotorSound: true, captions: false,
 };
 
 function loadPrefs(): Prefs {
@@ -128,6 +130,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
           <label class="rea-check"><input type="checkbox" data-rea-show-hud> 顯示高度、速度與機頭角</label>
           <label class="rea-check"><input type="checkbox" data-rea-narration> 示範語音解說（台灣女聲）</label>
           <label class="rea-check"><input type="checkbox" data-rea-rotor-sound> 槳葉旋轉聲音</label>
+          <label class="rea-check"><input type="checkbox" data-rea-captions> 顯示解說字幕</label>
           <p class="rea-muted" data-rea-voice-name></p>
         </div>
         <p class="rea-muted" data-rea-safety></p>
@@ -173,6 +176,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
   let narratedStep = -1;
   let captionTimer = 0;
   narrator.onText = (text) => {
+    // 字幕只在「使用者打開字幕」或「瀏覽器不能發聲」時顯示，避免擋住無人機
+    if (!prefs.captions && narrator.canSpeak) return;
     const cap = $('[data-rea-caption]');
     cap.textContent = `🎙️ ${text}`;
     cap.hidden = false;
@@ -221,6 +226,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $<HTMLInputElement>('[data-rea-show-hud]').checked = prefs.showHud;
     $<HTMLInputElement>('[data-rea-narration]').checked = prefs.narration;
     $<HTMLInputElement>('[data-rea-rotor-sound]').checked = prefs.rotorSound;
+    $<HTMLInputElement>('[data-rea-captions]').checked = prefs.captions;
+    if (!prefs.captions) hideCaption();
     narrator.enabled = prefs.narration;
     rotor.enabled = prefs.rotorSound;
     if (!prefs.narration) { narrator.stop(); hideCaption(); }
@@ -327,6 +334,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
   bindSetting('[data-rea-show-hud]', (_v, el) => (prefs.showHud = el.checked));
   bindSetting('[data-rea-narration]', (_v, el) => (prefs.narration = el.checked));
   bindSetting('[data-rea-rotor-sound]', (_v, el) => (prefs.rotorSound = el.checked));
+  bindSetting('[data-rea-captions]', (_v, el) => (prefs.captions = el.checked));
   $('[data-rea-reset-prefs]').addEventListener('click', () => { Object.assign(prefs, { ...DEFAULT_PREFS, wind: { ...DEFAULT_WIND }, subjectId: prefs.subjectId }); refreshAll(); });
 
   $('[data-rea-start]').addEventListener('click', () => start(false));

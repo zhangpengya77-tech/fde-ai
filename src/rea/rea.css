@@ -82,4 +82,26 @@
 /* 2026-11-08：示範語音解說字幕 */
 .rea-caption { position:absolute; left:50%; bottom:168px; transform:translateX(-50%); max-width:min(760px,90%); background:rgba(15,20,26,.82); color:#fff; padding:8px 16px; border-radius:12px; font-size:16px; line-height:1.6; z-index:3; text-align:center; border:1px solid rgba(255,214,102,.45); }
 .rea-caption[hidden] { display:none; }
-@media (max-width: 760px) { .rea-caption { bottom:215px; font-size:14px; } }
+
+/* 2026-11-08：手機版修正——上方按鈕單行可左右滑、不再壓到「下一步」提示；
+   打桿框縮小、字幕移到上方，讓畫面中間留給無人機；側欄底部留空間給「🔗 連線方式」按鈕 */
+@media (max-width: 900px) {
+  .rea-topbar { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; pointer-events:auto; }
+  .rea-topbar::-webkit-scrollbar { display:none; }
+  .rea-topbar > * { flex:0 0 auto; }
+  .rea-chip { font-size:12px; padding:4px 10px; }
+  .rea-hint { top:46px; font-size:13px; max-width:94%; padding:4px 10px; }
+  .rea-sticks { bottom:54px; gap:10px; }
+  .rea-stick { width:58px; height:58px; }
+  .rea-stick span { bottom:-16px; font-size:10px; }
+  .rea-hud { bottom:132px; font-size:12px; }
+  .rea-caption { top:84px; bottom:auto; font-size:13px; padding:6px 12px; }
+  .rea-side { padding-bottom:84px; }
+}
+/* 手機：「🔗 連線方式」縮成右下角小圓鈕（只露出 🔗），不再蓋住科目清單 */
+@media (max-width: 900px) {
+  .rea-root ~ [data-action="open-link"], body [data-action="open-link"] {
+    left:auto !important; right:12px !important; bottom:12px !important; width:44px; height:44px;
+    padding:0 0 0 11px !important; border-radius:50% !important; overflow:hidden; white-space:nowrap; text-align:left; font-size:18px !important;
+  }
+}
