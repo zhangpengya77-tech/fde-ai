@@ -8,7 +8,16 @@ if (!root) {
 
 const params = new URLSearchParams(window.location.search);
 if (params.get('mode') === 'exam') {
-  // CAA 專業基本級術科考場模擬（考試機獨立疊加）。
+  // 2026-11-07：正式考照入口改為 REA 重建版（選科目 → 選機型 → 設定 → 開始飛 → 評等／回放）。
+  // 下方五種連線方式沿用 ExamInput 與既有連線面板。
+  void import('./rea/app').then((m) => {
+    const app = m.createReaApp(root);
+    if (import.meta.hot) {
+      import.meta.hot.dispose(() => app.dispose());
+    }
+  });
+} else if (params.get('mode') === 'exam-legacy') {
+  // 舊版 F450 考照模擬器：保留為歷史版本，不再作為正式考照入口。
   void import('./exam/exam-app').then((m) => {
     const examMode = params.get('exam') !== '0';
     const app = m.createExamApp(root, { examMode });

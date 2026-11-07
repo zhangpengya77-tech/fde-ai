@@ -9,7 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 async function openExam(page: Page): Promise<void> {
-  await page.goto('/?mode=exam');
+  await page.goto('/?mode=exam-legacy');
   await expect(page.locator('#app canvas[data-engine]')).toBeVisible({ timeout: 10_000 });
 }
 

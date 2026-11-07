@@ -301,7 +301,7 @@ export class CourseRunner {
 
   result(): CourseResult {
     const steps = [...this.results];
-    const grade = (this.failure ? 3 : steps.reduce((g, r) => Math.max(g, r.tier), 0)) as Tier;
+    const grade = (this.failure ? 3 : steps.reduce<number>((g, r) => Math.max(g, r.tier), 0)) as Tier;
     return {
       subjectId: this.subject.id, grade, finished: this.finished && !this.failure, failure: this.failure,
       steps, durationS: this.t, disclaimer: DISCLAIMER,
@@ -310,7 +310,7 @@ export class CourseRunner {
 
   private complete(metrics: Metric[], newAnchor?: Vec2): void {
     const step = this.subject.steps[this.index];
-    const tier = metrics.reduce((g, x) => Math.max(g, x.tier), 0) as Tier;
+    const tier = metrics.reduce<number>((g, x) => Math.max(g, x.tier), 0) as Tier;
     this.results.push({ index: this.index, label: step.label, kind: step.kind, startT: this.stepStart, endT: this.t, completed: true, metrics, tier });
     if (newAnchor) this.anchor = { ...newAnchor };
     this.index++;

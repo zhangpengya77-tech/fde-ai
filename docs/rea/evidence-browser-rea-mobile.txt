@@ -1,0 +1,18 @@
+[WebServer] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 8 tests using 1 worker
+
+  ok 1 [mobile-chrome] › tests\browser\rea-evidence.spec.ts:6:1 › REA 驗收截圖 (4.8s)
+  ok 2 [mobile-chrome] › tests\browser\rea-exam.spec.ts:31:3 › REA 考照模擬器 › 入口顯示新科目系統，舊 F450 考照介面已被取代 (542ms)
+  ok 3 [mobile-chrome] › tests\browser\rea-exam.spec.ts:44:3 › REA 考照模擬器 › 五種連線方式的面板仍在 (515ms)
+  ok 4 [mobile-chrome] › tests\browser\rea-exam.spec.ts:52:3 › REA 考照模擬器 › 看示範：8 字飛完出現練習評等與回放（加速 30 倍） (3.0s)
+  ok 5 [mobile-chrome] › tests\browser\rea-exam.spec.ts:66:3 › REA 考照模擬器 › 鍵盤：R 升高、W 前進會改變高度與位置 (6.7s)
+  ok 6 [mobile-chrome] › tests\browser\rea-exam.spec.ts:85:3 › REA 考照模擬器 › 模擬 USB 遙控器（RadioMaster Pocket 標定檔）：油門與俯仰實際控制新飛行引擎 (8.8s)
+  ok 7 [mobile-chrome] › tests\browser\rea-exam.spec.ts:108:3 › REA 考照模擬器 › 日本手（Mode 1）：右手垂直軸變成油門 (8.0s)
+  ok 8 [mobile-chrome] › tests\browser\rea-exam.spec.ts:123:3 › REA 考照模擬器 › 舊版 F450 考照模擬器仍可從 exam-legacy 開啟（歷史版本） (1.8s)
+
+  8 passed (44.5s)

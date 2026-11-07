@@ -98,7 +98,7 @@ test.describe('考試模式 — 機體與起飛流程', () => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
-    await page.goto('/?mode=exam');
+    await page.goto('/?mode=exam-legacy');
     await waitRendered(page);
 
     // 1) 起飛前：機體在場景中、畫面內、可辨識（考生視角）。
@@ -183,7 +183,7 @@ test.describe('考試模式 — 機體與起飛流程', () => {
   });
 
   test('考生視角可縮放與環繞，且相機操作不改變飛行狀態', async ({ page }, testInfo) => {
-    await page.goto('/?mode=exam');
+    await page.goto('/?mode=exam-legacy');
     await waitRendered(page);
 
     const before = await state(page);
@@ -235,7 +235,7 @@ test.describe('考試模式 — 機體與起飛流程', () => {
   });
 
   test('視角切換（V）：考生 → 追隨 → 俯視全景 → 考生，機體始終在畫面內', async ({ page }, testInfo) => {
-    await page.goto('/?mode=exam');
+    await page.goto('/?mode=exam-legacy');
     await waitRendered(page);
     expect((await state(page)).cameraView).toBe('examinee');
 
@@ -270,7 +270,7 @@ test.describe('考試模式 — 三解析度版面與截圖', () => {
       page.on('pageerror', (e) => errors.push(e.message));
 
       await page.setViewportSize({ width: vp.w, height: vp.h });
-      await page.goto('/?mode=exam');
+      await page.goto('/?mode=exam-legacy');
       await waitRendered(page);
 
       const shotPath = (name: string) => `${SHOT_DIR}/${vp.w}x${vp.h}-${name}.png`;

@@ -12,7 +12,7 @@ test('科目 F：選科 → 起飛 → 監評下達緊急返航 → 成績單 F 
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.goto('/?mode=exam');
+  await page.goto('/?mode=exam-legacy');
   const canvas = page.locator('#app canvas[data-engine]');
   await expect(canvas).toBeVisible({ timeout: 10_000 });
 
@@ -46,7 +46,7 @@ test('地面狀態按 E 不會下達緊急返航（顯示提示、不出橫幅�
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.goto('/?mode=exam');
+  await page.goto('/?mode=exam-legacy');
   const canvas = page.locator('#app canvas[data-engine]');
   await expect(canvas).toBeVisible({ timeout: 10_000 });
 

@@ -11,7 +11,7 @@ test('exam mode mounts, runs, and produces a report', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
 
-  await page.goto('/?mode=exam');
+  await page.goto('/?mode=exam-legacy');
 
   // 考場 canvas 已掛載（three.js 主場景，data-engine 標記）。
   const canvas = page.locator('#app canvas[data-engine]');
