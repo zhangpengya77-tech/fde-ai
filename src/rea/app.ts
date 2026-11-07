@@ -18,6 +18,8 @@ import { DEFAULT_WIND, WIND_FROM_LABELS, levelToSpeed, type WindFrom, type WindS
 import { ExamScene, type ExamineeCam } from './scene';
 import { drawTrack, type TrackColoring } from './track-view';
 import { normalizeInputSource, showPracticeToast, syncPractice } from '../report/practice-sync';
+import { Narrator, introNarration, stepNarration } from './narrator';
+import { RotorAudio, rotorTarget } from './rotor-audio';
 
 type Phase = 'setup' | 'countdown' | 'flying' | 'result';
 type StickMode = 'mode2' | 'mode1';
@@ -36,12 +38,17 @@ interface Prefs {
   showSticks: boolean;
   showHud: boolean;
   license: License | 'all';
+  /** 2026-11-08：示範飛行語音解說（台灣女聲） */
+  narration: boolean;
+  /** 2026-11-08：槳葉旋轉聲音 */
+  rotorSound: boolean;
 }
 
 const PREFS_KEY = 'fde-rea-exam-prefs-v1';
 const DEFAULT_PREFS: Prefs = {
   subjectId: 'figure-eight', airframeId: 'quad-4kg', airframeFixed: false, mode: 'attitude', wind: { ...DEFAULT_WIND },
   sunny: true, hour: 10, facingDeg: 0, stickMode: 'mode2', examineeCam: 'follow', showSticks: true, showHud: true, license: 'all',
+  narration: true, rotorSound: true,
 };
 
 function loadPrefs(): Prefs {
@@ -74,6 +81,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <span class="rea-chip rea-src" data-rea-src title="目前生效的輸入來源"></span>
       </div>
       <div class="rea-hint" data-rea-hint></div>
+      <div class="rea-caption" data-rea-caption hidden></div>
       <div class="rea-hud" data-rea-hud></div>
       <div class="rea-sticks" data-rea-sticks>
         <div class="rea-stick"><i data-rea-stick-l></i><span>左手</span></div>
@@ -118,6 +126,9 @@ export function createReaApp(root: HTMLElement): ReaApp {
           <label>考生視角<select data-rea-excam><option value="fixed">固定</option><option value="follow">自動轉頭</option><option value="zoom">飛遠拉近</option></select></label>
           <label class="rea-check"><input type="checkbox" data-rea-show-sticks> 顯示打桿位置</label>
           <label class="rea-check"><input type="checkbox" data-rea-show-hud> 顯示高度、速度與機頭角</label>
+          <label class="rea-check"><input type="checkbox" data-rea-narration> 示範語音解說（台灣女聲）</label>
+          <label class="rea-check"><input type="checkbox" data-rea-rotor-sound> 槳葉旋轉聲音</label>
+          <p class="rea-muted" data-rea-voice-name></p>
         </div>
         <p class="rea-muted" data-rea-safety></p>
         <button class="rea-link" data-rea-reset-prefs>恢復預設</button>
@@ -155,6 +166,20 @@ export function createReaApp(root: HTMLElement): ReaApp {
   let last = performance.now();
   // 測試／快速預覽用：?reaSpeed=N 只加速「示範飛行」（1–40 倍），真人飛行永遠是實際時間
   const demoSpeed = Math.min(40, Math.max(1, Number(new URLSearchParams(location.search).get('reaSpeed')) || 1));
+
+  // 2026-11-08：示範語音解說與槳葉聲音
+  const narrator = new Narrator();
+  const rotor = new RotorAudio();
+  let narratedStep = -1;
+  let captionTimer = 0;
+  narrator.onText = (text) => {
+    const cap = $('[data-rea-caption]');
+    cap.textContent = `🎙️ ${text}`;
+    cap.hidden = false;
+    clearTimeout(captionTimer);
+    captionTimer = window.setTimeout(() => { cap.hidden = true; }, Math.max(4000, text.length * 260));
+  };
+  const hideCaption = () => { clearTimeout(captionTimer); $('[data-rea-caption]').hidden = true; };
 
   const subject = (): Subject => subjectById(prefs.subjectId) ?? SUBJECTS[3];
 
@@ -194,6 +219,15 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $<HTMLSelectElement>('[data-rea-excam]').value = prefs.examineeCam;
     $<HTMLInputElement>('[data-rea-show-sticks]').checked = prefs.showSticks;
     $<HTMLInputElement>('[data-rea-show-hud]').checked = prefs.showHud;
+    $<HTMLInputElement>('[data-rea-narration]').checked = prefs.narration;
+    $<HTMLInputElement>('[data-rea-rotor-sound]').checked = prefs.rotorSound;
+    narrator.enabled = prefs.narration;
+    rotor.enabled = prefs.rotorSound;
+    if (!prefs.narration) { narrator.stop(); hideCaption(); }
+    if (!prefs.rotorSound) rotor.silence();
+    $('[data-rea-voice-name]').textContent = !narrator.canSpeak
+      ? '這個瀏覽器不支援語音，示範時只顯示解說字幕。'
+      : narrator.voiceName ? `解說聲音：${narrator.voiceName}` : '解說聲音：使用系統預設中文聲音（沒有找到台灣女聲）';
     const safety = levelToSpeed(w.level) >= 7.5 || levelToSpeed(w.level) + w.gust * 0.6 >= 10;
     $('[data-rea-safety]').textContent = safety ? '⚠️ 已達規範的安全宣告門檻（平均風 7.5 m/s 或陣風 10 m/s），實際考試時監評會做安全宣告。' : '';
     scene.examineeCam = prefs.examineeCam;
@@ -244,6 +278,9 @@ export function createReaApp(root: HTMLElement): ReaApp {
     root.dataset.reaPhase = 'setup';
     $('[data-rea-countdown]').textContent = '';
     stage.classList.remove('rea-demo');
+    narrator.stop();
+    hideCaption();
+    rotor.silence();
     endResult();
     if (wasActive) $('[data-rea-hint]').textContent = '已結束上一趟，換好後按「開始飛」。';
   }
@@ -288,6 +325,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
   bindSetting('[data-rea-excam]', (v) => (prefs.examineeCam = v as ExamineeCam));
   bindSetting('[data-rea-show-sticks]', (_v, el) => (prefs.showSticks = el.checked));
   bindSetting('[data-rea-show-hud]', (_v, el) => (prefs.showHud = el.checked));
+  bindSetting('[data-rea-narration]', (_v, el) => (prefs.narration = el.checked));
+  bindSetting('[data-rea-rotor-sound]', (_v, el) => (prefs.rotorSound = el.checked));
   $('[data-rea-reset-prefs]').addEventListener('click', () => { Object.assign(prefs, { ...DEFAULT_PREFS, wind: { ...DEFAULT_WIND }, subjectId: prefs.subjectId }); refreshAll(); });
 
   $('[data-rea-start]').addEventListener('click', () => start(false));
@@ -328,6 +367,13 @@ export function createReaApp(root: HTMLElement): ReaApp {
     phase = 'countdown';
     countdownT = isDemo ? 0.01 : 3;
     stage.classList.toggle('rea-demo', isDemo);
+    // 使用者剛按了按鈕：此時才能喚醒音訊（瀏覽器規定）
+    rotor.unlock();
+    narratedStep = -1;
+    narrator.stop();
+    hideCaption();
+    // 加速示範（自動化測試用）不念解說
+    if (isDemo && demoSpeed === 1) narrator.speak(introNarration(s), true);
   }
 
   function restart(): void {
@@ -337,6 +383,9 @@ export function createReaApp(root: HTMLElement): ReaApp {
     phase = 'setup';
     $('[data-rea-countdown]').textContent = '';
     stage.classList.remove('rea-demo');
+    narrator.stop();
+    hideCaption();
+    rotor.silence();
     endResult();
     prepareIdle();
   }
@@ -349,6 +398,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
     replay = { samples: session.samples, t: 0, speed: 1, playing: false, result, coloring: 'time' };
     scene.setTrailFromSamples(session.samples);
     showResult();
+    rotor.silence();
+    if (demo && demoSpeed === 1) narrator.speak(result.failure ? '示範結束。' : '示範完成。接下來換你試試看，按「開始飛」就可以練習這個科目。');
     // 真人飛完（示範不算）：沿用既有機制，已登入學員時把成績摘要存入成長日誌「模擬練飛紀錄」
     if (!demo) {
       const s = subject();
@@ -430,6 +481,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     box.querySelector('[data-rea-again]')!.addEventListener('click', () => start(!!demo));
     box.querySelector('[data-rea-close]')!.addEventListener('click', () => restart());
     box.querySelector('[data-rea-play]')!.addEventListener('click', () => {
+      rotor.unlock(); // 回放時也有槳葉聲音
       if (!replay) return;
       if (replay.t >= r.durationS - 0.05) replay.t = 0;
       replay.playing = !replay.playing;
@@ -505,6 +557,10 @@ export function createReaApp(root: HTMLElement): ReaApp {
       const st = sess.state;
       scene.pushTrail(st.x, st.y, st.h);
       const step = sess.runner.step;
+      if (ap && demoSpeed === 1 && step && sess.runner.index !== narratedStep) {
+        narratedStep = sess.runner.index;
+        narrator.speak(stepNarration(step));
+      }
       const holdLeft = step && step.kind === 'hold' ? '' : '';
       hint.textContent = sess.runner.returnCalled && step?.kind === 'emergency-return'
         ? '🚨 緊急返航！立刻停住，再飛回較近的八字內圈降落'
@@ -538,6 +594,16 @@ export function createReaApp(root: HTMLElement): ReaApp {
       hud.dataset.heading = st.heading.toFixed(1);
       root.dataset.reaPhase = phase;
     }
+    // 槳葉聲音：倒數／飛行中跟著真實狀態；回放播放中跟著紀錄；其他時候停槳
+    const afId = session?.opts.airframeId ?? prefs.airframeId;
+    if (session && (phase === 'flying' || phase === 'countdown')) {
+      rotor.update(rotorTarget(afId, cmd, session.state));
+    } else if (phase === 'result' && replay?.playing) {
+      const smp = sampleAt(replay.samples, replay.t);
+      rotor.update(smp ? rotorTarget(afId, smp.cmd, { armed: true, landed: smp.h < 0.02, crashed: false, pitchDeg: smp.pitchDeg, rollDeg: smp.rollDeg }) : { spin: 0, freq: 0, gain: 0 });
+    } else {
+      rotor.update({ spin: 0, freq: 0, gain: 0 });
+    }
     drawSticks(cmd);
     scene.render();
   }
@@ -563,6 +629,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', onKey);
       unmountLink();
+      narrator.stop();
+      rotor.dispose();
       scene.dispose();
     },
   };
