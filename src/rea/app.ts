@@ -20,6 +20,8 @@ import { drawTrack, type TrackColoring } from './track-view';
 import { normalizeInputSource, showPracticeToast, syncPractice } from '../report/practice-sync';
 import { Narrator, introNarration, stepNarration } from './narrator';
 import { RotorAudio, rotorTarget } from './rotor-audio';
+import { touchToStick, sticksToCommand, type StickXY } from '../phone/stick-math';
+import { IDLE_LEFT, IDLE_RIGHT, TOUR, describeLeft, describeRight, tourSvg } from './touch-deck';
 
 type Phase = 'setup' | 'countdown' | 'flying' | 'result';
 type StickMode = 'mode2' | 'mode1';
@@ -44,6 +46,8 @@ interface Prefs {
   rotorSound: boolean;
   /** 2026-11-08：解說字幕（預設關：以語音為主，畫面留給無人機） */
   captions: boolean;
+  /** 2026-11-08：觸控搖桿（用這支手機的螢幕當搖桿；手機預設開） */
+  touchSticks: boolean;
 }
 
 const PREFS_KEY = 'fde-rea-exam-prefs-v1';
@@ -51,6 +55,8 @@ const DEFAULT_PREFS: Prefs = {
   subjectId: 'figure-eight', airframeId: 'quad-4kg', airframeFixed: false, mode: 'attitude', wind: { ...DEFAULT_WIND },
   sunny: true, hour: 10, facingDeg: 0, stickMode: 'mode2', examineeCam: 'follow', showSticks: true, showHud: true, license: 'all',
   narration: true, rotorSound: true, captions: false,
+  // 手機、平板（手指操作）預設開觸控搖桿；電腦預設用鍵盤
+  touchSticks: typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches,
 };
 
 function loadPrefs(): Prefs {
@@ -80,7 +86,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <a class="rea-chip rea-home" href="../">← 仿真訓練</a>
         <button class="rea-chip" data-rea-mode title="定位模式：放開搖桿會停住；姿態模式：放開搖桿機身擺平但會被風吹走"></button>
         <span class="rea-chip rea-title" data-rea-title></span>
-        <span class="rea-chip rea-src" data-rea-src title="目前生效的輸入來源"></span>
+        <button class="rea-chip rea-src" data-rea-src title="目前生效的輸入來源；點一下選操作方式"></button>
       </div>
       <div class="rea-hint" data-rea-hint></div>
       <div class="rea-caption" data-rea-caption hidden></div>
@@ -98,9 +104,37 @@ export function createReaApp(root: HTMLElement): ReaApp {
       </div>
       <div class="rea-result" data-rea-result hidden></div>
     </section>
+    <div class="rea-deck" data-rea-deck hidden>
+      <div class="rea-deck-top">
+        <div class="rea-seg" data-rea-seg-mode role="group" aria-label="飛行模式"><button type="button" data-v="position">定位</button><button type="button" data-v="attitude">姿態</button></div>
+        <button type="button" class="rea-deck-btn" data-rea-help>❓ 怎麼操控</button>
+        <span class="rea-spacer"></span>
+        <button type="button" class="rea-deck-btn" data-rea-deck-demo>看示範</button>
+        <button type="button" class="rea-deck-btn primary" data-rea-deck-start>開始飛</button>
+      </div>
+      <div class="rea-deck-sticks">
+        <div class="rea-joy" data-rea-joy="l"><div class="rea-joy-ring" data-rea-ring="l"><i data-rea-knob="l"></i></div><p data-rea-joy-text="l"></p></div>
+        <div class="rea-joy" data-rea-joy="r"><div class="rea-joy-ring" data-rea-ring="r"><i data-rea-knob="r"></i></div><p data-rea-joy-text="r"></p></div>
+      </div>
+    </div>
+    <div class="rea-tour" data-rea-tour hidden role="dialog" aria-modal="true" aria-labelledby="rea-tour-title">
+      <div class="rea-tour-card">
+        <header><h2 id="rea-tour-title">怎麼操控</h2><button type="button" class="rea-link" data-rea-tour-skip>跳過教學</button></header>
+        <div class="rea-tour-body"><p class="rea-muted">美國手（左手油門）</p><div class="rea-tour-pic" data-rea-tour-pic></div><h3 data-rea-tour-h></h3><p data-rea-tour-text></p></div>
+        <footer><span data-rea-tour-n></span><span class="rea-spacer"></span><button type="button" class="rea-deck-btn" data-rea-tour-prev>上一步</button><button type="button" class="rea-deck-btn primary" data-rea-tour-next>下一步</button></footer>
+      </div>
+    </div>
     <aside class="rea-side" data-rea-side>
       <h1 class="rea-h1">臺灣無人機考照模擬器 <small>FDE-AI V2.0・REA 重建版</small></h1>
       <p class="rea-note">練習評等為本站自訂標準，<b>不是民航局官方評分</b>；考場尺寸依 AC 107-005D。</p>
+      <div class="rea-inputsel" data-rea-inputsel>
+        <div class="rea-h2">操作方式 <small class="rea-muted" data-rea-input-now></small></div>
+        <div class="rea-inputsel-btns">
+          <button type="button" data-rea-input="touch">👆 觸控搖桿<small>用這支手機的螢幕飛</small></button>
+          <button type="button" data-rea-input="keyboard">⌨️ 鍵盤<small>電腦 W/S/A/D/Q/E/R/F</small></button>
+          <button type="button" data-rea-input="link">🔗 其他連線<small>USB 遙控器、另一支手機掃碼、原子筆、手勢</small></button>
+        </div>
+      </div>
       <div class="rea-tabs" role="tablist">
         <button role="tab" data-rea-tab="exam" aria-selected="true">考試科目</button>
         <button role="tab" data-rea-tab="challenge" aria-selected="false">趣味挑戰</button>
@@ -186,6 +220,76 @@ export function createReaApp(root: HTMLElement): ReaApp {
   };
   const hideCaption = () => { clearTimeout(captionTimer); $('[data-rea-caption]').hidden = true; };
 
+  // 2026-11-08：觸控搖桿狀態（美國手 Mode 2：左＝油門／轉向，右＝前後／左右）
+  const touch: { l: StickXY; r: StickXY; down: Record<'l' | 'r', number | null> } = { l: { x: 0, y: 0 }, r: { x: 0, y: 0 }, down: { l: null, r: null } };
+  const openLinkPanel = () => (document.querySelector<HTMLButtonElement>('[data-action="open-link"]'))?.click();
+  // 操控盤：手指按下的位置就是搖桿中心（浮動中心），往外推就是打桿；半徑 56 像素
+  const JOY_R = 56;
+  root.querySelectorAll<HTMLElement>('[data-rea-joy]').forEach((zone) => {
+    const side = zone.dataset.reaJoy as 'l' | 'r';
+    const ring = zone.querySelector<HTMLElement>('[data-rea-ring]')!;
+    let origin = { x: 0, y: 0 };
+    zone.addEventListener('pointerdown', (e) => {
+      if (!prefs.touchSticks || demo || touch.down[side] !== null) return;
+      e.preventDefault();
+      touch.down[side] = e.pointerId;
+      zone.setPointerCapture?.(e.pointerId);
+      rotor.unlock();
+      const z = zone.getBoundingClientRect();
+      origin = { x: e.clientX, y: e.clientY };
+      // 圓圈移到手指位置（不超出區塊）
+      ring.style.left = `${Math.min(z.width - JOY_R, Math.max(JOY_R, e.clientX - z.left))}px`;
+      ring.style.top = `${Math.min(z.height - JOY_R - 24, Math.max(JOY_R, e.clientY - z.top))}px`;
+      zone.classList.add('active');
+      touch[side] = { x: 0, y: 0 };
+    });
+    zone.addEventListener('pointermove', (e) => {
+      if (touch.down[side] !== e.pointerId) return;
+      touch[side] = touchToStick(e.clientX - origin.x, e.clientY - origin.y, JOY_R);
+    });
+    const up = (e: PointerEvent) => {
+      if (touch.down[side] !== e.pointerId) return;
+      touch.down[side] = null;
+      touch[side] = { x: 0, y: 0 }; // 放開回中：油門 0.5＝保持高度，其他歸零
+      ring.style.left = '';
+      ring.style.top = '';
+      zone.classList.remove('active');
+    };
+    zone.addEventListener('pointerup', up);
+    zone.addEventListener('pointercancel', up);
+  });
+
+  // 「怎麼操控」教學（第一次用觸控搖桿時自動出現，之後可按「❓ 怎麼操控」再看）
+  const TOUR_KEY = 'fde-rea-touch-tour-v1';
+  let tourPage = 0;
+  const renderTour = () => {
+    const pg = TOUR[tourPage];
+    $('[data-rea-tour-pic]').innerHTML = tourSvg(pg);
+    $('[data-rea-tour-h]').textContent = pg.title;
+    $('[data-rea-tour-text]').textContent = pg.text;
+    $('[data-rea-tour-n]').textContent = `${tourPage + 1} / ${TOUR.length}`;
+    $<HTMLButtonElement>('[data-rea-tour-prev]').hidden = tourPage === 0;
+    $('[data-rea-tour-next]').textContent = tourPage === TOUR.length - 1 ? '開始練習' : '下一步';
+  };
+  const openTour = () => { tourPage = 0; renderTour(); $('[data-rea-tour]').hidden = false; };
+  const closeTour = () => {
+    $('[data-rea-tour]').hidden = true;
+    try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* 無痕模式：下次再顯示也沒關係 */ }
+  };
+  const maybeTour = () => {
+    let seen = false;
+    try { seen = localStorage.getItem(TOUR_KEY) === '1'; } catch { /* 忽略 */ }
+    if (!seen && prefs.touchSticks) openTour();
+  };
+  $('[data-rea-help]').addEventListener('click', openTour);
+  $('[data-rea-tour-skip]').addEventListener('click', closeTour);
+  $('[data-rea-tour-prev]').addEventListener('click', () => { tourPage = Math.max(0, tourPage - 1); renderTour(); });
+  $('[data-rea-tour-next]').addEventListener('click', () => {
+    if (tourPage >= TOUR.length - 1) { closeTour(); return; }
+    tourPage += 1;
+    renderTour();
+  });
+
   const subject = (): Subject => subjectById(prefs.subjectId) ?? SUBJECTS[3];
 
   // ---------- 側欄 ----------
@@ -227,6 +331,10 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $<HTMLInputElement>('[data-rea-narration]').checked = prefs.narration;
     $<HTMLInputElement>('[data-rea-rotor-sound]').checked = prefs.rotorSound;
     $<HTMLInputElement>('[data-rea-captions]').checked = prefs.captions;
+    root.querySelectorAll<HTMLElement>('[data-rea-input]').forEach((b) => b.classList.toggle('on', (b.dataset.reaInput === 'touch') === prefs.touchSticks && b.dataset.reaInput !== 'link'));
+    root.classList.toggle('rea-touchmode', prefs.touchSticks);
+    $('[data-rea-deck]').hidden = !prefs.touchSticks;
+    root.querySelectorAll<HTMLElement>('[data-rea-seg-mode] button').forEach((b) => b.classList.toggle('on', b.dataset.v === prefs.mode));
     if (!prefs.captions) hideCaption();
     narrator.enabled = prefs.narration;
     rotor.enabled = prefs.rotorSound;
@@ -239,7 +347,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $('[data-rea-safety]').textContent = safety ? '⚠️ 已達規範的安全宣告門檻（平均風 7.5 m/s 或陣風 10 m/s），實際考試時監評會做安全宣告。' : '';
     scene.examineeCam = prefs.examineeCam;
     scene.setSun({ hour: prefs.hour, facingDeg: prefs.facingDeg, sunny: prefs.sunny });
-    $('[data-rea-sticks]').hidden = !prefs.showSticks;
+    // 觸控模式：打桿位置改顯示在下方操控盤，考場畫面不再放打桿框
+    $('[data-rea-sticks]').hidden = !prefs.showSticks || prefs.touchSticks;
     $('[data-rea-hud]').hidden = !prefs.showHud;
   }
 
@@ -337,6 +446,24 @@ export function createReaApp(root: HTMLElement): ReaApp {
   bindSetting('[data-rea-captions]', (_v, el) => (prefs.captions = el.checked));
   $('[data-rea-reset-prefs]').addEventListener('click', () => { Object.assign(prefs, { ...DEFAULT_PREFS, wind: { ...DEFAULT_WIND }, subjectId: prefs.subjectId }); refreshAll(); });
 
+  root.querySelectorAll<HTMLElement>('[data-rea-input]').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.reaInput;
+    if (v === 'link') { openLinkPanel(); return; }
+    prefs.touchSticks = v === 'touch';
+    refreshAll();
+    maybeTour();
+    // 手機：選好後捲回飛行畫面
+    if (prefs.touchSticks) stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  $('[data-rea-src]').addEventListener('click', () => openLinkPanel());
+  $('[data-rea-deck-start]').addEventListener('click', () => start(false));
+  $('[data-rea-deck-demo]').addEventListener('click', () => start(true));
+  root.querySelectorAll<HTMLElement>('[data-rea-seg-mode] button').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.v === prefs.mode) return;
+    stopForChange();
+    prefs.mode = b.dataset.v as FlightMode;
+    refreshAll();
+  }));
   $('[data-rea-start]').addEventListener('click', () => start(false));
   $('[data-rea-demo]').addEventListener('click', () => start(true));
   $('[data-rea-restart]').addEventListener('click', () => restart());
@@ -445,9 +572,18 @@ export function createReaApp(root: HTMLElement): ReaApp {
       cmd = { ...cmd, throttle: 0.5 + c.pitch / 2, pitch: (c.throttle - 0.5) * 2 };
     }
     const src = $('[data-rea-src]');
-    const label = r.source.kind === 'adapter' ? r.source.label : '鍵盤';
+    let label = r.source.kind === 'adapter' ? r.source.label : '鍵盤';
     lastSource = { kind: r.source.kind, label };
+    if (prefs.touchSticks && r.source.kind === 'keyboard') {
+      const t = sticksToCommand(touch.l, touch.r);
+      cmd = { throttle: t.throttle, pitch: t.pitch, roll: t.roll, yaw: t.yaw };
+      label = '觸控搖桿';
+      // 成長日誌的操作方式欄位：用手機操作一律記為「手機遙控器」
+      lastSource = { kind: 'adapter', label: '手機遙控器' };
+    }
     if (src.textContent !== `輸入：${label}`) src.textContent = `輸入：${label}`;
+    const now = $('[data-rea-input-now]');
+    if (now.textContent !== `目前：${label}`) now.textContent = `目前：${label}`;
     return cmd;
   }
 
@@ -616,8 +752,30 @@ export function createReaApp(root: HTMLElement): ReaApp {
     scene.render();
   }
 
+  function drawDeck(c: Command): void {
+    if (!prefs.touchSticks) return;
+    // 示範時顯示自動駕駛的打桿，學員可以邊看邊學
+    const l = { x: c.yaw, y: (c.throttle - 0.5) * 2 };
+    const r = { x: c.roll, y: c.pitch };
+    const knob = (side: 'l' | 'r', v: StickXY) => {
+      const el = root.querySelector<HTMLElement>(`[data-rea-knob="${side}"]`)!;
+      el.style.transform = `translate(${(v.x * JOY_R).toFixed(1)}px, ${(-v.y * JOY_R).toFixed(1)}px)`;
+    };
+    knob('l', l);
+    knob('r', r);
+    const tl = describeLeft(l);
+    const tr = describeRight(r);
+    const pl = $('[data-rea-joy-text="l"]');
+    const pr = $('[data-rea-joy-text="r"]');
+    const tlx = tl || IDLE_LEFT;
+    const trx = tr || IDLE_RIGHT;
+    if (pl.textContent !== tlx) { pl.textContent = tlx; pl.classList.toggle('on', !!tl); }
+    if (pr.textContent !== trx) { pr.textContent = trx; pr.classList.toggle('on', !!tr); }
+  }
+
   function drawSticks(c: Command): void {
-    if (!prefs.showSticks) return;
+    drawDeck(c);
+    if (!prefs.showSticks || prefs.touchSticks) return;
     // 畫面上的搖桿以使用者選的手別呈現
     const l = prefs.stickMode === 'mode2' ? { x: c.yaw, y: (c.throttle - 0.5) * 2 } : { x: c.yaw, y: c.pitch };
     const r = prefs.stickMode === 'mode2' ? { x: c.roll, y: c.pitch } : { x: c.roll, y: (c.throttle - 0.5) * 2 };
@@ -630,6 +788,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
   }
 
   refreshAll();
+  maybeTour();
   raf = requestAnimationFrame(frame);
 
   return {

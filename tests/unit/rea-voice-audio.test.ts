@@ -72,3 +72,25 @@ describe('槳葉聲音', () => {
     expect(rotorTarget('quad-4kg', cmd(0.5), { ...air, pitchDeg: 20 }).spin).toBeGreaterThan(rotorTarget('quad-4kg', cmd(0.5), air).spin);
   });
 });
+
+// 2026-11-08：手機操控盤——搖桿下方的「目前動作」文字與教學內容
+import { describeLeft, describeRight, TOUR, tourSvg } from '../../src/rea/touch-deck';
+describe('手機操控盤', () => {
+  it('左搖桿：上推＝高度往上、左推＝機頭往左轉；小抖動不顯示', () => {
+    expect(describeLeft({ x: 0, y: 0.8 })).toBe('高度往上');
+    expect(describeLeft({ x: -0.6, y: -0.6 })).toBe('機頭往左轉・高度往下');
+    expect(describeLeft({ x: 0.05, y: -0.1 })).toBe('');
+  });
+  it('右搖桿：上推＝往前飛、右推＝往右平移', () => {
+    expect(describeRight({ x: 0, y: 1 })).toBe('往前飛');
+    expect(describeRight({ x: 0.7, y: -0.5 })).toBe('往後飛・往右平移');
+  });
+  it('教學有 4 頁，每頁都有標題、說明與示意圖', () => {
+    expect(TOUR).toHaveLength(4);
+    for (const pg of TOUR) {
+      expect(pg.title.length).toBeGreaterThan(3);
+      expect(pg.text.length).toBeGreaterThan(10);
+      expect(tourSvg(pg)).toContain('<svg');
+    }
+  });
+});
