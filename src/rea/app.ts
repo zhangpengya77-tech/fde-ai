@@ -17,6 +17,7 @@ import { TIER_LABELS, type CourseResult } from './runner';
 import { DEFAULT_WIND, WIND_FROM_LABELS, levelToSpeed, type WindFrom, type WindSettings } from './wind';
 import { ExamScene, type ExamineeCam } from './scene';
 import { drawTrack, type TrackColoring } from './track-view';
+import { normalizeInputSource, showPracticeToast, syncPractice } from '../report/practice-sync';
 
 type Phase = 'setup' | 'countdown' | 'flying' | 'result';
 type StickMode = 'mode2' | 'mode1';
@@ -149,6 +150,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
   let countdownT = 0;
   let replay: { samples: Sample[]; t: number; speed: number; playing: boolean; result: CourseResult; coloring: TrackColoring } | null = null;
   let raf = 0;
+  /** 最近一次的輸入來源（存成長日誌時記錄操作方式） */
+  let lastSource: { kind: 'keyboard' | 'adapter'; label: string } = { kind: 'keyboard', label: '鍵盤' };
   let last = performance.now();
   // 測試／快速預覽用：?reaSpeed=N 只加速「示範飛行」（1–40 倍），真人飛行永遠是實際時間
   const demoSpeed = Math.min(40, Math.max(1, Number(new URLSearchParams(location.search).get('reaSpeed')) || 1));
@@ -346,6 +349,24 @@ export function createReaApp(root: HTMLElement): ReaApp {
     replay = { samples: session.samples, t: 0, speed: 1, playing: false, result, coloring: 'time' };
     scene.setTrailFromSamples(session.samples);
     showResult();
+    // 真人飛完（示範不算）：沿用既有機制，已登入學員時把成績摘要存入成長日誌「模擬練飛紀錄」
+    if (!demo) {
+      const s = subject();
+      void syncPractice({
+        mode: 'exam',
+        title: `術科模擬・${s.name}`,
+        grade: TIER_LABELS[result.grade],
+        passed: !result.failure && result.finished,
+        duration_seconds: Math.round(result.durationS),
+        input_source: normalizeInputSource(lastSource.kind, lastSource.label),
+        summary: {
+          subject: s.id, airframe: session.opts.airframeId, mode: session.opts.mode,
+          wind_mps: levelToSpeed(session.opts.wind.level), failure: result.failure,
+          steps: result.steps.map((st) => ({ label: st.label, grade: TIER_LABELS[st.tier] })),
+          note: '練習評等，非民航局官方評分',
+        },
+      }).then(showPracticeToast);
+    }
   }
 
   function endResult(): void {
@@ -366,6 +387,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     }
     const src = $('[data-rea-src]');
     const label = r.source.kind === 'adapter' ? r.source.label : '鍵盤';
+    lastSource = { kind: r.source.kind, label };
     if (src.textContent !== `輸入：${label}`) src.textContent = `輸入：${label}`;
     return cmd;
   }

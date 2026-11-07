@@ -144,6 +144,42 @@ test.describe('REA 考照模擬器', () => {
     await expect(page.locator('[data-rea-af="hexa-18kg"]')).toHaveClass(/on/);
   });
 
+  test('教學網站登入時，真人飛完的成績存入成長日誌；示範飛行不送出', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'getGamepads', { configurable: true, writable: true, value: () => [] });
+    });
+    const posts: Record<string, unknown>[] = [];
+    // 模擬教學網站的練飛紀錄 API（已登入學員）
+    await page.route('**/student/sim-practice/api/', async (route) => {
+      if (route.request().method() === 'POST') {
+        posts.push(JSON.parse(route.request().postData() ?? '{}'));
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ records_url: '/student/sim-practice/' }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ logged_in: true, csrf_token: 't', login_url: '/login/' }) });
+      }
+    });
+    await page.goto('/?mode=exam&exam=0&reaSpeed=30');
+    // 示範飛完：不應送出
+    await page.locator('[data-rea-pick="hover-small"]').click();
+    await page.locator('[data-rea-demo]').click();
+    await expect(page.locator('[data-rea-result]')).toBeVisible({ timeout: 60_000 });
+    expect(posts.length).toBe(0);
+    // 真人飛：升高後一路往後飛到考生身後（重大違失）→ 這趟結束 → 送出一筆
+    await page.locator('[data-rea-close]').click();
+    await page.locator('[data-rea-start]').click();
+    await page.waitForTimeout(3300);
+    await page.locator('[data-rea-canvas]').click({ force: true });
+    await page.keyboard.down('r');
+    await page.waitForTimeout(1500);
+    await page.keyboard.up('r');
+    await page.keyboard.down('s');
+    await expect(page.locator('[data-rea-result]')).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.up('s');
+    await expect.poll(() => posts.length, { timeout: 10_000 }).toBe(1);
+    expect(posts[0]).toMatchObject({ mode: 'exam', title: '術科模擬・四面停懸（小場地）', grade: '失敗', passed: false, input_source: '鍵盤' });
+    await expect(page.locator('[role=status]', { hasText: '成績已存入成長日誌' })).toHaveCount(1);
+  });
+
   test('舊版 F450 考照模擬器仍可從 exam-legacy 開啟（歷史版本）', async ({ page }) => {
     await page.goto('/?mode=exam-legacy&exam=0');
     await expect(page.locator('.rea-h1')).toHaveCount(0);
