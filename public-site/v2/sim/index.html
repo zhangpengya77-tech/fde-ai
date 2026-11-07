@@ -8,7 +8,8 @@
   <link rel="stylesheet" href="../assets/style.css">
   <style>
     .sim-main { max-width: 1080px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-    .sim-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+    .sim-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+    @media (max-width: 1000px) { .sim-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .sim-card { display: flex; min-height: 19rem; flex-direction: column; justify-content: space-between; }
     .sim-card h2 { margin-top: 0; }
     .sim-card .actions { margin-top: 1.5rem; }
@@ -27,7 +28,7 @@
     <div class="page-heading">
       <p class="eyebrow">公開測試版 Beta</p>
       <h1>無人機模擬仿真訓練中心</h1>
-      <p>兩種獨立教學場景；僅供練習，非民航局官方考試系統。</p>
+      <p>考照模擬、電力巡檢、模擬飛行 M02 三種教學場景；僅供練習，非民航局官方考試系統。</p>
     </div>
   </header>
 
@@ -53,6 +54,16 @@
           <p>在輸電塔、輸電線與巡檢區中進行飛行、取景與任務練習。畫面中的缺陷判讀為模擬事件／教學示範，不呼叫 YOLO，也不是實際 AI 辨識結果。</p>
         </div>
         <div class="actions"><a class="button primary" href="app/">進入巡檢場景訓練</a></div>
+      </article>
+
+      <!-- 2026-11-08：首頁上方只保留一個「仿真訓練」入口，模擬飛行 M02 移到這裡 -->
+      <article class="card sim-card">
+        <div>
+          <p class="section-label">飛行模擬</p>
+          <h2>模擬飛行 M02</h2>
+          <p>M02 課程的飛行模擬練習（Flight Simulation）：基本起降、方向與航線操作。</p>
+        </div>
+        <div class="actions"><a class="button primary" href="../m02-simulator/">進入模擬飛行 M02</a></div>
       </article>
     </section>
     <!-- 2026-11-07：五種連線方式（公開網站版）。手機配對與成績保存需教學主機開機；其他方式電腦關機也能用 -->
