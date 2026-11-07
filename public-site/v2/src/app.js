@@ -81,18 +81,27 @@ function escapeHtml(value) {
 
 function renderNavigation() {
   const primaryNav = [
-    { key: 'missions', label: '任', title: '12 任務地圖' },
+    // 2026-11-06：「關於我們」入口移到左上角品牌（點我），導航從「學」開始；12 任務資料與 /platform/tasks 路由保留不刪
     ...moduleSections,
     { label: '健', title: '飛行健康 AI / Flight Health', href: './flight-health/' },
+    { label: '調', title: 'AI PID 與濾波實驗室 / AI PID & Filter Lab', href: 'https://fde-ai-v2.fde-ai-gateway.workers.dev/pid-lab/' },
     { key: 'cohorts', label: '展', title: '歷屆學員成果' },
     { key: 'teacher', label: '師', title: '教師復核中心' }
   ];
+  // 2026-11-06：左側導航改為「藍底圓形徽章（繁體楷書大字）＋下方英文小字」，旁邊的項目名稱縮小。
+  // 學練做測證是核心五步，徽章再大一號（is-core）。
+  const NAV_EN = { 關: 'ABOUT', 學: 'LEARN', 練: 'PRACTICE', 做: 'BUILD', 作: 'BUILD', 測: 'TEST', 證: 'CERTIFY', 健: 'HEALTH', 調: 'TUNE', 展: 'SHOWCASE', 師: 'TEACHER' };
+  const CORE = new Set(['學', '練', '做', '作', '測', '證']);
   $('#moduleNav').innerHTML = primaryNav
     .map(
       (section) =>
-        `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''}><span>${section.label}</span>${section.title}</a>`
+        `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''} class="nav-item${CORE.has(section.label) ? ' is-core' : ''}">` +
+        `<span class="nav-badge" aria-hidden="true"><b class="nav-zh">${section.label}</b><small class="nav-en">${NAV_EN[section.label] || ''}</small></span>` +
+        `<em class="nav-title">${section.title}</em></a>`
     )
     .join('');
+  // 系統關閉動畫效果時預設不播放徽章動畫；驗收時可加 ?motion=1 強制播放
+  if (new URLSearchParams(window.location.search).get('motion') === '1') document.documentElement.classList.add('force-motion');
 
   // 手機左側抽屜直接沿用桌面左側欄的導航，避免兩份清單各自維護而走樣。
   const mobileNavList = document.getElementById('mobileNavList');
@@ -142,6 +151,18 @@ function setMetaContent(attribute, key, value, fallback) {
 }
 
 function updatePageMetadata(routeKey) {
+  // 2026-11-05：「關於我們」頁的標題與描述（分享連結時顯示）
+  if (routeKey === 'about') {
+    const title = 'FDE-AI｜關於我們 About FDE-AI';
+    const description = 'FDE-AI 是結合無人機教育、開源技術、AI 應用與產業實作的無人載具人才實訓平台，服務零基礎學員到專業進階人才。';
+    document.title = title;
+    setMetaContent('name', 'description', description, null);
+    setMetaContent('property', 'og:title', title, null);
+    setMetaContent('property', 'og:description', description, null);
+    setMetaContent('property', 'og:type', 'website', null);
+    setMetaContent('property', 'og:url', new URL(router.hrefFor('about'), window.location.href).href, null);
+    return;
+  }
   if (routeKey === 'fde-column') {
     const title = 'FDE-AI｜無人載具學習中心';
     const description = 'FDE-AI 無人載具學習中心，依閉源飛控、開源飛控與 3D 列印整理教師指定課程。';
@@ -191,9 +212,12 @@ function renderHero() {
   $('#heroSystems').innerHTML = hero.systems.map((system) => `<span>${system}</span>`).join('');
 
   const primaryAction = hero.actions.find((action) => action.kind === 'primary');
-  $('#heroActions').innerHTML = primaryAction
-    ? `<a class="${primaryAction.kind}-action" href="${router.hrefForTarget(primaryAction.target)}">${primaryAction.label}</a>`
-    : '';
+  $('#heroActions').innerHTML =
+    (primaryAction
+      ? `<a class="${primaryAction.kind}-action" href="${router.hrefForTarget(primaryAction.target)}">${primaryAction.label}</a>`
+      : '') +
+    // 2026-11-06：首頁加「一分鐘認識 FDE-AI」入口，點了進入「關於我們」頁（最上方就是介紹影片）
+    `<a class="secondary-action hero-video-entry" href="./about" data-route="about">▶ 一分鐘認識 FDE-AI</a>`;
 
   const motionStrip = $('#designMotion');
   if (motionStrip) {
@@ -520,7 +544,7 @@ function renderLearningSectionDetail(sectionId) {
                 <h4>${escapeHtml(course.title)}</h4>
                 ${
                   id
-                    ? `<div class="learning-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="${escapeHtml(course.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+                    ? `<div class="learning-video"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}" title="${escapeHtml(course.title)}" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
                     : '<p class="learning-video-missing">影片嵌入待補。</p>'
                 }
                 <a class="learning-youtube-link" href="${escapeHtml(course.youtubeUrl)}" target="_blank" rel="noreferrer">在 YouTube 開啟原始影片 ↗</a>
@@ -531,6 +555,9 @@ function renderLearningSectionDetail(sectionId) {
         .join('')}
     </div>
   `;
+  // 正式站 Referrer-Policy 為 same-origin；YouTube 嵌入需要來源網址才能播放，所以 iframe 個別設定 referrerpolicy（同 FDE 專欄做法）
+  // 手機上卡片在畫面下方：切換後捲回課程清單開頭，學員才看得到內容
+  detail.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function handleLearningClick(event) {
@@ -540,7 +567,11 @@ function handleLearningClick(event) {
     return;
   }
 
-  if (event.target.closest('[data-learning-back]')) renderLearningResources();
+  if (event.target.closest('[data-learning-back]')) {
+    renderLearningResources();
+    // 返回時捲回三大專區卡片
+    $('#learningResources')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 }
 
 function renderFdeColumn() {
@@ -919,13 +950,192 @@ function inspectionAssistantContext(result) {
   };
 }
 
+// ---- 2026-11-04 鷹眼檢測 AI 助教：判定說明＋知識庫＋大模型解說＋自動語音 ----
+let eagleTutorPayload = null;
+let eagleTutorSpeech = '';
+
+/** iOS Safari 只允許「使用者點擊」後播放語音；在按下檢測按鈕時先播一段空白語音解鎖，結果回來才能自動朗讀。 */
+function primeInspectionSpeech() {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    const unlock = new SpeechSynthesisUtterance(' ');
+    unlock.volume = 0;
+    window.speechSynthesis.speak(unlock);
+  } catch {
+    /* 不支援時略過，文字回答仍可閱讀 */
+  }
+}
+
+/** 朗讀 AI 助教文字（先停止上一段，避免疊音）。 */
+function speakEagleTutor(text) {
+  if (!('speechSynthesis' in window) || !text) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = voiceAssistant.locale;
+  utterance.rate = 0.95;
+  window.speechSynthesis.speak(utterance);
+}
+
+/** 把 M1～M4 檢測結果轉成後端 AI 助教需要的格式（只送旋向，不送照片）。 */
+function eagleTutorPayloadFrom(result) {
+  const checks = Array.isArray(result.motorChecks) ? result.motorChecks : [];
+  return {
+    task: 'f450_propeller_check',
+    motors: checks
+      .filter((item) => /^M[1-4]$/.test(String(item.motor || '')))
+      .map((item) => ({ motor: item.motor, detected: item.detectedDirection || '' })),
+  };
+}
+
+async function requestEagleTutor(payload, withLlm) {
+  const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+  const response = await fetch('/api/public/inspection/ai-tutor/', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {}),
+    },
+    body: JSON.stringify({ ...payload, with_llm: Boolean(withLlm) }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    const error = new Error(data.error || `AI 助教暫時無法使用（${response.status}）`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function renderEagleTutor(answer) {
+  const status = answer.candidate === 'PASS' ? 'PASS' : answer.candidate === 'ERROR' ? 'NG' : 'CHECK';
+  const wrong = Array.isArray(answer.wrong_props) ? answer.wrong_props : [];
+  const rag = answer.rag || {};
+  const sources = Array.isArray(rag.sources) ? rag.sources : [];
+  const wrongHtml = wrong.length
+    ? `<h4>哪一支錯、正確應該是什麼</h4><ul>${wrong
+        .map((item) => `<li>${escapeHtml(item.motor)}（${escapeHtml(item.position)}）：目前 ${escapeHtml(item.detected)} ✗，正確應為 ${escapeHtml(item.expected)}</li>`)
+        .join('')}</ul>`
+    : '';
+  const fixHtml = Array.isArray(answer.fix_steps) && answer.fix_steps.length
+    ? `<h4>修正步驟</h4><ol>${answer.fix_steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol>`
+    : '';
+  const ragHtml = rag.available
+    ? `<h4>知識庫說明（RAG）</h4><p>${escapeHtml(rag.answer)}</p>${sources.length ? `<small>出處：${sources.map((s) => escapeHtml(`${s.title} ${s.ref}`.trim())).join('、')}</small>` : ''}`
+    : '';
+  let llmHtml = '<p class="muted">按「AI 助教解說」，由大模型說明正確與錯誤的差別與影響。</p>';
+  if (answer.llm_requested) {
+    llmHtml = answer.llm_available
+      ? `<p>${escapeHtml(answer.llm)}</p>`
+      : '<p class="muted">大模型目前未啟用或暫時無法連線，上方判定與知識庫說明仍可使用。</p>';
+  }
+  return `
+    <article class="result-card eagle-ai-tutor">
+      <div class="section-head"><span class="tag">AI 助教</span><span class="status ${statusClass(status)}">${status}</span></div>
+      <h3>檢測說明</h3>
+      <p>${escapeHtml(answer.verdict)}</p>
+      ${wrongHtml}
+      ${fixHtml}
+      ${ragHtml}
+      <h4>AI 大模型解說</h4>
+      ${llmHtml}
+      <div class="inspection-speech">
+        <button type="button" class="primary-action" data-eagle-llm>🤖 AI 助教解說</button>
+        <button type="button" class="secondary-action" data-eagle-replay>🔊 再聽一次</button>
+        <button type="button" class="secondary-action" data-stop-inspection>■ 停止播放</button>
+      </div>
+    </article>
+  `;
+}
+
+/** 按「AI 助教解說」：向後端要大模型解說，顯示並朗讀；「再聽一次」重播目前內容。 */
+async function handleEagleTutorClick(event) {
+  if (event.target.closest('[data-eagle-replay]')) {
+    speakEagleTutor(eagleTutorSpeech);
+    return;
+  }
+  const button = event.target.closest('[data-eagle-llm]');
+  if (!button || !eagleTutorPayload) return;
+  const target = document.querySelector('[data-inspection-assistant]');
+  primeInspectionSpeech();
+  button.disabled = true;
+  button.textContent = 'AI 助教思考中…';
+  try {
+    const answer = await requestEagleTutor(eagleTutorPayload, true);
+    eagleTutorSpeech = answer.speech_text || '';
+    if (target) target.innerHTML = renderEagleTutor(answer);
+    speakEagleTutor(answer.llm || answer.speech_text);
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = '🤖 AI 助教解說';
+    if (target) target.insertAdjacentHTML('beforeend', `<p class="muted">${escapeHtml(error.message)}</p>`);
+  }
+}
+
+/**
+ * 電力巡檢 AI 助教：每 10 秒詢問一次，分析完成（不再回 409）後顯示判定、處理建議與大模型解說並自動朗讀。
+ * 最多等 10 分鐘；超過時請學員到巡檢紀錄頁查看（該頁也有 AI 助教按鈕）。
+ */
+async function pollPowerTutor(jobId, container, attempt = 0) {
+  if (!container || !document.body.contains(container)) return;
+  const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+  try {
+    const response = await fetch(`/student/power-inspection/jobs/${encodeURIComponent(jobId)}/ai-tutor/`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {},
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 409 && attempt < 60) {
+      setTimeout(() => pollPowerTutor(jobId, container, attempt + 1), 10000);
+      return;
+    }
+    if (!response.ok || !data.ok) throw new Error(data.error || `AI 助教暫時無法使用（${response.status}）`);
+    eagleTutorSpeech = data.speech_text || '';
+    container.innerHTML = `
+      <h3>AI 助教</h3>
+      <p>${escapeHtml(data.verdict || '')}</p>
+      ${data.advice ? `<h4>處理建議</h4><p>${escapeHtml(data.advice)}</p>` : ''}
+      <h4>AI 大模型解說</h4>
+      ${data.llm_available ? `<p>${escapeHtml(data.llm)}</p>` : '<p class="muted">大模型目前未啟用或暫時無法連線，上方判定與建議仍可使用。</p>'}
+      <div class="inspection-speech">
+        <button type="button" class="secondary-action" data-eagle-replay>🔊 再聽一次</button>
+        <button type="button" class="secondary-action" data-stop-inspection>■ 停止播放</button>
+      </div>
+    `;
+    speakEagleTutor(eagleTutorSpeech);
+  } catch (error) {
+    container.innerHTML = `<h3>AI 助教</h3><p class="muted">${escapeHtml(error.message)}，請到「我的巡檢紀錄」查看結果。</p>`;
+  }
+}
+
 async function appendInspectionKnowledgeAnswer(result) {
   const target = document.querySelector('[data-inspection-assistant]');
   if (!target) return;
 
+  // 優先使用後端 AI 助教（需登入）：自動顯示判定與知識庫並語音朗讀；失敗才退回原本的知識庫回答。
+  const payload = eagleTutorPayloadFrom(result);
+  if (payload.motors.length && !result.simulationMode) {
+    target.innerHTML = '<p>AI 助教正在整理檢測說明...</p>';
+    try {
+      const answer = await requestEagleTutor(payload, false);
+      eagleTutorPayload = payload;
+      eagleTutorSpeech = answer.speech_text || '';
+      target.innerHTML = renderEagleTutor(answer);
+      speakEagleTutor(eagleTutorSpeech);
+      return;
+    } catch {
+      /* 未登入或後端暫時無法使用：沿用原本的知識庫流程 */
+    }
+  }
+
   const finalResult = propellerFinalResult(result);
   if (finalResult.status === 'PASS') {
-    target.innerHTML = '<h3>AI 修正建議</h3><p>檢測通過，無需修正建議。</p>';
+    // 正確場景也要能語音播報，學員不必看螢幕即可確認結果。
+    target.innerHTML = renderF450RagResult({
+      answer: '檢測通過：M1 到 M4 的槳葉旋向都與 F450 配置一致，可以進入下一步。',
+      source_type: 'rag',
+    });
     return;
   }
 
@@ -976,7 +1186,6 @@ function renderPropellerInspectionResult(result, includeVisual = false) {
         <p>${escapeHtml(result.summary)}</p>
         <div class="inspection-hints">
           <small>M1 = CCW、M2 = CCW、M3 = CW、M4 = CW。</small>
-          <small>Blade Face 若模型沒有可靠正反面資料，會顯示 CHECK，不硬猜。</small>
         </div>
         ${renderMotorChecks(result)}
         <div class="inspection-final-result ${statusClass(finalResult.status)}">
@@ -1076,8 +1285,21 @@ function noModelMessage() {
     || '目前尚無可用模型，請稍後再試或聯絡教師。';
 }
 
+/** 2026-11-04：未登入（後台回 live_session_required）時改提示登入，登入後回到目前頁面，不再誤導成「無可用模型」。 */
+function loginRequiredCard() {
+  const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+  return `
+    <article class="result-card local-service-note">
+      <h3>請先登入</h3>
+      <p>AI 檢測需要登入學員或教師帳號，登入後會自動回到這個檢測頁。</p>
+      <p><a class="primary-action button" href="https://fde-ai-v2.fde-ai-gateway.workers.dev/login/?next=${next}">前往學員登入</a></p>
+    </article>
+  `;
+}
+
 /** 正式流程不可用時的明確提示：絕不顯示模擬結果當成真實測評。 */
 function unavailableCard(message, detail) {
+  if (detail === 'live_session_required') return loginRequiredCard();
   return `
     <article class="result-card local-service-note">
       <h3>目前尚無可用模型</h3>
@@ -1114,7 +1336,7 @@ function renderBuildMain12Entry() {
   if (!link) return;
   const config = window.FdeRagConfig || {};
   const publicUrl = String(config.PUBLIC_LIVE_COACH_URL || '').trim();
-  const localUrl = String(config.LIVE_COACH_URL || '/live/').trim();
+  const localUrl = String(config.LIVE_COACH_URL || './live/').trim();
   link.href = publicUrl || localUrl;
 }
 
@@ -1190,6 +1412,8 @@ function bindActions() {
       return;
     }
     if (event.target.closest('[data-stop-inspection]')) stopInspectionAnswer();
+    // 鷹眼 AI 助教的「AI 助教解說」「再聽一次」按鈕
+    if (event.target.closest('[data-eagle-llm], [data-eagle-replay]')) handleEagleTutorClick(event);
   });
   window.addEventListener('popstate', syncViewFromLocation);
 
@@ -1348,6 +1572,8 @@ function bindActions() {
   $('#propellerButton').addEventListener('click', async () => {
     // 新一次檢測開始前，先停止上一段 AI 語音朗讀，避免疊音。
     stopInspectionAnswer();
+    // 趁使用者點擊時解鎖語音，結果回來後 AI 助教才能自動朗讀（iOS Safari 限制）。
+    primeInspectionSpeech();
     const file = $('#propellerInput').files[0];
     const client = window.FdeVisionClient;
     if (!file) {
@@ -1395,40 +1621,122 @@ function bindActions() {
   // POWER_INSPECTION_V1：正式走 Django /student/power-inspection/upload/（JSON）。
   // 沒有真實模型時後端會回 WAITING_FOR_REAL_MODEL / BLOCKED，前端如實顯示，
   // 絕不顯示任何模擬異常結果。
+  const POWER_UPLOAD_STALL_MS = 90000;
+  const POWER_SERVER_WAIT_MS = 180000;
+
+  const powerLoginCard = (detail, loginUrl) => `
+    <article class="result-card local-service-note">
+      <h3>請先以學員身分登入</h3>
+      <p>${escapeHtml(detail || '登入後才能上傳電力巡檢影片。')}</p>
+      <p><a class="primary-action button" href="${escapeHtml(loginUrl || 'https://fde-ai-v2.fde-ai-gateway.workers.dev/login/')}?next=%2Fstudent%2Fpower-inspection%2F">前往學員登入</a></p>
+    </article>
+  `;
+
+  // fetch 沒有上傳進度，大影片在手機網路上會像當機，因此改用 XHR；
+  // 超過時間沒有進度就中止，不讓畫面停在上傳中。
+  const uploadPowerVideo = (file, csrfToken, onProgress) => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let watchdog;
+    let stalled = false;
+    const arm = (ms) => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        stalled = true;
+        xhr.abort();
+      }, ms);
+    };
+    const body = new FormData();
+    body.append('video', file, file.name);
+    xhr.open('POST', '/student/power-inspection/upload/');
+    xhr.withCredentials = true;
+    if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
+    xhr.upload.onprogress = (event) => {
+      arm(POWER_UPLOAD_STALL_MS);
+      onProgress(event.loaded, event.total || file.size);
+    };
+    xhr.upload.onload = () => {
+      arm(POWER_SERVER_WAIT_MS);
+      onProgress(file.size, file.size);
+    };
+    xhr.onload = () => {
+      clearTimeout(watchdog);
+      let payload = {};
+      try {
+        payload = JSON.parse(xhr.responseText);
+      } catch {
+        payload = {};
+      }
+      resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, payload });
+    };
+    xhr.onerror = () => {
+      clearTimeout(watchdog);
+      reject(new Error('network_error'));
+    };
+    xhr.onabort = () => {
+      clearTimeout(watchdog);
+      reject(new Error(stalled ? 'upload_stalled' : 'upload_aborted'));
+    };
+    arm(POWER_UPLOAD_STALL_MS);
+    xhr.send(body);
+  });
+
   $('#powerInspectionButton').addEventListener('click', async () => {
+    // 先解鎖語音：分析完成後 AI 助教要自動朗讀（iOS Safari 限制）。
+    stopInspectionAnswer();
+    primeInspectionSpeech();
     const file = $('#powerInspectionInput').files[0];
     const target = $('#powerInspectionResult');
     if (!file) {
-      target.innerHTML = missingFileCard('請先上傳巡檢 MP4 影片，再點擊「上傳並建立巡檢工作」。');
+      target.innerHTML = missingFileCard('請先上傳巡檢影片，再點擊「上傳並建立巡檢工作」。');
       return;
     }
-    if (!/\.mp4$/i.test(file.name)) {
-      target.innerHTML = missingFileCard('電力巡檢僅接受 MP4 影片格式。');
+    if (!/\.(mp4|mov|m4v|3gp|3g2|lrf|webm|mkv|avi|wmv|mts|m2ts|ts|mpg|mpeg)$/i.test(file.name)) {
+      target.innerHTML = missingFileCard('影片格式不支援，請上傳 MP4、MOV、M4V、3GP、WEBM、MKV、AVI、WMV、MTS、M2TS、TS、MPG 或 DJI LRF 影片。');
+      return;
+    }
+    if (file.size > 512 * 1024 * 1024) {
+      target.innerHTML = missingFileCard('影片超過 512 MB，請裁短或降低畫質後再上傳。');
       return;
     }
 
-    target.innerHTML = '<article class="result-card"><p>正在上傳巡檢影片並建立隔離工作...</p></article>';
+    const sizeMb = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
+    target.innerHTML = '<article class="result-card"><p>正在確認上傳權限...</p></article>';
     try {
-      const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
-      const body = new FormData();
-      body.append('video', file, file.name);
-      const response = await fetch('/student/power-inspection/upload/', {
-        method: 'POST',
-        headers: csrfToken ? { 'X-CSRFToken': decodeURIComponent(csrfToken) } : {},
-        credentials: 'same-origin',
-        body,
-      });
-      const payload = await response.json().catch(() => ({}));
+      // 先確認身分與 CSRF，避免整支影片傳完才被拒絕。
+      const check = await fetch('/student/power-inspection/upload/', { credentials: 'same-origin' });
+      const access = await check.json().catch(() => ({}));
+      if (access.denied?.code === 'login_required') {
+        target.innerHTML = powerLoginCard(access.denied.detail, access.denied.login_url);
+        return;
+      }
+      if (access.denied) {
+        target.innerHTML = unavailableCard(access.denied.detail || '目前無法上傳巡檢影片，請聯絡教師。');
+        return;
+      }
+
+      const startedAt = Date.now();
+      const showProgress = (loaded, total) => {
+        const percent = total ? Math.min(100, Math.floor((loaded / total) * 100)) : 0;
+        const seconds = (Date.now() - startedAt) / 1000;
+        const speed = seconds > 1 ? ` ｜ ${(loaded * 8 / 1000000 / seconds).toFixed(1)} Mbps` : '';
+        target.innerHTML = percent >= 100
+          ? '<article class="result-card"><p>影片已傳送完成，正在建立巡檢工作...</p></article>'
+          : `<article class="result-card">
+              <p>正在上傳 ${percent}%（${sizeMb(loaded)} / ${sizeMb(total)} MB${speed}）</p>
+              <progress max="100" value="${percent}" style="width:100%"></progress>
+              <p>上傳期間請保持此頁開啟，不要鎖定手機。</p>
+            </article>`;
+      };
+      showProgress(0, file.size);
+      const { status, ok, payload } = await uploadPowerVideo(file, access.csrf_token, showProgress);
+      const response = { status, ok };
       if (!response.ok || !payload.ok) {
+        if (response.status === 413) {
+          target.innerHTML = missingFileCard('影片超過目前網址允許的上傳大小，請裁短或降低畫質後再上傳。');
+          return;
+        }
         if (payload.code === 'login_required') {
-          const loginUrl = payload.login_url || '/login/';
-          target.innerHTML = `
-            <article class="result-card local-service-note">
-              <h3>請先以學員身分登入</h3>
-              <p>${escapeHtml(payload.detail || '登入後才能上傳電力巡檢影片。')}</p>
-              <p><a class="primary-action button" href="${escapeHtml(loginUrl)}?next=%2Fstudent%2Fpower-inspection%2F">前往學員登入</a></p>
-            </article>
-          `;
+          target.innerHTML = powerLoginCard(payload.detail, payload.login_url);
           return;
         }
         target.innerHTML = unavailableCard(payload.detail || '巡檢影片上傳未完成，請稍後再試或聯絡教師。');
@@ -1442,10 +1750,16 @@ function bindActions() {
           <p>狀態：${escapeHtml(payload.status || '')}｜推論模式：${escapeHtml(payload.inference_mode || '')}</p>
           <p>${escapeHtml(payload.detail || '')}</p>
           ${blocked ? '<p><strong>目前不會產生任何 AI 異常結果；待教師部署真實模型後才會實際分析。</strong></p>' : ''}
-          <p><a href="/student/power-inspection/">前往我的巡檢紀錄</a></p>
+          <p><a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/power-inspection/">前往我的巡檢紀錄</a></p>
+          ${blocked ? '' : '<div class="inspection-assistant" data-power-tutor><h3>AI 助教</h3><p>影片分析中，完成後 AI 助教會自動說明結果並語音朗讀…</p></div>'}
         </article>
       `;
+      if (!blocked && payload.job_id) pollPowerTutor(payload.job_id, target.querySelector('[data-power-tutor]'));
     } catch (error) {
+      if (error.message === 'upload_stalled') {
+        target.innerHTML = unavailableCard('上傳已超過 90 秒沒有進度，已自動中止。請改用較穩定的 Wi-Fi，或裁短影片後再試。');
+        return;
+      }
       target.innerHTML = unavailableCard('巡檢影片上傳失敗（連線異常），未確認建立任何工作。', error.message);
     }
   });
@@ -1521,6 +1835,35 @@ function bindMobileMenu() {
   });
 }
 
+// 右上角功能入口：手機收成下拉；登入後沿用伺服器渲染的登出表單。
+function bindPortalMenu() {
+  const toggle = document.getElementById('portalMenuToggle');
+  const menu = document.getElementById('portalMenu');
+  if (!toggle || !menu) return;
+
+  const logout = document.querySelector('.fde-public-links form');
+  if (logout) menu.append(logout.cloneNode(true));
+
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+  };
+
+  toggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  document.addEventListener('click', (event) => {
+    if (!menu.hidden && !event.target.closest('#portalMenu')) setOpen(false);
+  });
+  menu.addEventListener('click', (event) => {
+    if (event.target.closest('a')) setOpen(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setOpen(false);
+  });
+}
+
 renderNavigation();
 renderHero();
 renderDataFlow();
@@ -1541,5 +1884,6 @@ renderTeacherDashboard();
 renderCertificationChecklist();
 bindActions();
 bindMobileMenu();
+bindPortalMenu();
 syncViewFromLocation();
 })();

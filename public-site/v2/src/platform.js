@@ -104,7 +104,7 @@ function withVideoDescription(video, description) {
 
 export const hero = {
   name: 'fde-ai',
-  headline: 'FDE-AI 無人載具學習平台',
+  headline: 'FDE-AI 無人載具實訓平台', // 2026-11-06：依使用者要求改為「實訓平台」，一行顯示
   summary: 'AI 雙師教學｜學・練・做・測・證，將 Mission Pack、F450 工程實作、鷹眼 AI 評測與作品存證整合成一座無人載具學習控制中心。',
   systems: ['AI 驅動雙師教學系統', '鷹眼 AI 評測系統'],
   systemStatus: [
@@ -294,7 +294,7 @@ export const cohorts = [
       },
       {
         phase: '07',
-        title: '2026FDE_AI無人載具在職培訓06',
+        title: 'FD-AI无人载具在职培训2026-06-7',
         url: 'https://youtu.be/O_QmYD-b4QU?si=ej5g6w67y-7D77lv'
       },
       {
@@ -563,19 +563,20 @@ export function searchKnowledgeBase(question = '', limit = 2) {
 }
 
 export const assessmentWorkflows = [
+  // 2026-11-04：正式檢測入口為 V7 槳葉檢測與電力巡檢（四面懸停不再是正式入口）
   {
     key: 'propeller-inspection',
     title: 'F450 槳葉正反及方向檢查',
-    engine: 'YOLOv8 placeholder',
+    engine: 'YOLO11 V7 槳葉旋向模型',
     acceptedEvidence: ['photo'],
-    checks: ['槳葉 M1 = CCW', '槳葉 M2 = CCW', '槳葉 M3 = CW', '槳葉 M4 = CW', '錯誤項目交由 RAG 知識庫回答']
+    checks: ['槳葉 M1 = CCW', '槳葉 M2 = CCW', '槳葉 M3 = CW', '槳葉 M4 = CW', '錯誤時 AI 助教說明哪一支錯並語音朗讀', '知識庫（RAG）＋大模型補充修正步驟']
   },
   {
     key: 'power-inspection',
-    title: '電力巡檢 MP4 影片上傳與分析',
-    engine: 'POWER_INSPECTION_V1 isolated worker',
-    acceptedEvidence: ['mp4-video'],
-    checks: ['學生上傳巡檢 MP4 後建立隔離巡檢工作', '未載入真實模型時維持 WAITING_FOR_REAL_MODEL，不產生虛構推論', '異常時間軸與截圖保存於本人紀錄', '教師覆核結果回寫學生巡檢紀錄']
+    title: '電力巡檢影片上傳與分析',
+    engine: '電力巡檢 R7 模型（教師已審核）',
+    acceptedEvidence: ['video'],
+    checks: ['上傳無人機巡檢影片（MP4、MOV 等）', '偵測鳥巢、異物、絕緣子損傷、導線斷開', '異常時間軸與截圖保存於本人紀錄', '分析完成後 AI 助教語音說明', '教師覆核結果回寫學生巡檢紀錄']
   },
   {
     key: 'hover-scoring',
