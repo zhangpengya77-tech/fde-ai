@@ -131,7 +131,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <div class="rea-h2">操作方式 <small class="rea-muted" data-rea-input-now></small></div>
         <div class="rea-inputsel-btns">
           <button type="button" data-rea-input="touch">👆 觸控搖桿<small>用這支手機的螢幕飛</small></button>
-          <button type="button" data-rea-input="keyboard">⌨️ 鍵盤<small>電腦 W/S/A/D/Q/E/R/F</small></button>
+          <button type="button" data-rea-input="keyboard">⌨️ 鍵盤<small>電腦 WASD＋QE／RF</small></button>
           <button type="button" data-rea-input="link">🔗 其他連線<small>USB 遙控器、另一支手機掃碼、原子筆、手勢</small></button>
         </div>
       </div>

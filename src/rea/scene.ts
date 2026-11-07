@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import type { Field, Subject, Vec2 } from './courses';
 import type { Airframe } from './physics';
+import { animateDrone, buildDroneModel, type DroneModel } from './drone-model';
 
 const FIELD_TO_3D = (p: Vec2, h = 0) => new THREE.Vector3(p.x, h, -p.y);
 
@@ -27,7 +28,10 @@ export class ExamScene {
   examineeCam: ExamineeCam = 'follow';
   private fieldGroup = new THREE.Group();
   private drone = new THREE.Group();
-  private rotors: THREE.Object3D[] = [];
+  /** 2026-11-08：精緻模型（機臂、馬達、槳葉、起落架、航行燈） */
+  private model: DroneModel | null = null;
+  private clock = 0;
+  private spin = 0;
   private trail: THREE.Line;
   private trailPts: THREE.Vector3[] = [];
   private ghostTrail: THREE.Line;
@@ -187,37 +191,13 @@ export class ExamScene {
     this.sock.position.copy(FIELD_TO_3D({ x: b.xMax - 1, y: field.examinee.y + 1 }));
   }
 
-  /** 依機型建立機體：紅色兩支臂那一側是機頭（比照業界慣例）。 */
+  /** 依機型建立機體：紅色機臂那一側是機頭（比照業界慣例）。模型細節見 drone-model.ts。 */
   buildDrone(af: Airframe): void {
     this.drone.clear();
-    this.rotors = [];
-    const body = new THREE.Mesh(new THREE.BoxGeometry(af.wheelbase * 0.28, af.wheelbase * 0.1, af.wheelbase * 0.34), new THREE.MeshStandardMaterial({ color: 0x2b2d42, roughness: 0.6 }));
-    body.castShadow = true;
-    this.drone.add(body);
-    const n = af.rotors;
-    const armLen = af.wheelbase / 2;
-    for (let i = 0; i < n; i++) {
-      // 四軸 X 型：45°、135°…；六軸：30°、90°…（0° = 機頭方向 -z）
-      const a = ((n === 4 ? 45 : 30) + (360 / n) * i) * (Math.PI / 180);
-      const front = Math.cos(a) > 0.1;
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(af.wheelbase * 0.04, af.wheelbase * 0.03, armLen), new THREE.MeshStandardMaterial({ color: front ? 0xd62839 : 0x3d405b }));
-      arm.position.set(Math.sin(a) * armLen / 2, 0, -Math.cos(a) * armLen / 2);
-      arm.rotation.y = -a;
-      arm.castShadow = true;
-      const disk = new THREE.Mesh(new THREE.CylinderGeometry(af.wheelbase * 0.17, af.wheelbase * 0.17, 0.005, 24), new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.25 }));
-      disk.position.set(Math.sin(a) * armLen, af.wheelbase * 0.04, -Math.cos(a) * armLen);
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(af.wheelbase * 0.32, 0.004, af.wheelbase * 0.025), new THREE.MeshBasicMaterial({ color: 0x222222 }));
-      blade.position.copy(disk.position);
-      this.rotors.push(blade);
-      this.drone.add(arm, disk, blade);
-    }
-    // 腳架
-    for (const sx of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.02, af.wheelbase * 0.18, af.wheelbase * 0.3), new THREE.MeshStandardMaterial({ color: 0x8d99ae }));
-      leg.position.set(sx * af.wheelbase * 0.12, -af.wheelbase * 0.1, 0);
-      this.drone.add(leg);
-    }
-    this.drone.userData.lift = af.wheelbase * 0.19;
+    this.model = buildDroneModel(af);
+    this.drone.add(this.model.group);
+    this.drone.userData.lift = this.model.lift;
+    this.spin = 0;
   }
 
   setDrone(x: number, y: number, h: number, headingDeg: number, pitchDeg: number, rollDeg: number, spinning: boolean, dt: number): void {
@@ -227,7 +207,11 @@ export class ExamScene {
     this.drone.rotateY((-headingDeg * Math.PI) / 180);
     this.drone.rotateX((-pitchDeg * Math.PI) / 180);
     this.drone.rotateZ((-rollDeg * Math.PI) / 180);
-    if (spinning) for (const r of this.rotors) r.rotation.y += dt * 60;
+    // 槳葉轉速平滑變化：起飛時慢慢轉起來、落地後慢慢停
+    this.clock += dt;
+    const target = spinning ? 1 : 0;
+    this.spin += (target - this.spin) * Math.min(1, dt * (spinning ? 3 : 1.2));
+    if (this.model) animateDrone(this.model, this.spin, dt, this.clock);
   }
 
   setWindSock(wind: Vec2): void {

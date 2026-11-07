@@ -94,3 +94,26 @@ describe('手機操控盤', () => {
     }
   });
 });
+
+// 2026-11-08：精緻無人機模型
+import { buildDroneModel, modelSpec } from '../../src/rea/drone-model';
+import { AIRFRAMES } from '../../src/rea/physics';
+describe('無人機模型', () => {
+  it('每種機型的槳葉數＝馬達數，起落架離地高度為正，槳徑隨機型變大', () => {
+    const ids = ['quad-800g', 'quad-4kg', 'hexa-18kg'] as const;
+    const d = ids.map((id) => {
+      const m = buildDroneModel(AIRFRAMES[id]);
+      expect(m.props).toHaveLength(AIRFRAMES[id].rotors);
+      expect(m.discs).toHaveLength(AIRFRAMES[id].rotors);
+      expect(m.lift).toBeGreaterThan(0);
+      return m.propDiameter;
+    });
+    expect(d[0]).toBeLessThan(d[1]);
+    expect(d[1]).toBeLessThan(d[2]);
+  });
+  it('外觀規格：小飛機有相機、18 kg 有藥箱、大機型有 GPS', () => {
+    expect(modelSpec(AIRFRAMES['quad-800g']).payload).toBe('camera');
+    expect(modelSpec(AIRFRAMES['hexa-18kg']).payload).toBe('tank');
+    expect(modelSpec(AIRFRAMES['quad-4kg']).gps).toBe(true);
+  });
+});
