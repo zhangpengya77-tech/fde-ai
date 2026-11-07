@@ -272,6 +272,9 @@ CONTENT_TYPES = {
     ".ico": "image/x-icon",
     ".txt": "text/plain; charset=utf-8",
     ".webmanifest": "application/manifest+json",
+    # 2026-11-07：手勢搖桿的辨識引擎與模型（.wasm 必須是 application/wasm，瀏覽器才能邊下載邊編譯）
+    ".wasm": "application/wasm",
+    ".task": "application/octet-stream",
 }
 
 UNAVAILABLE_HTML = """<!DOCTYPE html>
