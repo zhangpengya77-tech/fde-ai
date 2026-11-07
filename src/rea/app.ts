@@ -229,20 +229,36 @@ export function createReaApp(root: HTMLElement): ReaApp {
   }
 
   // ---------- 事件 ----------
+  /**
+   * 換科目／機型／模式前先結束目前這趟（飛行中、倒數中、評等畫面都一樣），回到準備狀態。
+   * 2026-11-08：原本飛行中會直接忽略點擊，使用者以為「點不了」；評等畫面換科目時 3D 考場也沒更新。
+   */
+  function stopForChange(): void {
+    const wasActive = phase !== 'setup';
+    session = null;
+    demo = null;
+    phase = 'setup';
+    root.dataset.reaPhase = 'setup';
+    $('[data-rea-countdown]').textContent = '';
+    stage.classList.remove('rea-demo');
+    endResult();
+    if (wasActive) $('[data-rea-hint]').textContent = '已結束上一趟，換好後按「開始飛」。';
+  }
+
   root.addEventListener('click', (ev) => {
     const t = ev.target as HTMLElement;
     const pick = t.closest<HTMLElement>('[data-rea-pick]');
-    if (pick && phase !== 'flying' && phase !== 'countdown') {
+    if (pick) {
+      stopForChange();
       prefs.subjectId = pick.dataset.reaPick!;
       if (!prefs.airframeFixed) prefs.airframeId = subject().defaultAirframe;
-      endResult();
       refreshAll();
       return;
     }
     const lic = t.closest<HTMLElement>('[data-rea-lic]');
     if (lic) { prefs.license = lic.dataset.reaLic as Prefs['license']; refreshAll(); return; }
     const af = t.closest<HTMLElement>('[data-rea-af]');
-    if (af && phase !== 'flying' && phase !== 'countdown') { prefs.airframeId = af.dataset.reaAf as AirframeId; refreshAll(); return; }
+    if (af) { stopForChange(); prefs.airframeId = af.dataset.reaAf as AirframeId; refreshAll(); return; }
     const tab = t.closest<HTMLElement>('[data-rea-tab]');
     if (tab) {
       root.querySelectorAll<HTMLElement>('[data-rea-tab]').forEach((b) => b.setAttribute('aria-selected', String(b === tab)));
@@ -251,7 +267,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     }
   });
   $('[data-rea-mode]').addEventListener('click', () => {
-    if (phase === 'flying' || phase === 'countdown') return;
+    stopForChange();
     prefs.mode = prefs.mode === 'position' ? 'attitude' : 'position';
     refreshAll();
   });

@@ -64,13 +64,18 @@ test.describe('REA 考照模擬器', () => {
   });
 
   test('鍵盤：R 升高、W 前進會改變高度與位置', async ({ page }) => {
+    // 測試機若真的插著遙控器，實體遙控器優先會接管鍵盤；這裡明確模擬「沒有接任何遙控器」
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'getGamepads', { configurable: true, writable: true, value: () => [] });
+    });
     await page.goto('/?mode=exam&exam=0');
     await page.locator('[data-rea-pick="hover"]').click();
     await page.locator('[data-rea-mode]').click(); // 預設姿態 → 切到定位
     await expect(page.locator('[data-rea-mode]')).toHaveText('定位模式');
     await page.locator('[data-rea-start]').click();
     await page.waitForTimeout(3300); // 倒數 3 秒
-    await page.locator('body').click({ position: { x: 300, y: 300 } });
+    // 點 3D 畫面讓頁面取得鍵盤焦點（不用固定座標，手機版面捲動後才不會誤點到科目按鈕）
+    await page.locator('[data-rea-canvas]').click({ force: true }); // 點中央（左上角疊著「← 仿真訓練」連結）
     await page.keyboard.down('r');
     await page.waitForTimeout(1500);
     await page.keyboard.up('r');
@@ -118,6 +123,25 @@ test.describe('REA 考照模擬器', () => {
     await page.waitForTimeout(1500);
     await setAxis(page, 1, 0);
     expect(await hud(page, 'alt')).toBeGreaterThan(1);
+  });
+
+  test('飛行中與評等畫面都能直接換科目、換機型（2026-11-08 使用者回報點不了）', async ({ page }) => {
+    await page.goto('/?mode=exam&exam=0&reaSpeed=30');
+    await page.locator('[data-rea-pick="hover-small"]').click();
+    await page.locator('[data-rea-start]').click();
+    await page.waitForTimeout(500); // 倒數中
+    await page.locator('[data-rea-pick="figure-eight"]').click();
+    await expect(page.locator('[data-rea-title]')).toContainText('8 字水平圓');
+    await expect(page.locator('[data-rea-pick="figure-eight"]')).toHaveClass(/on/);
+    await expect(page.locator('[data-rea-start]')).toContainText('8 字水平圓');
+    // 示範飛完進入評等畫面後換科目，評等面板關閉、回到準備狀態
+    await page.locator('[data-rea-demo]').click();
+    await expect(page.locator('[data-rea-result]')).toBeVisible({ timeout: 60_000 });
+    await page.locator('[data-rea-pick="sideways"]').click();
+    await expect(page.locator('[data-rea-result]')).toBeHidden();
+    await expect(page.locator('[data-rea-title]')).toContainText('側飛');
+    await page.locator('[data-rea-af="hexa-18kg"]').click();
+    await expect(page.locator('[data-rea-af="hexa-18kg"]')).toHaveClass(/on/);
   });
 
   test('舊版 F450 考照模擬器仍可從 exam-legacy 開啟（歷史版本）', async ({ page }) => {
