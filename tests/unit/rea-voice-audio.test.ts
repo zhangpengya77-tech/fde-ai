@@ -117,3 +117,22 @@ describe('無人機模型', () => {
     expect(modelSpec(AIRFRAMES['quad-4kg']).gps).toBe(true);
   });
 });
+
+// 2026-11-08：科目卡片航線示意圖
+import { flySubject, subjectSvg } from '../../src/rea/subject-diagram';
+describe('科目航線示意圖', () => {
+  it('每個已實作科目都能背景試飛並畫出航線圖', () => {
+    for (const s of SUBJECTS.filter((x) => x.implemented)) {
+      const svg = subjectSvg(s);
+      expect(svg.startsWith('<svg')).toBe(true);
+      expect(svg).not.toMatch(/NaN|undefined/);
+      expect(flySubject(s).path.length).toBeGreaterThan(5);
+    }
+  });
+  it('8 字有兩個環帶圓與航線；五邊標出最高高度', () => {
+    const eight = subjectSvg(SUBJECTS.find((s) => s.id === 'figure-eight')!);
+    expect((eight.match(/<circle[^>]+stroke="#e05a6d"/g) ?? []).length).toBe(4);
+    expect(eight).toContain('stroke="#1769aa"');
+    expect(subjectSvg(SUBJECTS.find((s) => s.id === 'five-leg')!)).toContain('最高約');
+  });
+});

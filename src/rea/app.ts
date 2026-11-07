@@ -22,6 +22,7 @@ import { Narrator, introNarration, stepNarration } from './narrator';
 import { RotorAudio, rotorTarget } from './rotor-audio';
 import { touchToStick, sticksToCommand, type StickXY } from '../phone/stick-math';
 import { IDLE_LEFT, IDLE_RIGHT, TOUR, describeLeft, describeRight, tourSvg } from './touch-deck';
+import { subjectSvg } from './subject-diagram';
 
 type Phase = 'setup' | 'countdown' | 'flying' | 'result';
 type StickMode = 'mode2' | 'mode1';
@@ -303,8 +304,27 @@ export function createReaApp(root: HTMLElement): ReaApp {
     const list = SUBJECTS.filter((s) => prefs.license === 'all' || s.licenses.includes(prefs.license as License));
     $('[data-rea-subjects]').innerHTML = list.map((s) => `
       <button class="rea-subject${s.id === prefs.subjectId ? ' on' : ''}" data-rea-pick="${s.id}" ${s.implemented ? '' : 'disabled'}>
+        <span class="rea-subj-pic" data-rea-pic="${s.id}">${diagrams.get(s.id) ?? ''}</span>
         <b>${esc(s.name)}</b><small>${s.licenses.join('・')}${s.field === 'I2' ? '・小場地' : ''}${s.implemented ? '' : '・尚未實作'}</small>
       </button>`).join('');
+    fillDiagrams(list);
+  }
+
+  // 2026-11-08：科目航線示意圖（背景試飛一次產生；一張一張做，避免手機卡頓）
+  const diagrams = new Map<string, string>();
+  let diagramTimer = 0;
+  function fillDiagrams(list: Subject[]): void {
+    clearTimeout(diagramTimer);
+    const todo = list.filter((s) => !diagrams.has(s.id));
+    const next = () => {
+      const s = todo.shift();
+      if (!s) return;
+      try { diagrams.set(s.id, subjectSvg(s)); } catch { diagrams.set(s.id, ''); }
+      const el = root.querySelector<HTMLElement>(`[data-rea-pic="${s.id}"]`);
+      if (el) el.innerHTML = diagrams.get(s.id) ?? '';
+      diagramTimer = window.setTimeout(next, 16);
+    };
+    diagramTimer = window.setTimeout(next, 50);
   }
 
   function renderAirframes(): void {

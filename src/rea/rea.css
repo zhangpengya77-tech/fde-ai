@@ -168,3 +168,12 @@ body:has(.rea-touchmode) [data-action="open-link"] { display:none !important; }
   .rea-seg button { padding:5px 10px; font-size:13px; }
   .rea-deck-btn { padding:6px 9px; font-size:13px; white-space:nowrap; }
 }
+
+/* 2026-11-08：科目卡片（上：航線示意圖，下：名稱與適用證照），兩欄排列 */
+.rea-subjects { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.rea-subject { padding:0; overflow:hidden; gap:0; }
+.rea-subject .rea-subj-pic { display:block; aspect-ratio:4/3; background:#c9cdd1; }
+.rea-subject .rea-subj-pic svg { display:block; width:100%; height:100%; }
+.rea-subject b { padding:7px 10px 0; font-size:14px; }
+.rea-subject small { padding:0 10px 8px; }
+.rea-subject.on { box-shadow:inset 0 0 0 2px var(--acc); }
