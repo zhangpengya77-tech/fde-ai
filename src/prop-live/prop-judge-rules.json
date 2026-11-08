@@ -1,0 +1,36 @@
+{
+  "_說明": "F450 螺旋槳安裝檢查判定規則（圖片／即時鏡頭共用）。改規則只改這個檔，不改程式碼。俯視、機頭朝上。",
+  "version": "PROP_LIVE_RULE_v1",
+  "classes": ["CW", "CCW"],
+  "layout": {
+    "TL": "CW",
+    "TR": "CCW",
+    "BL": "CCW",
+    "BR": "CW"
+  },
+  "motorIds": {
+    "TL": "M3",
+    "TR": "M1",
+    "BL": "M2",
+    "BR": "M4"
+  },
+  "expectedCount": 4,
+  "minConfidence": 0.5,
+  "candidateConfidence": 0.25,
+  "maxOverlapIoU": 0.3,
+  "minQuadrantMargin": 0.02,
+  "stability": {
+    "window": 8,
+    "required": 5,
+    "maxCenterShift": 0.06
+  },
+  "live": {
+    "_說明": "即時鏡頭設定。推論尺寸固定 640（2026-11-08 決定：416 判定可靠度下降，不採用）；省電模式只降低擷取解析度與每秒推論次數。",
+    "imgsz": 640,
+    "maxFps": 15,
+    "powerSaveMaxFps": 5,
+    "capture": { "width": 1280, "height": 720 },
+    "powerSaveCapture": { "width": 640, "height": 480 },
+    "defaultFacingMode": "environment"
+  }
+}

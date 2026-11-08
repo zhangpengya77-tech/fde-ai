@@ -23,7 +23,7 @@ const okResponse = (payload) => ({ ok: true, status: 200, json: async () => payl
 {
   const html = readFile('index.html');
   assert.match(html, /id="buildMain12Entry"[^>]*href="\/live\/"/, 'Build CTA 必須存在並指向 /live/');
-  assert.match(html, /src="\.\/src\/vision-client\.js\?v=1\.0\.4-error-envelope"/, '手機端必須載入最新 Vision client，避免 Safari 沿用舊快取');
+  assert.match(html, /src="\.\/src\/vision-client\.js\?v=1\.0\.5-prop-judge"/, '手機端必須載入最新 Vision client，避免 Safari 沿用舊快取');
   assert.match(html, /build-legacy-note/, 'legacy F450 必須保留為次級入口');
   assert.ok(/id="build"/.test(html) && /assistantQuestion/.test(html), 'legacy 1.0 build 內容必須保留');
   console.log('✓ Build CTA → /live/，legacy 保留');

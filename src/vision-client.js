@@ -108,6 +108,7 @@
     const {
       fetchImpl = typeof fetch === 'function' ? fetch : null,
       base, imageDataUrl, imageWidth, imageHeight, fileName = '', confidenceThreshold = 0.5,
+      judge = null,
     } = options || {};
     if (!base) throw unavailableError('missing_vision_base');
     if (!fetchImpl) throw unavailableError('missing_fetch');
@@ -131,7 +132,62 @@
     const payload = await readJson(response);
     throwForFailure(payload, response);
     if (!payload || payload.model == null) throw noModelError('no_active_model');
+    // 2026-11-08：學員頁一律傳入共用判定模組（judge），畫面結果改由 judgePropellers 依偵測框判定；
+    // 後端 evaluate_prop 的結果保留在 backendFinalResult 供稽核，不再決定畫面上的對錯。
+    if (judge) return adaptJudgedPropResult(payload, fileName, judge, Number(imageWidth) || 0, Number(imageHeight) || 0);
     return adaptPropResult(payload, fileName);
+  }
+
+  /**
+   * 以共用判定模組（prop-live/prop-judge.js）產生學生結果卡片。
+   * judge = { judgePropellers, formatJudgement, rules, messages }
+   * 狀態對應：CORRECT→PASS、WRONG→NG、UNCERTAIN→CHECK（UNCERTAIN 時四個位置都顯示 CHECK，不出現 PASS）。
+   */
+  function adaptJudgedPropResult(payload, fileName, judge, imageWidth, imageHeight) {
+    const { rules, messages } = judge;
+    const raw = Array.isArray(payload && payload.detections) ? payload.detections : [];
+    const judgement = judge.judgePropellers(raw, rules);
+    const text = judge.formatJudgement(judgement, messages);
+    const finalResult = judgement.state === 'CORRECT' ? 'PASS' : judgement.state === 'WRONG' ? 'NG' : 'CHECK';
+    const quadrantOf = {};
+    for (const [q, motor] of Object.entries(rules.motorIds || {})) quadrantOf[motor] = q;
+    const motorChecks = ['M1', 'M2', 'M3', 'M4'].map((motor) => {
+      const q = quadrantOf[motor];
+      const item = judgement.positions[q];
+      const place = `${messages.positions[q] || q}（${motor}）`;
+      if (!item) {
+        return {
+          motor, result: 'CHECK', position: place, detectedDirection: 'CHECK',
+          expectedDirection: rules.layout[q] || 'CHECK', confidence: null,
+          reason: messages.uncertainReason[judgement.reasonCode] || messages.state.UNCERTAIN,
+        };
+      }
+      return {
+        motor, result: item.ok ? 'PASS' : 'NG', position: place, detectedDirection: item.detected,
+        expectedDirection: item.expected, confidence: item.confidence, reason: item.ok ? '' : '旋向錯誤',
+      };
+    });
+    const simulationMode = payload?.simulation_mode === true;
+    return {
+      fileName: fileName || '未命名檢測檔案',
+      engine: 'AI 視覺評測',
+      simulationMode,
+      resultLabel: simulationMode ? (payload?.result_label || 'DEMO 模擬結果') : '',
+      summary: text.headline,
+      judgeLines: text.lines,
+      judgeState: judgement.state,
+      judgeReason: judgement.reasonCode,
+      ruleVersion: judgement.ruleVersion,
+      overlayBoxes: judgement.boxes,
+      imageWidth,
+      imageHeight,
+      motorChecks,
+      detections: motorChecks
+        .filter((item) => item.confidence !== null)
+        .map((item) => ({ motor: item.motor, label: item.detectedDirection, confidence: item.confidence })),
+      finalResult,
+      backendFinalResult: payload?.final_result || null,
+    };
   }
 
   /** FOUR_SIDE_HOVER：正式四面懸停檢測（後端抽幀 + 分析）。 */
@@ -235,6 +291,7 @@
     stripDataUrl,
     isSupportedVideo,
     adaptPropResult,
+    adaptJudgedPropResult,
     adaptHoverResult,
     propCheck,
     hoverAnalyze,

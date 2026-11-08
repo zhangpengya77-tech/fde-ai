@@ -397,14 +397,56 @@
         </div>
         <div class="workflow-grid" id="assessmentWorkflows"></div>
         <div class="inspection-layout">
-          <div class="panel upload-panel">
+          <div class="panel upload-panel" data-prop-panel data-live-root>
             <h3>F450 槳葉正反及方向檢查</h3>
+            <!-- 2026-11-08：圖片上傳／即時鏡頭兩個入口，同一個判定模組與規則檔；文字由 prop-live.zh-TW.json 填入 -->
+            <div class="prop-tabs" role="tablist">
+              <button type="button" class="prop-tab" role="tab" aria-selected="true" data-prop-tab="image" data-live-text="tabImage">圖片上傳</button>
+              <button type="button" class="prop-tab" role="tab" aria-selected="false" data-prop-tab="live" data-live-text="tabLive">即時鏡頭</button>
+            </div>
+            <div data-prop-pane="image">
             <label class="dropzone">
               <input type="file" id="propellerInput" accept="image/*" />
               <span>上傳 F450 俯視照片</span>
               <small>系統會依 M1、M2、M3、M4 顯示 PASS / NG / CHECK，錯誤項目交由 RAG 知識庫回答。</small>
             </label>
             <button class="primary-action button" id="propellerButton">執行槳葉檢測</button>
+            </div>
+            <div class="prop-live" data-prop-pane="live" hidden>
+              <div class="prop-live-stage" data-live="stage">
+                <video data-live="video" playsinline muted></video>
+                <canvas data-live="overlay" class="prop-live-overlay"></canvas>
+                <span class="prop-live-fps" data-live="fps"></span>
+                <span class="prop-live-backend" data-live="backend"></span>
+              </div>
+              <div class="prop-live-answer" data-live="answer" data-tone="gray" aria-live="polite">
+                <strong data-live="headline"></strong>
+                <ul data-live="lines"></ul>
+              </div>
+              <div class="prop-live-controls">
+                <button type="button" class="primary-action button" data-live="start" data-live-text="start">開始鏡頭檢測</button>
+                <button type="button" class="secondary-action button" data-live="stop" data-live-text="stop">停止</button>
+                <button type="button" class="secondary-action button" data-live="switch" data-live-text="switchCamera">切換鏡頭</button>
+                <select data-live="camera" aria-label="鏡頭"></select>
+                <label class="prop-live-lowres"><input type="checkbox" data-live="lowres" /> <span data-live-text="lowRes">省電模式（低解析度）</span></label>
+              </div>
+              <!-- 2026-11-08 S5：學員發問才回答（不問不講話）；對錯由規則判定，知識庫只做補充 -->
+              <div class="prop-live-qa">
+                <div class="prop-live-ask">
+                  <input type="text" data-live="question" maxlength="200" aria-label="問 AI 助教" />
+                  <button type="button" class="primary-action button" data-live="ask" data-live-qa-text="askButton">問 AI 助教</button>
+                  <button type="button" class="secondary-action button" data-live="mic" data-live-qa-text="micButton">🎤 用說的</button>
+                </div>
+                <div class="prop-live-reply" data-live="reply" aria-live="polite" hidden>
+                  <p data-live="replyRule"></p>
+                  <p class="muted" data-live="replyRag" hidden></p>
+                  <button type="button" class="secondary-action button" data-live="stopSpeak" data-live-qa-text="stopSpeak">■ 停止播放</button>
+                </div>
+              </div>
+              <p class="prop-live-status" data-live="status" aria-live="polite"></p>
+              <p class="prop-live-error" data-live="error" role="alert" hidden></p>
+              <small class="muted" data-live-text="privacy">鏡頭畫面只在你的裝置上辨識，不會上傳。</small>
+            </div>
           </div>
           <div class="panel upload-panel">
             <h3>電力巡檢影片上傳與分析</h3>
@@ -489,8 +531,13 @@
       document.write('<script src="./src/rag-config.js?v=' + Date.now() + '"><\/script>');
     </script>
     <script src="./src/rag-client.js?v=1.2.3-mobile-speech"></script>
-    <script src="./src/vision-client.js?v=1.0.4-error-envelope"></script>
-    <script src="./src/app.js?v=2.0c-learning-sections-3"></script>
+    <script src="./src/prop-live/prop-judge.js?v=1"></script>
+    <script src="./src/prop-live/prop-live-config.js?v=4"></script>
+    <script src="./src/prop-live/prop-stabilizer.js?v=1"></script>
+    <script src="./src/prop-live/prop-qa.js?v=1"></script>
+    <script src="./src/prop-live/prop-live.js?v=4"></script>
+    <script src="./src/vision-client.js?v=1.0.5-prop-judge"></script>
+    <script src="./src/app.js?v=2.0c-prop-judge-1"></script>
     <!-- 首頁右側 3D 無人機：沿用 F450 數位孿生的 three.js（同站 /f450-twin/vendor），延後到頁面載完才載入 -->
     <script type="importmap">{"imports":{"three":"/f450-twin/vendor/three/three.module.min.js"}}</script>
     <script type="module" src="./src/hero-drone-3d.js?v=3.0-neon"></script>

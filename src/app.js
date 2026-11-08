@@ -920,7 +920,6 @@ function renderMotorChecks(result) {
               <dl>
                 <div><dt>Detected</dt><dd>${escapeHtml(item.detectedDirection || 'CHECK')}</dd></div>
                 <div><dt>Expected</dt><dd>${escapeHtml(item.expectedDirection || 'CHECK')}</dd></div>
-                <div><dt>Blade Face</dt><dd>${escapeHtml(item.bladeFace || 'CHECK')}</dd></div>
                 <div><dt>Confidence</dt><dd>${formatConfidence(item.confidence)}</dd></div>
               </dl>
               ${item.result === 'NG' ? `<p>Correct: ${escapeHtml(item.expectedDirection)}</p>` : ''}
@@ -1113,6 +1112,18 @@ async function appendInspectionKnowledgeAnswer(result) {
   const target = document.querySelector('[data-inspection-assistant]');
   if (!target) return;
 
+  // 2026-11-08：共用判定模組判為「無法判斷」時，不呼叫 AI 助教或知識庫（避免 AI 自行推測對錯），
+  // 只顯示固定說明：寧可無法判斷，也不亂判斷。
+  if (result.judgeState === 'UNCERTAIN') {
+    target.innerHTML = `
+      <h3>AI 修正建議</h3>
+      <p>${escapeHtml(result.summary)}</p>
+      ${(result.judgeLines || []).map((line) => `<p class="muted">${escapeHtml(line)}</p>`).join('')}
+      <p class="muted">請從正上方俯視、機頭朝上，讓四支槳完整入鏡後重新拍照。</p>
+    `;
+    return;
+  }
+
   // 優先使用後端 AI 助教（需登入）：自動顯示判定與知識庫並語音朗讀；失敗才退回原本的知識庫回答。
   const payload = eagleTutorPayloadFrom(result);
   if (payload.motors.length && !result.simulationMode) {
@@ -1161,9 +1172,41 @@ function renderDetectionImage(result) {
 
   const label = result.annotatedImage ? 'YOLO 標註檢測圖片' : '上傳檢測圖片';
   return `
-    <img src="${imageSrc}" alt="${label}" />
+    <div class="prop-overlay-wrap">
+      <img src="${imageSrc}" alt="${label}" />
+      ${renderPropOverlay(result)}
+    </div>
     <span class="visual-caption">檢測圖片</span>
   `;
+}
+
+/** 2026-11-08：取得共用判定模組＋規則＋文字（圖片上傳與即時鏡頭共用）。 */
+async function loadPropJudge() {
+  const module = window.FdePropJudge;
+  const loader = window.FdePropLiveConfig;
+  if (!module || !loader) throw new Error('prop_judge_missing');
+  const { rules, messages } = await loader.loadPropLiveConfig();
+  return { judgePropellers: module.judgePropellers, formatJudgement: module.formatJudgement, rules, messages };
+}
+
+/** 2026-11-08：在上傳圖片上疊加共用判定模組的框（綠＝正確、紅＝裝錯、灰＝無法判斷），與即時鏡頭同一套顏色。 */
+function renderPropOverlay(result) {
+  const boxes = Array.isArray(result.overlayBoxes) ? result.overlayBoxes : [];
+  const w = Number(result.imageWidth) || 0;
+  const h = Number(result.imageHeight) || 0;
+  if (!boxes.length || !w || !h) return '';
+  const stroke = { green: '#2ec27e', red: '#e01b24', gray: '#9a9996' };
+  const lineWidth = Math.max(2, Math.round(Math.min(w, h) / 160));
+  const rects = boxes
+    .map((box) => {
+      const [x1, y1, x2, y2] = box.bbox.map(Number);
+      const color = stroke[box.color] || stroke.gray;
+      const label = `${box.class || ''}${Number.isFinite(box.confidence) ? ` ${Math.round(box.confidence * 100)}%` : ''}`;
+      return `<rect x="${x1}" y="${y1}" width="${x2 - x1}" height="${y2 - y1}" fill="none" stroke="${color}" stroke-width="${lineWidth}"/>`
+        + `<text x="${x1 + lineWidth}" y="${Math.max(y1 - lineWidth * 2, lineWidth * 6)}" fill="${color}" font-size="${lineWidth * 6}" font-weight="700">${escapeHtml(label)}</text>`;
+    })
+    .join('');
+  return `<svg class="prop-overlay" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${rects}</svg>`;
 }
 
 function renderPropellerInspectionResult(result, includeVisual = false) {
@@ -1184,8 +1227,9 @@ function renderPropellerInspectionResult(result, includeVisual = false) {
         </div>
         <h3 class="result-file-name" title="${fileName}">${fileName}</h3>
         <p>${escapeHtml(result.summary)}</p>
+        ${(result.judgeLines || []).map((line) => `<p class="prop-judge-line">${escapeHtml(line)}</p>`).join('')}
         <div class="inspection-hints">
-          <small>M1 = CCW、M2 = CCW、M3 = CW、M4 = CW。</small>
+          <small>俯視、機頭朝上：左上 M3 = CW、右上 M1 = CCW、左下 M2 = CCW、右下 M4 = CW。</small>
         </div>
         ${renderMotorChecks(result)}
         <div class="inspection-final-result ${statusClass(finalResult.status)}">
@@ -1588,6 +1632,14 @@ function bindActions() {
     }
 
     $('#propellerResult').innerHTML = '<article class="result-card"><p>正在執行 AI 槳葉方向檢測...</p></article>';
+    // 2026-11-08：圖片與即時鏡頭共用同一個判定模組與規則檔；規則載入失敗就停止，不退回其他判定方式。
+    let judge;
+    try {
+      judge = await loadPropJudge();
+    } catch {
+      $('#propellerResult').innerHTML = unavailableCard('判定規則無法載入，我無法判斷，請重新整理頁面或找線下老師確認。');
+      return;
+    }
     try {
       const imageData = await fileToDataUrl(file);
       const size = await imageSize(imageData);
@@ -1597,6 +1649,7 @@ function bindActions() {
         imageWidth: size.width,
         imageHeight: size.height,
         fileName: file.name,
+        judge,
       });
       // 學生必須看到「自己上傳的那張照片」，否則預覽區只會顯示等待占位文字。
       result.inputImage = imageData;

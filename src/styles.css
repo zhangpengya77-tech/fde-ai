@@ -3922,3 +3922,237 @@ a.about-card:hover { border-color: var(--line-strong); box-shadow: 0 0 18px rgba
   .learning-course-card { grid-template-columns: 42px minmax(0, 1fr); gap: 10px; padding: 12px; }
   .learning-course-content h4 { font-size: 0.98rem; }
 }
+
+/* 2026-11-08：槳葉判定疊框（圖片上傳與即時鏡頭共用顏色：綠＝正確、紅＝裝錯、灰＝無法判斷） */
+.prop-overlay-wrap {
+  position: relative;
+  display: block;
+}
+
+.prop-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.prop-judge-line {
+  margin: 4px 0;
+  font-weight: 600;
+}
+
+/* 2026-11-08：槳葉檢查「圖片上傳／即時鏡頭」分頁與即時鏡頭畫面 */
+.prop-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.prop-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 200, 255, 0.35);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.prop-tab[aria-selected="true"] {
+  background: rgba(0, 170, 255, 0.18);
+  border-color: rgba(0, 200, 255, 0.8);
+  font-weight: 700;
+}
+
+.prop-live[hidden],
+[data-prop-pane][hidden],
+.prop-live-error[hidden] {
+  display: none;
+}
+
+.prop-live-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #06111d;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.prop-live-stage video,
+.prop-live-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.prop-live-overlay {
+  pointer-events: none;
+}
+
+.prop-live-fps,
+.prop-live-backend {
+  position: absolute;
+  top: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+}
+
+.prop-live-fps { left: 8px; }
+.prop-live-backend { right: 8px; }
+.prop-live-fps:empty,
+.prop-live-backend:empty { display: none; }
+
+.prop-live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.prop-live-controls select {
+  max-width: 180px;
+}
+
+.prop-live-error {
+  color: #ff8a8a;
+  font-weight: 600;
+}
+
+.prop-live-answer {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 2px solid #9a9996;
+  background: rgba(154, 153, 150, 0.12);
+  min-height: 48px;
+}
+
+.prop-live-answer[data-tone="green"] { border-color: #2ec27e; background: rgba(46, 194, 126, 0.12); }
+.prop-live-answer[data-tone="red"] { border-color: #e01b24; background: rgba(224, 27, 36, 0.12); }
+
+.prop-live-answer ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* 2026-11-08 S4：即時鏡頭手機版面（答案在畫面正下方、按鈕縮小成一列、直式畫面不超出螢幕） */
+.prop-live-stage {
+  max-height: 70vh;
+  margin: 0 auto;
+}
+
+.prop-live-answer {
+  margin-top: 10px;
+}
+
+.prop-live-controls .button {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 14px;
+}
+
+.prop-live-status {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .prop-live-controls {
+    gap: 6px;
+  }
+
+  .prop-live-controls .button {
+    flex: 1 1 30%;
+    padding: 10px 8px;
+    font-size: 14px;
+  }
+
+  .prop-live-controls select {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .prop-live-lowres {
+    flex: 1 1 100%;
+    font-size: 14px;
+  }
+
+  .prop-live-answer strong {
+    font-size: 17px;
+  }
+}
+
+/* 2026-11-08 S4：鏡頭名稱很長時，下拉選單不得撐出面板 */
+.prop-live-controls select {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 641px) {
+  .prop-live-controls select {
+    width: auto;
+    max-width: 220px;
+  }
+}
+
+/* 2026-11-08 S5：即時鏡頭問答 */
+.prop-live-qa {
+  margin-top: 10px;
+}
+
+.prop-live-ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prop-live-ask input {
+  flex: 1 1 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 200, 255, 0.35);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+}
+
+.prop-live-ask .button {
+  width: auto;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 10px 14px;
+}
+
+.prop-live-reply {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 200, 255, 0.35);
+}
+
+.prop-live-reply[hidden],
+.prop-live-reply [hidden] {
+  display: none;
+}
+
+.prop-live-reply .button {
+  width: auto;
+  margin: 6px 0 0;
+  padding: 6px 12px;
+}

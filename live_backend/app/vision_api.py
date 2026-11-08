@@ -18,6 +18,7 @@ from .vision_center import (
 )
 from .prop_rotation_service import PropRotationServiceError
 from .rotation_sandbox import RotationSandboxError
+from .prop_live_model import PropLiveModelError, public_info, resolve_live_model
 
 
 async def _teacher(request: Request) -> tuple[str | None, Response | None]:
@@ -276,6 +277,35 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
             return json_response(result)
         except (KeyError, ValueError, ModelValidationError, binascii.Error) as exc:
             return error_response("invalid_prop_request", str(exc), 422)
+
+    # 2026-11-08：即時鏡頭檢測——只提供教師已啟用（ACTIVE）且通過類別閘門的模型 ONNX，供瀏覽器端推論。
+    # 唯讀：不建立難例、不改模型狀態；畫面不會上傳伺服器。需已驗證身分（學員或教師）。
+    async def prop_live_model(request: Request):
+        _, denied = await _any_identity(request)
+        if denied:
+            return denied
+        try:
+            info = resolve_live_model(center, center._expected_class_names("PROP_DIRECTION"))
+        except PropLiveModelError as exc:
+            return error_response(exc.code, "Live propeller model is not available.", exc.status)
+        return json_response(public_info(info))
+
+    async def prop_live_model_file(request: Request):
+        _, denied = await _any_identity(request)
+        if denied:
+            return denied
+        try:
+            info = resolve_live_model(center, center._expected_class_names("PROP_DIRECTION"))
+        except PropLiveModelError as exc:
+            return error_response(exc.code, "Live propeller model is not available.", exc.status)
+        from pathlib import Path
+
+        content = Path(info["_onnx_path"]).read_bytes()
+        return Response(content, media_type="application/octet-stream", headers={
+            "Cache-Control": "private, no-store",
+            "X-Model-Sha256": info["onnx_sha256"],
+            "X-Model-Id": str(info["model_id"]),
+        })
 
     async def hover_analyze(request: Request):
         # P7-B5：會建立 hard example（難例回饋），屬於建立資料 → 必須有身分。
@@ -863,6 +893,8 @@ def vision_routes(center: VisionCenter, rotation_trial=None) -> list[Route]:
         Route("/api/v1/vision/tasks/{model_type}/history", model_history, methods=["GET"]),
         Route("/api/v1/vision/tasks/{model_type}/rollback", rollback, methods=["POST"]),
         Route("/api/v1/vision/prop-check", prop_check, methods=["GET", "POST"]),
+        Route("/api/v1/vision/prop-live/model", prop_live_model, methods=["GET"]),
+        Route("/api/v1/vision/prop-live/model.onnx", prop_live_model_file, methods=["GET"]),
         Route("/api/v1/vision/hover-analyze", hover_analyze, methods=["POST"]),
         Route("/api/v1/vision/hover-video", hover_video, methods=["POST"]),
         Route("/api/v1/vision/datasets", datasets, methods=["GET", "POST"]),

@@ -85,3 +85,6 @@ student_portal/.cache/
 
 # Cloudflare wrangler 本機暫存（不提交）
 .wrangler/
+
+# 2026-11-08：即時鏡頭測試產出（Playwright 報告、假鏡頭影片）
+test-results/

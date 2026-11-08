@@ -1,0 +1,76 @@
+{
+  "positions": {
+    "TL": "左上",
+    "TR": "右上",
+    "BL": "左下",
+    "BR": "右下"
+  },
+  "classes": {
+    "CW": "CW",
+    "CCW": "CCW"
+  },
+  "state": {
+    "CORRECT": "目前四支槳都已換到正確位置。",
+    "WRONG": "有槳裝錯了，請依下方說明更換。",
+    "UNCERTAIN": "我無法判斷，請找線下老師確認。",
+    "FIXED": "你已經換到正確的了。"
+  },
+  "wrongItem": "{position}應為 {expected}，目前是 {detected}，請依正確方向更換。",
+  "allReversedHint": "四支槳全部相反：請先確認機頭朝上、畫面沒有左右鏡像（前鏡頭常會鏡像）；若方向無誤，代表四支槳都裝反了。",
+  "uncertainReason": {
+    "NO_DETECTION": "畫面中沒有偵測到槳葉。",
+    "COUNT_MISMATCH": "偵測到的槳葉不是 4 支。",
+    "LOW_CONFIDENCE": "有槳葉的辨識信心不足。",
+    "UNKNOWN_CLASS": "出現無法辨識的槳葉類別。",
+    "OVERLAP": "有偵測框過度重疊。",
+    "QUADRANT_CONFLICT": "有兩支槳落在同一個位置，無法對應四個馬達。",
+    "UNSTABLE": "畫面晃動，請拿穩後再看。"
+  },
+  "qa": {
+    "yes": "對，",
+    "no": "不對。",
+    "judging": "還在判斷中，請拿穩鏡頭幾秒後再問一次。",
+    "notRunning": "請先按「開始鏡頭檢測」，讓我看到四支槳之後再問。",
+    "layoutAnswer": "正確裝法（俯視、機頭朝上）：{layout}。",
+    "ragLabel": "知識庫補充",
+    "defaultQuestion": "我這樣裝對嗎？",
+    "ragQuestion": "學員問：「{question}」。F450 螺旋槳即時檢查（規則判定，不可更改）：{wrong} 正確配置是 {layout}。請依 F450 知識庫用 1 到 3 句補充：為什麼要這樣裝、更換前要注意的安全事項（斷電拔電池）與更換步驟。不要重新判斷哪一支對錯，也不要推測其他參數。",
+    "speechLang": "zh-TW",
+    "askButton": "問 AI 助教",
+    "micButton": "🎤 用說的",
+    "stopSpeak": "■ 停止播放",
+    "listening": "請說出你的問題…",
+    "micUnsupported": "這個瀏覽器不支援語音輸入，請用打字。"
+  },
+  "ui": {
+    "tabImage": "圖片上傳",
+    "tabLive": "即時鏡頭",
+    "start": "開始鏡頭檢測",
+    "stop": "停止",
+    "switchCamera": "切換鏡頭",
+    "lowRes": "省電模式（降低鏡頭解析度與更新頻率）",
+    "pausedHidden": "畫面切到背景，鏡頭已關閉；回來後請按「開始鏡頭檢測」。",
+    "fps": "FPS {fps}・已辨識 {frames} 幀",
+    "inferenceFailed": "這台裝置無法執行即時辨識（{detail}），已停止。請改用圖片上傳，並把這段訊息截圖給老師。",
+    "inferenceStalled": "辨識沒有回應，已停止。請重新整理頁面再試，或改用圖片上傳（{detail}）。",
+    "fallbackWasm": "這台裝置的 GPU 辨識失敗，已改用一般模式重新載入（速度較慢）…",
+    "cameraFallback": "指定的鏡頭無法開啟，已改用預設後置鏡頭。",
+    "ask": "問 AI 助教",
+    "askPlaceholder": "例如：我這樣裝對嗎？",
+    "noCamera": "無法使用鏡頭：請允許瀏覽器使用相機，或改用圖片上傳。",
+    "needHttps": "手機鏡頭需要 HTTPS 連線，請改用正式網址開啟。",
+    "noModel": "目前沒有可用的槳葉辨識模型，請改用圖片上傳。",
+    "modelNotEnabled": "老師尚未啟用槳葉辨識模型，請稍後再試或找老師確認。",
+    "modelRejected": "模型類別不符合（只接受 CW、CCW），已停止載入。",
+    "loadingModel": "正在載入辨識模型…",
+    "startingCamera": "正在開啟鏡頭…",
+    "needLogin": "請先登入學員或教師帳號，才能使用即時鏡頭檢測。",
+    "modelHashMismatch": "模型檔案核對失敗，已停止載入，請找老師確認。",
+    "modelLoadFailed": "辨識模型無法在這台裝置上執行，請改用圖片上傳。",
+    "cameraLabel": "鏡頭",
+    "cameraDefault": "預設鏡頭",
+    "backend": "運算：{backend}",
+    "hint": "俯視、機頭朝上，讓四支槳完整入鏡。",
+    "privacy": "鏡頭畫面只在你的裝置上辨識，不會上傳。"
+  }
+}

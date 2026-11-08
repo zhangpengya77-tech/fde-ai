@@ -1,0 +1,14 @@
+{
+  "name": "fde-ai-live-camera-tests",
+  "private": true,
+  "description": "FDE-AI 即時鏡頭檢測的開發測試工具（只在開發時使用，不會進入正式站執行環境）",
+  "scripts": {
+    "test:node": "node --test src/*.test.cjs src/prop-live/*.test.cjs",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test -c tests/live-camera/playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "vitest": "3.2.7"
+  }
+}
