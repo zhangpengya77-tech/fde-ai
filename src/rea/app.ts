@@ -23,8 +23,10 @@ import { RotorAudio, rotorTarget } from './rotor-audio';
 import { touchToStick, sticksToCommand, type StickXY } from '../phone/stick-math';
 import { IDLE_LEFT, IDLE_RIGHT, TOUR, describeLeft, describeRight, tourSvg } from './touch-deck';
 import { subjectSvg } from './subject-diagram';
+import { PHYSICS_DT } from './session';
 
-type Phase = 'setup' | 'countdown' | 'flying' | 'result';
+// 2026-11-08：新增 demo（示範播放中：背景已試飛完成，畫面依時間播放，可暫停、變速、拖曳）
+type Phase = 'setup' | 'countdown' | 'flying' | 'demo' | 'result';
 type StickMode = 'mode2' | 'mode1';
 
 interface Prefs {
@@ -104,6 +106,16 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <button class="rea-chip" data-rea-full title="全螢幕（G）">全螢幕 G</button>
       </div>
       <div class="rea-result" data-rea-result hidden></div>
+      <div class="rea-demobar" data-rea-demobar hidden>
+        <div class="rea-db-title"><b data-rea-db-name></b> 示範・<span data-rea-db-step></span></div>
+        <div class="rea-db-row">
+          <button type="button" class="rea-db-btn" data-rea-db-play>⏸ 暫停</button>
+          <span class="rea-db-speeds">${[1, 1.5, 3, 6].map((v) => `<button type="button" class="rea-db-btn" data-rea-db-speed="${v}">×${v}</button>`).join('')}</span>
+          <span class="rea-spacer"></span><span class="rea-db-time" data-rea-db-time></span>
+        </div>
+        <div class="rea-db-track"><div class="rea-db-marks" data-rea-db-marks></div><input type="range" min="0" max="1000" value="0" step="1" data-rea-db-seek aria-label="示範進度"></div>
+        <div class="rea-db-row"><button type="button" class="rea-db-btn" data-rea-db-exit>結束示範</button><span class="rea-spacer"></span><button type="button" class="rea-db-btn primary" data-rea-db-fly>換我飛</button></div>
+      </div>
     </section>
     <div class="rea-deck" data-rea-deck hidden>
       <div class="rea-deck-top">
@@ -291,6 +303,69 @@ export function createReaApp(root: HTMLElement): ReaApp {
     renderTour();
   });
 
+  // ---------- 示範播放（2026-11-08） ----------
+  let demoPlay: { t: number; dur: number; speed: number; playing: boolean; lastIdx: number; stepT: number[] } | null = null;
+  const demoBar = $('[data-rea-demobar]');
+  const DEMO_SPEEDS = [1, 1.5, 3, 6];
+  const markLabel = (label: string): string => {
+    if (label.startsWith('起飛')) return '起飛';
+    const m = label.match(/(P\d|H)(?!.*(P\d|H))/);
+    return m ? m[1] : '';
+  };
+  function renderDemoBar(): void {
+    if (!demoPlay || !session) return;
+    $('[data-rea-db-name]').textContent = subject().name;
+    $('[data-rea-db-play]').textContent = demoPlay.playing ? '⏸ 暫停' : '▶ 播放';
+    root.querySelectorAll<HTMLElement>('[data-rea-db-speed]').forEach((b) => b.classList.toggle('on', Number(b.dataset.reaDbSpeed) === demoPlay!.speed));
+    // 進度條上的步驟標記（角錐、H、起飛），太擠的就省略
+    let lastPct = -100;
+    let lastLab = '';
+    $('[data-rea-db-marks]').innerHTML = subject().steps.map((st, i) => {
+      const lab = markLabel(st.label);
+      const pct = (demoPlay!.stepT[i] / demoPlay!.dur) * 100;
+      if (!lab || lab === lastLab || !Number.isFinite(pct) || pct - lastPct < 7) return '';
+      lastPct = pct;
+      lastLab = lab;
+      return `<span style="left:${pct.toFixed(1)}%">${lab}</span>`;
+    }).join('');
+  }
+  function seekDemo(t: number): void {
+    if (!demoPlay || !session) return;
+    demoPlay.t = Math.max(0, Math.min(demoPlay.dur, t));
+    const upto = session.samples.filter((smp) => smp.t <= demoPlay!.t);
+    scene.setTrailFromSamples(upto);
+    // 拖曳後：從目前這一步重新開始解說
+    narrator.stop();
+    const smp = sampleAt(session.samples, demoPlay.t);
+    demoPlay.lastIdx = smp ? smp.stepIndex : -1;
+    narratedStep = demoPlay.lastIdx;
+  }
+  $('[data-rea-db-play]').addEventListener('click', () => {
+    if (!demoPlay) return;
+    if (!demoPlay.playing && demoPlay.t >= demoPlay.dur - 0.05) seekDemo(0);
+    demoPlay.playing = !demoPlay.playing;
+    if (!demoPlay.playing) narrator.stop();
+    rotor.unlock();
+    renderDemoBar();
+  });
+  root.querySelectorAll<HTMLElement>('[data-rea-db-speed]').forEach((b) => b.addEventListener('click', () => {
+    if (!demoPlay) return;
+    demoPlay.speed = Number(b.dataset.reaDbSpeed);
+    if (demoPlay.speed > 1.5) narrator.stop(); // 快轉時不念解說
+    renderDemoBar();
+  }));
+  $<HTMLInputElement>('[data-rea-db-seek]').addEventListener('input', (e) => {
+    if (!demoPlay) return;
+    seekDemo((Number((e.target as HTMLInputElement).value) / 1000) * demoPlay.dur);
+  });
+  $('[data-rea-db-exit]').addEventListener('click', () => restart());
+  $('[data-rea-db-fly]').addEventListener('click', () => start(false));
+  function hideDemoBar(): void {
+    demoPlay = null;
+    demoBar.hidden = true;
+    root.classList.remove('rea-demoing');
+  }
+
   const subject = (): Subject => subjectById(prefs.subjectId) ?? SUBJECTS[3];
 
   // ---------- 側欄 ----------
@@ -414,6 +489,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     root.dataset.reaPhase = 'setup';
     $('[data-rea-countdown]').textContent = '';
     stage.classList.remove('rea-demo');
+    hideDemoBar();
     narrator.stop();
     hideCaption();
     rotor.silence();
@@ -516,11 +592,26 @@ export function createReaApp(root: HTMLElement): ReaApp {
     endResult();
     session = new FlightSession({ subject: s, airframeId: prefs.airframeId, mode: isDemo ? 'position' : prefs.mode, wind: { ...prefs.wind } });
     demo = isDemo ? new Autopilot(AIRFRAMES[prefs.airframeId]) : null;
+    hideDemoBar();
+    if (isDemo && demo) {
+      // 背景把整個科目先飛完（同一套物理與評等），再依時間播放，才能暫停、變速、拖曳
+      const ap = demo;
+      const sess = session;
+      const maxSteps = Math.round((8 * 60) / PHYSICS_DT);
+      for (let i = 0; i < maxSteps && !sess.done; i++) sess.stepOnce(ap.command(sess.runner, sess.state));
+      const stepT = s.steps.map((_st, i) => sess.samples.find((smp) => smp.stepIndex >= i)?.t ?? sess.t);
+      demoPlay = { t: 0, dur: sess.t, speed: DEMO_SPEEDS.includes(demoSpeed) ? demoSpeed : demoSpeed > 1 ? demoSpeed : 1, playing: true, lastIdx: -1, stepT };
+      (prefs.touchSticks ? $('[data-rea-deck]') : stage).appendChild(demoBar);
+      demoBar.hidden = false;
+      root.classList.add('rea-demoing');
+      renderDemoBar();
+    }
     scene.buildField(fieldOf(s.field), s);
     scene.buildDrone(AIRFRAMES[prefs.airframeId]);
     scene.clearTrail();
-    phase = 'countdown';
-    countdownT = isDemo ? 0.01 : 3;
+    phase = isDemo ? 'demo' : 'countdown';
+    root.dataset.reaPhase = isDemo ? 'flying' : 'countdown';
+    countdownT = isDemo ? 0 : 3;
     stage.classList.toggle('rea-demo', isDemo);
     // 使用者剛按了按鈕：此時才能喚醒音訊（瀏覽器規定）
     rotor.unlock();
@@ -528,7 +619,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     narrator.stop();
     hideCaption();
     // 加速示範（自動化測試用）不念解說
-    if (isDemo && demoSpeed === 1) narrator.speak(introNarration(s), true);
+    if (isDemo && demoPlay && demoPlay.speed <= 1.5) narrator.speak(introNarration(s), true);
   }
 
   function restart(): void {
@@ -538,6 +629,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     phase = 'setup';
     $('[data-rea-countdown]').textContent = '';
     stage.classList.remove('rea-demo');
+    hideDemoBar();
     narrator.stop();
     hideCaption();
     rotor.silence();
@@ -554,7 +646,9 @@ export function createReaApp(root: HTMLElement): ReaApp {
     scene.setTrailFromSamples(session.samples);
     showResult();
     rotor.silence();
-    if (demo && demoSpeed === 1) narrator.speak(result.failure ? '示範結束。' : '示範完成。接下來換你試試看，按「開始飛」就可以練習這個科目。');
+    const demoNarrate = !!demoPlay && demoPlay.speed <= 1.5;
+    hideDemoBar();
+    if (demo && demoNarrate) narrator.speak(result.failure ? '示範結束。' : '示範完成。接下來換你試試看，按「開始飛」就可以練習這個科目。');
     // 真人飛完（示範不算）：沿用既有機制，已登入學員時把成績摘要存入成長日誌「模擬練飛紀錄」
     if (!demo) {
       const s = subject();
@@ -730,6 +824,33 @@ export function createReaApp(root: HTMLElement): ReaApp {
         ? '🚨 緊急返航！立刻停住，再飛回較近的八字內圈降落'
         : step ? `下一步：${step.label}${holdLeft}` : '完成';
       if (sess.done) finish();
+    } else if (phase === 'demo' && session && demoPlay) {
+      const dp = demoPlay;
+      if (dp.playing) dp.t = Math.min(dp.dur, dp.t + dt * dp.speed);
+      const smp = sampleAt(session.samples, dp.t);
+      if (smp) {
+        cmd = smp.cmd;
+        scene.setDrone(smp.x, smp.y, smp.h, smp.heading, smp.pitchDeg, smp.rollDeg, smp.h > 0.02 || dp.t < dp.dur - 0.5, dt);
+        if (dp.playing) scene.pushTrail(smp.x, smp.y, smp.h);
+        const st = subject().steps[smp.stepIndex];
+        hint.textContent = st ? `下一步：${st.label}` : '完成';
+        $('[data-rea-db-step]').textContent = st?.label ?? '完成';
+        // 換步驟時念解說（×1、×1.5 才念）
+        if (dp.playing && dp.speed <= 1.5 && smp.stepIndex !== narratedStep && st) {
+          narratedStep = smp.stepIndex;
+          narrator.speak(stepNarration(st));
+        }
+        const hud = $('[data-rea-hud]');
+        hud.textContent = `高度 ${smp.h.toFixed(1)} m・機頭 ${Math.round(norm360(smp.heading))}°`;
+        hud.dataset.alt = smp.h.toFixed(3);
+        hud.dataset.x = smp.x.toFixed(3);
+        hud.dataset.y = smp.y.toFixed(3);
+        hud.dataset.heading = smp.heading.toFixed(1);
+      }
+      $('[data-rea-db-time]').textContent = `${fmt(dp.t)} / ${fmt(dp.dur)}`;
+      const seek = $<HTMLInputElement>('[data-rea-db-seek]');
+      if (document.activeElement !== seek) seek.value = String(Math.round((dp.t / Math.max(0.01, dp.dur)) * 1000));
+      if (dp.t >= dp.dur && dp.playing) finish();
     } else if (phase === 'result' && replay) {
       if (replay.playing) {
         replay.t = Math.min(replay.result.durationS, replay.t + dt * replay.speed);
@@ -745,7 +866,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
       }
     }
 
-    if (session && phase !== 'result') {
+    if (session && phase !== 'result' && phase !== 'demo') {
       const st = session.state;
       scene.setDrone(st.x, st.y, st.h, st.heading, st.pitchDeg, st.rollDeg, !st.landed, dt);
       scene.setWindSock(session.wind.at(session.t));
@@ -762,6 +883,9 @@ export function createReaApp(root: HTMLElement): ReaApp {
     const afId = session?.opts.airframeId ?? prefs.airframeId;
     if (session && (phase === 'flying' || phase === 'countdown')) {
       rotor.update(rotorTarget(afId, cmd, session.state));
+    } else if (phase === 'demo' && session && demoPlay?.playing) {
+      const smp = sampleAt(session.samples, demoPlay.t);
+      rotor.update(smp ? rotorTarget(afId, smp.cmd, { armed: true, landed: smp.h < 0.02, crashed: false, pitchDeg: smp.pitchDeg, rollDeg: smp.rollDeg }) : { spin: 0, freq: 0, gain: 0 });
     } else if (phase === 'result' && replay?.playing) {
       const smp = sampleAt(replay.samples, replay.t);
       rotor.update(smp ? rotorTarget(afId, smp.cmd, { armed: true, landed: smp.h < 0.02, crashed: false, pitchDeg: smp.pitchDeg, rollDeg: smp.rollDeg }) : { spin: 0, freq: 0, gain: 0 });
