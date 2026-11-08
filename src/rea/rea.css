@@ -195,3 +195,11 @@ body:has(.rea-touchmode) [data-action="open-link"] { display:none !important; }
 /* 觸控模式：播放列放在操控盤裡，示範時暫時收起搖桿 */
 .rea-deck .rea-demobar { position:static; transform:none; width:auto; margin-top:8px; box-shadow:none; }
 .rea-demoing .rea-deck-sticks { display:none; }
+
+/* 2026-11-08：趣味挑戰結果 */
+.rea-ch-result { padding:8px 4px; }
+.rea-ch-stars { font-size:40px; color:#f4c430; letter-spacing:6px; margin:4px 0; }
+.rea-ch-fail { color:#e63946; font-weight:700; }
+/* 卡片圖固定比例（直式小圖不會把卡片撐高） */
+.rea-subject .rea-subj-pic { position:relative; overflow:hidden; min-height:0; }
+.rea-subject .rea-subj-pic svg { position:absolute; inset:0; }

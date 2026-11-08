@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import type { Field, Subject, Vec2 } from './courses';
 import type { Airframe } from './physics';
 import { animateDrone, buildDroneModel, type DroneModel } from './drone-model';
+import { CAGE, type Challenge } from './challenges';
 
 const FIELD_TO_3D = (p: Vec2, h = 0) => new THREE.Vector3(p.x, h, -p.y);
 
@@ -32,6 +33,9 @@ export class ExamScene {
   private model: DroneModel | null = null;
   private clock = 0;
   private spin = 0;
+  /** 2026-11-08：趣味挑戰的目標物（氣球、圈門）與足球網籠 */
+  private challengeGroup = new THREE.Group();
+  private targetMeshes: THREE.Object3D[] = [];
   private trail: THREE.Line;
   private trailPts: THREE.Vector3[] = [];
   private ghostTrail: THREE.Line;
@@ -49,7 +53,7 @@ export class ExamScene {
     this.renderer.domElement.setAttribute('data-rea-canvas', '');
     this.scene.background = new THREE.Color(0xbfd9ee);
     this.scene.fog = new THREE.Fog(0xbfd9ee, 120, 600);
-    this.scene.add(this.hemi, this.sun, this.fieldGroup, this.drone, this.sock);
+    this.scene.add(this.hemi, this.sun, this.fieldGroup, this.drone, this.sock, this.challengeGroup);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40 });
@@ -198,6 +202,95 @@ export class ExamScene {
     this.drone.add(this.model.group);
     this.drone.userData.lift = this.model.lift;
     this.spin = 0;
+  }
+
+  /** 建立趣味挑戰的目標物；傳 null 清除。足球挑戰另外蓋網籠與綠色球場。 */
+  buildChallenge(ch: Challenge | null): void {
+    this.challengeGroup.clear();
+    this.targetMeshes = [];
+    if (!ch) return;
+    const g = this.challengeGroup;
+    if (ch.arena === 'cage') {
+      const w = CAGE.xMax - CAGE.xMin, d = CAGE.yMax - CAGE.yMin, H = CAGE.height;
+      const cx = (CAGE.xMin + CAGE.xMax) / 2, cy = (CAGE.yMin + CAGE.yMax) / 2;
+      // 綠色球場與白線
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ color: 0x2f9e44 }));
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(cx, 0.012, -cy); // 比起降點 H 低一點，H 才看得到
+      floor.receiveShadow = true;
+      g.add(floor);
+      const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const mid = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.08), lineMat);
+      mid.rotation.x = -Math.PI / 2; mid.position.set(cx, 0.04, -cy);
+      const circle = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.48, 64), lineMat);
+      circle.rotation.x = -Math.PI / 2; circle.position.set(cx, 0.04, -cy);
+      g.add(mid, circle);
+      // 網子：四面牆＋屋頂（細格線），四角紅色立柱
+      const net = new THREE.MeshBasicMaterial({ color: 0xdfe6ec, wireframe: true, transparent: true, opacity: 0.35 });
+      const wall = (ww: number, hh: number, x: number, y: number, z: number, ry: number) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(ww, hh, Math.round(ww * 2), Math.round(hh * 2)), net);
+        m.position.set(x, y, z); m.rotation.y = ry; g.add(m);
+      };
+      wall(w, H, cx, H / 2, -CAGE.yMax, 0);
+      wall(w, H, cx, H / 2, -CAGE.yMin, 0);
+      wall(d, H, CAGE.xMin, H / 2, -cy, Math.PI / 2);
+      wall(d, H, CAGE.xMax, H / 2, -cy, Math.PI / 2);
+      const roof = new THREE.Mesh(new THREE.PlaneGeometry(w, d, Math.round(w * 2), Math.round(d * 2)), net);
+      roof.rotation.x = -Math.PI / 2; roof.position.set(cx, H, -cy); g.add(roof);
+      const postMat = new THREE.MeshLambertMaterial({ color: 0xd62839 });
+      for (const x of [CAGE.xMin, CAGE.xMax]) for (const y of [CAGE.yMin, CAGE.yMax]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, H, 0.15), postMat);
+        post.position.set(x, H / 2, -y); g.add(post);
+      }
+      // 頂部紅色框梁
+      for (const [ax, ay, bx, by] of [[CAGE.xMin, CAGE.yMin, CAGE.xMax, CAGE.yMin], [CAGE.xMin, CAGE.yMax, CAGE.xMax, CAGE.yMax], [CAGE.xMin, CAGE.yMin, CAGE.xMin, CAGE.yMax], [CAGE.xMax, CAGE.yMin, CAGE.xMax, CAGE.yMax]]) {
+        const len = Math.hypot(bx - ax, by - ay);
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(ax === bx ? 0.12 : len, 0.12, ax === bx ? len : 0.12), postMat);
+        beam.position.set((ax + bx) / 2, H, -(ay + by) / 2); g.add(beam);
+      }
+    }
+    for (const t of ch.targets) {
+      if (t.kind === 'balloon') {
+        const grp = new THREE.Group();
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(t.r, 24, 16), new THREE.MeshStandardMaterial({ color: 0xe63946, roughness: 0.25, metalness: 0.05 }));
+        ball.scale.set(1, 1.18, 1);
+        const knot = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 8), ball.material);
+        knot.position.y = -t.r * 1.2; knot.rotation.x = Math.PI;
+        const str = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, t.h - t.r * 1.2, 4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        str.position.y = -(t.h + t.r * 1.2) / 2;
+        grp.add(ball, knot, str);
+        grp.position.set(t.x, t.h, -t.y);
+        ball.castShadow = true;
+        g.add(grp);
+        this.targetMeshes.push(grp);
+      } else {
+        const grp = new THREE.Group();
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(t.r, t.goal ? 0.12 : 0.07, 12, 48), new THREE.MeshStandardMaterial({ color: t.goal ? 0xf4c430 : 0xff8c1a, emissive: 0x000000, roughness: 0.4 }));
+        ring.name = 'ring';
+        ring.castShadow = true;
+        // 支架：從地面到圈底
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, Math.max(0.05, t.h - t.r), 6), new THREE.MeshLambertMaterial({ color: 0x444b55 }));
+        pole.position.y = -(t.r + (t.h - t.r) / 2);
+        grp.add(ring, pole);
+        grp.position.set(t.x, t.h, -t.y);
+        // 圈門面向：機頭角 → 繞 y 軸（圈面法線對齊行進方向）
+        grp.rotation.y = (-(t.facing ?? 0) * Math.PI) / 180;
+        g.add(grp);
+        this.targetMeshes.push(grp);
+      }
+    }
+  }
+
+  /** 更新目標狀態：已完成（氣球消失、圈門變綠淡化）、下一個（發亮）。 */
+  updateChallenge(hit: boolean[], next: number): void {
+    this.targetMeshes.forEach((m, i) => {
+      const ring = m.getObjectByName('ring') as THREE.Mesh | undefined;
+      if (!ring) { m.visible = !hit[i]; return; }
+      const mat = ring.material as THREE.MeshStandardMaterial;
+      if (hit[i]) { mat.color.setHex(0x2ec27e); mat.transparent = true; mat.opacity = 0.35; mat.emissive.setHex(0x000000); }
+      else if (i === next) { mat.emissive.setHex(0x775500); mat.emissiveIntensity = 0.6 + 0.4 * Math.sin(this.clock * 6); }
+      else { mat.emissive.setHex(0x000000); }
+    });
   }
 
   setDrone(x: number, y: number, h: number, headingDeg: number, pitchDeg: number, rollDeg: number, spinning: boolean, dt: number): void {

@@ -24,9 +24,10 @@ import { touchToStick, sticksToCommand, type StickXY } from '../phone/stick-math
 import { IDLE_LEFT, IDLE_RIGHT, TOUR, describeLeft, describeRight, tourSvg } from './touch-deck';
 import { subjectSvg } from './subject-diagram';
 import { PHYSICS_DT } from './session';
+import { CHALLENGES, ChallengeRun, FIELD_CAGE, challengeById, challengeSubject, type Challenge } from './challenges';
 
 // 2026-11-08：新增 demo（示範播放中：背景已試飛完成，畫面依時間播放，可暫停、變速、拖曳）
-type Phase = 'setup' | 'countdown' | 'flying' | 'demo' | 'result';
+type Phase = 'setup' | 'countdown' | 'flying' | 'demo' | 'challenge' | 'result';
 type StickMode = 'mode2' | 'mode1';
 
 interface Prefs {
@@ -157,7 +158,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <div class="rea-subjects" data-rea-subjects></div>
       </div>
       <div data-rea-pane="challenge" hidden>
-        <p class="rea-muted">參考網站另有射氣球、平移矩形、刺氣球、8 字闖關、繞角錐、小五邊等趣味挑戰與無人機足球。<b>本版尚未實作</b>，先專注考照科目。</p>
+        <p class="rea-muted">計時挑戰：越快完成星星越多（撞網每次加罰 2 秒）。選好後按「開始挑戰」。</p>
+        <div class="rea-subjects" data-rea-challenges></div>
       </div>
       <h2 class="rea-h2">選機型 <label class="rea-switch"><input type="checkbox" data-rea-af-fixed> 固定（不隨科目）</label></h2>
       <div class="rea-airframes" data-rea-airframes></div>
@@ -366,6 +368,75 @@ export function createReaApp(root: HTMLElement): ReaApp {
     root.classList.remove('rea-demoing');
   }
 
+  // ---------- 趣味挑戰（2026-11-08） ----------
+  let chSel: Challenge | null = null; // 目前選的挑戰（選了挑戰，「開始」就是開始挑戰）
+  let chRun: ChallengeRun | null = null;
+  let chCountdown = 0;
+  function chIcon(ch: Challenge): string {
+    // 卡片小圖：俯視目標位置（自行繪製）
+    const pts = ch.targets;
+    const xs = pts.map((t) => t.x), ys = pts.map((t) => t.y);
+    const x0 = Math.min(-3, ...xs) - 2, x1 = Math.max(3, ...xs) + 2, y0 = Math.min(-2, ...ys) - 2, y1 = Math.max(...ys) + 2;
+    const W = x1 - x0, H = y1 - y0, X = (x: number) => (x - x0).toFixed(1), Y = (y: number) => (y1 - y).toFixed(1);
+    const path = ch.ordered ? `<path d="M${X(0)} ${Y(0)} ${pts.map((t) => `L${X(t.x)} ${Y(t.y)}`).join(' ')}" fill="none" stroke="#1769aa" stroke-width="${(W / 60).toFixed(2)}" stroke-dasharray="${(W / 40).toFixed(2)}"/>` : '';
+    const marks = pts.map((t, i) => t.kind === 'balloon'
+      ? `<circle cx="${X(t.x)}" cy="${Y(t.y)}" r="${(W / 22).toFixed(2)}" fill="#e63946"/>`
+      : `<circle cx="${X(t.x)}" cy="${Y(t.y)}" r="${(W / 26).toFixed(2)}" fill="none" stroke="${t.goal ? '#f4c430' : '#ff8c1a'}" stroke-width="${(W / 50).toFixed(2)}"/>${ch.ordered ? `<text x="${X(t.x)}" y="${(Number(Y(t.y)) + W / 70).toFixed(2)}" font-size="${(W / 24).toFixed(2)}" text-anchor="middle" fill="#17212b" font-weight="700">${i + 1}</text>` : ''}`).join('');
+    const bg = ch.arena === 'cage' ? '#2f9e44' : '#c9cdd1';
+    return `<svg viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" preserveAspectRatio="xMidYMid meet"><rect width="100%" height="100%" fill="${bg}"/>${path}<circle cx="${X(0)}" cy="${Y(0)}" r="${(W / 30).toFixed(2)}" fill="#fff"/>${marks}</svg>`;
+  }
+  function renderChallenges(): void {
+    $('[data-rea-challenges]').innerHTML = CHALLENGES.map((ch) => `
+      <button class="rea-subject${chSel?.id === ch.id ? ' on' : ''}" data-rea-ch="${ch.id}">
+        <span class="rea-subj-pic">${chIcon(ch)}</span>
+        <b>${esc(ch.name)}</b><small>${ch.arena === 'cage' ? '室內網籠' : '考場'}・${ch.targets.length} 個目標</small>
+      </button>`).join('');
+  }
+  function stopChallenge(): void {
+    chRun = null;
+    scene.buildChallenge(null);
+  }
+  function startChallenge(ch: Challenge): void {
+    endResult();
+    hideDemoBar();
+    session = null;
+    demo = null;
+    narrator.stop();
+    hideCaption();
+    chRun = new ChallengeRun(ch, AIRFRAMES[prefs.airframeId], prefs.mode, { ...prefs.wind });
+    scene.buildField(ch.arena === 'cage' ? FIELD_CAGE : fieldOf('I'), challengeSubject(ch));
+    scene.buildChallenge(ch);
+    scene.buildDrone(AIRFRAMES[prefs.airframeId]);
+    scene.clearTrail();
+    phase = 'challenge';
+    root.dataset.reaPhase = 'countdown';
+    chCountdown = 3;
+    stage.classList.remove('rea-demo');
+    rotor.unlock();
+    if (prefs.narration) narrator.speak(`${ch.name}挑戰。${ch.brief}`, true);
+  }
+  function showChallengeResult(): void {
+    if (!chRun) return;
+    const r = chRun.result();
+    phase = 'result';
+    root.dataset.reaPhase = 'result';
+    rotor.silence();
+    const stars = r.finished ? '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars) : '';
+    const box = $('[data-rea-result]');
+    box.innerHTML = `
+      <div class="rea-result-head"><b>${esc(chRun.ch.name)}</b>・趣味挑戰</div>
+      <div class="rea-ch-result">
+        ${r.finished ? `<p class="rea-ch-stars">${stars}</p><p>完成時間 <b>${fmt(r.timeS)}</b>（${r.timeS.toFixed(1)} 秒）${r.bumps ? `・撞網 ${r.bumps} 次（加罰 ${r.bumps * 2} 秒）` : ''}</p>`
+          : `<p class="rea-ch-fail">挑戰中止：${esc(r.failure ?? '')}</p><p>完成 ${r.hits} / ${r.total} 個目標</p>`}
+        <p class="rea-muted">三星：${chRun.ch.stars[0]} 秒內・兩星：${chRun.ch.stars[1]} 秒內・一星：${chRun.ch.stars[2]} 秒內</p>
+      </div>
+      <div class="rea-result-actions"><button class="rea-primary" data-rea-ch-again>再挑戰一次</button><button class="rea-secondary" data-rea-ch-close>回到準備</button></div>`;
+    box.hidden = false;
+    box.querySelector('[data-rea-ch-again]')!.addEventListener('click', () => { const ch = chRun!.ch; startChallenge(ch); box.hidden = true; });
+    box.querySelector('[data-rea-ch-close]')!.addEventListener('click', () => { box.hidden = true; restart(); });
+    if (prefs.narration) narrator.speak(r.finished ? `挑戰完成，花了${Math.round(r.timeS)}秒，得到${r.stars}顆星。` : `挑戰中止，${r.failure ?? ''}。`, true);
+  }
+
   const subject = (): Subject => subjectById(prefs.subjectId) ?? SUBJECTS[3];
 
   // ---------- 側欄 ----------
@@ -449,9 +520,11 @@ export function createReaApp(root: HTMLElement): ReaApp {
 
   function renderHeader(): void {
     const s = subject();
-    $('[data-rea-title]').textContent = `術科模擬器・${s.name}`;
-    $('[data-rea-start]').textContent = `開始飛・${s.name}`;
-    $('[data-rea-brief]').textContent = s.brief;
+    $('[data-rea-title]').textContent = chSel ? `趣味挑戰・${chSel.name}` : `術科模擬器・${s.name}`;
+    $('[data-rea-start]').textContent = chSel ? `開始挑戰・${chSel.name}` : `開始飛・${s.name}`;
+    $('[data-rea-brief]').textContent = chSel ? chSel.brief : s.brief;
+    $<HTMLButtonElement>('[data-rea-demo]').hidden = !!chSel;
+    $<HTMLButtonElement>('[data-rea-deck-demo]').hidden = !!chSel;
     $('[data-rea-mode]').textContent = prefs.mode === 'position' ? '定位模式' : '姿態模式';
     $('[data-rea-view]').textContent = scene.view === 'drone' ? '飛機視角 V' : scene.view === 'top' ? '俯視 V' : '考生視角 V';
   }
@@ -459,6 +532,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
   function refreshAll(): void {
     renderFilter();
     renderSubjects();
+    renderChallenges();
     renderAirframes();
     renderSettings();
     renderHeader();
@@ -469,7 +543,13 @@ export function createReaApp(root: HTMLElement): ReaApp {
   /** 待機畫面：機體停在 H 上。 */
   function prepareIdle(): void {
     const s = subject();
-    scene.buildField(fieldOf(s.field), s);
+    if (chSel) {
+      scene.buildField(chSel.arena === 'cage' ? FIELD_CAGE : fieldOf('I'), challengeSubject(chSel));
+      scene.buildChallenge(chSel);
+    } else {
+      scene.buildChallenge(null);
+      scene.buildField(fieldOf(s.field), s);
+    }
     scene.buildDrone(AIRFRAMES[prefs.airframeId]);
     scene.setDrone(0, 0, 0, 0, 0, 0, false, 0);
     scene.clearTrail();
@@ -490,6 +570,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $('[data-rea-countdown]').textContent = '';
     stage.classList.remove('rea-demo');
     hideDemoBar();
+    chRun = null;
     narrator.stop();
     hideCaption();
     rotor.silence();
@@ -503,7 +584,15 @@ export function createReaApp(root: HTMLElement): ReaApp {
     if (pick) {
       stopForChange();
       prefs.subjectId = pick.dataset.reaPick!;
+      chSel = null;
       if (!prefs.airframeFixed) prefs.airframeId = subject().defaultAirframe;
+      refreshAll();
+      return;
+    }
+    const chPick = t.closest<HTMLElement>('[data-rea-ch]');
+    if (chPick) {
+      stopForChange();
+      chSel = challengeById(chPick.dataset.reaCh!) ?? null;
       refreshAll();
       return;
     }
@@ -587,6 +676,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
 
   // ---------- 飛行流程 ----------
   function start(isDemo: boolean): void {
+    if (chSel && !isDemo) { startChallenge(chSel); return; }
+    stopChallenge();
     const s = subject();
     if (!s.implemented) return;
     endResult();
@@ -630,6 +721,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $('[data-rea-countdown]').textContent = '';
     stage.classList.remove('rea-demo');
     hideDemoBar();
+    chRun = null;
     narrator.stop();
     hideCaption();
     rotor.silence();
@@ -824,6 +916,30 @@ export function createReaApp(root: HTMLElement): ReaApp {
         ? '🚨 緊急返航！立刻停住，再飛回較近的八字內圈降落'
         : step ? `下一步：${step.label}${holdLeft}` : '完成';
       if (sess.done) finish();
+    } else if (phase === 'challenge' && chRun) {
+      const run = chRun;
+      cmd = pilotCommand();
+      if (chCountdown > 0) {
+        chCountdown -= dt;
+        $('[data-rea-countdown]').textContent = chCountdown > 0 ? String(Math.ceil(chCountdown)) : '';
+        hint.textContent = '3、2、1，開始！左桿往上推起飛';
+        if (chCountdown <= 0) root.dataset.reaPhase = 'flying';
+      } else {
+        run.advance(dt, cmd);
+        const st = run.state;
+        scene.pushTrail(st.x, st.y, st.h);
+        const nx = run.next;
+        hint.textContent = `目標 ${run.hits} / ${run.ch.targets.length}・${fmt(run.t)}${run.bumps ? `・撞網 ${run.bumps}` : ''}${nx >= 0 ? `・下一個：${run.ch.targets[nx].goal ? '球門' : `第 ${nx + 1} 個圈`}` : ''}`;
+        if (run.finished) showChallengeResult();
+      }
+      const st = run.state;
+      scene.setDrone(st.x, st.y, st.h, st.heading, st.pitchDeg, st.rollDeg, !st.landed, dt);
+      scene.updateChallenge(run.hit, run.next);
+      const hud = $('[data-rea-hud]');
+      hud.textContent = `高度 ${st.h.toFixed(1)} m・速度 ${horizontalSpeed(st).toFixed(1)} m/s・機頭 ${Math.round(norm360(st.heading))}°`;
+      hud.dataset.alt = st.h.toFixed(3);
+      hud.dataset.x = st.x.toFixed(3);
+      hud.dataset.y = st.y.toFixed(3);
     } else if (phase === 'demo' && session && demoPlay) {
       const dp = demoPlay;
       if (dp.playing) dp.t = Math.min(dp.dur, dp.t + dt * dp.speed);
@@ -883,6 +999,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
     const afId = session?.opts.airframeId ?? prefs.airframeId;
     if (session && (phase === 'flying' || phase === 'countdown')) {
       rotor.update(rotorTarget(afId, cmd, session.state));
+    } else if (phase === 'challenge' && chRun) {
+      rotor.update(rotorTarget(afId, chRun.lastCmd, chRun.state));
     } else if (phase === 'demo' && session && demoPlay?.playing) {
       const smp = sampleAt(session.samples, demoPlay.t);
       rotor.update(smp ? rotorTarget(afId, smp.cmd, { armed: true, landed: smp.h < 0.02, crashed: false, pitchDeg: smp.pitchDeg, rollDeg: smp.rollDeg }) : { spin: 0, freq: 0, gain: 0 });
