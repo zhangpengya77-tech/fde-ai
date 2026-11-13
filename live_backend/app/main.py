@@ -752,6 +752,8 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         Mount("/pid-lab", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "pid-lab"), html=True, check_dir=False), name="pid-lab"),
         # F450 數位孿生（2026-11-04）：純靜態互動拆解頁，獨立入口；不影響其他路由。
         Mount("/f450-twin", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "f450-twin"), html=True, check_dir=False), name="f450-twin"),
+        # 2026-11-13：無人機空域查詢（獨立靜態頁）
+        Mount("/airspace", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "airspace"), html=True, check_dir=False), name="airspace"),
     ]
     app = Starlette(routes=routes)
     app.state.pid_lab = pid_lab
