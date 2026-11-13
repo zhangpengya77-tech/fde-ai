@@ -128,9 +128,13 @@ class GcsPageSafetyTests(GcsTestBase):
             self.assertIn(f'id="{section_id}"', self.html)
 
     def test_no_control_or_write_action_is_enabled(self):
-        buttons = self.html.count("<button")
-        disabled = self.html.count("<button type=\"button\" disabled>")
-        self.assertEqual(buttons, disabled)
+        import re
+
+        buttons = re.findall(r"<button\b[^>]*>", self.html)
+        self.assertTrue(buttons)
+        # 頁面載入時所有按鈕都停用；只有「連線」「讀取參數」「匯出」「中斷」會在條件成立後由 gcs.js 開啟。
+        for tag in buttons:
+            self.assertRegex(tag, r"\sdisabled\b", tag)
         for forbidden in ("ARM</button>", "起飛</button>", "寫入</button>"):
             self.assertNotIn(forbidden, self.html)
 
@@ -163,3 +167,22 @@ class GcsEntryLinkTests(GcsTestBase):
         request.user = make_teacher("t2@example.com")
         self.assertEqual(evaluate_access(request), ALLOWED)
         self.assertEqual(gcs_entry(request), {"fde_gcs_url": GCS_URL})
+
+
+class MavlinkDefinitionsInSyncTests(TestCase):
+    """defs.js 必須與產生器輸出一致（需要 pymavlink；正式環境沒有安裝時略過）。"""
+
+    def test_defs_js_matches_generator_output(self):
+        import importlib.util
+        from pathlib import Path
+
+        if importlib.util.find_spec("pymavlink") is None:
+            self.skipTest("pymavlink 未安裝（僅開發環境需要）")
+        from .tools import gen_mavlink_defs
+
+        defs_path = Path(__file__).resolve().parent / "static" / "gcs_portal" / "mavlink" / "defs.js"
+        current = defs_path.read_text(encoding="utf-8")
+        generated = gen_mavlink_defs.render()
+        if "PYMAVLINK_VERSION = %s" % __import__("json").dumps(__import__("importlib.metadata").metadata.version("pymavlink")) not in current:
+            self.skipTest("本機 pymavlink 版本與 defs.js 不同，請重新產生後再比對")
+        self.assertEqual(current, generated)

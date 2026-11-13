@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FDE-AI 地面站（FDE-GCS）</title>
   <link rel="stylesheet" href="{% static 'gcs_portal/gcs.css' %}">
-  <script src="{% static 'gcs_portal/gcs.js' %}" defer></script>
+  <script type="module" src="{% static 'gcs_portal/gcs.js' %}"></script>
 </head>
 <body class="gcs-root" data-gcs-role="{{ gcs_role }}">
   <header class="gcs-header">
@@ -34,29 +34,31 @@
       <dl class="gcs-facts">
         <dt>瀏覽器 Web Serial</dt><dd id="gcsSerialSupport">檢查中…</dd>
         <dt>COM 埠</dt><dd>使用者每次手動選擇，不自動掃描、不記住授權</dd>
-        <dt>Baud Rate</dt><dd>115200（預設）</dd>
-        <dt>Heartbeat</dt><dd>未連線</dd>
-        <dt>System ID／Component ID</dt><dd>—</dd>
+        <dt><label for="gcsBaud">Baud Rate</label></dt>
+        <dd><select id="gcsBaud"><option value="57600">57600</option><option value="115200" selected>115200（USB 預設）</option><option value="921600">921600</option></select></dd>
+        <dt>Heartbeat</dt><dd id="gcsHeartbeat" data-state="disconnected">未連線</dd>
+        <dt>System ID／Component ID</dt><dd id="gcsIds">—</dd>
       </dl>
       <div class="gcs-actions">
-        <button type="button" disabled>連線（P2 開放）</button>
-        <button type="button" disabled>中斷</button>
+        <button type="button" id="gcsConnect" disabled>選擇 USB 並連線</button>
+        <button type="button" id="gcsDisconnect" disabled>中斷</button>
       </div>
+      <p class="gcs-link-message" id="gcsLinkMessage" role="status" aria-live="polite">請先選擇連線模式。</p>
       <p class="gcs-note">使用真機前，請先關閉 Mission Planner、QGC 等其他地面站，一個 COM 埠同一時間只能給一個程式使用。</p>
     </section>
 
     <section class="gcs-panel" id="gcs-dashboard" aria-labelledby="gcs-dashboard-title">
       <h2 id="gcs-dashboard-title"><span>02</span>飛控儀表板</h2>
       <dl class="gcs-telemetry">
-        <div><dt>飛控類型</dt><dd>—</dd><small>HEARTBEAT</small></div>
-        <div><dt>韌體版本</dt><dd>—</dd><small>AUTOPILOT_VERSION</small></div>
-        <div><dt>飛行模式</dt><dd>—</dd><small>HEARTBEAT</small></div>
-        <div><dt>ARM 狀態</dt><dd>—</dd><small>HEARTBEAT</small></div>
-        <div><dt>電池</dt><dd>—</dd><small>SYS_STATUS</small></div>
-        <div><dt>GPS／衛星數</dt><dd>—</dd><small>GPS_RAW_INT</small></div>
-        <div><dt>高度</dt><dd>—</dd><small>GLOBAL_POSITION_INT</small></div>
-        <div><dt>Roll／Pitch／Yaw</dt><dd>—</dd><small>ATTITUDE</small></div>
-        <div><dt>遙測更新時間</dt><dd>—</dd><small>本機時鐘</small></div>
+        <div><dt>飛控類型</dt><dd data-key="vehicle">—</dd><small>HEARTBEAT</small></div>
+        <div><dt>韌體版本</dt><dd data-key="firmware">—</dd><small>AUTOPILOT_VERSION</small></div>
+        <div><dt>飛行模式</dt><dd data-key="mode">—</dd><small>HEARTBEAT</small></div>
+        <div><dt>ARM 狀態</dt><dd data-key="armed">—</dd><small>HEARTBEAT</small></div>
+        <div><dt>電池</dt><dd data-key="battery">—</dd><small>SYS_STATUS</small></div>
+        <div><dt>GPS／衛星數</dt><dd data-key="gps">—</dd><small>GPS_RAW_INT</small></div>
+        <div><dt>高度</dt><dd data-key="altitude">—</dd><small>GLOBAL_POSITION_INT</small></div>
+        <div><dt>Roll／Pitch／Yaw</dt><dd data-key="attitude">—</dd><small>ATTITUDE</small></div>
+        <div><dt>遙測更新時間</dt><dd data-key="updated">—</dd><small>本機時鐘</small></div>
       </dl>
       <p class="gcs-note">所有數值都必須來自真實 MAVLink 訊息；超過 2 秒沒更新的數值會變灰，不保留舊值。真機模式沒有 ARM、切換模式、起飛等控制按鈕。</p>
     </section>
@@ -64,14 +66,18 @@
     <section class="gcs-panel" id="gcs-params" aria-labelledby="gcs-params-title">
       <h2 id="gcs-params-title"><span>03</span>參數管理</h2>
       <div class="gcs-actions">
-        <button type="button" disabled>讀取全部參數（P2 開放）</button>
-        <button type="button" disabled>匯出</button>
+        <button type="button" id="gcsParamRead" disabled>讀取全部參數</button>
+        <button type="button" id="gcsParamExport" disabled>匯出備份</button>
       </div>
-      <table class="gcs-table">
-        <thead><tr><th>參數</th><th>原始值</th><th>目前值</th><th>狀態</th></tr></thead>
-        <tbody><tr><td colspan="4">尚未連線，沒有參數資料。</td></tr></tbody>
-      </table>
-      <p class="gcs-note">寫入只開放教師批准的白名單參數，並且必須：已上鎖（Disarmed）、連線有效、已勾選「已拆槳、已斷電池」、二次確認、寫入後讀回驗證。（P3 開放）</p>
+      <p class="gcs-link-message" id="gcsParamProgress" role="status" aria-live="polite">尚未連線。</p>
+      <input class="gcs-search" id="gcsParamSearch" type="search" placeholder="搜尋參數名稱，例如 ATC_RAT" aria-label="搜尋參數" disabled>
+      <div class="gcs-table-wrap">
+        <table class="gcs-table">
+          <thead><tr><th>參數</th><th>原始值</th><th>目前值</th><th>型別</th></tr></thead>
+          <tbody id="gcsParamBody"><tr><td colspan="4">尚未連線，沒有參數資料。</td></tr></tbody>
+        </table>
+      </div>
+      <p class="gcs-note">「原始值」是這次連線第一次讀到的值；再讀一次時，有變化的參數會標示出來。本階段只讀取，不提供寫入。寫入只開放教師批准的白名單參數，並且必須：已上鎖（Disarmed）、連線有效、已勾選「已拆槳、已斷電池」、二次確認、寫入後讀回驗證。（P3 開放）</p>
     </section>
 
     <section class="gcs-panel" id="gcs-sitl" aria-labelledby="gcs-sitl-title">

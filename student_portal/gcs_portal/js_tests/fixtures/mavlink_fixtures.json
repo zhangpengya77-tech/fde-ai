@@ -1,0 +1,471 @@
+{
+ "pymavlink": "2.4.50",
+ "incoming": [
+  {
+   "version": 2,
+   "name": "HEARTBEAT",
+   "hex": "fd090000000101000000050000000203d103033723",
+   "fields": {
+    "type": 2,
+    "autopilot": 3,
+    "base_mode": 209,
+    "custom_mode": 5,
+    "system_status": 3,
+    "mavlink_version": 3
+   }
+  },
+  {
+   "version": 2,
+   "name": "HEARTBEAT",
+   "hex": "fd090000010101000000000000000203510303f21c",
+   "fields": {
+    "type": 2,
+    "autopilot": 3,
+    "base_mode": 81,
+    "custom_mode": 0,
+    "system_status": 3,
+    "mavlink_version": 3
+   }
+  },
+  {
+   "version": 2,
+   "name": "SYS_STATUS",
+   "hex": "fd1f0000020101010000010000000100000001000000f401a830fe0500000000000000000000000057e7ac",
+   "fields": {
+    "onboard_control_sensors_present": 1,
+    "onboard_control_sensors_enabled": 1,
+    "onboard_control_sensors_health": 1,
+    "load": 500,
+    "voltage_battery": 12456,
+    "current_battery": 1534,
+    "battery_remaining": 87,
+    "drop_rate_comm": 0,
+    "errors_comm": 0,
+    "errors_count1": 0,
+    "errors_count2": 0,
+    "errors_count3": 0,
+    "errors_count4": 0,
+    "onboard_control_sensors_present_extended": 0,
+    "onboard_control_sensors_enabled_extended": 0,
+    "onboard_control_sensors_health_extended": 0
+   }
+  },
+  {
+   "version": 2,
+   "name": "GPS_RAW_INT",
+   "hex": "fd1e000003010118000015cd5b0700000000623c6b0e9644e147c0d401005000780000000000030e7423",
+   "fields": {
+    "time_usec": 123456789,
+    "fix_type": 3,
+    "lat": 241908834,
+    "lon": 1205945494,
+    "alt": 120000,
+    "eph": 80,
+    "epv": 120,
+    "vel": 0,
+    "cog": 0,
+    "satellites_visible": 14,
+    "alt_ellipsoid": 0,
+    "h_acc": 0,
+    "v_acc": 0,
+    "vel_acc": 0,
+    "hdg_acc": 0,
+    "yaw": 0
+   }
+  },
+  {
+   "version": 2,
+   "name": "ATTITUDE",
+   "hex": "fd1c00000401011e0000e8030000cdcccc3dcdcc4cbe0000c03f0ad7233c0ad7a33c8fc2f53c1c22",
+   "fields": {
+    "time_boot_ms": 1000,
+    "roll": 0.1,
+    "pitch": -0.2,
+    "yaw": 1.5,
+    "rollspeed": 0.01,
+    "pitchspeed": 0.02,
+    "yawspeed": 0.03
+   }
+  },
+  {
+   "version": 2,
+   "name": "GLOBAL_POSITION_INT",
+   "hex": "fd1c0000050101210000d0070000623c6b0e9644e147c0d40100d46200000a00fbff000028236bc3",
+   "fields": {
+    "time_boot_ms": 2000,
+    "lat": 241908834,
+    "lon": 1205945494,
+    "alt": 120000,
+    "relative_alt": 25300,
+    "vx": 10,
+    "vy": -5,
+    "vz": 0,
+    "hdg": 9000
+   }
+  },
+  {
+   "version": 2,
+   "name": "PARAM_VALUE",
+   "hex": "fd190000060101160000713d0a3ed20411004154435f5241545f524c4c5f5000000009d4ce",
+   "fields": {
+    "param_id": "ATC_RAT_RLL_P",
+    "param_value": 0.135,
+    "param_type": 9,
+    "param_count": 1234,
+    "param_index": 17
+   }
+  },
+  {
+   "version": 2,
+   "name": "PARAM_VALUE",
+   "hex": "fd1900000701011600000000803fd20400004652414d455f434c415353000000000002516e",
+   "fields": {
+    "param_id": "FRAME_CLASS",
+    "param_value": 1.0,
+    "param_type": 2,
+    "param_count": 1234,
+    "param_index": 0
+   }
+  },
+  {
+   "version": 2,
+   "name": "AUTOPILOT_VERSION",
+   "hex": "fd14000008010194000000000000000000000000000000000000ff0005042571",
+   "fields": {
+    "capabilities": 0,
+    "flight_sw_version": 67436799,
+    "middleware_sw_version": 0,
+    "os_sw_version": 0,
+    "board_version": 0,
+    "flight_custom_version": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "middleware_custom_version": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "os_custom_version": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "vendor_id": 0,
+    "product_id": 0,
+    "uid": 0,
+    "uid2": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "version": 2,
+   "name": "STATUSTEXT",
+   "hex": "fd120000090101fd00000641726475436f707465722056342e352e303477",
+   "fields": {
+    "severity": 6,
+    "text": "ArduCopter V4.5.0",
+    "id": 0,
+    "chunk_seq": 0
+   }
+  },
+  {
+   "version": 2,
+   "name": "COMMAND_ACK",
+   "hex": "fd0200000a01014d00000002811f",
+   "fields": {
+    "command": 512,
+    "result": 0,
+    "progress": 0,
+    "result_param2": 0,
+    "target_system": 0,
+    "target_component": 0
+   }
+  },
+  {
+   "version": 1,
+   "name": "HEARTBEAT",
+   "hex": "fe0900010100050000000203d10303ade0",
+   "fields": {
+    "type": 2,
+    "autopilot": 3,
+    "base_mode": 209,
+    "custom_mode": 5,
+    "system_status": 3,
+    "mavlink_version": 3
+   }
+  },
+  {
+   "version": 1,
+   "name": "HEARTBEAT",
+   "hex": "fe0901010100000000000203510303922f",
+   "fields": {
+    "type": 2,
+    "autopilot": 3,
+    "base_mode": 81,
+    "custom_mode": 0,
+    "system_status": 3,
+    "mavlink_version": 3
+   }
+  },
+  {
+   "version": 1,
+   "name": "SYS_STATUS",
+   "hex": "fe1f02010101010000000100000001000000f401a830fe0500000000000000000000000057390c",
+   "fields": {
+    "onboard_control_sensors_present": 1,
+    "onboard_control_sensors_enabled": 1,
+    "onboard_control_sensors_health": 1,
+    "load": 500,
+    "voltage_battery": 12456,
+    "current_battery": 1534,
+    "battery_remaining": 87,
+    "drop_rate_comm": 0,
+    "errors_comm": 0,
+    "errors_count1": 0,
+    "errors_count2": 0,
+    "errors_count3": 0,
+    "errors_count4": 0
+   }
+  },
+  {
+   "version": 1,
+   "name": "GPS_RAW_INT",
+   "hex": "fe1e0301011815cd5b0700000000623c6b0e9644e147c0d401005000780000000000030e16aa",
+   "fields": {
+    "time_usec": 123456789,
+    "fix_type": 3,
+    "lat": 241908834,
+    "lon": 1205945494,
+    "alt": 120000,
+    "eph": 80,
+    "epv": 120,
+    "vel": 0,
+    "cog": 0,
+    "satellites_visible": 14
+   }
+  },
+  {
+   "version": 1,
+   "name": "ATTITUDE",
+   "hex": "fe1c0401011ee8030000cdcccc3dcdcc4cbe0000c03f0ad7233c0ad7a33c8fc2f53ce582",
+   "fields": {
+    "time_boot_ms": 1000,
+    "roll": 0.1,
+    "pitch": -0.2,
+    "yaw": 1.5,
+    "rollspeed": 0.01,
+    "pitchspeed": 0.02,
+    "yawspeed": 0.03
+   }
+  },
+  {
+   "version": 1,
+   "name": "GLOBAL_POSITION_INT",
+   "hex": "fe1c05010121d0070000623c6b0e9644e147c0d40100d46200000a00fbff000028234bdf",
+   "fields": {
+    "time_boot_ms": 2000,
+    "lat": 241908834,
+    "lon": 1205945494,
+    "alt": 120000,
+    "relative_alt": 25300,
+    "vx": 10,
+    "vy": -5,
+    "vz": 0,
+    "hdg": 9000
+   }
+  },
+  {
+   "version": 1,
+   "name": "PARAM_VALUE",
+   "hex": "fe1906010116713d0a3ed20411004154435f5241545f524c4c5f5000000009716e",
+   "fields": {
+    "param_id": "ATC_RAT_RLL_P",
+    "param_value": 0.135,
+    "param_type": 9,
+    "param_count": 1234,
+    "param_index": 17
+   }
+  },
+  {
+   "version": 1,
+   "name": "PARAM_VALUE",
+   "hex": "fe19070101160000803fd20400004652414d455f434c4153530000000000026599",
+   "fields": {
+    "param_id": "FRAME_CLASS",
+    "param_value": 1.0,
+    "param_type": 2,
+    "param_count": 1234,
+    "param_index": 0
+   }
+  },
+  {
+   "version": 1,
+   "name": "AUTOPILOT_VERSION",
+   "hex": "fe3c0801019400000000000000000000000000000000ff00050400000000000000000000000000000000000000000000000000000000000000000000000000000000f597",
+   "fields": {
+    "capabilities": 0,
+    "flight_sw_version": 67436799,
+    "middleware_sw_version": 0,
+    "os_sw_version": 0,
+    "board_version": 0,
+    "flight_custom_version": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "middleware_custom_version": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "os_custom_version": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "vendor_id": 0,
+    "product_id": 0,
+    "uid": 0
+   }
+  },
+  {
+   "version": 1,
+   "name": "STATUSTEXT",
+   "hex": "fe33090101fd0641726475436f707465722056342e352e30000000000000000000000000000000000000000000000000000000000000000000ecb7",
+   "fields": {
+    "severity": 6,
+    "text": "ArduCopter V4.5.0"
+   }
+  },
+  {
+   "version": 1,
+   "name": "COMMAND_ACK",
+   "hex": "fe030a01014d0002002351",
+   "fields": {
+    "command": 512,
+    "result": 0
+   }
+  }
+ ],
+ "outgoing": [
+  {
+   "name": "HEARTBEAT",
+   "seq": 0,
+   "fields": {
+    "type": 6,
+    "autopilot": 8,
+    "base_mode": 0,
+    "custom_mode": 0,
+    "system_status": 4,
+    "mavlink_version": 3
+   },
+   "hex": "fd09000000ffbe0000000000000006080004033d48"
+  },
+  {
+   "name": "PARAM_REQUEST_LIST",
+   "seq": 1,
+   "fields": {
+    "target_system": 1,
+    "target_component": 1
+   },
+   "hex": "fd02000001ffbe1500000101758d"
+  },
+  {
+   "name": "PARAM_REQUEST_READ",
+   "seq": 2,
+   "fields": {
+    "target_system": 1,
+    "target_component": 1,
+    "param_id": "",
+    "param_index": 42
+   },
+   "hex": "fd04000002ffbe1400002a00010137a8"
+  },
+  {
+   "name": "COMMAND_LONG",
+   "seq": 3,
+   "fields": {
+    "target_system": 1,
+    "target_component": 1,
+    "command": 511,
+    "confirmation": 0,
+    "param1": 30,
+    "param2": 200000,
+    "param3": 0,
+    "param4": 0,
+    "param5": 0,
+    "param6": 0,
+    "param7": 0
+   },
+   "hex": "fd20000003ffbe4c00000000f041005043480000000000000000000000000000000000000000ff0101015c9d"
+  },
+  {
+   "name": "COMMAND_LONG",
+   "seq": 4,
+   "fields": {
+    "target_system": 1,
+    "target_component": 1,
+    "command": 512,
+    "confirmation": 0,
+    "param1": 148,
+    "param2": 0,
+    "param3": 0,
+    "param4": 0,
+    "param5": 0,
+    "param6": 0,
+    "param7": 0
+   },
+   "hex": "fd20000004ffbe4c00000000144300000000000000000000000000000000000000000000000000020101ca0c"
+  }
+ ]
+}

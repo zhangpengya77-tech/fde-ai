@@ -185,7 +185,7 @@
 
 .gcs-telemetry dd {
   margin: 4px 0;
-  font-size: 18px;
+  font-size: 15px;
   color: var(--muted);
 }
 
@@ -265,4 +265,56 @@
   .gcs-grid {
     display: none;
   }
+}
+
+/* P2：連線狀態、即時數值、參數表 */
+.gcs-facts select,
+.gcs-search {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+.gcs-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+}
+
+.gcs-actions button:not(:disabled) {
+  border-color: var(--acc);
+  color: var(--acc);
+  cursor: pointer;
+}
+
+.gcs-link-message {
+  color: var(--fg);
+  font-size: 13px;
+}
+
+#gcsHeartbeat[data-state="ok"] { color: var(--ok); }
+#gcsHeartbeat[data-state="waiting"],
+#gcsHeartbeat[data-state="stale"] { color: var(--warn); }
+#gcsHeartbeat[data-state="lost"] { color: var(--bad); }
+
+.gcs-telemetry dd.gcs-live {
+  color: var(--fg);
+}
+
+.gcs-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0 0 12px;
+}
+
+.gcs-table-wrap .gcs-table {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.gcs-table tr.gcs-changed td {
+  color: var(--warn);
 }

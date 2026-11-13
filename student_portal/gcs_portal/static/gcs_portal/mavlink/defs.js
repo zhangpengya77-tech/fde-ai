@@ -1,0 +1,679 @@
+// 本檔由 gcs_portal/tools/gen_mavlink_defs.py 自動產生，請勿手動修改。
+// 來源：pymavlink 2.4.50，ardupilotmega 方言（MAVLink v2）。
+// 授權：MAVLink 產生器輸出，依 MAVLink COPYING 例外條款以 MIT 授權釋出。
+// 欄位格式：[名稱, 型別, 陣列長度(0=單值), 位元組位移]，依線上傳輸順序排列。
+export const PYMAVLINK_VERSION = "2.4.50";
+export const MESSAGE_DEFS = {
+ "0": {
+  "crcExtra": 50,
+  "fields": [
+   [
+    "custom_mode",
+    "uint32_t",
+    0,
+    0
+   ],
+   [
+    "type",
+    "uint8_t",
+    0,
+    4
+   ],
+   [
+    "autopilot",
+    "uint8_t",
+    0,
+    5
+   ],
+   [
+    "base_mode",
+    "uint8_t",
+    0,
+    6
+   ],
+   [
+    "system_status",
+    "uint8_t",
+    0,
+    7
+   ],
+   [
+    "mavlink_version",
+    "uint8_t",
+    0,
+    8
+   ]
+  ],
+  "length": 9,
+  "name": "HEARTBEAT"
+ },
+ "1": {
+  "crcExtra": 124,
+  "fields": [
+   [
+    "onboard_control_sensors_present",
+    "uint32_t",
+    0,
+    0
+   ],
+   [
+    "onboard_control_sensors_enabled",
+    "uint32_t",
+    0,
+    4
+   ],
+   [
+    "onboard_control_sensors_health",
+    "uint32_t",
+    0,
+    8
+   ],
+   [
+    "load",
+    "uint16_t",
+    0,
+    12
+   ],
+   [
+    "voltage_battery",
+    "uint16_t",
+    0,
+    14
+   ],
+   [
+    "current_battery",
+    "int16_t",
+    0,
+    16
+   ],
+   [
+    "drop_rate_comm",
+    "uint16_t",
+    0,
+    18
+   ],
+   [
+    "errors_comm",
+    "uint16_t",
+    0,
+    20
+   ],
+   [
+    "errors_count1",
+    "uint16_t",
+    0,
+    22
+   ],
+   [
+    "errors_count2",
+    "uint16_t",
+    0,
+    24
+   ],
+   [
+    "errors_count3",
+    "uint16_t",
+    0,
+    26
+   ],
+   [
+    "errors_count4",
+    "uint16_t",
+    0,
+    28
+   ],
+   [
+    "battery_remaining",
+    "int8_t",
+    0,
+    30
+   ],
+   [
+    "onboard_control_sensors_present_extended",
+    "uint32_t",
+    0,
+    31
+   ],
+   [
+    "onboard_control_sensors_enabled_extended",
+    "uint32_t",
+    0,
+    35
+   ],
+   [
+    "onboard_control_sensors_health_extended",
+    "uint32_t",
+    0,
+    39
+   ]
+  ],
+  "length": 43,
+  "name": "SYS_STATUS"
+ },
+ "20": {
+  "crcExtra": 214,
+  "fields": [
+   [
+    "param_index",
+    "int16_t",
+    0,
+    0
+   ],
+   [
+    "target_system",
+    "uint8_t",
+    0,
+    2
+   ],
+   [
+    "target_component",
+    "uint8_t",
+    0,
+    3
+   ],
+   [
+    "param_id",
+    "char",
+    16,
+    4
+   ]
+  ],
+  "length": 20,
+  "name": "PARAM_REQUEST_READ"
+ },
+ "21": {
+  "crcExtra": 159,
+  "fields": [
+   [
+    "target_system",
+    "uint8_t",
+    0,
+    0
+   ],
+   [
+    "target_component",
+    "uint8_t",
+    0,
+    1
+   ]
+  ],
+  "length": 2,
+  "name": "PARAM_REQUEST_LIST"
+ },
+ "22": {
+  "crcExtra": 220,
+  "fields": [
+   [
+    "param_value",
+    "float",
+    0,
+    0
+   ],
+   [
+    "param_count",
+    "uint16_t",
+    0,
+    4
+   ],
+   [
+    "param_index",
+    "uint16_t",
+    0,
+    6
+   ],
+   [
+    "param_id",
+    "char",
+    16,
+    8
+   ],
+   [
+    "param_type",
+    "uint8_t",
+    0,
+    24
+   ]
+  ],
+  "length": 25,
+  "name": "PARAM_VALUE"
+ },
+ "24": {
+  "crcExtra": 24,
+  "fields": [
+   [
+    "time_usec",
+    "uint64_t",
+    0,
+    0
+   ],
+   [
+    "lat",
+    "int32_t",
+    0,
+    8
+   ],
+   [
+    "lon",
+    "int32_t",
+    0,
+    12
+   ],
+   [
+    "alt",
+    "int32_t",
+    0,
+    16
+   ],
+   [
+    "eph",
+    "uint16_t",
+    0,
+    20
+   ],
+   [
+    "epv",
+    "uint16_t",
+    0,
+    22
+   ],
+   [
+    "vel",
+    "uint16_t",
+    0,
+    24
+   ],
+   [
+    "cog",
+    "uint16_t",
+    0,
+    26
+   ],
+   [
+    "fix_type",
+    "uint8_t",
+    0,
+    28
+   ],
+   [
+    "satellites_visible",
+    "uint8_t",
+    0,
+    29
+   ],
+   [
+    "alt_ellipsoid",
+    "int32_t",
+    0,
+    30
+   ],
+   [
+    "h_acc",
+    "uint32_t",
+    0,
+    34
+   ],
+   [
+    "v_acc",
+    "uint32_t",
+    0,
+    38
+   ],
+   [
+    "vel_acc",
+    "uint32_t",
+    0,
+    42
+   ],
+   [
+    "hdg_acc",
+    "uint32_t",
+    0,
+    46
+   ],
+   [
+    "yaw",
+    "uint16_t",
+    0,
+    50
+   ]
+  ],
+  "length": 52,
+  "name": "GPS_RAW_INT"
+ },
+ "30": {
+  "crcExtra": 39,
+  "fields": [
+   [
+    "time_boot_ms",
+    "uint32_t",
+    0,
+    0
+   ],
+   [
+    "roll",
+    "float",
+    0,
+    4
+   ],
+   [
+    "pitch",
+    "float",
+    0,
+    8
+   ],
+   [
+    "yaw",
+    "float",
+    0,
+    12
+   ],
+   [
+    "rollspeed",
+    "float",
+    0,
+    16
+   ],
+   [
+    "pitchspeed",
+    "float",
+    0,
+    20
+   ],
+   [
+    "yawspeed",
+    "float",
+    0,
+    24
+   ]
+  ],
+  "length": 28,
+  "name": "ATTITUDE"
+ },
+ "33": {
+  "crcExtra": 104,
+  "fields": [
+   [
+    "time_boot_ms",
+    "uint32_t",
+    0,
+    0
+   ],
+   [
+    "lat",
+    "int32_t",
+    0,
+    4
+   ],
+   [
+    "lon",
+    "int32_t",
+    0,
+    8
+   ],
+   [
+    "alt",
+    "int32_t",
+    0,
+    12
+   ],
+   [
+    "relative_alt",
+    "int32_t",
+    0,
+    16
+   ],
+   [
+    "vx",
+    "int16_t",
+    0,
+    20
+   ],
+   [
+    "vy",
+    "int16_t",
+    0,
+    22
+   ],
+   [
+    "vz",
+    "int16_t",
+    0,
+    24
+   ],
+   [
+    "hdg",
+    "uint16_t",
+    0,
+    26
+   ]
+  ],
+  "length": 28,
+  "name": "GLOBAL_POSITION_INT"
+ },
+ "76": {
+  "crcExtra": 152,
+  "fields": [
+   [
+    "param1",
+    "float",
+    0,
+    0
+   ],
+   [
+    "param2",
+    "float",
+    0,
+    4
+   ],
+   [
+    "param3",
+    "float",
+    0,
+    8
+   ],
+   [
+    "param4",
+    "float",
+    0,
+    12
+   ],
+   [
+    "param5",
+    "float",
+    0,
+    16
+   ],
+   [
+    "param6",
+    "float",
+    0,
+    20
+   ],
+   [
+    "param7",
+    "float",
+    0,
+    24
+   ],
+   [
+    "command",
+    "uint16_t",
+    0,
+    28
+   ],
+   [
+    "target_system",
+    "uint8_t",
+    0,
+    30
+   ],
+   [
+    "target_component",
+    "uint8_t",
+    0,
+    31
+   ],
+   [
+    "confirmation",
+    "uint8_t",
+    0,
+    32
+   ]
+  ],
+  "length": 33,
+  "name": "COMMAND_LONG"
+ },
+ "77": {
+  "crcExtra": 143,
+  "fields": [
+   [
+    "command",
+    "uint16_t",
+    0,
+    0
+   ],
+   [
+    "result",
+    "uint8_t",
+    0,
+    2
+   ],
+   [
+    "progress",
+    "uint8_t",
+    0,
+    3
+   ],
+   [
+    "result_param2",
+    "int32_t",
+    0,
+    4
+   ],
+   [
+    "target_system",
+    "uint8_t",
+    0,
+    8
+   ],
+   [
+    "target_component",
+    "uint8_t",
+    0,
+    9
+   ]
+  ],
+  "length": 10,
+  "name": "COMMAND_ACK"
+ },
+ "148": {
+  "crcExtra": 178,
+  "fields": [
+   [
+    "capabilities",
+    "uint64_t",
+    0,
+    0
+   ],
+   [
+    "uid",
+    "uint64_t",
+    0,
+    8
+   ],
+   [
+    "flight_sw_version",
+    "uint32_t",
+    0,
+    16
+   ],
+   [
+    "middleware_sw_version",
+    "uint32_t",
+    0,
+    20
+   ],
+   [
+    "os_sw_version",
+    "uint32_t",
+    0,
+    24
+   ],
+   [
+    "board_version",
+    "uint32_t",
+    0,
+    28
+   ],
+   [
+    "vendor_id",
+    "uint16_t",
+    0,
+    32
+   ],
+   [
+    "product_id",
+    "uint16_t",
+    0,
+    34
+   ],
+   [
+    "flight_custom_version",
+    "uint8_t",
+    8,
+    36
+   ],
+   [
+    "middleware_custom_version",
+    "uint8_t",
+    8,
+    44
+   ],
+   [
+    "os_custom_version",
+    "uint8_t",
+    8,
+    52
+   ],
+   [
+    "uid2",
+    "uint8_t",
+    18,
+    60
+   ]
+  ],
+  "length": 78,
+  "name": "AUTOPILOT_VERSION"
+ },
+ "253": {
+  "crcExtra": 83,
+  "fields": [
+   [
+    "severity",
+    "uint8_t",
+    0,
+    0
+   ],
+   [
+    "text",
+    "char",
+    50,
+    1
+   ],
+   [
+    "id",
+    "uint16_t",
+    0,
+    51
+   ],
+   [
+    "chunk_seq",
+    "uint8_t",
+    0,
+    53
+   ]
+  ],
+  "length": 54,
+  "name": "STATUSTEXT"
+ }
+};
