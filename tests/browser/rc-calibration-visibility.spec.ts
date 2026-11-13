@@ -379,6 +379,9 @@ test.describe('M1 RC profile visibility & guided calibration (simulated RadioMas
 
     // 回中後即可正常開始。
     await restoreAllAxes(page);
+    // 等待 Gamepad 輪詢消化回中輸入；不可讓上一幀的 axis1=-0.90
+    // 污染下一次校準起始檢查。
+    await waitSticksAtRest(page);
     await page.locator('[data-guided-action="start"]').click();
     await expect(page.locator('.calibration-hint')).toContainText('偵測中');
   });

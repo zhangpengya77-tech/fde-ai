@@ -8,7 +8,9 @@ import { expect, test, type Page } from '@playwright/test';
  * → 新飛行引擎」這條路是通的，但不能取代真實遙控器的人工驗收（見 USB_CONTROLLER_TEST.md）。
  */
 
-const LIVE = 'https://zhangpengya77-tech.github.io/fde-ai/v2/sim/app/';
+declare const process: { env: Record<string, string | undefined> };
+// 預設驗 GitHub Pages；REA_LIVE_URL 可改驗 trycloudflare 本機正式站（須以 / 結尾）
+const LIVE = process.env.REA_LIVE_URL ?? 'https://zhangpengya77-tech.github.io/fde-ai/v2/sim/app/';
 const POCKET_ID = 'Radiomaster Pocket Joystick (Vendor: 1209 Product: 4f54)';
 
 async function installFakePocket(page: Page): Promise<void> {
@@ -29,6 +31,10 @@ const hud = (page: Page, key: 'alt' | 'x' | 'y' | 'heading') =>
   page.evaluate((k) => Number(document.querySelector<HTMLElement>('[data-rea-hud]')?.dataset[k] ?? 'NaN'), key);
 
 test.describe('REA 考照模擬器', () => {
+  // 正式站版在觸控裝置第一次進入會跳出「怎麼操控」教學；自動化驗收視為已看過，斷言不變
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => { try { localStorage.setItem('fde-rea-touch-tour-v1', '1'); } catch { /* 忽略 */ } });
+  });
   test('入口顯示新科目系統，舊 F450 考照介面已被取代', async ({ page }) => {
     await page.goto(LIVE + '?mode=exam&exam=0');
     await expect(page.locator('.rea-h1')).toContainText('臺灣無人機考照模擬器');
@@ -65,6 +71,8 @@ test.describe('REA 考照模擬器', () => {
   });
 
   test('鍵盤：R 升高、W 前進會改變高度與位置', async ({ page }) => {
+    // 驗的是鍵盤：正式站版在觸控裝置預設開觸控搖桿，這裡明確關掉
+    await page.addInitScript(() => { try { localStorage.setItem('fde-rea-exam-prefs-v1', JSON.stringify({ touchSticks: false })); } catch { /* 忽略 */ } });
     await page.goto(LIVE + '?mode=exam&exam=0');
     await page.locator('[data-rea-pick="hover"]').click();
     await page.locator('[data-rea-mode]').click(); // 預設姿態 → 切到定位

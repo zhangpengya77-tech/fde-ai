@@ -28,6 +28,12 @@ const hud = (page: Page, key: 'alt' | 'x' | 'y' | 'heading') =>
   page.evaluate((k) => Number(document.querySelector<HTMLElement>('[data-rea-hud]')?.dataset[k] ?? 'NaN'), key);
 
 test.describe('REA 考照模擬器', () => {
+  // 正式站版在觸控裝置第一次進入會跳出「怎麼操控」教學（全螢幕對話框）；
+  // 自動化測試預設視為已看過，不改任何斷言。教學本身另由手機實機人工驗收。
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => { try { localStorage.setItem('fde-rea-touch-tour-v1', '1'); } catch { /* 忽略 */ } });
+  });
+
   test('入口顯示新科目系統，舊 F450 考照介面已被取代', async ({ page }) => {
     await page.goto('/?mode=exam&exam=0');
     await expect(page.locator('.rea-h1')).toContainText('臺灣無人機考照模擬器');
@@ -39,6 +45,29 @@ test.describe('REA 考照模擬器', () => {
     await expect(page.locator('[data-rea-canvas]')).toBeVisible();
     // 舊版 F450 考試 HUD 不應出現在正式入口
     await expect(page.locator('[data-exam-panel], .exam-panel')).toHaveCount(0);
+  });
+
+  test('畫質選項以保守的中畫質為預設，且可切換低畫質渲染預算', async ({ page }) => {
+    await test.step('載入考照場景', async () => {
+      await page.goto('/?mode=exam&exam=0');
+    });
+    const quality = page.locator('[data-rea-quality-select]');
+    await page.locator('.rea-settings summary').click();
+    await test.step('確認中畫質預設', async () => {
+      await expect(quality).toHaveValue('medium');
+    });
+    await test.step('切換為低畫質並檢查實際渲染器標記', async () => {
+      await quality.selectOption('low');
+      await expect(page.locator('[data-rea-canvas]')).toHaveAttribute('data-rea-quality', 'low');
+    });
+  });
+
+  test('WEB LITE 不顯示 PHYSICS PRO 故障注入按鈕（設定畫面與飛行中）', async ({ page }) => {
+    await page.goto('/?mode=exam&exam=0');
+    await expect(page.locator('[data-rea-faults]')).toBeHidden();
+    await page.locator('[data-rea-start]').click();
+    await page.waitForTimeout(1_000);
+    await expect(page.locator('[data-rea-faults]')).toBeHidden();
   });
 
   test('五種連線方式的面板仍在', async ({ page }) => {
@@ -67,6 +96,8 @@ test.describe('REA 考照模擬器', () => {
     // 測試機若真的插著遙控器，實體遙控器優先會接管鍵盤；這裡明確模擬「沒有接任何遙控器」
     await page.addInitScript(() => {
       Object.defineProperty(Navigator.prototype, 'getGamepads', { configurable: true, writable: true, value: () => [] });
+      // 這個測試驗的是鍵盤：正式站版在觸控裝置預設開觸控搖桿，這裡明確關掉，改用鍵盤
+      try { localStorage.setItem('fde-rea-exam-prefs-v1', JSON.stringify({ touchSticks: false })); } catch { /* 忽略 */ }
     });
     await page.goto('/?mode=exam&exam=0');
     await page.locator('[data-rea-pick="hover"]').click();
@@ -147,6 +178,8 @@ test.describe('REA 考照模擬器', () => {
   test('教學網站登入時，真人飛完的成績存入成長日誌；示範飛行不送出', async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(Navigator.prototype, 'getGamepads', { configurable: true, writable: true, value: () => [] });
+      // 這個測試驗的是鍵盤：正式站版在觸控裝置預設開觸控搖桿，這裡明確關掉，改用鍵盤
+      try { localStorage.setItem('fde-rea-exam-prefs-v1', JSON.stringify({ touchSticks: false })); } catch { /* 忽略 */ }
     });
     const posts: Record<string, unknown>[] = [];
     // 模擬教學網站的練飛紀錄 API（已登入學員）

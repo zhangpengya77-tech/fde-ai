@@ -1,5 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// A caller may select an alternate loopback port when a previously terminated
+// local preview has not yet released the default Windows socket. Production
+// preview remains 4173; this only affects isolated test orchestration.
+const previewPort = Number(
+  (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.PLAYWRIGHT_PREVIEW_PORT ?? '4173',
+);
+const reuseExistingPreview =
+  (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.PLAYWRIGHT_REUSE_EXISTING_SERVER === '1';
+const testEnvironment =
+  (globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+const outputDir = testEnvironment.PLAYWRIGHT_OUTPUT_DIR ?? './.playwright-output';
+
 /**
  * Playwright 設定。
  *
@@ -30,9 +44,12 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   reporter: 'list',
-  outputDir: './.playwright-output',
+  outputDir,
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: `http://127.0.0.1:${previewPort}`,
+    // Trace capture is disabled by default. R3 observed an environment-specific
+    // recursive artifact expansion; retain the failed run as evidence rather
+    // than risking further disk growth.
     trace: 'off',
     screenshot: 'off',
     /**
@@ -70,9 +87,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort --host 127.0.0.1',
-    url: 'http://127.0.0.1:4173/',
-    reuseExistingServer: false,
+    command: `npm run build && npm run preview -- --port ${previewPort} --strictPort --host 127.0.0.1`,
+    url: `http://127.0.0.1:${previewPort}/`,
+    reuseExistingServer: reuseExistingPreview,
     timeout: 180_000,
   },
 });
