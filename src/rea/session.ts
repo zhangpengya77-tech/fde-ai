@@ -7,7 +7,8 @@ import { fieldOf, type Subject } from './courses';
 import { AIRFRAMES, type Airframe, type Command, type DroneState, type FlightMode, initialState, step } from './physics';
 import { CourseRunner, type CourseResult, type RunnerOptions } from './runner';
 import { Wind, type WindSettings } from './wind';
-import type { AirframeId } from './courses';
+import type { AirframeId, Vec2 } from './courses';
+import { WEB_LITE_LABELS, type EngineLabels, type FlightEngine } from './engine';
 
 export const PHYSICS_DT = 1 / 120;
 const RECORD_EVERY = 6; // 20 Hz
@@ -24,7 +25,12 @@ export interface SessionOptions extends RunnerOptions {
   wind: WindSettings;
 }
 
-export class FlightSession {
+/** WEB LITE 引擎：瀏覽器內的簡化物理（非高精度），立即可飛。 */
+export class FlightSession implements FlightEngine {
+  readonly labels: EngineLabels = WEB_LITE_LABELS;
+  readonly ready = true;
+  readonly statusText = '';
+  readonly failed: string | null = null;
   readonly airframe: Airframe;
   readonly runner: CourseRunner;
   readonly wind: Wind;
@@ -64,6 +70,14 @@ export class FlightSession {
         cmd: { ...cmd }, stepIndex: info.stepIndex, cross: info.cross, headErr: info.headErr,
       });
     }
+  }
+
+  windAt(t: number): Vec2 {
+    return this.wind.at(t);
+  }
+
+  dispose(): void {
+    /* 純瀏覽器計算，沒有外部資源要釋放 */
   }
 
   get done(): boolean {
