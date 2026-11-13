@@ -26,6 +26,8 @@ export class ExamScene {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(55, 1, 0.05, 2000);
+  /** 使用者以滑鼠滾輪設定的縮放倍率（1＝原始；只影響畫面，不影響飛行與評分） */
+  viewZoom = 1;
   view: ViewMode = 'examinee';
   examineeCam: ExamineeCam = 'follow';
   private fieldGroup = new THREE.Group();
@@ -431,6 +433,7 @@ export class ExamScene {
         this.camera.fov = this.examineeCam === 'zoom' ? Math.max(18, Math.min(60, 600 / Math.max(dist, 1))) : 60;
       }
     }
+    this.camera.zoom = this.viewZoom;
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);
     this.renderer.domElement.dataset.reaRenderFrame = String(++this.renderFrame);

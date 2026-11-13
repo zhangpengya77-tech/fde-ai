@@ -62,6 +62,24 @@ test.describe('REA 考照模擬器', () => {
     });
   });
 
+  test('滑鼠滾輪縮放 3D 畫面（頁面不捲動），雙擊重設', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop-chrome', '滑鼠滾輪只在桌機驗證');
+    await page.goto('/?mode=exam&exam=0');
+    const canvas = page.locator('[data-rea-canvas]');
+    const stage = page.locator('[data-rea-stage]');
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, -300);
+    await expect.poll(async () => Number(await stage.getAttribute('data-rea-view-zoom'))).toBeGreaterThan(1.3);
+    await expect(page.locator('[data-rea-zoom-tip]')).toContainText('縮放 ×');
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+    await page.mouse.wheel(0, 900);
+    await expect.poll(async () => Number(await stage.getAttribute('data-rea-view-zoom'))).toBeLessThan(1);
+    await canvas.dblclick();
+    await expect.poll(async () => Number(await stage.getAttribute('data-rea-view-zoom'))).toBe(1);
+  });
+
   test('WEB LITE 不顯示 PHYSICS PRO 故障注入按鈕（設定畫面與飛行中）', async ({ page }) => {
     await page.goto('/?mode=exam&exam=0');
     await expect(page.locator('[data-rea-faults]')).toBeHidden();

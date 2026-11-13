@@ -210,3 +210,7 @@ body:has(.rea-touchmode) [data-action="open-link"] { display:none !important; }
 /* hidden 屬性要真的隱藏（display:flex 會蓋過 hidden）：故障注入只在 PHYSICS PRO 飛行中顯示 */
 .rea-faults[hidden] { display:none; }
 .rea-engine-line { font-size:11.5px; color:var(--muted); }
+
+/* 2026-11-13：滑鼠滾輪縮放提示 */
+.rea-zoomtip { position:absolute; right:12px; top:56px; z-index:6; background:rgba(15,20,26,.82); color:#fff; padding:4px 10px; border-radius:8px; font-size:13px; pointer-events:none; }
+.rea-zoomtip[hidden] { display:none; }

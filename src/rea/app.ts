@@ -14,6 +14,7 @@ import { AIRFRAMES, type Command, type FlightMode, horizontalSpeed, norm360 } fr
 import { Autopilot } from './autopilot';
 import { FlightSession, sampleAt, type Sample } from './session';
 import type { FlightEngine } from './engine';
+import { nextViewZoom, viewZoomLabel } from './view-zoom';
 import { READ_ATTACHMENT_RENEW_EVENT, SitlEngine, consumeExternalReadAttachment, parseReadAttachment } from './sitl-client';
 import { TrainingEvidencePipeline, buildTrainingExport, trainingExportFilename, type TrainingExportRecord, type TrainingSummary } from './training-pipeline';
 import { TIER_LABELS, type CourseResult } from './runner';
@@ -222,6 +223,26 @@ export function createReaApp(root: HTMLElement): ReaApp {
   const $ = <T extends HTMLElement = HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
   const stage = $('[data-rea-stage]');
   const scene = new ExamScene(stage);
+  // 滑鼠滾輪縮放 3D 畫面（全螢幕也適用）；雙擊重設。只改攝影機 zoom，不影響飛行與評分。
+  const zoomTip = document.createElement('div');
+  zoomTip.className = 'rea-zoomtip';
+  zoomTip.dataset.reaZoomTip = '';
+  zoomTip.hidden = true;
+  stage.appendChild(zoomTip);
+  let zoomTipTimer = 0;
+  const showZoom = () => {
+    zoomTip.textContent = viewZoomLabel(scene.viewZoom);
+    zoomTip.hidden = false;
+    stage.dataset.reaViewZoom = scene.viewZoom.toFixed(3);
+    window.clearTimeout(zoomTipTimer);
+    zoomTipTimer = window.setTimeout(() => { zoomTip.hidden = true; }, 1_500);
+  };
+  scene.renderer.domElement.addEventListener('wheel', (e) => {
+    e.preventDefault(); // 不讓頁面捲動或瀏覽器縮放
+    scene.viewZoom = nextViewZoom(scene.viewZoom, e.deltaY, e.deltaMode);
+    showZoom();
+  }, { passive: false });
+  scene.renderer.domElement.addEventListener('dblclick', () => { scene.viewZoom = 1; showZoom(); });
   scene.renderer.domElement.classList.add('rea-canvas');
   stage.prepend(scene.renderer.domElement);
 
