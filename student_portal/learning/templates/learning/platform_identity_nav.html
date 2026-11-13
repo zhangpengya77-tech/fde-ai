@@ -18,6 +18,7 @@
       <span class="fde-public-identity">帳號權限待確認</span>
       <form method="post" action="{% url 'learning:logout' %}"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button type="submit">登出</button></form>
     {% endif %}
+    {% if fde_gcs_url %}<a class="fde-public-gcs" href="{{ fde_gcs_url }}">FDE-AI 地面站</a>{% endif %}
   </nav>
 </div>
 <!-- 五階段主導航（teacher 2026-10-15 最終裁決）：平台左側 #moduleNav（學→練→做→測→證）為全站唯一

@@ -119,6 +119,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'learning.apps.LearningConfig',
+    'gcs_portal.apps.GcsPortalConfig',
 ]
 
 MIDDLEWARE = [
@@ -145,6 +146,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'gcs_portal.context_processors.gcs_entry',
             ],
         },
     },
@@ -288,6 +290,16 @@ VISION_DEMO_SIMULATION_ENABLED = os.environ.get(
 #   FDE_MODULE_MP_GROUND_STATION_ENABLED / FDE_MODULE_MP_GROUND_STATION_URL
 #   FDE_MODULE_HQGC_ASSESSMENT_ENABLED  / FDE_MODULE_HQGC_ASSESSMENT_URL
 # 注意：entry_url 只能是基礎網址，不得夾帶登入 Token、學生個資等敏感參數。
+# FDE-GCS Web 1.0（FDE-AI 地面站）Feature Flag。
+# 預設關閉：入口不顯示、/gcs/ 回 404。設 FDE_GCS_ENABLED=0 即可一鍵關閉。
+# 學員只有在 FDE_GCS_COHORTS 指定的期別（逗號分隔，例如 2026-06）中才看得到；教師開啟後即可使用。
+FDE_GCS_ENABLED = os.environ.get('FDE_GCS_ENABLED', '') == '1'
+FDE_GCS_COHORTS = frozenset(
+    item.strip()
+    for item in os.environ.get('FDE_GCS_COHORTS', '').split(',')
+    if item.strip()
+)
+
 FDE_EXTERNAL_MODULES = {
     module_id: {
         'enabled': os.environ.get('FDE_MODULE_{}_ENABLED'.format(module_id), '') == '1',

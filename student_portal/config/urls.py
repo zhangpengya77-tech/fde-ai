@@ -19,5 +19,6 @@ from django.urls import include, path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('gcs/', include('gcs_portal.urls')),
     path('', include('learning.urls')),
 ]

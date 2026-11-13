@@ -1,0 +1,105 @@
+{% load static %}<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FDE-AI 地面站（FDE-GCS）</title>
+  <link rel="stylesheet" href="{% static 'gcs_portal/gcs.css' %}">
+  <script src="{% static 'gcs_portal/gcs.js' %}" defer></script>
+</head>
+<body class="gcs-root" data-gcs-role="{{ gcs_role }}">
+  <header class="gcs-header">
+    <a class="gcs-brand" href="{% url 'learning:platform' %}"><span class="gcs-mark">FDE</span><span>FDE-AI 地面站<small>FDE-GCS Web 1.0</small></span></a>
+    <div class="gcs-header-links">
+      {% if gcs_role == "teacher" %}<span class="gcs-chip">教師</span>{% else %}<span class="gcs-chip">學員 · {{ user.student_profile.public_user_id }}</span>{% endif %}
+      <a class="gcs-chip gcs-chip-link" href="{% url 'learning:platform' %}">回學習平台</a>
+    </div>
+  </header>
+
+  <div class="gcs-modebar" id="gcsModeBar" data-mode="demo" role="status" aria-live="polite">
+    <strong id="gcsModeLabel">DEMO 介面</strong>
+    <span id="gcsModeDetail">目前未連線任何飛控。畫面上沒有真實遙測，也沒有用假資料冒充遙測。</span>
+  </div>
+
+  <p class="gcs-desktop-only">FDE-GCS 第一版只支援 Windows 桌面版 Chrome／Edge，請改用電腦開啟。</p>
+
+  <main class="gcs-grid">
+    <section class="gcs-panel" id="gcs-connection" aria-labelledby="gcs-connection-title">
+      <h2 id="gcs-connection-title"><span>01</span>連線管理</h2>
+      <fieldset class="gcs-mode-select">
+        <legend>連線模式</legend>
+        <label><input type="radio" name="gcs-mode" value="real"> 真機（USB）</label>
+        <label><input type="radio" name="gcs-mode" value="sitl"> 仿真（SITL）</label>
+      </fieldset>
+      <dl class="gcs-facts">
+        <dt>瀏覽器 Web Serial</dt><dd id="gcsSerialSupport">檢查中…</dd>
+        <dt>COM 埠</dt><dd>使用者每次手動選擇，不自動掃描、不記住授權</dd>
+        <dt>Baud Rate</dt><dd>115200（預設）</dd>
+        <dt>Heartbeat</dt><dd>未連線</dd>
+        <dt>System ID／Component ID</dt><dd>—</dd>
+      </dl>
+      <div class="gcs-actions">
+        <button type="button" disabled>連線（P2 開放）</button>
+        <button type="button" disabled>中斷</button>
+      </div>
+      <p class="gcs-note">使用真機前，請先關閉 Mission Planner、QGC 等其他地面站，一個 COM 埠同一時間只能給一個程式使用。</p>
+    </section>
+
+    <section class="gcs-panel" id="gcs-dashboard" aria-labelledby="gcs-dashboard-title">
+      <h2 id="gcs-dashboard-title"><span>02</span>飛控儀表板</h2>
+      <dl class="gcs-telemetry">
+        <div><dt>飛控類型</dt><dd>—</dd><small>HEARTBEAT</small></div>
+        <div><dt>韌體版本</dt><dd>—</dd><small>AUTOPILOT_VERSION</small></div>
+        <div><dt>飛行模式</dt><dd>—</dd><small>HEARTBEAT</small></div>
+        <div><dt>ARM 狀態</dt><dd>—</dd><small>HEARTBEAT</small></div>
+        <div><dt>電池</dt><dd>—</dd><small>SYS_STATUS</small></div>
+        <div><dt>GPS／衛星數</dt><dd>—</dd><small>GPS_RAW_INT</small></div>
+        <div><dt>高度</dt><dd>—</dd><small>GLOBAL_POSITION_INT</small></div>
+        <div><dt>Roll／Pitch／Yaw</dt><dd>—</dd><small>ATTITUDE</small></div>
+        <div><dt>遙測更新時間</dt><dd>—</dd><small>本機時鐘</small></div>
+      </dl>
+      <p class="gcs-note">所有數值都必須來自真實 MAVLink 訊息；超過 2 秒沒更新的數值會變灰，不保留舊值。真機模式沒有 ARM、切換模式、起飛等控制按鈕。</p>
+    </section>
+
+    <section class="gcs-panel" id="gcs-params" aria-labelledby="gcs-params-title">
+      <h2 id="gcs-params-title"><span>03</span>參數管理</h2>
+      <div class="gcs-actions">
+        <button type="button" disabled>讀取全部參數（P2 開放）</button>
+        <button type="button" disabled>匯出</button>
+      </div>
+      <table class="gcs-table">
+        <thead><tr><th>參數</th><th>原始值</th><th>目前值</th><th>狀態</th></tr></thead>
+        <tbody><tr><td colspan="4">尚未連線，沒有參數資料。</td></tr></tbody>
+      </table>
+      <p class="gcs-note">寫入只開放教師批准的白名單參數，並且必須：已上鎖（Disarmed）、連線有效、已勾選「已拆槳、已斷電池」、二次確認、寫入後讀回驗證。（P3 開放）</p>
+    </section>
+
+    <section class="gcs-panel" id="gcs-sitl" aria-labelledby="gcs-sitl-title">
+      <h2 id="gcs-sitl-title"><span>04</span>仿真與航線</h2>
+      <dl class="gcs-facts">
+        <dt>仿真連線</dt><dd>尚未接入（P4）</dd>
+        <dt>目前航點</dt><dd>—</dd>
+        <dt>任務狀態</dt><dd>—</dd>
+      </dl>
+      <p class="gcs-note">航線固定以 TAKEOFF 開頭、RETURN_TO_LAUNCH 結尾。上傳與執行任務需要教師授權的短效控制憑證；唯讀憑證不能用來控制。</p>
+    </section>
+
+    <section class="gcs-panel" id="gcs-ai" aria-labelledby="gcs-ai-title">
+      <h2 id="gcs-ai-title"><span>05</span>AI 調參助教</h2>
+      <p>連線讀到參數後，助教會說明每個參數的用途、目前值、常見範圍與風險。</p>
+      <p class="gcs-note">AI 只提供建議，不會寫入飛控；建議和寫入是兩個分開的步驟，寫入必須經過教師批准。（P5 開放）</p>
+    </section>
+
+    <section class="gcs-panel" id="gcs-results" aria-labelledby="gcs-results-title">
+      <h2 id="gcs-results-title"><span>06</span>學員成果</h2>
+      <dl class="gcs-facts">
+        <dt>參數備份</dt><dd>尚無紀錄</dd>
+        <dt>差異報告</dt><dd>尚無紀錄</dd>
+        <dt>SITL 任務結果</dt><dd>尚無紀錄</dd>
+        <dt>教師覆核</dt><dd>尚無紀錄</dd>
+      </dl>
+      <p class="gcs-note">紀錄只在學員主動上傳後保存，只有本人和所屬班級教師看得到。（P5 開放）</p>
+    </section>
+  </main>
+</body>
+</html>

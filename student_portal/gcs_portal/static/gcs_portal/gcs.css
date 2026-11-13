@@ -1,0 +1,268 @@
+/* FDE-GCS Web 1.0 — 沿用 REA 重建版的設計變數，FDE-AI 自行設計，不使用第三方圖示或字型。 */
+.gcs-root {
+  --bg: #0f141a;
+  --panel: #151c24;
+  --line: #273340;
+  --fg: #e7edf3;
+  --muted: #9aa7b4;
+  --acc: #2fb4ff;
+  --ok: #2ec27e;
+  --warn: #f4c430;
+  --bad: #e63946;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.gcs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.gcs-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.gcs-brand small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.gcs-mark {
+  background: var(--acc);
+  color: #04131d;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-weight: 800;
+}
+
+.gcs-header-links {
+  display: flex;
+  gap: 8px;
+}
+
+.gcs-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.gcs-chip-link {
+  text-decoration: none;
+}
+
+.gcs-chip-link:hover,
+.gcs-chip-link:focus-visible {
+  border-color: var(--acc);
+}
+
+.gcs-modebar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: #2b2610;
+  color: var(--warn);
+}
+
+.gcs-modebar[data-mode="real"] {
+  background: #2d1216;
+  color: #ff8a93;
+}
+
+.gcs-modebar[data-mode="sitl"] {
+  background: #0f2333;
+  color: var(--acc);
+}
+
+.gcs-modebar span {
+  color: var(--fg);
+}
+
+.gcs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+}
+
+.gcs-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.gcs-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.gcs-panel h2 span {
+  color: var(--acc);
+  font-size: 12px;
+  border: 1px solid var(--acc);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.gcs-panel p {
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+
+.gcs-note {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.gcs-mode-select {
+  display: flex;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+}
+
+.gcs-mode-select legend {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.gcs-facts {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  gap: 6px 10px;
+  margin: 0 0 12px;
+}
+
+.gcs-facts dt {
+  color: var(--muted);
+}
+
+.gcs-facts dd {
+  margin: 0;
+}
+
+.gcs-telemetry {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.gcs-telemetry div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.gcs-telemetry dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.gcs-telemetry dd {
+  margin: 4px 0;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.gcs-telemetry small {
+  color: #5f6d7a;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.gcs-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.gcs-actions button {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+}
+
+.gcs-actions button:disabled {
+  color: #5f6d7a;
+  cursor: not-allowed;
+}
+
+.gcs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+}
+
+.gcs-table th,
+.gcs-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px;
+  text-align: left;
+}
+
+.gcs-table th {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.gcs-desktop-only {
+  display: none;
+  margin: 20px;
+  padding: 12px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  color: var(--warn);
+}
+
+.gcs-denied {
+  max-width: 520px;
+  margin: 15vh auto;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+@media (max-width: 1279px) {
+  .gcs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1023px) {
+  .gcs-desktop-only {
+    display: block;
+  }
+
+  .gcs-grid {
+    display: none;
+  }
+}

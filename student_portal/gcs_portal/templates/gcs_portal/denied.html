@@ -1,0 +1,16 @@
+{% load static %}<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FDE-AI 地面站（FDE-GCS）</title>
+  <link rel="stylesheet" href="{% static 'gcs_portal/gcs.css' %}">
+</head>
+<body class="gcs-root">
+  <main class="gcs-denied">
+    <h1>FDE-AI 地面站</h1>
+    <p>{{ message }}</p>
+    <a class="gcs-chip gcs-chip-link" href="{% url 'learning:platform' %}">回學習平台</a>
+  </main>
+</body>
+</html>
