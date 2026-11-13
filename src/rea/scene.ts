@@ -8,6 +8,7 @@ import type { Field, Subject, Vec2 } from './courses';
 import type { Airframe } from './physics';
 import { animateDrone, buildDroneModel, type DroneModel } from './drone-model';
 import { CAGE, type Challenge } from './challenges';
+import { normalizeRenderQuality, RENDER_QUALITY_PRESETS, type RenderQuality } from './render-quality';
 
 const FIELD_TO_3D = (p: Vec2, h = 0) => new THREE.Vector3(p.x, h, -p.y);
 
@@ -44,18 +45,18 @@ export class ExamScene {
   private sock = new THREE.Group();
   private field: Field | null = null;
   private readonly ro: ResizeObserver;
+  private renderFrame = 0;
+  private quality: RenderQuality = 'medium';
 
   constructor(readonly host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.setQuality('medium');
     host.appendChild(this.renderer.domElement);
     this.renderer.domElement.setAttribute('data-rea-canvas', '');
     this.scene.background = new THREE.Color(0xbfd9ee);
     this.scene.fog = new THREE.Fog(0xbfd9ee, 120, 600);
     this.scene.add(this.hemi, this.sun, this.fieldGroup, this.drone, this.sock, this.challengeGroup);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40 });
 
     // 大範圍草地＋考場柏油
@@ -73,6 +74,27 @@ export class ExamScene {
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
     this.resize();
+  }
+
+  /** Applies visual budget only; it never changes the flight, scoring or Gateway path. */
+  setQuality(value: unknown): RenderQuality {
+    this.quality = normalizeRenderQuality(value);
+    const preset = RENDER_QUALITY_PRESETS[this.quality];
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.maxPixelRatio));
+    this.renderer.shadowMap.enabled = preset.shadows;
+    this.sun.shadow.mapSize.set(preset.shadowMapSize, preset.shadowMapSize);
+    // These attributes expose the renderer values that were actually applied.
+    // They are visual-only diagnostics; no flight, input, or Session state is
+    // represented here.
+    this.renderer.domElement.dataset.reaQuality = this.quality;
+    this.renderer.domElement.dataset.reaPixelRatio = String(this.renderer.getPixelRatio());
+    this.renderer.domElement.dataset.reaShadows = String(this.renderer.shadowMap.enabled);
+    this.renderer.domElement.dataset.reaShadowMapSize = String(this.sun.shadow.mapSize.x);
+    return this.quality;
+  }
+
+  getQuality(): RenderQuality {
+    return this.quality;
   }
 
   resize(): void {
@@ -146,6 +168,35 @@ export class ExamScene {
     }
     // 考生站位線
     g.add(stripe({ x: -2, y: field.examinee.y }, { x: 2, y: field.examinee.y }, 0.15, yellow));
+
+    // 教師觀察區與安全邊界：程式化教學視覺，尺寸仍由 Field 資料決定，
+    // 不是官方考場認證標示。
+    const safety = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints([
+        FIELD_TO_3D({ x: b.xMin, y: b.yMin }, 0.04), FIELD_TO_3D({ x: b.xMax, y: b.yMin }, 0.04),
+        FIELD_TO_3D({ x: b.xMax, y: b.yMax }, 0.04), FIELD_TO_3D({ x: b.xMin, y: b.yMax }, 0.04),
+      ]),
+      new THREE.LineDashedMaterial({ color: 0xff7b00, dashSize: 0.4, gapSize: 0.25 }),
+    );
+    safety.computeLineDistances();
+    g.add(safety);
+    const teacherZone = new THREE.Mesh(
+      new THREE.PlaneGeometry(5, 2),
+      new THREE.MeshBasicMaterial({ color: 0x3a86ff, transparent: true, opacity: 0.16 }),
+    );
+    teacherZone.rotation.x = -Math.PI / 2;
+    teacherZone.position.copy(FIELD_TO_3D({ x: 0, y: field.examinee.y - 1.5 }, 0.02));
+    g.add(teacherZone, label('教師觀察區', FIELD_TO_3D({ x: 0, y: field.examinee.y - 2.1 }, 0.35)));
+
+    // 低面數遠景建築只提供深度線索；在所有畫質檔位都保留必要考場標誌。
+    const buildingMat = new THREE.MeshLambertMaterial({ color: 0xb8c2cc });
+    for (const [x, y, w, h, d] of [[b.xMin - 9, b.yMax - 1, 8, 5, 6], [b.xMax + 9, b.yMax - 4, 10, 7, 7]] as const) {
+      const building = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMat);
+      building.position.copy(FIELD_TO_3D({ x, y }, h / 2));
+      building.castShadow = true;
+      building.receiveShadow = true;
+      g.add(building);
+    }
 
     // 起降點 H：紅圓＋白色 H
     const hDisk = new THREE.Mesh(new THREE.CircleGeometry(field.hRadius, 64), red);
@@ -293,8 +344,11 @@ export class ExamScene {
     });
   }
 
-  setDrone(x: number, y: number, h: number, headingDeg: number, pitchDeg: number, rollDeg: number, spinning: boolean, dt: number): void {
+  setDrone(x: number, y: number, h: number, headingDeg: number, pitchDeg: number, rollDeg: number, spinning: boolean, dt: number, sampleId?: number): void {
     this.drone.position.set(x, h + (this.drone.userData.lift ?? 0.1), -y);
+    // 僅作為端到端驗收的觀測值：保留 setDrone 的輸入高度，讓測試可比對
+    // Gateway ENU → SitlEngine → Three.js 與 HUD 是否仍取自同一筆權威狀態。
+    this.renderer.domElement.dataset.reaDroneHeight = h.toFixed(3);
     // Three.js：yaw 繞 +y 逆時針為正 → 機頭角（順時針）取負
     this.drone.rotation.set(0, 0, 0);
     this.drone.rotateY((-headingDeg * Math.PI) / 180);
@@ -305,6 +359,16 @@ export class ExamScene {
     const target = spinning ? 1 : 0;
     this.spin += (target - this.spin) * Math.min(1, dt * (spinning ? 3 : 1.2));
     if (this.model) animateDrone(this.model, this.spin, dt, this.clock);
+    // Read-only E2E evidence from the actual Object3D after transforms.
+    const q = this.drone.quaternion;
+    this.renderer.domElement.dataset.reaDronePosition = JSON.stringify([this.drone.position.x, this.drone.position.y, this.drone.position.z]);
+    this.renderer.domElement.dataset.reaDroneQuaternion = JSON.stringify([q.x, q.y, q.z, q.w]);
+    this.renderer.domElement.dataset.reaDroneAppliedAt = String(performance.now());
+    // A replay or WEB LITE frame has no authoritative Gateway sample.  Clear
+    // the prior identity so the E2E observer cannot mistake a later rendered
+    // transform for the last read-only Mission telemetry sample.
+    if (sampleId !== undefined) this.renderer.domElement.dataset.reaDroneSample = String(sampleId);
+    else delete this.renderer.domElement.dataset.reaDroneSample;
   }
 
   setWindSock(wind: Vec2): void {
@@ -369,6 +433,9 @@ export class ExamScene {
     }
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);
+    this.renderer.domElement.dataset.reaRenderFrame = String(++this.renderFrame);
+    this.renderer.domElement.dataset.reaRenderAt = String(performance.now());
+    this.renderer.domElement.dataset.reaRenderSample = this.renderer.domElement.dataset.reaDroneSample ?? '';
   }
 
   dispose(): void {

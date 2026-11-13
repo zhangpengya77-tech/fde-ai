@@ -203,3 +203,10 @@ body:has(.rea-touchmode) [data-action="open-link"] { display:none !important; }
 /* 卡片圖固定比例（直式小圖不會把卡片撐高） */
 .rea-subject .rea-subj-pic { position:relative; overflow:hidden; min-height:0; }
 .rea-subject .rea-subj-pic svg { position:absolute; inset:0; }
+/* 引擎標示與 PHYSICS PRO 故障注入 */
+.rea-engine { cursor:help; color:#9fd8ff; }
+.rea-engine[data-simulator-type="ardupilot_sitl"] { border-color:#f4c430; color:#f4c430; }
+.rea-faults { position:absolute; top:128px; left:10px; display:flex; gap:6px; z-index:3; }
+/* hidden 屬性要真的隱藏（display:flex 會蓋過 hidden）：故障注入只在 PHYSICS PRO 飛行中顯示 */
+.rea-faults[hidden] { display:none; }
+.rea-engine-line { font-size:11.5px; color:var(--muted); }

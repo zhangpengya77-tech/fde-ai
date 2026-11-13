@@ -13,9 +13,13 @@ import { SUBJECTS, fieldOf, subjectById, type AirframeId, type License, type Sub
 import { AIRFRAMES, type Command, type FlightMode, horizontalSpeed, norm360 } from './physics';
 import { Autopilot } from './autopilot';
 import { FlightSession, sampleAt, type Sample } from './session';
+import type { FlightEngine } from './engine';
+import { READ_ATTACHMENT_RENEW_EVENT, SitlEngine, consumeExternalReadAttachment, parseReadAttachment } from './sitl-client';
+import { TrainingEvidencePipeline, buildTrainingExport, trainingExportFilename, type TrainingExportRecord, type TrainingSummary } from './training-pipeline';
 import { TIER_LABELS, type CourseResult } from './runner';
 import { DEFAULT_WIND, WIND_FROM_LABELS, levelToSpeed, type WindFrom, type WindSettings } from './wind';
 import { ExamScene, type ExamineeCam } from './scene';
+import type { RenderQuality } from './render-quality';
 import { drawTrack, type TrackColoring } from './track-view';
 import { normalizeInputSource, showPracticeToast, syncPractice } from '../report/practice-sync';
 import { Narrator, introNarration, stepNarration } from './narrator';
@@ -27,7 +31,9 @@ import { PHYSICS_DT } from './session';
 import { CHALLENGES, ChallengeRun, FIELD_CAGE, challengeById, challengeSubject, type Challenge } from './challenges';
 
 // 2026-11-08：新增 demo（示範播放中：背景已試飛完成，畫面依時間播放，可暫停、變速、拖曳）
-type Phase = 'setup' | 'countdown' | 'flying' | 'demo' | 'challenge' | 'result';
+// preparing：PHYSICS PRO 等待 SITL 驗證、定位與解鎖
+type Phase = 'setup' | 'preparing' | 'countdown' | 'flying' | 'demo' | 'challenge' | 'result';
+type EngineKind = 'web_lite' | 'physics_pro';
 type StickMode = 'mode2' | 'mode1';
 
 interface Prefs {
@@ -43,6 +49,7 @@ interface Prefs {
   examineeCam: ExamineeCam;
   showSticks: boolean;
   showHud: boolean;
+  quality: RenderQuality;
   license: License | 'all';
   /** 2026-11-08：示範飛行語音解說（台灣女聲） */
   narration: boolean;
@@ -52,15 +59,20 @@ interface Prefs {
   captions: boolean;
   /** 2026-11-08：觸控搖桿（用這支手機的螢幕當搖桿；手機預設開） */
   touchSticks: boolean;
+  /** 飛行引擎：WEB LITE（瀏覽器簡化物理）／PHYSICS PRO（本機 ArduPilot SITL） */
+  engine: EngineKind;
+  proBase: string;
+  proToken: string;
 }
 
 const PREFS_KEY = 'fde-rea-exam-prefs-v1';
 const DEFAULT_PREFS: Prefs = {
   subjectId: 'figure-eight', airframeId: 'quad-4kg', airframeFixed: false, mode: 'attitude', wind: { ...DEFAULT_WIND },
-  sunny: true, hour: 10, facingDeg: 0, stickMode: 'mode2', examineeCam: 'follow', showSticks: true, showHud: true, license: 'all',
+  sunny: true, hour: 10, facingDeg: 0, stickMode: 'mode2', examineeCam: 'follow', showSticks: true, showHud: true, quality: 'medium', license: 'all',
   narration: true, rotorSound: true, captions: false,
   // 手機、平板（手指操作）預設開觸控搖桿；電腦預設用鍵盤
   touchSticks: typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches,
+  engine: 'web_lite', proBase: 'http://127.0.0.1:8200', proToken: '',
 };
 
 function loadPrefs(): Prefs {
@@ -91,10 +103,15 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <button class="rea-chip" data-rea-mode title="定位模式：放開搖桿會停住；姿態模式：放開搖桿機身擺平但會被風吹走"></button>
         <span class="rea-chip rea-title" data-rea-title></span>
         <button class="rea-chip rea-src" data-rea-src title="目前生效的輸入來源；點一下選操作方式"></button>
+        <span class="rea-chip rea-engine" data-rea-engine title="simulator_type／physics_model_version／firmware_version"></span>
       </div>
       <div class="rea-hint" data-rea-hint></div>
       <div class="rea-caption" data-rea-caption hidden></div>
       <div class="rea-hud" data-rea-hud></div>
+      <div class="rea-faults" data-rea-faults hidden>
+        <button class="rea-chip" data-rea-fault="gps_loss">注入 GPS 異常</button>
+        <button class="rea-chip" data-rea-fault="gps_restore">恢復 GPS</button>
+      </div>
       <div class="rea-sticks" data-rea-sticks>
         <div class="rea-stick"><i data-rea-stick-l></i><span>左手</span></div>
         <div class="rea-stick"><i data-rea-stick-r></i><span>右手</span></div>
@@ -175,14 +192,19 @@ export function createReaApp(root: HTMLElement): ReaApp {
           <label>考生面向<select data-rea-facing>${['北', '東北', '東', '東南', '南', '西南', '西', '西北'].map((n, i) => `<option value="${i * 45}">${n}</option>`).join('')}</select></label>
           <label>搖桿模式<select data-rea-stick-mode><option value="mode2">美國手（Mode 2，左手油門）</option><option value="mode1">日本手（Mode 1，右手油門）</option></select></label>
           <label>考生視角<select data-rea-excam><option value="fixed">固定</option><option value="follow">自動轉頭</option><option value="zoom">飛遠拉近</option></select></label>
+          <label>畫質<select data-rea-quality-select><option value="low">低（MX450 節能）</option><option value="medium">中（建議）</option><option value="high">高（高效能裝置）</option></select></label>
           <label class="rea-check"><input type="checkbox" data-rea-show-sticks> 顯示打桿位置</label>
           <label class="rea-check"><input type="checkbox" data-rea-show-hud> 顯示高度、速度與機頭角</label>
           <label class="rea-check"><input type="checkbox" data-rea-narration> 示範語音解說（台灣女聲）</label>
           <label class="rea-check"><input type="checkbox" data-rea-rotor-sound> 槳葉旋轉聲音</label>
           <label class="rea-check"><input type="checkbox" data-rea-captions> 顯示解說字幕</label>
           <p class="rea-muted" data-rea-voice-name></p>
+          <label>飛行引擎<select data-rea-engine-pick><option value="web_lite">WEB LITE（瀏覽器簡化物理）</option><option value="physics_pro">PHYSICS PRO（本機 ArduPilot SITL）</option></select></label>
+          <label data-rea-pro-row>服務位址<input data-rea-pro-base spellcheck="false"></label>
+          <label data-rea-pro-row>服務金鑰<input data-rea-pro-token type="password" autocomplete="off"></label>
         </div>
         <p class="rea-muted" data-rea-safety></p>
+        <p class="rea-muted" data-rea-pro-note>PHYSICS PRO 需要在這台電腦啟動 FDE-DT 服務（ArduPilot SITL，只連本機 127.0.0.1）；示範飛行固定使用 WEB LITE。機型參數尚未實測校準，不代表真機手感。</p>
         <button class="rea-link" data-rea-reset-prefs>恢復預設</button>
       </details>
       <div class="rea-actions">
@@ -208,7 +230,15 @@ export function createReaApp(root: HTMLElement): ReaApp {
   const unmountLink = input.pen && input.phone ? mountFloatingLinkPanel(input.pen, input.phone, input.gesture ?? undefined) : () => undefined;
 
   let phase: Phase = 'setup';
-  let session: FlightSession | null = null;
+  let session: FlightEngine | null = null;
+  /** 只在 Runner 注入唯讀 attach 時存在；不提供任何控制指令介面。 */
+  let training: TrainingEvidencePipeline | null = null;
+  /** 已送進管線的最後一筆觀測序號（同一筆觀測在多個畫面幀重複出現，只送一次） */
+  let lastFedSample = 0;
+  /** 最近一次科目的訓練評分摘要（教師唯讀檢視與 JSON 匯出用） */
+  let lastTraining: TrainingSummary | null = null;
+  /** 最近一次科目的教師唯讀匯出紀錄（只供下載覆核，不含任何寫入授權） */
+  let lastExport: TrainingExportRecord | null = null;
   let demo: Autopilot | null = null;
   let countdownT = 0;
   let replay: { samples: Sample[]; t: number; speed: number; playing: boolean; result: CourseResult; coloring: TrackColoring } | null = null;
@@ -492,6 +522,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     $<HTMLSelectElement>('[data-rea-facing]').value = String(prefs.facingDeg);
     $<HTMLSelectElement>('[data-rea-stick-mode]').value = prefs.stickMode;
     $<HTMLSelectElement>('[data-rea-excam]').value = prefs.examineeCam;
+    $<HTMLSelectElement>('[data-rea-quality-select]').value = prefs.quality;
     $<HTMLInputElement>('[data-rea-show-sticks]').checked = prefs.showSticks;
     $<HTMLInputElement>('[data-rea-show-hud]').checked = prefs.showHud;
     $<HTMLInputElement>('[data-rea-narration]').checked = prefs.narration;
@@ -512,10 +543,26 @@ export function createReaApp(root: HTMLElement): ReaApp {
     const safety = levelToSpeed(w.level) >= 7.5 || levelToSpeed(w.level) + w.gust * 0.6 >= 10;
     $('[data-rea-safety]').textContent = safety ? '⚠️ 已達規範的安全宣告門檻（平均風 7.5 m/s 或陣風 10 m/s），實際考試時監評會做安全宣告。' : '';
     scene.examineeCam = prefs.examineeCam;
+    prefs.quality = scene.setQuality(prefs.quality);
     scene.setSun({ hour: prefs.hour, facingDeg: prefs.facingDeg, sunny: prefs.sunny });
     // 觸控模式：打桿位置改顯示在下方操控盤，考場畫面不再放打桿框
     $('[data-rea-sticks]').hidden = !prefs.showSticks || prefs.touchSticks;
     $('[data-rea-hud]').hidden = !prefs.showHud;
+    $<HTMLSelectElement>('[data-rea-engine-pick]').value = prefs.engine;
+    $<HTMLInputElement>('[data-rea-pro-base]').value = prefs.proBase;
+    $<HTMLInputElement>('[data-rea-pro-token]').value = prefs.proToken;
+    root.querySelectorAll<HTMLElement>('[data-rea-pro-row]').forEach((el) => (el.hidden = prefs.engine !== 'physics_pro'));
+  }
+
+  /** 上方常駐的引擎標示（保真度聲明：WEB LITE 不得標示為高精度）。 */
+  function renderEngineChip(): void {
+    const labels = session?.labels ?? (prefs.engine === 'physics_pro'
+      ? { display: 'PHYSICS PRO・ArduPilot SITL（尚未連線）', simulator_type: 'ardupilot_sitl', physics_model_version: '—', firmware_version: '—' }
+      : { display: 'WEB LITE・瀏覽器簡化物理（非高精度）', simulator_type: 'web_lite', physics_model_version: 'rea-lite-1', firmware_version: 'none' });
+    const el = $('[data-rea-engine]');
+    el.textContent = labels.display;
+    el.dataset.simulatorType = labels.simulator_type;
+    el.title = `simulator_type=${labels.simulator_type}｜physics_model_version=${labels.physics_model_version}｜firmware_version=${labels.firmware_version}`;
   }
 
   function renderHeader(): void {
@@ -536,6 +583,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     renderAirframes();
     renderSettings();
     renderHeader();
+    renderEngineChip();
     savePrefs(prefs);
     if (phase === 'setup') prepareIdle();
   }
@@ -563,7 +611,10 @@ export function createReaApp(root: HTMLElement): ReaApp {
    */
   function stopForChange(): void {
     const wasActive = phase !== 'setup';
+    training?.cancel();
+    session?.dispose();
     session = null;
+    clearAttachObservation();
     demo = null;
     phase = 'setup';
     root.dataset.reaPhase = 'setup';
@@ -576,6 +627,14 @@ export function createReaApp(root: HTMLElement): ReaApp {
     rotor.silence();
     endResult();
     if (wasActive) $('[data-rea-hint]').textContent = '已結束上一趟，換好後按「開始飛」。';
+  }
+
+  /** 這裡只清除測試證據欄位；絕不攜帶任何控制能力。 */
+  function clearAttachObservation(): void {
+    const d = scene.renderer.domElement.dataset;
+    for (const key of ['reaAuthoritySample', 'reaAuthorityPositionEnu', 'reaAuthorityAttitudeDeg',
+      'reaAuthorityMode', 'reaAuthorityArmed', 'reaAuthorityMission', 'reaAuthoritySourceAt',
+      'reaAuthorityReceivedAt', 'reaAuthorityLink']) delete d[key];
   }
 
   root.addEventListener('click', (ev) => {
@@ -613,8 +672,14 @@ export function createReaApp(root: HTMLElement): ReaApp {
     refreshAll();
   });
   $<HTMLInputElement>('[data-rea-af-fixed]').addEventListener('change', (e) => { prefs.airframeFixed = (e.target as HTMLInputElement).checked; refreshAll(); });
-  const bindSetting = (sel: string, apply: (v: string, el: HTMLInputElement) => void) =>
-    $(sel).addEventListener('input', (e) => { const el = e.target as HTMLInputElement; apply(el.value, el); refreshAll(); });
+  const bindSetting = (sel: string, apply: (v: string, el: HTMLInputElement) => void) => {
+    const element = $(sel);
+    const update = (e: Event) => { const el = e.target as HTMLInputElement; apply(el.value, el); refreshAll(); };
+    element.addEventListener('input', update);
+    // 下拉選單必須主動發布已確定的變更；
+    // 有些瀏覽器在程式化選取時不會觸發 input 事件。
+    if (element instanceof HTMLSelectElement) element.addEventListener('change', update);
+  };
   bindSetting('[data-rea-wind-from]', (v) => (prefs.wind.from = v as WindFrom));
   bindSetting('[data-rea-wind-level]', (v) => (prefs.wind.level = Number(v)));
   bindSetting('[data-rea-wind-gust]', (v) => (prefs.wind.gust = Number(v)));
@@ -624,11 +689,18 @@ export function createReaApp(root: HTMLElement): ReaApp {
   bindSetting('[data-rea-facing]', (v) => (prefs.facingDeg = Number(v)));
   bindSetting('[data-rea-stick-mode]', (v) => (prefs.stickMode = v as StickMode));
   bindSetting('[data-rea-excam]', (v) => (prefs.examineeCam = v as ExamineeCam));
+  bindSetting('[data-rea-quality-select]', (v) => (prefs.quality = v as RenderQuality));
   bindSetting('[data-rea-show-sticks]', (_v, el) => (prefs.showSticks = el.checked));
   bindSetting('[data-rea-show-hud]', (_v, el) => (prefs.showHud = el.checked));
   bindSetting('[data-rea-narration]', (_v, el) => (prefs.narration = el.checked));
   bindSetting('[data-rea-rotor-sound]', (_v, el) => (prefs.rotorSound = el.checked));
   bindSetting('[data-rea-captions]', (_v, el) => (prefs.captions = el.checked));
+  bindSetting('[data-rea-engine-pick]', (v) => { stopForChange(); prefs.engine = v as EngineKind; });
+  $('[data-rea-pro-base]').addEventListener('change', (e) => { prefs.proBase = (e.target as HTMLInputElement).value.trim().replace(/\/+$/, ''); savePrefs(prefs); });
+  $('[data-rea-pro-token]').addEventListener('change', (e) => { prefs.proToken = (e.target as HTMLInputElement).value; savePrefs(prefs); });
+  root.querySelectorAll<HTMLElement>('[data-rea-fault]').forEach((b) => b.addEventListener('click', () => {
+    if (session instanceof SitlEngine) session.injectFault(b.dataset.reaFault as 'gps_loss' | 'gps_restore');
+  }));
   $('[data-rea-reset-prefs]').addEventListener('click', () => { Object.assign(prefs, { ...DEFAULT_PREFS, wind: { ...DEFAULT_WIND }, subjectId: prefs.subjectId }); refreshAll(); });
 
   root.querySelectorAll<HTMLElement>('[data-rea-input]').forEach((b) => b.addEventListener('click', () => {
@@ -663,6 +735,14 @@ export function createReaApp(root: HTMLElement): ReaApp {
     else if (e.key === 'g' || e.key === 'G') toggleFull();
   };
   window.addEventListener('keydown', onKey);
+  // 唯讀 ticket 飛行中續發：只在 attach 模式有效；身分與效期由 SitlEngine 再次驗證，伺服器也會獨立驗證
+  window.addEventListener(READ_ATTACHMENT_RENEW_EVENT, (ev) => {
+    const next = parseReadAttachment((ev as CustomEvent<unknown>).detail);
+    const ok = !!next && session instanceof SitlEngine && session.renewReadAttachment(next);
+    // 只給測試讀取的續發結果：不含 ticket
+    root.dataset.reaReadRenewals = String(Number(root.dataset.reaReadRenewals ?? 0) + (ok ? 1 : 0));
+    if (!ok) root.dataset.reaReadRenewRejected = String(Number(root.dataset.reaReadRenewRejected ?? 0) + 1);
+  });
 
   function cycleView(): void {
     scene.view = scene.view === 'examinee' ? 'drone' : scene.view === 'drone' ? 'top' : 'examinee';
@@ -681,12 +761,31 @@ export function createReaApp(root: HTMLElement): ReaApp {
     const s = subject();
     if (!s.implemented) return;
     endResult();
-    session = new FlightSession({ subject: s, airframeId: prefs.airframeId, mode: isDemo ? 'position' : prefs.mode, wind: { ...prefs.wind } });
+    session?.dispose();
+    clearAttachObservation();
+    const opts = { subject: s, airframeId: prefs.airframeId, mode: isDemo ? 'position' as const : prefs.mode, wind: { ...prefs.wind } };
+    // 示範固定用 WEB LITE（自動駕駛依簡化物理設計）；真人飛行依設定選引擎
+    const usePro = !isDemo && prefs.engine === 'physics_pro';
+    // 僅由受控測試 Runner 注入的一次性短效 read ticket 會在此消費；
+    // 它不會寫入偏好，也不會把 Gateway 管理 token 帶入 attach 模式。
+    const attach = usePro ? consumeExternalReadAttachment(window.sessionStorage) : undefined;
+    session = usePro
+      ? new SitlEngine(opts, { base: prefs.proBase || 'http://127.0.0.1:8200', token: prefs.proToken, facingDeg: prefs.facingDeg, attach })
+      : new FlightSession(opts);
+    // 只有受控 Runner 注入的唯讀 attach 才建立訓練證據轉接器（沒有任何控制介面）
+    // 只有受控 Runner 注入的唯讀 attach 才建立訓練證據管線（沒有任何控制介面）
+    training?.cancel();
+    training = attach ? TrainingEvidencePipeline.forSubject(s.id, attach, 3_000, prefs.facingDeg) : null;
+    lastFedSample = 0;
+    lastTraining = null;
+    lastExport = null;
     demo = isDemo ? new Autopilot(AIRFRAMES[prefs.airframeId]) : null;
     hideDemoBar();
     if (isDemo && demo) {
       // 背景把整個科目先飛完（同一套物理與評等），再依時間播放，才能暫停、變速、拖曳
       const ap = demo;
+      // 示範固定 WEB LITE（usePro 排除示範），這裡一定是 FlightSession
+      if (!(session instanceof FlightSession)) throw new Error('示範只支援 WEB LITE');
       const sess = session;
       const maxSteps = Math.round((8 * 60) / PHYSICS_DT);
       for (let i = 0; i < maxSteps && !sess.done; i++) sess.stepOnce(ap.command(sess.runner, sess.state));
@@ -700,9 +799,11 @@ export function createReaApp(root: HTMLElement): ReaApp {
     scene.buildField(fieldOf(s.field), s);
     scene.buildDrone(AIRFRAMES[prefs.airframeId]);
     scene.clearTrail();
-    phase = isDemo ? 'demo' : 'countdown';
-    root.dataset.reaPhase = isDemo ? 'flying' : 'countdown';
+    // 示範固定 WEB LITE（背景試飛後播放）；PHYSICS PRO 先進 preparing 等 SITL 就緒
+    phase = isDemo ? 'demo' : usePro ? 'preparing' : 'countdown';
+    root.dataset.reaPhase = isDemo ? 'flying' : phase;
     countdownT = isDemo ? 0 : 3;
+    renderEngineChip();
     stage.classList.toggle('rea-demo', isDemo);
     // 使用者剛按了按鈕：此時才能喚醒音訊（瀏覽器規定）
     rotor.unlock();
@@ -715,7 +816,10 @@ export function createReaApp(root: HTMLElement): ReaApp {
 
   function restart(): void {
     if (phase === 'setup') return;
+    training?.cancel();
+    session?.dispose();
     session = null;
+    clearAttachObservation();
     demo = null;
     phase = 'setup';
     $('[data-rea-countdown]').textContent = '';
@@ -732,6 +836,12 @@ export function createReaApp(root: HTMLElement): ReaApp {
   function finish(): void {
     if (!session) return;
     const result = session.result();
+    if (training) {
+      training.finish(result);
+      lastTraining = training.summary();
+      lastExport = buildTrainingExport(training, subject().id);
+      root.dataset.reaTrainingStatus = lastTraining.status;
+    }
     phase = 'result';
     root.dataset.reaPhase = 'result';
     replay = { samples: session.samples, t: 0, speed: 1, playing: false, result, coloring: 'time' };
@@ -742,7 +852,8 @@ export function createReaApp(root: HTMLElement): ReaApp {
     hideDemoBar();
     if (demo && demoNarrate) narrator.speak(result.failure ? '示範結束。' : '示範完成。接下來換你試試看，按「開始飛」就可以練習這個科目。');
     // 真人飛完（示範不算）：沿用既有機制，已登入學員時把成績摘要存入成長日誌「模擬練飛紀錄」
-    if (!demo) {
+    // 唯讀 attach（training 存在）不是學員操作，絕不寫入成績
+    if (!demo && !training) {
       const s = subject();
       void syncPractice({
         mode: 'exam',
@@ -756,6 +867,9 @@ export function createReaApp(root: HTMLElement): ReaApp {
           wind_mps: levelToSpeed(session.opts.wind.level), failure: result.failure,
           steps: result.steps.map((st) => ({ label: st.label, grade: TIER_LABELS[st.tier] })),
           note: '練習評等，非民航局官方評分',
+          simulator_type: session.labels.simulator_type,
+          physics_model_version: session.labels.physics_model_version,
+          firmware_version: session.labels.firmware_version,
         },
       }).then(showPracticeToast);
     }
@@ -794,11 +908,22 @@ export function createReaApp(root: HTMLElement): ReaApp {
   }
 
   // ---------- 評等與回放 ----------
+  /** 教師檢視表格：證據過多時只列前 20 與後 20 筆，完整內容在 JSON */
+  function teacherRows(rec: TrainingExportRecord): string {
+    const all = rec.run.samples;
+    const pick = all.length > 40 ? [...all.slice(0, 20), null, ...all.slice(-20)] : all;
+    return pick.map((x) => x === null
+      ? `<tr><td colspan="6">…（中間 ${all.length - 40} 筆略，完整見 JSON）</td></tr>`
+      : `<tr><td>${x.localSequence ?? x.sampleId}</td><td>${x.position.x.toFixed(2)}</td><td>${x.position.y.toFixed(2)}</td><td>${x.position.altitudeM.toFixed(2)}</td><td>${esc(x.missionState)}</td><td>${esc(x.safetyEvents.join('、'))}</td></tr>`).join('');
+  }
+
   function showResult(): void {
     if (!replay) return;
     const r = replay.result;
     const s = subject();
     const box = $('[data-rea-result]');
+    // 沒有完成任何步驟，或訓練證據鏈 INVALID（例如遙測過期）時，不得顯示任何等級，避免空資料被誤讀為高分
+    const ungraded = r.steps.length === 0 || lastTraining?.status === 'INVALID';
     const rows = r.steps.map((st) => `
       <tr class="t${st.tier}"><td>${esc(st.label)}</td><td><b>${TIER_LABELS[st.tier]}</b></td>
       <td>${st.metrics.map((m) => `<span class="m t${m.tier}">${esc(m.label)} ${m.value}${m.unit}</span>`).join('')}</td>
@@ -806,14 +931,24 @@ export function createReaApp(root: HTMLElement): ReaApp {
     const markers = r.steps.map((st) => `<i style="left:${(st.startT / Math.max(r.durationS, 1)) * 100}%" title="${esc(st.label)}"></i>`).join('');
     box.innerHTML = `
       <div class="rea-result-head">
-        <div><small>練習評等</small><div class="rea-grade t${r.grade}">${TIER_LABELS[r.grade]}</div></div>
+        <div><small>練習評等</small>${ungraded ? '<div class="rea-grade" data-rea-ungraded>未評等</div>' : `<div class="rea-grade t${r.grade}">${TIER_LABELS[r.grade]}</div>`}</div>
         <div class="rea-result-meta">
           <b>${esc(s.name)}</b>・${AIRFRAMES[session?.opts.airframeId ?? prefs.airframeId].name}・${session?.opts.mode === 'position' ? '定位' : '姿態'}模式${demo ? '・示範' : ''}<br>
           全程 ${Math.round(r.durationS)} 秒・風 ${levelToSpeed(prefs.wind.level)} m/s${r.failure ? `<br><span class="rea-fail">❌ ${esc(r.failure)}</span>` : ''}
+          <br><span class="rea-engine-line" data-rea-result-engine>${esc(session?.labels.display ?? '')}｜simulator_type=${esc(session?.labels.simulator_type ?? '')}｜physics_model_version=${esc(session?.labels.physics_model_version ?? '')}｜firmware_version=${esc(session?.labels.firmware_version ?? '')}</span>
         </div>
         <div class="rea-result-btns"><button class="rea-primary" data-rea-again>再飛一次</button><button class="rea-secondary" data-rea-close>換科目</button></div>
       </div>
       <p class="rea-disclaimer">${esc(r.disclaimer)}</p>
+      ${lastTraining ? `<p class="rea-training" data-rea-training-summary>訓練模板：${esc(lastTraining.taskName)}｜狀態 <b>${lastTraining.status}</b>${lastTraining.reason ? `（${esc(lastTraining.reason)}）` : ''}｜證據 ${lastTraining.sampleCount} 筆（瀏覽器端序號）｜安全事件 ${lastTraining.score.safetyEvents}｜<b>${lastTraining.score.recommendation}</b>｜${lastTraining.classification}，非官方評分</p>` : ''}
+      ${lastExport ? `<details class="rea-teacher" data-rea-teacher-view>
+        <summary>教師唯讀檢視（${lastExport.run.samples.length} 筆證據）</summary>
+        <p class="rea-disclaimer">唯讀：本頁不提供教師核可功能（Gateway 沒有教師寫入端點）。下載 JSON 後由教師另行覆核。</p>
+        <table class="rea-table"><thead><tr><th>序號（瀏覽器端）</th><th>東 m</th><th>北 m</th><th>高 m</th><th>模式</th><th>安全事件</th></tr></thead><tbody>
+        ${teacherRows(lastExport)}
+        </tbody></table>
+        <button class="rea-secondary" data-rea-export-json>下載訓練證據 JSON</button>
+      </details>` : ''}
       <div class="rea-result-body">
         <div class="rea-track">
           <canvas width="360" height="300" data-rea-track></canvas>
@@ -828,6 +963,16 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <span data-rea-time>00:00 / ${fmt(r.durationS)}</span>
       </div>`;
     box.hidden = false;
+    box.querySelector('[data-rea-export-json]')?.addEventListener('click', () => {
+      if (!lastExport) return;
+      // 純前端下載：不送出任何網路請求
+      const blob = new Blob([JSON.stringify(lastExport, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = trainingExportFilename(lastExport);
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1_000);
+    });
     box.querySelector('[data-rea-again]')!.addEventListener('click', () => start(!!demo));
     box.querySelector('[data-rea-close]')!.addEventListener('click', () => restart());
     box.querySelector('[data-rea-play]')!.addEventListener('click', () => {
@@ -890,6 +1035,16 @@ export function createReaApp(root: HTMLElement): ReaApp {
 
     if (phase === 'setup') {
       cmd = pilotCommand(); // 讓使用者在起飛前就看得到打桿位置、確認連線
+    } else if (phase === 'preparing' && session) {
+      // PHYSICS PRO：等 SITL 驗證、定位與解鎖完成後才開始倒數
+      cmd = pilotCommand();
+      hint.textContent = session.failed ? `⚠️ ${session.failed}` : session.statusText;
+      renderEngineChip();
+      // 唯讀 attach：Runner 已結束 Session（未飛行或飛行後才連上）→ 直接進結果畫面，提供教師唯讀檢視
+      if (training && session instanceof SitlEngine && session.readOnlyLinkStatus === 'disconnected') {
+        if (!training.terminal) training.sessionLost('Session 遺失（Gateway 已結束）');
+        finish();
+      } else if (session.ready) { phase = 'countdown'; countdownT = 3; }
     } else if (phase === 'countdown' && session) {
       cmd = pilotCommand();
       countdownT -= dt;
@@ -915,7 +1070,12 @@ export function createReaApp(root: HTMLElement): ReaApp {
       hint.textContent = sess.runner.returnCalled && step?.kind === 'emergency-return'
         ? '🚨 緊急返航！立刻停住，再飛回較近的八字內圈降落'
         : step ? `下一步：${step.label}${holdLeft}` : '完成';
-      if (sess.done) finish();
+      // 唯讀 attach（training 只在 attach 時存在）：飛行生命週期由 Mission Runner 擁有，
+      // 本地課程判定不得提早結束畫面，否則權威遙測停止更新、訓練任務被提早轉為 COMPLETED/FAILED。
+      if (training && sess instanceof SitlEngine) {
+        if (sess.readOnlyLinkStatus === 'disconnected') finish();
+      } else if (sess.failed) { training?.sessionLost(`Session 遺失：${sess.failed}`); hint.textContent = `⚠️ ${sess.failed}`; finish(); }
+      else if (sess.done) finish();
     } else if (phase === 'challenge' && chRun) {
       const run = chRun;
       cmd = pilotCommand();
@@ -984,10 +1144,42 @@ export function createReaApp(root: HTMLElement): ReaApp {
 
     if (session && phase !== 'result' && phase !== 'demo') {
       const st = session.state;
-      scene.setDrone(st.x, st.y, st.h, st.heading, st.pitchDeg, st.rollDeg, !st.landed, dt);
-      scene.setWindSock(session.wind.at(session.t));
+      const sampleId = session instanceof SitlEngine ? session.observation?.sampleId : undefined;
+      scene.setDrone(st.x, st.y, st.h, st.heading, st.pitchDeg, st.rollDeg, !st.landed, dt, sampleId);
+      if (session instanceof SitlEngine && session.observation) {
+        const o = session.observation;
+        const d = scene.renderer.domElement.dataset;
+        d.reaAuthoritySample = String(o.sampleId);
+        d.reaAuthorityPositionEnu = JSON.stringify(o.positionEnu);
+        d.reaAuthorityAttitudeDeg = JSON.stringify(o.attitudeDeg);
+        d.reaAuthorityMode = o.mode;
+        d.reaAuthorityArmed = String(o.armed);
+        d.reaAuthorityMission = JSON.stringify(o.missionProgress ?? {});
+        d.reaAuthoritySourceAt = String(o.sourceTimestamp);
+        d.reaAuthorityReceivedAt = String(o.receivedTimestamp);
+        d.reaAuthorityLink = session.readOnlyLinkStatus;
+      } else if (session instanceof SitlEngine) {
+        scene.renderer.domElement.dataset.reaAuthorityLink = session.readOnlyLinkStatus;
+      }
+      scene.setWindSock(session.windAt(session.t));
+      if (session instanceof SitlEngine && training && session.observation && session.observation.sampleId !== lastFedSample) {
+        lastFedSample = session.observation.sampleId;
+        const evidence = training.observe(session.observation, session.readOnlyLinkStatus, Date.now());
+        // 只給測試讀取的生命週期狀態：不含 ticket、token 或任何控制介面
+        root.dataset.reaTrainingEvidence = evidence;
+        root.dataset.reaTrainingStatus = training.run.status;
+        root.dataset.reaTrainingSamples = String(training.run.samples.length);
+      }
+      // 遙測過期或 Session 結束時不會再有新觀測，必須主動依連線狀態判定 INVALID
+      if (session instanceof SitlEngine && training && !training.terminal
+          && (session.readOnlyLinkStatus === 'stale' || session.readOnlyLinkStatus === 'disconnected')) {
+        training.sessionLost(session.readOnlyLinkStatus === 'stale' ? '遙測資料過期（Gateway 來源停止）' : 'Session 遺失（Gateway 已結束）');
+        root.dataset.reaTrainingStatus = training.run.status;
+        root.dataset.reaTrainingReason = training.run.reason ?? '';
+      }
       const hud = $('[data-rea-hud]');
       hud.textContent = `高度 ${st.h.toFixed(1)} m・速度 ${horizontalSpeed(st).toFixed(1)} m/s・機頭 ${Math.round(norm360(st.heading))}°`;
+      $('[data-rea-faults]').hidden = !(session instanceof SitlEngine && phase === 'flying');
       // 給自動化測試讀取的數值（不影響畫面）
       hud.dataset.alt = st.h.toFixed(3);
       hud.dataset.x = st.x.toFixed(3);
@@ -1009,6 +1201,12 @@ export function createReaApp(root: HTMLElement): ReaApp {
       rotor.update(smp ? rotorTarget(afId, smp.cmd, { armed: true, landed: smp.h < 0.02, crashed: false, pitchDeg: smp.pitchDeg, rollDeg: smp.rollDeg }) : { spin: 0, freq: 0, gain: 0 });
     } else {
       rotor.update({ spin: 0, freq: 0, gain: 0 });
+    }
+    // 唯讀 Mission attach 的本地課程畫面可能比 Runner 的「過期 → DELETE」
+    // 生命週期驗證更早結束；此處持續公開連線狀態，
+    // 但不恢復任何控制、也不改動模型。
+    if (session instanceof SitlEngine) {
+      scene.renderer.domElement.dataset.reaAuthorityLink = session.readOnlyLinkStatus;
     }
     drawSticks(cmd);
     scene.render();
@@ -1056,11 +1254,14 @@ export function createReaApp(root: HTMLElement): ReaApp {
   return {
     dispose() {
       cancelAnimationFrame(raf);
+      session?.dispose();
+      clearAttachObservation();
       window.removeEventListener('keydown', onKey);
       unmountLink();
       narrator.stop();
       rotor.dispose();
       scene.dispose();
+      session?.dispose();
     },
   };
 }

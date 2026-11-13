@@ -33,6 +33,14 @@ if (params.get('mode') === 'exam') {
       import.meta.hot.dispose(() => app.dispose());
     }
   });
+} else if (params.get('mode') === 'gcs') {
+  // P5：獨立地面站訓練入口；未連 Gateway 前僅能規劃，不會發送任何飛行命令。
+  void import('./gcs/training-app').then((m) => {
+    const app = m.createGroundStationTrainingApp(root);
+    if (import.meta.hot) {
+      import.meta.hot.dispose(() => app.dispose());
+    }
+  });
 } else {
   void import('./app/create-app').then((m) => {
     const app = m.createApp(root);
