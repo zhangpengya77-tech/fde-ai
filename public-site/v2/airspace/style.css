@@ -1,0 +1,75 @@
+/* FDE 空域查詢頁樣式（自行設計；深藍科技風，與 FDE-AI-UAS 網站一致的色調） */
+:root {
+  --bg: #07111f;
+  --card: #0f2033;
+  --line: rgba(0, 194, 255, 0.28);
+  --fg: #dbe7ef;
+  --muted: #93a9b8;
+  --acc: #00c2ff;
+  --warn: #ffb703;
+  --ok: #4ade80;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; line-height: 1.6; }
+a { color: var(--acc); }
+
+/* 頂部列 */
+.as-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.as-brand { color: var(--acc); font-weight: 800; text-decoration: none; letter-spacing: 0.04em; }
+.as-links { display: flex; gap: 8px; }
+.as-links a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); text-decoration: none; font-size: 14px; }
+.as-links a[aria-current="page"] { background: var(--acc); color: #03121f; border-color: var(--acc); font-weight: 700; }
+
+/* 主版面：桌機左地圖右資訊；手機上下排列 */
+.as-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; max-width: 1500px; margin: 0 auto; }
+.as-mapwrap { position: relative; min-height: 70vh; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+#map { position: absolute; inset: 0; background: #cfd8dc; }
+.as-side { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 120px); overflow: auto; }
+@media (max-width: 900px) {
+  .as-main { grid-template-columns: 1fr; padding: 10px; }
+  .as-mapwrap { min-height: 62vh; }
+  .as-side { max-height: none; overflow: visible; }
+}
+
+/* 搜尋列與建議清單（疊在地圖上方） */
+.as-search { position: absolute; top: 10px; left: 56px; right: 10px; z-index: 500; display: flex; gap: 6px; max-width: 520px; }
+.as-search input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #b0bec5; font-size: 15px; }
+.as-search button { padding: 0 16px; border: 0; border-radius: 8px; background: var(--acc); color: #03121f; font-weight: 800; font-size: 15px; cursor: pointer; }
+.as-suggest { position: absolute; top: 54px; left: 56px; right: 10px; max-width: 520px; z-index: 600; margin: 0; padding: 4px 0; list-style: none; background: #fff; color: #17212b; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
+.as-suggest li { padding: 8px 12px; cursor: pointer; font-size: 14px; }
+.as-suggest li:hover, .as-suggest li:focus { background: #e3f2fd; outline: none; }
+
+/* 我的位置按鈕 */
+.as-locate { position: absolute; right: 14px; bottom: 28px; z-index: 500; width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--acc); color: #03121f; font-size: 24px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+
+/* 狀態提示 */
+.as-status { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 500; margin: 0; padding: 6px 14px; border-radius: 999px; background: rgba(7, 17, 31, 0.85); color: #fff; font-size: 13px; }
+.as-status-warn { background: rgba(170, 60, 0, 0.92); }
+
+/* 右側卡片 */
+.as-card { padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.as-card h2 { margin: 0 0 8px; font-size: 17px; color: #fff; }
+.as-card p { margin: 0 0 8px; }
+.as-muted { color: var(--muted); }
+.as-small { font-size: 13px; }
+.as-list { margin: 0; padding-left: 20px; }
+.as-list li { margin-bottom: 4px; }
+.as-where { font-weight: 700; color: #fff; }
+.as-ok { color: var(--ok); font-weight: 700; }
+.as-warn { color: var(--warn); font-weight: 700; }
+
+/* 查詢結果的每一個區域 */
+.as-hit { margin: 10px 0; padding: 10px 12px; background: #0b1a2b; border-left: 4px solid; border-radius: 6px; }
+.as-hit h3 { margin: 6px 0; font-size: 15px; color: #fff; }
+.as-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; color: #fff; font-size: 12px; font-weight: 700; }
+.as-hit dl { margin: 0; display: grid; grid-template-columns: 72px 1fr; gap: 2px 8px; font-size: 13px; }
+.as-hit dt { color: var(--muted); }
+.as-hit dd { margin: 0; word-break: break-word; }
+
+/* 圖層開關 */
+.as-layers { display: grid; gap: 6px; }
+.as-layers label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.as-layers i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.as-layers small { color: var(--muted); margin-left: auto; }
+
+.as-foot { padding: 14px; text-align: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
