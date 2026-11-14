@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 from learning.models import Cohort
 
 from .access import ALLOWED, DISABLED, evaluate_access
-from .allowlist import load_allowlist, readback_matches, validate_change
+from .allowlist import load_allowlist, load_explanations, readback_matches, validate_change
 from .models import APPROVAL_TTL, ParamWriteRequest
 
 Status = ParamWriteRequest.Status
@@ -76,7 +76,9 @@ def allowlist_view(request):
     if blocked:
         return blocked
     data = load_allowlist()
-    return JsonResponse({key: data[key] for key in ("version", "firmware", "approved_by", "max_step_ratio", "params")})
+    payload = {key: data[key] for key in ("version", "firmware", "approved_by", "max_step_ratio", "params")}
+    payload["explanations"] = load_explanations()
+    return JsonResponse(payload)
 
 
 @never_cache

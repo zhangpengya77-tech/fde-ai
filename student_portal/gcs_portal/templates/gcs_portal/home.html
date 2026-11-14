@@ -118,19 +118,46 @@
 
     <section class="gcs-panel" id="gcs-ai" aria-labelledby="gcs-ai-title">
       <h2 id="gcs-ai-title"><span>05</span>AI 調參助教</h2>
-      <p>連線讀到參數後，助教會說明每個參數的用途、目前值、常見範圍與風險。</p>
-      <p class="gcs-note">AI 只提供建議，不會寫入飛控；建議和寫入是兩個分開的步驟，寫入必須經過教師批准。（P5 開放）</p>
+      <p id="gcsAiIntro">讀取參數後，在參數表點參數名稱，這裡會顯示用途、目前值、安全範圍與風險。</p>
+      <div id="gcsAiCard" hidden>
+        <h3 class="gcs-h3" id="gcsAiName"></h3>
+        <dl class="gcs-facts">
+          <dt>目前值</dt><dd id="gcsAiValue">—</dd>
+          <dt>允許範圍</dt><dd id="gcsAiRange">—</dd>
+          <dt>用途</dt><dd id="gcsAiPurpose">—</dd>
+          <dt>調高</dt><dd id="gcsAiHigher">—</dd>
+          <dt>調低</dt><dd id="gcsAiLower">—</dd>
+          <dt>注意</dt><dd id="gcsAiRisk">—</dd>
+        </dl>
+        <p class="gcs-note" id="gcsAiSource"></p>
+        <div class="gcs-actions"><button type="button" id="gcsAiAsk" disabled>問 AI 助教</button></div>
+        <p class="gcs-ai-answer" id="gcsAiAnswer" role="status" aria-live="polite"></p>
+      </div>
+      <p class="gcs-note">AI 只提供建議，不會寫入飛控；這個區塊沒有任何「套用」按鈕。要修改參數，請在參數表按「申請修改」，由教師批准後才能寫入。</p>
     </section>
 
     <section class="gcs-panel" id="gcs-results" aria-labelledby="gcs-results-title">
       <h2 id="gcs-results-title"><span>06</span>學員成果</h2>
-      <dl class="gcs-facts">
-        <dt>參數備份</dt><dd>尚無紀錄</dd>
-        <dt>差異報告</dt><dd>尚無紀錄</dd>
-        <dt>SITL 任務結果</dt><dd>尚無紀錄</dd>
-        <dt>教師覆核</dt><dd>尚無紀錄</dd>
-      </dl>
-      <p class="gcs-note">紀錄只在學員主動上傳後保存，只有本人和所屬班級教師看得到。（P5 開放）</p>
+      <h3 class="gcs-h3">任務卡</h3>
+      <ul class="gcs-checklist" id="gcsTaskCard"><li>讀取中…</li></ul>
+      <div class="gcs-actions">
+        <button type="button" id="gcsBackupUpload" disabled>上傳目前參數備份</button>
+        <select id="gcsExportCohort" aria-label="匯出班級" hidden></select>
+        <button type="button" id="gcsExport" disabled hidden>匯出班級成果 CSV</button>
+      </div>
+      <p class="gcs-link-message" id="gcsResultMessage" role="status" aria-live="polite"></p>
+      <h3 class="gcs-h3">參數備份</h3>
+      <ul class="gcs-requests" id="gcsBackupList"><li>尚無備份。</li></ul>
+      <div class="gcs-subpanel" id="gcsDiff" hidden>
+        <h3 class="gcs-h3" id="gcsDiffTitle">差異報告</h3>
+        <div class="gcs-table-wrap">
+          <table class="gcs-table">
+            <thead><tr><th>參數</th><th>前一份</th><th>這一份</th></tr></thead>
+            <tbody id="gcsDiffBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="gcs-note">紀錄只在學員主動上傳後保存，只有本人和所屬班級教師看得到；不保存 USB 裝置識別資訊。</p>
     </section>
   </main>
 </body>

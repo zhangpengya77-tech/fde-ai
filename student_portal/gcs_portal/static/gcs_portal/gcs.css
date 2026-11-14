@@ -382,3 +382,38 @@
 .gcs-requests li[data-status="FAILED"] span,
 .gcs-requests li[data-status="REJECTED"] span { color: var(--bad); }
 .gcs-requests .gcs-actions { margin: 6px 0 0; }
+
+/* P5：AI 助教、成果 */
+.gcs-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--fg);
+  font: inherit;
+  text-decoration: underline dotted var(--muted);
+  cursor: pointer;
+}
+
+.gcs-link:hover,
+.gcs-link:focus-visible {
+  color: var(--acc);
+}
+
+.gcs-ai-answer {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.gcs-results-actions select,
+#gcsExportCohort {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+#gcsTaskCard li[data-ok="false"] {
+  color: var(--muted);
+}

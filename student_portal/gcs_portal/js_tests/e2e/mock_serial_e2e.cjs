@@ -55,7 +55,7 @@ const FAKE_SERIAL = () => {
   await page.waitForFunction(() => document.querySelector('[data-key="firmware"]').textContent !== '—', null, { timeout: 10000 });
   const telemetry = await page.$$eval('[data-key]', (cells) => Object.fromEntries(cells.map((c) => [c.dataset.key, c.textContent])));
   check('telemetry from MAVLink', telemetry.mode === 'LOITER' && telemetry.firmware.startsWith('4.5.0') && telemetry.gps.includes('RTK'), JSON.stringify(telemetry));
-  check('mode bar shows real read-only', (await page.textContent('#gcsModeLabel')).includes('唯讀'));
+  check('mode bar shows real connected', (await page.textContent('#gcsModeLabel')) === '真機模式（已連線）');
 
   await page.click('#gcsParamRead');
   await page.waitForFunction(() => /^(完成|未完整|失敗)/.test(document.getElementById('gcsParamProgress').textContent), null, { timeout: 30000 });

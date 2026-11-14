@@ -1,0 +1,15 @@
+{
+  "status": "PENDING_TEACHER_REVIEW",
+  "note": "教師撰寫的固定說明；AI 回答只作補充。內容請教師確認後把 status 改成 APPROVED。",
+  "params": {
+    "ATC_RAT_RLL_P": {"purpose": "Roll（左右翻滾）角速度控制的比例增益：誤差越大，修正力道越大。", "higher": "反應更快、更「硬」；太高會高頻抖動或來回震盪。", "lower": "反應變慢、變「軟」；太低會晃、回正慢。", "risk": "每次只調 10% 左右，調完先在低空懸停觀察。"},
+    "ATC_RAT_RLL_I": {"purpose": "Roll 角速度的積分增益：修正長時間存在的小誤差（例如重心偏移、風）。", "higher": "更能抵抗持續偏差；太高會出現慢速擺盪。", "lower": "容易慢慢偏向一邊。", "risk": "通常和 P 設成相同數值。"},
+    "ATC_RAT_RLL_D": {"purpose": "Roll 角速度的微分增益：抑制過衝、讓動作收得住。", "higher": "減少過衝；太高會放大振動、馬達發燙。", "lower": "停止動作時容易過衝。", "risk": "D 值很小，改動要非常小；調完摸馬達溫度。"},
+    "ATC_RAT_PIT_P": {"purpose": "Pitch（前後俯仰）角速度控制的比例增益。", "higher": "反應更快；太高會抖動或震盪。", "lower": "反應變慢、變軟。", "risk": "F450 前後對稱時通常和 Roll 相同。"},
+    "ATC_RAT_PIT_I": {"purpose": "Pitch 角速度的積分增益：修正持續性的前後偏差。", "higher": "抵抗持續偏差；太高會慢速擺盪。", "lower": "容易慢慢前傾或後仰。", "risk": "通常和 P 設成相同數值。"},
+    "ATC_RAT_PIT_D": {"purpose": "Pitch 角速度的微分增益：抑制前後方向的過衝。", "higher": "減少過衝；太高會放大振動。", "lower": "停止時容易過衝。", "risk": "改動要非常小。"},
+    "ATC_RAT_YAW_P": {"purpose": "Yaw（機頭轉向）角速度控制的比例增益。", "higher": "轉向更跟手；太高會左右抖動。", "lower": "轉向遲鈍、機頭會慢慢偏。", "risk": "Yaw 的力道來自馬達反扭力，比 Roll／Pitch 弱，不要調太高。"},
+    "ATC_RAT_YAW_I": {"purpose": "Yaw 角速度的積分增益：讓機頭長時間保持方向。", "higher": "機頭更穩；太高會慢速擺動。", "lower": "機頭會慢慢偏轉。", "risk": "數值很小，改動幅度也要小。"},
+    "ATC_RAT_YAW_D": {"purpose": "Yaw 角速度的微分增益，多數機型保持 0。", "higher": "很少需要調高。", "lower": "保持 0 即可。", "risk": "沒有明確需求時不要修改。"}
+  }
+}

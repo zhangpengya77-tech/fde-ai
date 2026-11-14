@@ -74,6 +74,7 @@ function renderParams() {
   $('gcsParamRead').textContent = original.size ? '再讀一次並比對' : '讀取全部參數';
   $('gcsParamExport').disabled = !(downloader && downloader.params.size && downloader.state !== 'downloading');
   $('gcsParamSearch').disabled = !(downloader && downloader.params.size);
+  $('gcsBackupUpload').disabled = !(downloader && downloader.params.size && ['complete', 'incomplete'].includes(downloader.state) && link.connected);
   if (!downloader || downloader.state === 'idle') return;
   const summary = downloader.summary();
   const progress = {
@@ -119,6 +120,15 @@ function renderParamRows() {
     for (const text of [p.name, formatValue(before), formatValue(p.value), p.typeName]) {
       tr.insertCell().textContent = text;
     }
+    const nameCell = tr.cells[0];
+    nameCell.textContent = '';
+    const nameButton = document.createElement('button');
+    nameButton.type = 'button';
+    nameButton.className = 'gcs-link';
+    nameButton.textContent = p.name;
+    nameButton.title = '在 AI 調參助教顯示說明';
+    nameButton.addEventListener('click', () => selectParam(p.name));
+    nameCell.append(nameButton);
     const action = tr.insertCell();
     if (allowlist && allowlist.params[p.name]) {
       const button = document.createElement('button');
@@ -134,6 +144,12 @@ function renderParamRows() {
     td.colSpan = 5;
     td.textContent = `只顯示前 500 筆，共 ${rows.length} 筆；請用搜尋縮小範圍。`;
   }
+}
+
+function backupLines() {
+  return Array.from(link.params.params.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((p) => `${p.name},${formatValue(p.value)}`);
 }
 
 function exportParams() {
@@ -208,9 +224,15 @@ document.addEventListener('DOMContentLoaded', () => {
   $('gcsApplyClose').addEventListener('click', () => { applyTarget = null; $('gcsApplyPanel').hidden = true; });
   $('gcsWriteClose').disabled = false;
   $('gcsApplyClose').disabled = false;
+  $('gcsAiAsk').addEventListener('click', askAi);
+  $('gcsBackupUpload').addEventListener('click', uploadBackup);
+  $('gcsExport').addEventListener('click', () => {
+    window.location.href = `/gcs/api/export.csv?cohort=${encodeURIComponent($('gcsExportCohort').value)}`;
+  });
   loadAllowlist();
   refreshRequests();
-  setInterval(refreshRequests, 5000);
+  refreshResults();
+  setInterval(() => { refreshRequests(); refreshResults(); }, 5000);
   setInterval(() => { if (link) render(); if (applyTarget) renderApplyPanel(); }, 500);
   render();
 });
@@ -343,13 +365,18 @@ function renderRequests() {
     title.textContent = `${item.param_name}：${formatValue(item.old_value)} → ${formatValue(item.new_value)}`;
     const meta = document.createElement('span');
     const who = item.is_mine ? '我' : `${item.requester}${item.cohort ? `（${item.cohort}）` : ''}`;
-    meta.textContent = ` ${item.status_label} · ${who} · 飛控 ${item.vehicle_sysid}${item.result_message ? ` · ${item.result_message}` : ''}`;
+    const review = item.review_status ? ` · 教師覆核 ${item.review_label}` : '';
+    meta.textContent = ` ${item.status_label} · ${who} · 飛控 ${item.vehicle_sysid}${item.result_message ? ` · ${item.result_message}` : ''}${review}`;
     li.append(title, meta);
     const actions = document.createElement('div');
     actions.className = 'gcs-actions';
     if (item.can_decide) {
       addButton(actions, '批准', () => decide(item.id, 'approve'));
       addButton(actions, '退回', () => decide(item.id, 'reject'));
+    }
+    if (isTeacher() && !item.is_mine && (item.status === 'APPLIED' || item.status === 'FAILED')) {
+      addButton(actions, 'PASS', () => reviewItem(`/gcs/api/param-requests/${item.id}/review/`, 'PASS'));
+      addButton(actions, 'NG', () => reviewItem(`/gcs/api/param-requests/${item.id}/review/`, 'NG'));
     }
     if (item.is_mine && item.status === 'APPROVED') {
       addButton(actions, '寫入飛控…', () => openApplyPanel(item.id));
@@ -419,4 +446,158 @@ async function applyWrite() {
   applyTarget = null;
   await refreshRequests();
   renderParamRows();
+}
+
+// ---- P5：AI 調參助教、學員成果、教師覆核 ----
+
+const isTeacher = () => document.body.dataset.gcsRole === 'teacher';
+let selectedParam = '';
+
+function selectParam(name) {
+  selectedParam = name;
+  const entry = link && link.params.params.get(name);
+  const rule = allowlist && allowlist.params[name];
+  const text = allowlist && allowlist.explanations && allowlist.explanations.params[name];
+  $('gcsAiIntro').hidden = true;
+  $('gcsAiCard').hidden = false;
+  $('gcsAiName').textContent = rule ? `${name}（${rule.label}）` : name;
+  $('gcsAiValue').textContent = entry ? `${formatValue(entry.value)}（${entry.typeName}）` : '—';
+  $('gcsAiRange').textContent = rule ? `${rule.min}～${rule.max}（ArduCopter 預設 ${rule.default}）` : '不在可修改的白名單內（只能查看）';
+  $('gcsAiPurpose').textContent = text ? text.purpose : '教師尚未撰寫這個參數的說明，可以問 AI 助教。';
+  $('gcsAiHigher').textContent = text ? text.higher : '—';
+  $('gcsAiLower').textContent = text ? text.lower : '—';
+  $('gcsAiRisk').textContent = text ? text.risk : '—';
+  const status = allowlist && allowlist.explanations && allowlist.explanations.status;
+  $('gcsAiSource').textContent = text ? `以上是教師撰寫的固定說明${status === 'APPROVED' ? '' : '（教師尚未最終確認）'}。` : '';
+  $('gcsAiAnswer').textContent = '';
+  $('gcsAiAsk').disabled = false;
+}
+
+async function askAi() {
+  const name = selectedParam;
+  const entry = link && link.params.params.get(name);
+  const rule = allowlist && allowlist.params[name];
+  $('gcsAiAsk').disabled = true;
+  $('gcsAiAnswer').textContent = 'AI 助教思考中…';
+  const question = `請用繁體中文、以無人機教官的口吻，向學員說明 ArduCopter 參數 ${name}`
+    + `${entry ? `（目前值 ${formatValue(entry.value)}）` : ''}${rule ? `，教學允許範圍 ${rule.min}～${rule.max}` : ''}`
+    + '：它的用途、調高與調低的影響、調整時的安全注意事項。只提供建議，不要給出直接套用的指令。';
+  try {
+    const data = await api('/api/public/rag/ask/', { method: 'POST', body: { question, locale: 'zh-TW' } });
+    $('gcsAiAnswer').textContent = `AI 建議（僅供參考，不會寫入飛控）：${data.answer || '（沒有回答）'}`;
+  } catch (error) {
+    $('gcsAiAnswer').textContent = `AI 助教目前無法回答：${error.message}`;
+  } finally {
+    $('gcsAiAsk').disabled = false;
+  }
+}
+
+async function reviewItem(url, result) {
+  const note = window.prompt(`覆核結果 ${result}，可輸入備註（可留空）：`, '') ?? null;
+  if (note === null) return;
+  try {
+    await api(url, { method: 'POST', body: { result, note } });
+  } catch (error) {
+    window.alert(error.message);
+  }
+  refreshRequests();
+  refreshResults();
+}
+
+async function uploadBackup() {
+  $('gcsBackupUpload').disabled = true;
+  try {
+    const summary = link.params.summary();
+    await api('/gcs/api/backups/', {
+      method: 'POST',
+      body: {
+        content: `${backupLines().join('\n')}\n`,
+        vehicle_sysid: link.telemetry.vehicle.sysid,
+        firmware: link.telemetry.values.firmware ? link.telemetry.values.firmware.text : '',
+        missing_count: summary.missing.length,
+      },
+    });
+    $('gcsResultMessage').textContent = '參數備份已上傳。';
+    refreshResults();
+  } catch (error) {
+    $('gcsResultMessage').textContent = `上傳失敗：${error.message}`;
+  }
+  render();
+}
+
+async function showDiff(item) {
+  try {
+    const diff = await api(`/gcs/api/backups/${item.id}/diff/`);
+    const body = $('gcsDiffBody');
+    body.replaceChildren();
+    $('gcsDiff').hidden = false;
+    if (!diff.base_id) {
+      $('gcsDiffTitle').textContent = `差異報告：備份 #${item.id} 是這台飛控的第一份備份，沒有可比對的對象`;
+      return;
+    }
+    $('gcsDiffTitle').textContent = `差異報告：備份 #${item.id} 對比前一份 #${diff.base_id}（變更 ${diff.changed.length}、新增 ${diff.added.length}、移除 ${diff.removed.length}）`;
+    const rows = [
+      ...diff.changed.map((c) => [c.name, formatValue(c.before), formatValue(c.after)]),
+      ...diff.added.map((n) => [n, '—', '新增']),
+      ...diff.removed.map((n) => [n, '移除', '—']),
+    ];
+    if (!rows.length) rows.push(['沒有差異', '', '']);
+    for (const row of rows) {
+      const tr = body.insertRow();
+      for (const text of row) tr.insertCell().textContent = text;
+    }
+  } catch (error) {
+    $('gcsResultMessage').textContent = `無法取得差異報告：${error.message}`;
+  }
+}
+
+async function refreshResults() {
+  try {
+    const [summary, backupData] = await Promise.all([api('/gcs/api/summary/'), api('/gcs/api/backups/')]);
+    const card = $('gcsTaskCard');
+    card.replaceChildren();
+    for (const task of summary.tasks) {
+      const li = document.createElement('li');
+      li.dataset.ok = String(task.done);
+      li.textContent = `${task.done ? '✔' : '○'} ${task.title}`;
+      card.append(li);
+    }
+    if (summary.cohorts) {
+      const select = $('gcsExportCohort');
+      if (select.options.length !== summary.cohorts.length) {
+        select.replaceChildren(...summary.cohorts.map((id) => new Option(id, id)));
+      }
+      select.hidden = summary.cohorts.length === 0;
+      $('gcsExport').hidden = summary.cohorts.length === 0;
+      $('gcsExport').disabled = summary.cohorts.length === 0;
+    }
+    const list = $('gcsBackupList');
+    list.replaceChildren();
+    if (!backupData.backups.length) {
+      const li = document.createElement('li');
+      li.textContent = '尚無備份。';
+      list.append(li);
+    }
+    for (const item of backupData.backups.slice(0, 20)) {
+      const li = document.createElement('li');
+      const title = document.createElement('strong');
+      title.textContent = `#${item.id} ${new Date(item.created_at).toLocaleString('zh-TW', { hour12: false })}`;
+      const meta = document.createElement('span');
+      const who = item.is_mine ? '我' : `${item.requester}${item.cohort ? `（${item.cohort}）` : ''}`;
+      meta.textContent = ` ${who} · ${item.param_count} 個參數${item.missing_count ? `，缺少 ${item.missing_count}` : ''} · 教師覆核：${item.review_label}${item.review_note ? `（${item.review_note}）` : ''}`;
+      li.dataset.status = item.review_status === 'PASS' ? 'APPLIED' : item.review_status === 'NG' ? 'FAILED' : '';
+      li.append(title, meta);
+      const actions = document.createElement('div');
+      actions.className = 'gcs-actions';
+      addButton(actions, '差異報告', () => showDiff(item));
+      if (item.can_review) {
+        addButton(actions, 'PASS', () => reviewItem(`/gcs/api/backups/${item.id}/review/`, 'PASS'));
+        addButton(actions, 'NG', () => reviewItem(`/gcs/api/backups/${item.id}/review/`, 'NG'));
+      }
+      li.append(actions);
+      list.append(li);
+    }
+  } catch (error) {
+    /* 下次再試 */
+  }
 }

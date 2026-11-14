@@ -7,7 +7,34 @@ from django.utils import timezone
 APPROVAL_TTL = timedelta(minutes=10)
 
 
-class ParamWriteRequest(models.Model):
+class Review(models.TextChoices):
+    PENDING = "", "待教師覆核"
+    PASS = "PASS", "PASS"
+    NG = "NG", "NG"
+
+
+class TeacherReviewFields(models.Model):
+    """教師覆核欄位（PASS／NG）。只記錄結果，不連動其他學習紀錄。"""
+
+    review_status = models.CharField(max_length=4, choices=Review.choices, default=Review.PENDING, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        abstract = True
+
+    def review_dict(self):
+        return {
+            "review_status": self.review_status,
+            "review_label": self.get_review_status_display(),
+            "review_note": self.review_note,
+        }
+
+
+class ParamWriteRequest(TeacherReviewFields):
     """真機參數寫入申請：每一筆都要教師批准，批准後 10 分鐘內只能使用一次。
 
     這張表同時是寫入日誌：申請、批准／退回、寫入結果與讀回值都記錄在同一筆。
@@ -77,4 +104,49 @@ class ParamWriteRequest(models.Model):
             "result_value": self.result_value,
             "result_message": self.result_message,
             "allowlist_version": self.allowlist_version,
+            **self.review_dict(),
+        }
+
+
+class ParamBackup(TeacherReviewFields):
+    """學員主動上傳的參數備份（.param 文字）。不保存 USB 裝置識別資訊。"""
+
+    requester = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="gcs_param_backups")
+    student = models.ForeignKey(
+        "learning.StudentProfile", null=True, blank=True, on_delete=models.PROTECT, related_name="gcs_param_backups"
+    )
+    cohort = models.ForeignKey(
+        "learning.Cohort", null=True, blank=True, on_delete=models.PROTECT, related_name="gcs_param_backups"
+    )
+    vehicle_sysid = models.PositiveSmallIntegerField()
+    firmware = models.CharField(max_length=40, blank=True)
+    param_count = models.PositiveIntegerField()
+    missing_count = models.PositiveIntegerField(default=0)
+    content = models.TextField()
+    sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def parsed(self):
+        values = {}
+        for line in self.content.splitlines():
+            if not line or line.startswith("#"):
+                continue
+            name, _, value = line.partition(",")
+            values[name] = float(value)
+        return values
+
+    def to_dict(self):
+        return {
+            "id": self.pk,
+            "requester": self.student.public_user_id if self.student_id else "教師",
+            "cohort": self.cohort_id or "",
+            "vehicle_sysid": self.vehicle_sysid,
+            "firmware": self.firmware,
+            "param_count": self.param_count,
+            "missing_count": self.missing_count,
+            "created_at": self.created_at.isoformat(),
+            **self.review_dict(),
         }

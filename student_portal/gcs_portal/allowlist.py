@@ -63,3 +63,12 @@ def readback_matches(expected, actual):
     if not isinstance(actual, (int, float)) or not math.isfinite(actual):
         return False
     return abs(actual - expected) <= max(1e-6, abs(expected) * 1e-5)
+
+
+EXPLANATIONS_FILE = Path(__file__).resolve().parent / "param_explanations.json"
+
+
+@lru_cache(maxsize=1)
+def load_explanations():
+    """教師撰寫的參數說明（固定文字，不經 AI 產生）。"""
+    return json.loads(EXPLANATIONS_FILE.read_text(encoding="utf-8"))

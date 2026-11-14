@@ -59,7 +59,7 @@ async function connectAndRead(page) {
 }
 
 async function requestChange(page, value) {
-  await page.click('#gcsParamBody tr:first-child button');
+  await page.click('#gcsParamBody tr:first-child button:has-text("申請修改")');
   await page.fill('#gcsWriteNew', String(value));
   await page.check('#gcsWriteAck');
 }
@@ -68,7 +68,7 @@ async function teacherApproves(teacher) {
   await teacher.reload();
   await teacher.waitForSelector('#gcsRequestList button:has-text("批准")', { timeout: 10000 });
   await teacher.click('#gcsRequestList button:has-text("批准")');
-  await teacher.waitForFunction(() => !document.querySelector('#gcsRequestList button'), null, { timeout: 10000 });
+  await teacher.waitForFunction(() => !Array.from(document.querySelectorAll('#gcsRequestList button')).some((b) => b.textContent === '批准'), null, { timeout: 10000 });
 }
 
 (async () => {
@@ -79,7 +79,7 @@ async function teacherApproves(teacher) {
 
   // A. 已上鎖的飛控：完整流程
   await connectAndRead(student);
-  check('allowlisted parameter offers 申請修改', await student.isVisible('#gcsParamBody tr:first-child button'));
+  check('allowlisted parameter offers 申請修改', await student.isVisible('#gcsParamBody tr:first-child button:has-text("申請修改")'));
   await requestChange(student, 0.5);
   check('out-of-range value cannot be submitted', await student.isDisabled('#gcsWriteSubmit'), await student.textContent('#gcsWriteMessage'));
   await requestChange(student, 0.15);
