@@ -9,6 +9,20 @@
   });
 
   window.FdeLearningSections = [
+    // 台灣無人多旋翼考照專區：FDE-AI 頻道考照示範（基本級→高級 G1～G3）
+    {
+      id: 'tw-license',
+      title: '台灣無人多旋翼考照專區',
+      label: 'TAIWAN DRONE LICENSE',
+      summary: '民航局無人多旋翼專業基本級（未達 2 公斤、2–15 公斤）與高級 G1、G2、G3 考試示範。',
+      courses: [
+        video('license-01', '專業基本級（未達 2 公斤）考照示範', 'https://youtu.be/pKKrS76LAqE', 1),
+        video('license-02', '專業基本級（2–15 公斤）考試示範', 'https://youtu.be/UNJ1JLVaGQk', 2),
+        video('license-03', '高級 G1 組考試示範', 'https://youtu.be/I7OGHpR1ex8', 3),
+        video('license-04', '高級 G2 組考試示範', 'https://youtu.be/ubLE5LzJtTQ', 4),
+        video('license-05', '高級 G3 組考試示範', 'https://youtu.be/XfaC29ybzds', 5),
+      ],
+    },
     {
       id: 'closed-flight-control',
       title: '閉源飛控系統',
