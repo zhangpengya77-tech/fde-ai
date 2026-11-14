@@ -1,8 +1,8 @@
 {
-  "version": "2026-11-13.1",
+  "version": "2026-11-14.1",
   "firmware": "ArduCopter 4.x",
-  "approved_by": "PENDING_TEACHER_CONFIRMATION",
-  "note": "第一版只開放角速度 PID。上下限是 F450 級四旋翼的保守教學範圍，教師確認後把 approved_by 改成教師姓名。",
+  "approved_by": "張鵬亞（2026-11-14 批准）",
+  "note": "第一版只開放角速度 PID。上下限是 F450 級四旋翼的保守教學範圍；2026-11-14 由張鵬亞教官批准。修改範圍時請更新 version 並重新批准。",
   "max_step_ratio": 0.3,
   "params": {
     "ATC_RAT_RLL_P": {"min": 0.05, "max": 0.30, "default": 0.135, "label": "Roll 角速度 P"},

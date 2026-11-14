@@ -1,6 +1,6 @@
 {
-  "status": "PENDING_TEACHER_REVIEW",
-  "note": "教師撰寫的固定說明；AI 回答只作補充。內容請教師確認後把 status 改成 APPROVED。",
+  "status": "APPROVED",
+  "note": "教師撰寫的固定說明；AI 回答只作補充。2026-11-14 由張鵬亞教官批准。",
   "params": {
     "ATC_RAT_RLL_P": {"purpose": "Roll（左右翻滾）角速度控制的比例增益：誤差越大，修正力道越大。", "higher": "反應更快、更「硬」；太高會高頻抖動或來回震盪。", "lower": "反應變慢、變「軟」；太低會晃、回正慢。", "risk": "每次只調 10% 左右，調完先在低空懸停觀察。"},
     "ATC_RAT_RLL_I": {"purpose": "Roll 角速度的積分增益：修正長時間存在的小誤差（例如重心偏移、風）。", "higher": "更能抵抗持續偏差；太高會出現慢速擺盪。", "lower": "容易慢慢偏向一邊。", "risk": "通常和 P 設成相同數值。"},

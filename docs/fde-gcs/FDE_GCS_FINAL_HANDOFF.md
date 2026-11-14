@@ -24,8 +24,8 @@
 |---|---|
 | `student_portal/gcs_portal/` | 全部 FDE-GCS 程式：Django app、API、模板、前端、測試、開發工具 |
 | `student_portal/gcs_portal/static/gcs_portal/mavlink/` | MAVLink 編解碼、連線、參數、遙測、寫入模組 |
-| `student_portal/gcs_portal/param_allowlist/arducopter-4.json` | 寫入白名單（**待教師確認範圍**） |
-| `student_portal/gcs_portal/param_explanations.json` | 參數說明（**待教師確認文字**） |
+| `student_portal/gcs_portal/param_allowlist/arducopter-4.json` | 寫入白名單（版本 `2026-11-14.1`，張鵬亞教官 2026-11-14 批准） |
+| `student_portal/gcs_portal/param_explanations.json` | 參數說明（張鵬亞教官 2026-11-14 批准） |
 | `student_portal/gcs_portal/migrations/` | `0001`（寫入申請）、`0002`（覆核欄位、參數備份）、`0003`（還原申請）；**只影響 gcs_portal 自己的資料表** |
 | `ops/fde-gcs/` | 教室啟動腳本 |
 | `docs/fde-gcs/` | 全部文件與截圖 |
@@ -103,7 +103,7 @@ cd student_portal && python manage.py test gcs_portal
 | 7 | USB 拔除與重新連線、COM 埠被 Mission Planner 占用時的提示 | PENDING_MANUAL |
 | 8 | 學員成果紀錄、教師權限、跨班級隔離（兩個班級各一位學員與教師實測） | PENDING_MANUAL |
 | 9 | AI 調參助教的實際回答品質（RAG 服務運作時） | PENDING_LOCAL |
-| 10 | 教師確認白名單範圍與參數說明文字 | PENDING_MANUAL |
+| 10 | 教師確認白名單範圍與參數說明文字 | **PASS**（2026-11-14 張鵬亞教官批准） |
 | 11 | SITL 獨立啟動、四航點仿真任務、QGC／HyperQGC 仿真連線 | BLOCKED（P4） |
 | 12 | P0 本機盤點（D／E 槽、QGC／HyperQGC 版本、COM 驅動、Gazebo 接管案） | PENDING_LOCAL |
 
