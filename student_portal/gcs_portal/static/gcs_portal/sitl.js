@@ -87,7 +87,7 @@ function clearFleet(text) {
 
 function setScope(next) {
   scope = next;
-  $('gcsSitlScope').textContent = next === 'control' ? '教師控制（10 分鐘內有效）' : next === 'read' ? '唯讀' : '—';
+  $('gcsSitlScope').textContent = next === 'control' ? '控制權（10 分鐘內有效）' : next === 'read' ? '唯讀' : '—';
   const controls = $('gcsSitlControls');
   if (controls) controls.disabled = next !== 'control';
   const controlBtn = $('gcsSitlControl');

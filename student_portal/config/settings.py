@@ -305,6 +305,9 @@ FDE_GCS_GATEWAY_SECRET = os.environ.get('FDE_GCS_GATEWAY_SECRET', '')
 FDE_GCS_GATEWAY_URL = os.environ.get('FDE_GCS_GATEWAY_URL', 'ws://127.0.0.1:8261')
 FDE_GCS_GATEWAY_REVOKE_URL = os.environ.get('FDE_GCS_GATEWAY_REVOKE_URL', 'http://127.0.0.1:8361/revoke')
 FDE_GCS_SIM_URL = os.environ.get('FDE_GCS_SIM_URL', 'http://127.0.0.1:8252/?mode=exam&engine=sitl_follow&embed=1')
+# 只有「本機一鍵啟動器」會設定（每次隨機）；正式站不要設定。設定後 /gcs/local-login/<代碼>/ 才存在，且只接受本機、只能用一次。
+FDE_GCS_LOCAL_LAUNCH_TOKEN = os.environ.get('FDE_GCS_LOCAL_LAUNCH_TOKEN', '')
+FDE_GCS_LOCAL_PILOT = os.environ.get('FDE_GCS_LOCAL_PILOT', 'local-pilot@fde-gcs.local')
 
 FDE_EXTERNAL_MODULES = {
     module_id: {
