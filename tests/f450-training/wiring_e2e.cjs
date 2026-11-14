@@ -67,6 +67,19 @@ const snap = async (fn) => { try { await fn(); } catch (e) { log.push(`SKIP 截�
       ok(sum.startsWith('✓ 全部 20 條都接對了'), `${name}: 全部接對 [${sum}]`);
       ok((await page.locator('#wire2d .w2-wire.good').count()) === 20, `${name}: 20 條線標綠`);
       await snap(() => page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_all_correct.png`, timeout: 90000 }));
+      // 4-b) 完整接線方式：20 條、每條都有官方文件與 GitHub 出處；示範畫 20 條但不改學員的線
+      await page.locator('#wire2d .w2-guide summary').click();
+      const guideIds = await P(() => [...document.querySelectorAll('#wire2d .w2-guide li[data-guide-wire]')].map((li) => li.dataset.guideWire).sort());
+      ok(JSON.stringify(guideIds) === JSON.stringify(EXPECTED_WIRES.map((x) => x.id).sort()), `${name}: 完整接線方式涵蓋全部 ${guideIds.length} 條正確接線`);
+      ok(await P(() => [...document.querySelectorAll('#wire2d .w2-guide li[data-guide-wire]')].every((li) => li.querySelector('a[href*="github.com"]') && li.querySelector('a[target="_blank"][rel="noopener noreferrer"]'))), `${name}: 每一條都附官方文件與 GitHub 出處（新分頁）`);
+      const before = await page.locator('#wire2d [data-wire]').count();
+      await page.locator('#wire2d .w2-guide button', { hasText: '完整接線示範' }).click();
+      await page.waitForFunction(() => document.querySelectorAll('#wire2d .w2-demo .demo-line').length === 20, null, { timeout: 40000 });
+      ok(true, `${name}: 示範依序畫出 20 條`);
+      ok((await page.locator('#wire2d [data-wire]').count()) === before, `${name}: 示範不改學員自己的接線`);
+      await snap(() => page.locator('#wire2d').screenshot({ path: `${OUT}/P9_wiring_demo.png`, timeout: 90000 }));
+      await page.locator('#wire2d .w2-guide button', { hasText: '清除示範' }).click();
+      ok((await page.locator('#wire2d .w2-demo .demo-line').count()) === 0, `${name}: 清除示範`);
       // 5) 重新整理後草稿還在
       await page.reload({ timeout: 150000 }); await page.locator('#wire2d-enter').click(); await page.waitForSelector('#wire2d [data-wire]');
       ok((await page.locator('#wire2d [data-wire]').count()) === 20, `${name}: 重新整理後草稿保留`);

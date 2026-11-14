@@ -66,6 +66,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
   ok((await page.locator('#wire2d [data-wire]').count()) === 0, '考核：2D 從空白開始');
   ok((await card()).includes('考核進行中'), '考核：交卷前不顯示分數');
   ok(await P(() => document.querySelector('#wire2d .w2-tools button.primary').hidden), '考核：不能自行檢查');
+  ok(await P(() => document.querySelector('#wire2d .w2-guide').hidden), '考核：不提供完整接線方式與示範');
   ok(await P(() => !document.querySelector('#strip-practice .pr-step.now')), '考核：零件盤不標下一步');
   await tray('機臂 右前').click();
   ok((await P(() => window.__f450Practice.message())) === '現在還不能裝這個零件（已記錄）', '考核：順序錯不說原因');

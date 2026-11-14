@@ -42,10 +42,10 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
   await shot('#viewer', 'P4_3d_from_2d_wire.png');
 
   // 2) 2D 點元件框：3D 模型沒有的零件要說清楚
-  await page.locator('#wire2d [data-comp="safety_switch"] rect').click({ force: true }); await page.waitForTimeout(400);
+  await page.locator('#wire2d [data-comp="safety_switch"] rect.w2-box').click({ force: true }); await page.waitForTimeout(400);
   s = await S();
   ok(s.hot.length === 0 && s.cap.includes('3D 模型沒有：安全開關'), `點安全開關 → 3D 說明沒有這個零件 [${s.cap}]`);
-  await page.locator('#wire2d [data-comp="gps"] rect').click({ force: true }); await page.waitForTimeout(800);
+  await page.locator('#wire2d [data-comp="gps"] rect.w2-box').click({ force: true }); await page.waitForTimeout(800);
   s = await S();
   ok(s.hot.some((n) => n.startsWith('GPS M8N')) && s.lines === 0, `點 GPS 元件 → 3D 高亮 GPS，沒有線`);
   // 點畫布空白 → 取消，3D 也清除
@@ -81,7 +81,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
 
   // 5) 組裝練習中：還沒裝的零件，說明「尚未組裝」
   await page.locator('#practice-enter').click(); await page.waitForTimeout(500);
-  await page.locator('#wire2d [data-comp="esc_fr"] rect').click({ force: true }); await page.waitForTimeout(400);
+  await page.locator('#wire2d [data-comp="esc_fr"] rect.w2-box').click({ force: true }); await page.waitForTimeout(400);
   s = await S();
   ok(s.cap.includes('尚未組裝'), `組裝練習中選 ESC 右前 → ${s.cap}`);
   await page.locator('#strip-practice .pr-tray button', { hasText: '下中心板' }).click();

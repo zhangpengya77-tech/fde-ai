@@ -3,7 +3,8 @@
 // 操作：點一個接口、再點另一個接口 → 連線；點線 → 選取，可刪除或「紅黑對調」；按「檢查接線」看結果。
 // 草稿只存在這台裝置的瀏覽器（localStorage）；不記錄成績（P5／P6 才接判分與任務卡）。
 import { COMPONENTS, PORTS, EXPECTED_WIRES, PRACTICE_ONLY, validateWiring } from './model.js?v=p4-1';
-import { emit, on, latest } from './bus.js?v=p4-1';   // P4：與 3D 同步；P5：教學／練習／考核
+import { emit, on, latest } from './bus.js?v=p4-1';
+import { PART_INFO, drawArt, infoKey } from './parts-art.js?v=p9-5';   // 零件擬真圖與官方資料連結   // P4：與 3D 同步；P5：教學／練習／考核
 
 const NS = 'http://www.w3.org/2000/svg';
 const STORE = 'f450twin-wire2d-v1';
@@ -19,15 +20,26 @@ const LAYOUT = {
   motor_rl: [20, 624, 130, 56, { 'motor_rl.phase': 'top' }],
   esc_rr: [830, 474, 150, 96, { 'esc_rr.power': 'top', 'esc_rr.phase': 'bottom', 'esc_rr.signal': 'left' }],
   motor_rr: [850, 624, 130, 56, { 'motor_rr.phase': 'top' }],
-  receiver: [300, 30, 170, 64, { 'receiver.sbus': 'bottom' }],
-  gps: [520, 30, 190, 64, { 'gps.serial': 'bottom', 'gps.compass': 'right' }],
-  pixhawk: [300, 168, 400, 214, {
-    'pixhawk.main_out_1': 'left', 'pixhawk.main_out_2': 'left', 'pixhawk.main_out_3': 'left', 'pixhawk.main_out_4': 'left', 'pixhawk.rc_in': 'top',
-    'pixhawk.gps': 'top', 'pixhawk.i2c': 'top', 'pixhawk.switch': 'right', 'pixhawk.buzzer': 'right', 'pixhawk.power': 'bottom',
+  // 周邊放在它要接的 Pixhawk 接口旁邊（依 Pixhawk 2.4.8 說明書的接口位置）
+  receiver: [215, 372, 170, 56, { 'receiver.sbus': { side: 'bottom', at: [85, 56], label: 'SBUS 輸出' } }],
+  gps: [230, 128, 120, 104, { 'gps.serial': { side: 'right', at: [120, 37], label: 'GPS', inside: true }, 'gps.compass': { side: 'right', at: [120, 67], label: '羅盤', inside: true } }],
+  // Pixhawk 2.4.8 直立擺放、箭頭（機頭）朝上：舵機排針在下方（左起 RC IN、S.B.OUT、MAIN OUT 8→1、AUX OUT 6→1），
+  // 左列（前→後）ADC6.6、I2C、CAN、GPS、SERIAL4/5、BUZZER；右列 POWER、SPI、USB、TELEM1、TELEM2、SPKT/DSM；中間 ADC3.3、SWITCH
+  pixhawk: [410, 120, 180, 310, {
+    'pixhawk.rc_in': { side: 'bottom', at: [22, 310], label: 'RC IN' },
+    'pixhawk.main_out_4': { side: 'bottom', at: [66, 310], label: 'M4' },
+    'pixhawk.main_out_3': { side: 'bottom', at: [92, 310], label: 'M3' },
+    'pixhawk.main_out_2': { side: 'bottom', at: [118, 310], label: 'M2' },
+    'pixhawk.main_out_1': { side: 'bottom', at: [144, 310], label: 'M1' },
+    'pixhawk.i2c': { side: 'left', at: [0, 75], label: '' },
+    'pixhawk.gps': { side: 'left', at: [0, 145], label: '' },
+    'pixhawk.buzzer': { side: 'left', at: [0, 215], label: '' },
+    'pixhawk.power': { side: 'right', at: [180, 40], label: '' },
+    'pixhawk.switch': { side: 'right', at: [180, 248], label: '' },
   }],
-  safety_switch: [790, 250, 130, 50, { 'safety_switch.conn': 'left' }],
-  buzzer: [790, 330, 130, 50, { 'buzzer.conn': 'left' }],
-  pdb: [300, 448, 400, 92, { 'pdb.pad_fl': 'left', 'pdb.pad_rl': 'left', 'pdb.pad_fr': 'right', 'pdb.pad_rr': 'right', 'pdb.in': 'bottom' }],
+  safety_switch: [640, 343, 140, 50, { 'safety_switch.conn': { side: 'left', at: [0, 25], label: '' } }],   // 標籤會壓到 Pixhawk 印字，省略（說明列有寫）
+  buzzer: [220, 300, 130, 50, { 'buzzer.conn': { side: 'right', at: [130, 35], label: '2pin' } }],
+  pdb: [300, 468, 400, 84, { 'pdb.pad_fl': 'left', 'pdb.pad_rl': 'left', 'pdb.pad_fr': 'right', 'pdb.pad_rr': 'right', 'pdb.in': 'bottom' }],
   power_module: [440, 610, 220, 80, { 'power_module.in': 'left', 'power_module.out': 'top', 'power_module.fc': 'right' }],
   battery: [190, 630, 150, 60, { 'battery.xt60': 'top' }],
 };
@@ -35,11 +47,14 @@ const SIDE_N = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] };
 const KIND_COLOR = { power: '#ff6a4d', signal: '#3fd0ff', data: '#7ee8c8' };
 const roleKind = (role) => (role.startsWith('power') ? 'power' : role.startsWith('signal') ? 'signal' : 'data');
 
-// 每個接口的座標與朝外方向
+// 每個接口的座標與朝外方向。值可以是邊（平均分配），或 { side, at: [框內 x, 框內 y], label, inside } 指定位置與標籤
 const PORT_POS = {};
 for (const [cid, [x, y, w, h, sides]] of Object.entries(LAYOUT)) {
   const bySide = {};
-  for (const [pid, side] of Object.entries(sides)) (bySide[side] ||= []).push(pid);
+  for (const [pid, v] of Object.entries(sides)) {
+    if (typeof v === 'object') { PORT_POS[pid] = { x: x + v.at[0], y: y + v.at[1], n: SIDE_N[v.side], side: v.side, cid, label: v.label, inside: !!v.inside }; continue; }
+    (bySide[v] ||= []).push(pid);
+  }
   for (const [side, list] of Object.entries(bySide)) {
     list.forEach((pid, i) => {
       const t = (i + 1) / (list.length + 1);
@@ -49,6 +64,52 @@ for (const [cid, [x, y, w, h, sides]] of Object.entries(LAYOUT)) {
     });
   }
 }
+
+// ───────── 完整接線方式（依 ArduPilot、PX4 官方文件；GitHub 原始文件同步列出） ─────────
+const DOC = {
+  px4: ['PX4：Pixhawk 接線快速入門', 'https://docs.px4.io/main/en/assembly/quick_start_pixhawk.html', 'https://github.com/PX4/PX4-user_guide/blob/main/en/assembly/quick_start_pixhawk.md'],
+  ap: ['ArduPilot：Pixhawk 接線快速入門', 'https://ardupilot.org/copter/docs/common-pixhawk-wiring-and-quick-start.html', 'https://github.com/ArduPilot/ardupilot_wiki/blob/master/common/source/docs/common-pixhawk-wiring-and-quick-start.rst'],
+  motors: ['ArduPilot：電調與馬達接線（Quad X）', 'https://ardupilot.org/copter/docs/connect-escs-and-motors.html', 'https://github.com/ArduPilot/ardupilot_wiki/blob/master/copter/source/docs/connect-escs-and-motors.rst'],
+};
+// 安裝順序：先電源路徑、再馬達、再訊號、最後周邊。id 對應 model.js 的 EXPECTED_WIRES
+export const WIRING_GUIDE = [
+  ['① 電源路徑', [
+    ['battery.xt60--power_module.in', '電池 XT60 接電源模組輸入（XT60 有防呆方向）', ['px4']],
+    ['power_module.out--pdb.in', '電源模組主輸出接配電板，再分給四顆電調', ['px4']],
+    ['power_module.fc--pixhawk.power', '電源模組 6pin 線接 Pixhawk POWER：供電並量測電壓電流', ['px4', 'ap']],
+    ['pdb.pad_fr--esc_fr.power', '配電板焊盤 → 右前電調電源（紅正黑負）', ['motors']],
+    ['pdb.pad_fl--esc_fl.power', '配電板焊盤 → 左前電調電源（紅正黑負）', ['motors']],
+    ['pdb.pad_rl--esc_rl.power', '配電板焊盤 → 左後電調電源（紅正黑負）', ['motors']],
+    ['pdb.pad_rr--esc_rr.power', '配電板焊盤 → 右後電調電源（紅正黑負）', ['motors']],
+  ]],
+  ['② 電調與馬達', [
+    ['esc_fr.phase--motor_fr.phase', '右前電調三相線 → 右前馬達（轉向不對時交換任兩條）', ['motors']],
+    ['esc_fl.phase--motor_fl.phase', '左前電調三相線 → 左前馬達', ['motors']],
+    ['esc_rl.phase--motor_rl.phase', '左後電調三相線 → 左後馬達', ['motors']],
+    ['esc_rr.phase--motor_rr.phase', '右後電調三相線 → 右後馬達', ['motors']],
+  ]],
+  ['③ 電調訊號（Quad X 馬達編號＝MAIN OUT 編號）', [
+    ['esc_fr.signal--pixhawk.main_out_1', '馬達 1 右前（CCW）→ MAIN OUT 1；訊號線與地線一起接', ['motors']],
+    ['esc_rl.signal--pixhawk.main_out_2', '馬達 2 左後（CCW）→ MAIN OUT 2', ['motors']],
+    ['esc_fl.signal--pixhawk.main_out_3', '馬達 3 左前（CW）→ MAIN OUT 3', ['motors']],
+    ['esc_rr.signal--pixhawk.main_out_4', '馬達 4 右後（CW）→ MAIN OUT 4', ['motors']],
+  ]],
+  ['④ 遙控與周邊', [
+    ['receiver.sbus--pixhawk.rc_in', 'R9DS（SBUS 模式）3pin 線 → RC IN', ['px4', 'ap']],
+    ['gps.serial--pixhawk.gps', 'GPS 6pin 線 → GPS 埠（圓餅箭頭朝機頭、遠離電源線）', ['px4', 'ap']],
+    ['gps.compass--pixhawk.i2c', '羅盤 4pin 線 → I2C 埠', ['px4', 'ap']],
+    ['safety_switch.conn--pixhawk.switch', '安全開關 3pin → SWITCH（必接）', ['px4', 'ap']],
+    ['buzzer.conn--pixhawk.buzzer', '蜂鳴器 2pin → BUZZER（必接）', ['px4', 'ap']],
+  ]],
+];
+export const WIRING_NOTES = [
+  ['Pixhawk 不供電給舵機排針：MAIN OUT 只有訊號；多軸的電調由電池供電，接訊號線與地線即可。', 'ap'],
+  ['電調訊號線一定要和地線一起接，不可只接訊號線。', 'ap'],
+  ['若多顆電調都有 BEC，排針只保留一顆的紅線（正極），其他拔掉，避免互相干擾。', 'ap'],
+  ['RC IN 只適合低耗電的接收機；不要在接收機上直接接舵機或繼電器。', 'ap'],
+  ['（選配，不計分）數傳模組接 TELEM1，地面站另一顆用 USB 接電腦。', 'px4'],
+  ['任何通電測試前必須先拆槳。', 'ap'],
+];
 
 export function initWiringCanvas(root) {
   if (!root) return null;
@@ -82,27 +143,72 @@ export function initWiringCanvas(root) {
   legend.append(...[['power', '電源'], ['signal', '訊號'], ['data', '資料／周邊']].map(([k, t]) => { const s = el('span', `━ ${t}`); s.style.color = KIND_COLOR[k]; return s; }),
     el('span', '｜虛線＝紅黑接反｜示意版面，不是實際尺寸與腳位'));
   const results = el('div', null, 'w2-results');
-  root.append(head, syncRow, status, scroller, legend, results,
+  const info = el('div', null, 'w2-info'); info.setAttribute('aria-live', 'polite');
+  const guide = el('details', null, 'w2-guide');
+  const gsum = el('summary', '完整接線方式（依 ArduPilot、PX4 官方文件，含 GitHub 原始文件）');
+  const bDemo = el('button', '▶ 完整接線示範'); bDemo.type = 'button';
+  const demoCap = el('p', null, 'note w2-demo-cap'); demoCap.setAttribute('aria-live', 'polite');
+  guide.append(gsum, el('p', '打開會看到全部答案。示範只畫在獨立圖層，不會改動你自己的接線；考核模式不提供。', 'note'), bDemo, demoCap);
+  const linkA = (label, href) => { const a = el('a', label); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a; };
+  let n = 0;
+  for (const [title, rows] of WIRING_GUIDE) {
+    guide.append(el('h4', title));
+    const ol = el('ol', null, 'w2-steps'); ol.start = n + 1;
+    for (const [id, text, refs] of rows) {
+      n++;
+      const li = el('li'); li.dataset.guideWire = id; li.append(el('span', text));
+      const src = el('span', null, 'w2-src'); src.append(' 依據：');
+      refs.forEach((r) => { src.append(linkA(DOC[r][0], DOC[r][1]), ' '); src.append(linkA('GitHub', DOC[r][2]), '　'); });
+      li.append(src); ol.append(li);
+    }
+    guide.append(ol);
+  }
+  guide.append(el('h4', '⑤ 官方文件的注意事項'));
+  const notes = el('ul', null, 'w2-steps');
+  WIRING_NOTES.forEach(([t, r]) => { const li = el('li', t); li.append(' ', linkA('出處 ↗', DOC[r][1])); notes.append(li); });
+  guide.append(notes);
+  let demoTimer = null;
+  function stopDemo(clear = true) { clearInterval(demoTimer); demoTimer = null; bDemo.textContent = '▶ 完整接線示範'; if (clear) { gDemo.replaceChildren(); demoCap.textContent = ''; } }
+  bDemo.onclick = () => {
+    if (demoTimer || gDemo.childNodes.length) { stopDemo(); return; }
+    const all = WIRING_GUIDE.flatMap(([, rows]) => rows); let k = 0;
+    bDemo.textContent = '■ 停止並清除示範';
+    const step = () => {
+      if (k >= all.length) { stopDemo(false); bDemo.textContent = '■ 清除示範'; demoCap.textContent = `示範完成：共 ${all.length} 條。可以照著自己接一次，再按「檢查接線」。`; return; }
+      const [id, text] = all[k++]; const [a, b] = id.split('--');
+      const kind = roleKind(PORTS[a].role);
+      gDemo.append(sv('path', { d: path(a, b), class: 'demo-line', stroke: KIND_COLOR[kind] }));
+      demoCap.textContent = `第 ${k}／${all.length} 條：${text}`;
+    };
+    step(); demoTimer = setInterval(step, 900);
+  };
+  root.append(head, syncRow, status, scroller, info, legend, results, guide,
     el('p', '操作：點一個接口（圓點）→ 再點要接的另一個接口，就會連線；點線可選取，再按「刪除這條線」或「紅黑對調」。鍵盤：Tab 移到接口、Enter 選取、Esc 取消。', 'note'),
     el('p', PRACTICE_ONLY ? '練習模式：接線規則依 Pixhawk 1／2.4.8 公開文件與教師安裝指導整理，全部待實機核對；不提供腳位定義，結果不記錄、不計正式成績。實際接線前務必先拆槳，並對照實機外殼印字。' : '', 'note'));
 
   const gWires = sv('g', { class: 'w2-wires' }), gComps = sv('g'), gPreview = sv('path', { class: 'w2-preview', d: '' });
-  svg.append(gWires, gComps, gPreview);
+  const gDemo = sv('g', { class: 'w2-demo', 'pointer-events': 'none' });   // 完整接線示範：獨立圖層，不改學員的線
+  svg.append(gWires, gComps, gDemo, gPreview);
 
   // ───────── 元件與接口 ─────────
   const portEls = {};
   for (const c of COMPONENTS) {
     const [x, y, w, h] = LAYOUT[c.id];
     const g = sv('g', { class: 'w2-comp', 'data-comp': c.id });
-    const rect = sv('rect', { x, y, width: w, height: h, rx: 10 }); g.append(rect);
+    const rect = sv('rect', { x, y, width: w, height: h, rx: 10, class: 'w2-box' }); g.append(rect);   // 外框（樣式只套在外框，不影響零件圖）
+    g.append(drawArt(c.id, [x, y, w, h], c.ports.map((pp) => ({ ...pp, ...PORT_POS[pp.id] })), sv));   // 擬真零件圖（自繪，不用廠商照片）
     g.addEventListener('click', (e) => { e.stopPropagation(); pending = null; selected = null; compFocus = c.id; say(`已選元件：${c.zh}`); draw(); });   // 點框或名稱都算（接口自己會攔下點擊）
-    const t = sv('text', { x: x + w / 2, y: y + h / 2 + 6, 'text-anchor': 'middle', class: 'w2-name' }); t.textContent = c.zh; g.append(t);   // 名稱置中；接口標籤都放在框外，避免重疊
+    const NAME_Y = { pixhawk: y + 138, battery: y + 31, receiver: y + 30, gps: y + h - 10 };   // 名稱放在不壓到零件圖的位置
+    const NAME_X = { safety_switch: x + 64 + (w - 64) / 2, buzzer: x + 64 + (w - 64) / 2 };
+    const t = sv('text', { x: NAME_X[c.id] ?? x + w / 2, y: NAME_Y[c.id] ?? y + h / 2 + 6, 'text-anchor': 'middle', class: `w2-name${c.id === 'pixhawk' ? ' silk' : ''}` }); t.textContent = c.zh; g.append(t);   // 名稱置中；接口標籤都放在框外，避免重疊
     for (const p of c.ports) {
       const pos = PORT_POS[p.id];
       const pg = sv('g', { class: `w2-port ${roleKind(p.role)}`, 'data-port': p.id, tabindex: 0, role: 'button', 'aria-label': `${c.zh} ${p.label}` });
       pg.append(sv('circle', { cx: pos.x, cy: pos.y, r: 9 }));
-      const lx = pos.x + pos.n[0] * 15, ly = pos.y + (pos.side === 'top' ? -15 : pos.side === 'bottom' ? 25 : -6);
-      const lt = sv('text', { x: lx, y: ly, class: 'w2-plabel', 'text-anchor': pos.side === 'left' ? 'end' : pos.side === 'right' ? 'start' : 'middle' }); lt.textContent = c.kind === 'motor' ? '' : p.label;   // 馬達三相線標籤與 ESC 重複，省略
+      const k = pos.inside ? -1 : 1;   // inside：標籤寫在框內（像電路板上的印字）
+      const lx = pos.x + pos.n[0] * 15 * k, ly = pos.y + (pos.side === 'top' ? -15 : pos.side === 'bottom' ? 25 : pos.inside ? 4 : -6);
+      const anchor = pos.side === 'left' ? (pos.inside ? 'start' : 'end') : pos.side === 'right' ? (pos.inside ? 'end' : 'start') : 'middle';
+      const lt = sv('text', { x: lx, y: ly, class: 'w2-plabel', 'text-anchor': anchor }); lt.textContent = c.kind === 'motor' ? '' : (pos.label ?? p.label);   // 馬達三相線標籤與 ESC 重複，省略
       pg.append(lt);
       pg.addEventListener('click', (e) => { e.stopPropagation(); clickPort(p.id); });
       pg.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickPort(p.id); } });
@@ -164,6 +270,7 @@ export function initWiringCanvas(root) {
     if (trainMode === 'teach') { result = validateWiring(wires); showHints = true; }   // 教學：每次變動都即時檢查、直接列出缺線
     if (isExam()) { result = null; showHints = false; }
     bCheck.hidden = isExam() || trainMode === 'teach';
+    guide.hidden = isExam(); if (isExam() && (demoTimer || gDemo.childNodes.length)) stopDemo();   // 考核不提供完整接線方式
     [bSwap, bDel, bUndo, bClear].forEach((b) => (b.disabled = locked));
     title.textContent = `2D 接線練習（${{ teach: '教學', practice: '練習', exam: locked ? '考核・已交卷' : '考核' }[trainMode]}）`;
     const suggest = new Set(trainMode === 'teach' && pending ? EXPECTED_WIRES.filter((e) => e.from === pending || e.to === pending).map((e) => (e.from === pending ? e.to : e.from)) : []);
@@ -194,7 +301,20 @@ export function initWiringCanvas(root) {
     syncOut();
   }
   // P4：把 2D 目前的選取與接線送給 3D（只有變動時才送）
+  // 選取元件、接口或線時，顯示該零件的簡介與官方資料（新分頁、只連結不複製）
+  function renderInfo() {
+    const w = wires.find((x) => x.id === selected);
+    const cid = compFocus || (pending && PORTS[pending].component) || (w && PORTS[w.from].component) || from3d[0];
+    info.replaceChildren();
+    const data = cid && PART_INFO[infoKey(cid)];
+    if (!data) { info.append(el('span', '點畫布上的零件，可看說明與官方資料。', 'note')); return; }
+    info.append(el('b', COMPONENTS.find((c) => c.id === cid).zh), el('span', `　${data.desc}`));
+    const links = el('span', null, 'w2-links'); links.append(el('span', '官方資料：'));
+    data.links.forEach(([label, href]) => { const a = el('a', `${label} ↗`); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; links.append(a); });
+    info.append(links);
+  }
   function syncOut() {
+    renderInfo();
     const w = wires.find((x) => x.id === selected);
     const comps = w ? [PORTS[w.from].component, PORTS[w.to].component] : pending ? [PORTS[pending].component] : compFocus ? [compFocus] : [];
     const label = w ? `${desc(w.from)} ↔ ${desc(w.to)}` : pending ? desc(pending) : compFocus ? COMPONENTS.find((c) => c.id === compFocus).zh : '';
