@@ -4,7 +4,7 @@
  *   民航局伺服器提供 JSONP（伺服器回傳 callback(...) 的公開跨站讀取方式），本頁由訪客瀏覽器即時查詢，資料永遠最新。
  * 功能：
  *  1. 點地圖／搜尋地名或座標／定位 → 查該點落在哪些管制區，結果卡片依紅／黃／紫／藍／綠五種狀態顯示。
- *  2. 依查詢點經緯度計算當天日出日落；以台北時間每秒更新「現在能不能飛」。
+ *  2. 依查詢點經緯度計算當天日出日落；以台北時間每秒更新日出後／日落前時段提示。
  *  3. 地圖載入可視範圍內的管制區（禁限航區依「限制區」欄位分紅區／黃區上色），移動後自動更新。
  *  4. 底部面板可拖拉（收合／半開／全開三段）；桌機固定在左側。
  *  5. 要塞堡壘地帶以示意圓圈＋三角形名稱顯示（data/fortress.json）。
@@ -131,11 +131,11 @@
   const card = $('result');
   let current = null;   // 目前查詢點 { lat, lon, label, sun }
   const STATE_TEXT = {
-    red: '這裡是紅區（禁飛區），不能飛',
-    yellow: '這裡是黃區（限制區），需申請',
-    purple: '這裡有臨時禁飛',
-    blue: '這裡是商港範圍',
-    green: '這裡不在禁限航區內',
+    red: '此處位於紅區（禁止飛航區），不得飛航',
+    yellow: '此處位於黃區（限制區），須經核准方得飛航',
+    purple: '此處有臨時禁限航公告',
+    blue: '此處位於商港範圍，須經管理機關同意',
+    green: '查詢點未位於民航局公告之禁限航區',
   };
   function showMessage(state, text) {
     card.dataset.state = state;
@@ -147,17 +147,22 @@
     if (!current || !current.sun.rise) return '';
     const { rise, set } = current.sun;
     if (now < rise) {
-      return `<div class="as-sunbox as-sun-night"><strong>⛔ 還沒日出，現在不能飛</strong>今天 ${fmtHM(rise)} 日出後才可以起飛（還要 ${dur(rise - now)}）<small>依民用航空法第 99 條之 14，日落後到日出前不得飛航（政府機關、學校、法人經民航局核准者除外；違者可罰 3～15 萬元）</small></div>`;
+      return `<div class="as-sunbox as-sun-night"><strong>⛔ 目前為日出前時段，不得飛航</strong>今天日出時間 ${fmtHM(rise)}（距日出 ${dur(rise - now)}）<small>依《民用航空法》第 99 條之 14，遙控無人機不得於日落後至日出前飛航（經民航局許可者除外）；違者處新臺幣 3 萬元以上 15 萬元以下罰鍰。</small></div>`;
     }
     if (now >= set) {
       const [y, m, d] = tpeYMD(now + 86400000);
       const next = sunTimes(y, m, d, current.lat, current.lon).rise;
-      return `<div class="as-sunbox as-sun-night"><strong>⛔ 已經日落，現在不能飛</strong>明天 ${fmtHM(next)} 日出後才可以起飛（還要 ${dur(next - now)}）<small>依民用航空法第 99 條之 14，日落後到日出前不得飛航（政府機關、學校、法人經民航局核准者除外；違者可罰 3～15 萬元）</small></div>`;
+      return `<div class="as-sunbox as-sun-night"><strong>⛔ 目前為日落後時段，不得飛航</strong>明日日出時間 ${fmtHM(next)}（距日出 ${dur(next - now)}）<small>依《民用航空法》第 99 條之 14，遙控無人機不得於日落後至日出前飛航（經民航局許可者除外）；違者處新臺幣 3 萬元以上 15 萬元以下罰鍰。</small></div>`;
     }
     if (set - now <= 30 * 60000) {
-      return `<div class="as-sunbox as-sun-dusk"><strong>⚠️ 快日落了，請注意時間</strong>今天 ${fmtHM(set)} 日落（剩 ${dur(set - now)}），日落後不得飛航</div>`;
+      return `<div class="as-sunbox as-sun-dusk"><strong>⚠️ 即將日落</strong>今天日落時間 ${fmtHM(set)}（距日落 ${dur(set - now)}），日落後不得飛航</div>`;
     }
-    return `<div class="as-sunbox as-sun-day"><strong>☀️ 現在是白天，可以飛</strong>日落前還有 ${dur(set - now)}（今天 ${fmtHM(set)} 日落）</div>`;
+    // 日間：只說明時段；是否可飛仍取決於空域狀態
+    if (current.state && current.state !== 'green') {
+      const why = { red: '此處位於禁止飛航區（紅區），任何時段皆不得飛航。', yellow: '此處位於限制區（黃區），未經主管機關核准不得飛航。', purple: '此處有臨時禁飛公告，公告期間不得飛航。', blue: '此處位於商港範圍，須經港務管理機關同意方可飛航。' }[current.state];
+      return `<div class="as-sunbox as-sun-dusk"><strong>☀️ 目前為日出後、日落前時段（今天日落時間 ${fmtHM(set)}）</strong>${why}</div>`;
+    }
+    return `<div class="as-sunbox as-sun-day"><strong>☀️ 目前為日出後、日落前時段</strong>今天日落時間 ${fmtHM(set)}（距日落 ${dur(set - now)}）。查詢點未位於民航局公告之禁限航區，飛航前仍應依《民用航空法》及《遙控無人機管理規則》確認註冊、操作證、目視範圍、距地面 400 呎以下等規定。</div>`;
   }
   function refreshSun() {
     const box = card.querySelector('[data-sunbox]');
@@ -208,11 +213,12 @@
     const inPark = has((h) => h.cfg.key === 'np');
     let extra = '';
     if (failed) extra += '<p class="as-msg" style="color:#a3401c">⚠️ 部分民航局圖層查詢失敗，結果可能不完整，請以官方查詢為準。</p>';
-    if (state === 'green') extra += `<p class="as-msg">${inPark ? '⚠️ 此點在國家公園範圍內，空拍需先向管理處申請。' : '國家公園內飛行另需向管理處申請。'}仍須遵守日間、目視範圍內、高度 400 呎以下等一般規定。</p>`;
+    if (state === 'green') extra += `<p class="as-msg">${inPark ? '⚠️ 此處位於國家公園範圍，空拍須事先向國家公園管理處申請。' : '國家公園範圍內空拍須事先向管理處申請。'}</p>`;
     const list = hits.map(({ cfg, color, d }) => `
       <li style="border-left-color:${color}"><details><summary><span class="as-tag" style="background:${color}">${esc(cfg.key === 'uav' ? (d.zone || '禁限航區') : cfg.name)}</span>${esc(d.title)}</summary>
       <dl>${d.rows.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${richText(v)}</dd>`).join('')}</dl></details></li>`).join('');
 
+    current.state = state;   // 供日出日落提示判斷用語
     card.dataset.state = state;
     card.innerHTML = `
       <h2 class="as-result-title"><i class="as-dot"></i><span>${STATE_TEXT[state]}</span></h2>
@@ -220,7 +226,8 @@
       <p class="as-sun">🌅 日出 <b>${current.sun.rise ? fmtHM(current.sun.rise) : '—'}</b>　🌇 日落 <b>${current.sun.set ? fmtHM(current.sun.set) : '—'}</b></p>
       <div data-sunbox>${sunBoxHtml(Date.now())}</div>
       ${extra}
-      ${list ? `<ul class="as-hits">${list}</ul>` : ''}`;
+      ${list ? `<ul class="as-hits">${list}</ul>` : ''}
+      <p class="as-msg" style="color:var(--muted);font-size:12.5px">本查詢結果僅供參考，不代表飛航許可；實際飛航應以交通部民用航空局「遙控無人機管理資訊系統」查詢結果及公告為準。</p>`;
   }
 
   // ---------- 在地圖上畫出目前可視範圍內的管制區 ----------
