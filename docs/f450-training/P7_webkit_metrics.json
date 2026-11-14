@@ -1,0 +1,17 @@
+{
+  "WebKit iPhone 13": {
+    "webgl": "WebGL 2.0 / WebKit WebGL",
+    "model_ready_ms": 1539,
+    "pending_scale": 1.33
+  },
+  "WebKit iPad（第 7 代）": {
+    "webgl": "WebGL 2.0 / WebKit WebGL",
+    "model_ready_ms": 1570,
+    "pending_scale": 1.33
+  },
+  "WebKit 桌面 Safari": {
+    "webgl": "WebGL 2.0 / WebKit WebGL",
+    "model_ready_ms": 1777,
+    "pending_scale": 1.33
+  }
+}

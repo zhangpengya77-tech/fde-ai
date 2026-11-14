@@ -10,7 +10,7 @@ import { UnrealBloomPass } from './vendor/three/addons/postprocessing/UnrealBloo
 import { OutlinePass } from './vendor/three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from './vendor/three/addons/postprocessing/OutputPass.js';
 import { PARTS, LAYERS, STATUS, STEPS, WIRING, CHECKS, SPECS, PRIMARY, LABELS, WIRING_LINKS, SIZE_REFS, PHOTOS, VIEW_PHOTOS } from './parts-data.js?v=1.2.1';
-import { createPractice } from './training/assembly-mode.js?v=p5-1';   // P2 實訓：3D 組裝練習（只透過下方幾個掛勾接入）
+import { createPractice } from './training/assembly-mode.js?v=p7-2';   // P2 實訓：3D 組裝練習（只透過下方幾個掛勾接入）
 import { createSync3D } from './training/sync3d.js?v=p7-1';   // P4 實訓：2D／3D 同步
 
 const $ = (id) => document.getElementById(id);

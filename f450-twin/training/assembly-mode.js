@@ -109,7 +109,7 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
     dragging = u; controls.enabled = false;                                   // 拖零件時不轉鏡頭
     plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(tmp).clone(), u.pos);
     grab.copy(hit.point).sub(u.pos);
-    renderer.domElement.setPointerCapture?.(e.pointerId);
+    try { renderer.domElement.setPointerCapture?.(e.pointerId); } catch { /* WebKit：指標已失效時會丟錯，拖曳改由 window 的 pointermove 接手 */ }
   }, true);
   addEventListener('pointermove', (e) => {
     if (!dragging) return;
