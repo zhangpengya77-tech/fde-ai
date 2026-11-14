@@ -2,6 +2,7 @@
 // 學員從零件盤拿起零件 → 在 3D 上拖到發光圈附近放開 → 自動吸附；順序、方向、槳葉轉向由 model.js 判斷。
 // 絕不用動畫假裝完成：每一件都必須由學員自己拖到位置。成績不記錄（P5／P6 才接判分與任務卡）。
 import { ASSEMBLY, ASSEMBLY_BY_ID, PRACTICE_ONLY, assemblyReport, createAssemblyState, install, pick, putBack, rotate, slotsFor, stepTitle, unitOfNode } from './model.js?v=p4-1';
+import { emit, on, latest } from './bus.js?v=p4-1';   // P5：教學／練習／考核模式與成績單
 
 const SNAP_PX = matchMedia('(pointer: coarse)').matches ? 64 : 46;   // 螢幕上距離多近就吸附（手機放寬）
 const LIFT = 170;                                                     // 拿起時放在安裝位置上方多少 mm
@@ -9,6 +10,10 @@ const LIFT = 170;                                                     // 拿起�
 export function createPractice({ THREE, nodes, scene, camera, renderer, controls, host, strip, onSelect, setView }) {
   let state = createAssemblyState();
   let active = false, built = false, current = null, dragging = null, message = '';
+  let trainMode = latest('trainMode')?.mode || 'practice', locked = !!latest('examLock')?.locked, stash = null, lastKey = '';   // P5
+  const isExam = () => trainMode === 'exam';
+  // 把組裝狀態送給成績單（只有變動時才送）
+  function emitState() { const k = JSON.stringify(state); if (k !== lastKey) { lastKey = k; emit('assembly', JSON.parse(k)); } }
   const units = new Map();      // id → { a, nodes, pivot, pos, q0: Map(node → 初始旋轉) }
   const Y = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3(), q = new THREE.Quaternion();
   const marks = new THREE.Group(); marks.visible = false; scene.add(marks);
@@ -55,7 +60,7 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
       const c = cp.status === 'held' ? cu.pos : cu.pivot;
       facing.position.copy(c).add(tmp.set(0, 45, 0));
       facing.setDirection(tmp.set(0, 0, -1).applyAxisAngle(Y, (-cp.yaw * Math.PI) / 180));
-      facing.setColor(cp.yaw % 360 === 0 ? 0x3ddc97 : 0xffc857);
+      facing.setColor(isExam() ? 0x36b9ff : cp.yaw % 360 === 0 ? 0x3ddc97 : 0xffc857);
     }
   }
 
@@ -65,7 +70,7 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
     for (const n of nodes) {
       const id = unitOfNode(n.obj.name), p = id && state.parts[id];
       n.obj.visible = !!p && p.status !== 'tray';
-      const glow = !p ? null : p.status === 'held' ? 0x1f7bff : p.status === 'wrong_orientation' ? 0xff3b3b : extra.has(n) ? 0x19b6c8 : null;
+      const glow = !p ? null : p.status === 'held' ? 0x1f7bff : p.status === 'wrong_orientation' && !isExam() ? 0xff3b3b : extra.has(n) ? 0x19b6c8 : null;
       if (glow && n.obj.visible) hot.push(n.obj);
       for (const m of n.meshes) for (const mat of [].concat(m.material)) {
         mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
@@ -74,13 +79,13 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
     }
     // 目標圈：手上零件可以去的空位
     rings.forEach((r) => (r.visible = false));
-    if (current && state.parts[current].status === 'held') {
+    if (current && state.parts[current].status === 'held' && !isExam()) {
       slotsFor(state, current).forEach((sid, i) => {
         if (!rings[i]) { const r = new THREE.Mesh(ringGeo, ringMat); r.rotation.x = Math.PI / 2; r.renderOrder = 10; marks.add(r); rings.push(r); }
         rings[i].position.copy(units.get(sid).pivot); rings[i].visible = true;
       });
     }
-    renderStrip();
+    renderStrip(); emitState();
     return hot;
   }
 
@@ -89,7 +94,7 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
   function setPtr(e) { const r = renderer.domElement.getBoundingClientRect(); ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ptr, camera); }
   function toScreen(v) { const r = renderer.domElement.getBoundingClientRect(); tmp.copy(v).project(camera); return [(tmp.x * 0.5 + 0.5) * r.width, (-tmp.y * 0.5 + 0.5) * r.height]; }
   host.addEventListener('pointerdown', (e) => {
-    if (!active || !built || e.target !== renderer.domElement) return;
+    if (!active || !built || locked || e.target !== renderer.domElement) return;
     setPtr(e);
     const pickable = [...units.values()].filter((u) => ['held', 'wrong_orientation'].includes(state.parts[u.a.id].status)).flatMap((u) => u.nodes.flatMap((n) => n.meshes));
     let hit = ray.intersectObjects(pickable, false)[0], u = null;
@@ -121,9 +126,10 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
   function drop(u) {
     const [x, y] = toScreen(u.pos);
     const cands = slotsFor(state, u.a.id).map((sid) => { const [sx, sy] = toScreen(units.get(sid).pivot); return [sid, Math.hypot(sx - x, sy - y)]; }).sort((p, r) => p[1] - r[1]);
-    if (!cands.length || cands[0][1] > SNAP_PX) { say(`還沒到安裝位置：把 ${u.a.zh} 拖到綠色圈上再放開`); onChange(); return; }
+    if (!cands.length || cands[0][1] > SNAP_PX) { say(isExam() ? `還沒到安裝位置：把 ${u.a.zh} 拖到它該裝的位置再放開` : `還沒到安裝位置：把 ${u.a.zh} 拖到綠色圈上再放開`); onChange(); return; }
     const r = install(state, u.a.id, cands[0][0]);
     if (r.ok) say(`✓ ${u.a.zh} 已安裝`, 'ok');
+    else if (isExam()) say(r.placed ? `${u.a.zh} 已放上（考核中不提示對錯）` : '這樣裝不行（已記錄）', r.placed ? '' : 'bad');
     else say(r.issue.message, 'bad');
     onChange();
   }
@@ -136,7 +142,8 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
   const btns = el('span');
   const bRotate = el('button', '↻ 旋轉 90°'), bBack = el('button', '放回零件盤'), bReset = el('button', '重新開始');
   [bRotate, bBack, bReset].forEach((b) => { b.type = 'button'; btns.append(b, ' '); });
-  head.append(el('b', '3D 組裝練習'), btns);
+  const title = el('b', '3D 組裝練習');
+  head.append(title, btns);
   const bar = el('div', null, 'pr-bar'); bar.append(el('i'));
   strip.append(head, bar, el('p', null, 'pr-stat'), el('p', null, 'pr-msg'), el('div', null, 'pr-tray'),
     el('p', '操作：點零件盤的零件拿起 → 在 3D 上把發藍光的零件拖到綠色圈 → 放開自動吸附。藍色箭頭＝機頭方向；Pixhawk 與 GPS 的黃色箭頭要轉成綠色（對準機頭）。', 'note'),
@@ -146,25 +153,28 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
   function say(text, tone = '') { message = text; msgTone = tone; }
 
   bRotate.onclick = () => {
+    if (locked) return;
     if (!current) { say('請先拿起或點選 Pixhawk 或 GPS'); onChange(); return; }
     const r = rotate(state, current, 90), a = ASSEMBLY_BY_ID[current];
     if (!r.ok) say(r.message);
+    else if (isExam()) say(`${a.zh} 已旋轉 90°`);
     else if (state.parts[current].status === 'installed') say(`✓ ${a.zh} 已對準機頭並安裝`, 'ok');
     else say(`${a.zh} 目前朝向 ${r.yaw}°（0° 才是對準機頭）`);
     onChange();
   };
-  bBack.onclick = () => { if (current && state.parts[current].status === 'held') { putBack(state, current); say('已放回零件盤'); current = null; onChange(); } };
-  bReset.onclick = () => { state = createAssemblyState(); current = null; say('已重新開始；請從第 1 步開始'); onChange(); };
+  bBack.onclick = () => { if (locked) return; if (current && state.parts[current].status === 'held') { putBack(state, current); say('已放回零件盤'); current = null; onChange(); } };
+  bReset.onclick = () => { if (locked || isExam()) return; state = createAssemblyState(); current = null; say('已重新開始；請從第 1 步開始'); onChange(); };
 
   function takeFromTray(id) {
+    if (locked) return;
     if (current && current !== id && state.parts[current].status === 'held') putBack(state, current);   // 一次只拿一件
     const r = pick(state, id), u = units.get(id);
-    if (!r.ok) { say(r.issue.message, 'bad'); onChange(); return; }
+    if (!r.ok) { say(isExam() ? '現在還不能裝這個零件（已記錄）' : r.issue.message, 'bad'); onChange(); return; }
     current = id;
     // 放在安裝位置上方；太靠近畫面上緣（會被視角按鈕擋住）就降低高度
     const H = renderer.domElement.getBoundingClientRect().height;
     for (let lift = LIFT; lift >= 40; lift -= 15) { u.pos.copy(u.pivot).add(tmp.set(0, lift, 0)); if (toScreen(u.pos)[1] > H * 0.2) break; }
-    say(`已拿起 ${u.a.zh}：拖到綠色圈${u.a.orient ? '，並把箭頭轉成指向機頭' : ''}${u.a.slot ? '（槳葉要裝到相同轉向的位置）' : ''}`);
+    say(isExam() ? `已拿起 ${u.a.zh}：拖到它該裝的位置` : `已拿起 ${u.a.zh}：拖到綠色圈${u.a.orient ? '，並把箭頭轉成指向機頭' : ''}${u.a.slot ? '（槳葉要裝到相同轉向的位置）' : ''}`);   // 考核時不提示方向與位置
     onSelect(u.a.kind); onChange();
     const vr = host.getBoundingClientRect();   // 零件盤在 3D 下方：拿起後把 3D 畫面捲回可見，才能直接拖
     if (vr.top < 0 || vr.bottom > innerHeight) host.scrollIntoView({ block: 'nearest' });
@@ -172,20 +182,26 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
 
   function renderStrip() {
     const rep = assemblyReport(state);
+    title.textContent = `3D 組裝練習（${{ teach: '教學', practice: '練習', exam: locked ? '考核・已交卷' : '考核' }[trainMode]}）`;
+    [bRotate, bBack].forEach((b) => (b.disabled = locked)); bReset.disabled = locked || isExam();
+    const suggest = trainMode === 'teach' && !rep.complete ? ASSEMBLY.find((a) => a.step === rep.nextStep && state.parts[a.id].status === 'tray') : null;
     $('.pr-bar i').style.width = `${(rep.installed / rep.total) * 100}%`;
     $('.pr-stat').textContent = rep.complete
       ? `全部 ${rep.total} 件已依序安裝完成｜錯誤 ${rep.errorCount} 次（練習結果，未記錄成績）`
-      : `已安裝 ${rep.installed} / ${rep.total}｜錯誤 ${rep.errorCount} 次｜下一步：第 ${rep.nextStep} 步「${stepTitle(rep.nextStep)}」${rep.wrongOrientation.length ? '｜有零件方向錯，先轉正' : ''}`;
+      : isExam() ? `已放上 ${rep.installed + rep.wrongOrientation.length} / ${rep.total}（考核中不顯示錯誤與下一步）`
+      : `已安裝 ${rep.installed} / ${rep.total}｜錯誤 ${rep.errorCount} 次｜下一步：第 ${rep.nextStep} 步「${stepTitle(rep.nextStep)}」${rep.wrongOrientation.length ? '｜有零件方向錯，先轉正' : ''}${suggest ? `｜建議先拿：${suggest.zh}` : ''}`;
     const m = $('.pr-msg'); m.textContent = message; m.className = `pr-msg ${msgTone}`;
     const tray = $('.pr-tray'); tray.replaceChildren();
     for (let s = 1; s <= 10; s++) {
       const list = ASSEMBLY.filter((a) => a.step === s);
       const left = list.filter((a) => state.parts[a.id].status !== 'installed' && state.parts[a.id].status !== 'wrong_orientation');
-      const g = el('div', null, `pr-step${s === rep.nextStep ? ' now' : ''}${left.length ? '' : ' done'}`);
-      g.append(el('span', `${left.length ? '' : '✓ '}${s}. ${stepTitle(s)}`, 'pr-h'));
+      const g = el('div', null, `pr-step${s === rep.nextStep && !isExam() ? ' now' : ''}${left.length || isExam() ? '' : ' done'}`);
+      g.append(el('span', `${left.length && !isExam() ? '' : isExam() ? '' : '✓ '}${s}. ${stepTitle(s)}`, 'pr-h'));
       left.forEach((a) => {
         const b = el('button', a.zh); b.type = 'button';
         if (state.parts[a.id].status === 'held') b.classList.add('on');
+        if (suggest && a.id === suggest.id) b.classList.add('suggest');
+        b.disabled = locked;
         b.onclick = () => takeFromTray(a.id); g.append(b);
       });
       tray.append(g);
@@ -204,6 +220,16 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
     };
   }
 
+  // P5：切換模式。考核時先把練習進度收起來、用全新的組裝狀態；離開考核再還原
+  on('trainMode', (d) => {
+    const next = d?.mode || 'practice';
+    if (next === 'exam') { if (!stash) stash = state; state = createAssemblyState(); current = null; say('考核開始：從第 1 步開始組裝，系統不會提示'); }
+    else if (trainMode === 'exam' && stash) { state = stash; stash = null; current = null; say('已回到練習進度'); }
+    else say(next === 'teach' ? '教學模式：照「建議先拿」的零件一件一件裝' : message);
+    trainMode = next; locked = false; lastKey = ''; emitState(); onChange(); if (!active) renderStrip();
+  });
+  on('examLock', (d) => { locked = !!d?.locked; if (locked) { dragging = null; controls.enabled = true; say('已交卷，組裝已鎖定'); } onChange(); if (!active) renderStrip(); });
+
   let onChange = () => {};
   return {
     get active() { return active; },
@@ -216,7 +242,7 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
         for (const u of units.values()) for (const n of u.nodes) n.obj.quaternion.copy(u.q0.get(n));
       } else { say(message || '從第 1 步開始：在零件盤點「下中心板」拿起'); setView('iso'); }
     },
-    update, refresh,
+    update, refresh, emitState,
     report: () => assemblyReport(state),
   };
 }

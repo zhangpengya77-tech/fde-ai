@@ -3,7 +3,7 @@
 // 操作：點一個接口、再點另一個接口 → 連線；點線 → 選取，可刪除或「紅黑對調」；按「檢查接線」看結果。
 // 草稿只存在這台裝置的瀏覽器（localStorage）；不記錄成績（P5／P6 才接判分與任務卡）。
 import { COMPONENTS, PORTS, EXPECTED_WIRES, PRACTICE_ONLY, validateWiring } from './model.js?v=p4-1';
-import { emit, on } from './bus.js?v=p4-1';   // P4：與 3D 同步
+import { emit, on, latest } from './bus.js?v=p4-1';   // P4：與 3D 同步；P5：教學／練習／考核
 
 const NS = 'http://www.w3.org/2000/svg';
 const STORE = 'f450twin-wire2d-v1';
@@ -52,6 +52,8 @@ for (const [cid, [x, y, w, h, sides]] of Object.entries(LAYOUT)) {
 
 export function initWiringCanvas(root) {
   if (!root) return null;
+  let trainMode = latest('trainMode')?.mode || 'practice', locked = !!latest('examLock')?.locked, stash = null;   // P5
+  const isExam = () => trainMode === 'exam';
   let compFocus = null, from3d = [], show3d = false, lastFocusKey = '', lastWiresKey = '';   // P4 同步狀態
   let wires = load(), pending = null, selected = null, result = null, showHints = false, seq = wires.reduce((m, w) => Math.max(m, Number(String(w.id).slice(1)) || 0), 0);
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -63,7 +65,8 @@ export function initWiringCanvas(root) {
   const tools = el('span', null, 'w2-tools');
   const B = (text, cls) => { const b = el('button', text, cls); b.type = 'button'; tools.append(b, ' '); return b; };
   const bCheck = B('✓ 檢查接線', 'primary'), bSwap = B('紅黑對調'), bDel = B('刪除這條線'), bUndo = B('復原'), bClear = B('全部清除');
-  head.append(el('b', '2D 接線練習'), tools);
+  const title = el('b', '2D 接線練習');
+  head.append(title, tools);
   const syncRow = el('div', null, 'row w2-sync');
   const lab3d = el('label', null, 'inline'); const cb3d = el('input'); cb3d.type = 'checkbox'; cb3d.id = 'w2-show3d';
   lab3d.append(cb3d, document.createTextNode(' 在 3D 顯示我的接線'));
@@ -110,6 +113,7 @@ export function initWiringCanvas(root) {
 
   // ───────── 互動 ─────────
   function clickPort(pid) {
+    if (locked) return say('已交卷，接線已鎖定');
     compFocus = null;
     if (!pending) { pending = pid; selected = null; say(`已選 ${desc(pid)}，再點要接的另一個接口（Esc 取消）`); return draw(); }
     if (pending === pid) { pending = null; say('已取消'); return draw(); }
@@ -130,18 +134,20 @@ export function initWiringCanvas(root) {
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); removeSelected(); }
   });
   function removeSelected() {
+    if (locked) return;
     if (!selected) return say('請先點選一條線');
     wires = wires.filter((w) => w.id !== selected); selected = null; result = null; say('已刪除'); save(); draw();
   }
   bDel.onclick = removeSelected;
   bSwap.onclick = () => {
+    if (locked) return;
     const w = wires.find((x) => x.id === selected); if (!w) return say('請先點選一條線');
     w.reversed = !w.reversed; result = null;
     say(w.reversed ? '已把這條線的紅黑對調（模擬焊接時接反）' : '已改回紅正黑負'); save(); draw();
   };
-  bUndo.onclick = () => { const w = wires.pop(); if (w) { selected = null; result = null; say(`已復原：${desc(w.from)} ↔ ${desc(w.to)}`); save(); } draw(); };
-  bClear.onclick = () => { if (!wires.length) return; if (!confirm('清除畫布上全部的線？')) return; wires = []; selected = null; result = null; say('已全部清除'); save(); draw(); };
-  bCheck.onclick = () => { result = validateWiring(wires); showHints = false; draw(); results.scrollIntoView?.({ block: 'nearest' }); };
+  bUndo.onclick = () => { if (locked) return; const w = wires.pop(); if (w) { selected = null; result = null; say(`已復原：${desc(w.from)} ↔ ${desc(w.to)}`); save(); } draw(); };
+  bClear.onclick = () => { if (locked || !wires.length) return; if (!confirm('清除畫布上全部的線？')) return; wires = []; selected = null; result = null; say('已全部清除'); save(); draw(); };
+  bCheck.onclick = () => { if (isExam()) return; result = validateWiring(wires); showHints = false; draw(); results.scrollIntoView?.({ block: 'nearest' }); };
 
   let msg = '先點一個接口開始接線。';
   function say(t) { msg = t; status.textContent = t; }
@@ -155,6 +161,12 @@ export function initWiringCanvas(root) {
   }
   function draw() {
     gWires.replaceChildren(); gPreview.setAttribute('d', '');
+    if (trainMode === 'teach') { result = validateWiring(wires); showHints = true; }   // 教學：每次變動都即時檢查、直接列出缺線
+    if (isExam()) { result = null; showHints = false; }
+    bCheck.hidden = isExam() || trainMode === 'teach';
+    [bSwap, bDel, bUndo, bClear].forEach((b) => (b.disabled = locked));
+    title.textContent = `2D 接線練習（${{ teach: '教學', practice: '練習', exam: locked ? '考核・已交卷' : '考核' }[trainMode]}）`;
+    const suggest = new Set(trainMode === 'teach' && pending ? EXPECTED_WIRES.filter((e) => e.from === pending || e.to === pending).map((e) => (e.from === pending ? e.to : e.from)) : []);
     const bad = new Map(), good = new Set();
     if (result) {
       for (const i of result.issues) if (i.wire) bad.set(i.wire, i.code);
@@ -166,7 +178,7 @@ export function initWiringCanvas(root) {
       const g = sv('g', { class: `w2-wire${w.id === selected ? ' sel' : ''}${bad.has(w.id) ? ' bad' : good.has(w.id) ? ' good' : ''}`, 'data-wire': w.id, tabindex: 0, role: 'button', 'aria-label': `導線 ${desc(w.from)} 到 ${desc(w.to)}` });
       const d = path(w.from, w.to);
       g.append(sv('path', { d, class: 'hit' }), sv('path', { d, class: 'line', stroke: KIND_COLOR[kind], 'stroke-dasharray': w.reversed ? '10 7' : 'none' }));
-      g.addEventListener('click', (e) => { e.stopPropagation(); pending = null; compFocus = null; selected = w.id; say(`已選取：${desc(w.from)} ↔ ${desc(w.to)}${w.reversed ? '（紅黑接反）' : ''}`); draw(); });
+      g.addEventListener('click', (e) => { e.stopPropagation(); if (locked) return; pending = null; compFocus = null; selected = w.id; say(`已選取：${desc(w.from)} ↔ ${desc(w.to)}${w.reversed ? '（紅黑接反）' : ''}`); draw(); });
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter') g.dispatchEvent(new MouseEvent('click', { bubbles: false })); });
       gWires.append(g);
     }
@@ -174,6 +186,7 @@ export function initWiringCanvas(root) {
     for (const [pid, pe] of Object.entries(portEls)) {
       pe.classList.toggle('pending', pid === pending);
       pe.classList.toggle('used', used.has(pid));
+      pe.classList.toggle('suggest', suggest.has(pid));   // 教學：標出這個接口該接到哪裡
     }
     for (const g of gComps.children) g.classList.toggle('focus3d', from3d.includes(g.dataset.comp));
     status.textContent = msg;
@@ -198,10 +211,11 @@ export function initWiringCanvas(root) {
   });
   function renderResults() {
     results.replaceChildren();
+    if (isExam()) { results.append(el('p', locked ? `已交卷：共接了 ${wires.length} 條線。分數見上方成績單。` : `考核中：目前 ${wires.length} 條線。考核不能自行檢查，完成後到上方成績單按「交卷」。`, 'note')); return; }
     if (!result) { results.append(el('p', `目前 ${wires.length} 條線（正確接線共 ${EXPECTED_WIRES.length} 條）。接完後按「✓ 檢查接線」。`, 'note')); return; }
     const errs = result.issues.filter((i) => i.code !== 'MISSING'), missing = result.issues.filter((i) => i.code === 'MISSING');
     const sum = el('p', null, `w2-sum ${result.ok ? 'ok' : 'bad'}`);
-    sum.textContent = result.ok ? `✓ 全部 ${result.expectedTotal} 條都接對了（練習結果，未記錄成績）`
+    sum.textContent = result.ok ? `✓ 全部 ${result.expectedTotal} 條都接對了（${trainMode === 'teach' ? '教學' : '練習'}結果，未記錄成績）`
       : `接對 ${result.correct.length} / ${result.expectedTotal}｜錯誤 ${errs.length} 處｜缺線 ${missing.length} 條`;
     results.append(sum);
     if (errs.length) {
@@ -220,7 +234,18 @@ export function initWiringCanvas(root) {
   function load() {
     try { const v = JSON.parse(localStorage.getItem(STORE) || '[]'); return Array.isArray(v) ? v.filter((w) => w && PORTS[w.from] && PORTS[w.to]) : []; } catch { return []; }
   }
-  function save() { try { localStorage.setItem(STORE, JSON.stringify(wires)); } catch { /* 無痕模式：不保存 */ } }
+  function save() { if (isExam()) return; try { localStorage.setItem(STORE, JSON.stringify(wires)); } catch { /* 無痕模式：不保存 */ } }
+
+  // P5：模式切換。考核時先收起練習草稿、從空白開始；離開考核再還原
+  function applyMode(next) {
+    if (next === 'exam') { if (!stash) stash = wires; wires = []; seq = 0; say('考核開始：從空白畫布開始接線，系統不會提示'); }
+    else if (trainMode === 'exam' && stash) { wires = stash; stash = null; seq = wires.reduce((m, w) => Math.max(m, Number(String(w.id).slice(1)) || 0), 0); say('已回到練習草稿'); }
+    else if (next === 'teach') say('教學模式：先點一個接口，畫布會用閃爍的圈標出它該接到哪裡');
+    trainMode = next; locked = false; pending = null; selected = null; result = null; draw();
+  }
+  on('trainMode', (d) => applyMode(d?.mode || 'practice'));
+  on('examLock', (d) => { locked = !!d?.locked; pending = null; selected = null; if (locked) say('已交卷，接線已鎖定'); draw(); });
+  if (isExam()) { trainMode = 'practice'; applyMode('exam'); }
 
   draw();
   return { get wires() { return wires; }, check: () => validateWiring(wires) };
