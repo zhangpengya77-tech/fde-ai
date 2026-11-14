@@ -299,6 +299,12 @@ FDE_GCS_COHORTS = frozenset(
     for item in os.environ.get('FDE_GCS_COHORTS', '').split(',')
     if item.strip()
 )
+# FDE-GCS P4／S6：多機 SITL 仿真。沒有設定金鑰時，仿真區塊顯示「未設定」，不簽發任何票證。
+# 金鑰需與 gcs-gateway 的 FDE_GCS_GATEWAY_SECRET 相同；Gateway 只連本機 SITL，不連真實飛控。
+FDE_GCS_GATEWAY_SECRET = os.environ.get('FDE_GCS_GATEWAY_SECRET', '')
+FDE_GCS_GATEWAY_URL = os.environ.get('FDE_GCS_GATEWAY_URL', 'ws://127.0.0.1:8261')
+FDE_GCS_GATEWAY_REVOKE_URL = os.environ.get('FDE_GCS_GATEWAY_REVOKE_URL', 'http://127.0.0.1:8361/revoke')
+FDE_GCS_SIM_URL = os.environ.get('FDE_GCS_SIM_URL', 'http://127.0.0.1:8252/?mode=exam&engine=sitl_follow')
 
 FDE_EXTERNAL_MODULES = {
     module_id: {

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import api, results_api, views
+from . import api, results_api, sitl_api, views
 
 app_name = "gcs_portal"
 
@@ -17,4 +17,6 @@ urlpatterns = [
     path("api/backups/<int:pk>/review/", results_api.review_backup, name="api_review_backup"),
     path("api/summary/", results_api.summary, name="api_summary"),
     path("api/export.csv", results_api.export_csv, name="api_export"),
+    path("api/sitl/ticket/", sitl_api.ticket, name="api_sitl_ticket"),
+    path("api/sitl/revoke/", sitl_api.revoke, name="api_sitl_revoke"),
 ]

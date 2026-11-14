@@ -6,6 +6,7 @@
   <title>FDE-AI 地面站（FDE-GCS）</title>
   <link rel="stylesheet" href="{% static 'gcs_portal/gcs.css' %}">
   <script type="module" src="{% static 'gcs_portal/gcs.js' %}"></script>
+  <script type="module" src="{% static 'gcs_portal/sitl.js' %}"></script>
 </head>
 <body class="gcs-root" data-gcs-role="{{ gcs_role }}" data-csrf="{{ csrf_token }}">
   <header class="gcs-header">
@@ -106,14 +107,62 @@
       <p class="gcs-note">「原始值」是這次連線第一次讀到的值；再讀一次時，有變化的參數會標示出來。寫入只開放白名單內的 PID 參數，每次都要教師批准，並且必須：已上鎖（Disarmed）、連線正常、已勾選「已拆槳、已斷電池」、二次確認；寫入後一定讀回驗證。</p>
     </section>
 
-    <section class="gcs-panel" id="gcs-sitl" aria-labelledby="gcs-sitl-title">
-      <h2 id="gcs-sitl-title"><span>04</span>仿真與航線</h2>
+    <section class="gcs-panel gcs-panel-wide" id="gcs-sitl" aria-labelledby="gcs-sitl-title" data-sitl-enabled="{{ sitl_enabled|yesno:'1,0' }}" data-sim-url="{{ sitl_sim_url }}">
+      <h2 id="gcs-sitl-title"><span>04</span>多機仿真與編隊（SITL）</h2>
+      {% if sitl_enabled %}
+      <div class="gcs-sitl-layout">
+        <div class="gcs-sitl-side">
+          <dl class="gcs-facts">
+            <dt>仿真連線</dt><dd id="gcsSitlLink" data-state="disconnected">未連線</dd>
+            <dt>權限</dt><dd id="gcsSitlScope">—</dd>
+            <dt>目前工作</dt><dd id="gcsSitlJob">—</dd>
+            <dt>隊形誤差</dt><dd id="gcsSitlFormErr">—</dd>
+          </dl>
+          <div class="gcs-actions">
+            <button type="button" id="gcsSitlConnect">連線仿真（唯讀）</button>
+            {% if gcs_role == "teacher" %}<button type="button" id="gcsSitlControl" disabled>取得控制權（10 分鐘）</button>{% endif %}
+          </div>
+          <div class="gcs-table-wrap">
+            <table class="gcs-table">
+              <thead><tr><th>機</th><th>模式</th><th>解鎖</th><th>高度</th><th>速度</th><th>電量</th><th>GPS</th></tr></thead>
+              <tbody id="gcsSitlFleet"><tr><td colspan="7">尚未連線。</td></tr></tbody>
+            </table>
+          </div>
+          {% if gcs_role == "teacher" %}
+          <fieldset class="gcs-sitl-controls" id="gcsSitlControls" disabled>
+            <legend>多機控制（教師）</legend>
+            <label>高度 m <input id="gcsSitlAlt" type="number" min="3" max="30" step="1" value="8"></label>
+            <div class="gcs-actions">
+              <button type="button" data-sitl-cmd="takeoff">一鍵起飛</button>
+              <button type="button" data-sitl-cmd="mission_start">開始任務</button>
+              <button type="button" data-sitl-cmd="brake">原地停住</button>
+              <button type="button" data-sitl-cmd="land">全部降落</button>
+              <button type="button" data-sitl-cmd="rtl">全部返航</button>
+            </div>
+            <label>隊形 <select id="gcsSitlShape"><option value="line">一字</option><option value="triangle" selected>三角</option><option value="column">縱隊</option></select></label>
+            <label>間距 m <input id="gcsSitlSpacing" type="number" min="2" max="20" step="0.5" value="3"></label>
+            <label>朝向 ° <input id="gcsSitlHeading" type="number" min="0" max="359" step="5" value="0"></label>
+            <label>航線 <select id="gcsSitlPath"><option value="square">正方形（領航機帶隊）</option><option value="hold">原地保持隊形</option></select></label>
+            <div class="gcs-actions">
+              <button type="button" data-sitl-cmd="formation">開始編隊</button>
+              <button type="button" id="gcsSitlRevoke">撤銷所有控制權並停住</button>
+            </div>
+          </fieldset>
+          {% endif %}
+          <p class="gcs-link-message" id="gcsSitlMessage" role="status" aria-live="polite">按「連線仿真」查看多機遙測。</p>
+        </div>
+        <div class="gcs-sitl-scene">
+          <iframe id="gcsSitlScene" title="考照場景（多機 3D 顯示）" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin"></iframe>
+          <p class="gcs-note">考照場景只顯示 SITL 的位置與姿態（唯讀），隊形目標圈與過近警告會同步出現。</p>
+        </div>
+      </div>
+      <p class="gcs-note">仿真只連本機 ArduPilot SITL，絕不連接真實飛控。學員只能看；控制需要教師的短效控制憑證，到期或撤銷後立即失效。開始任務時會先起飛再切 AUTO，航線不必以 TAKEOFF 開頭。</p>
+      {% else %}
       <dl class="gcs-facts">
-        <dt>仿真連線</dt><dd>尚未接入（P4）</dd>
-        <dt>目前航點</dt><dd>—</dd>
-        <dt>任務狀態</dt><dd>—</dd>
+        <dt>仿真連線</dt><dd>尚未設定（需要 SITL Gateway 金鑰）</dd>
       </dl>
-      <p class="gcs-note">航線固定以 TAKEOFF 開頭、RETURN_TO_LAUNCH 結尾。上傳與執行任務需要教師授權的短效控制憑證；唯讀憑證不能用來控制。</p>
+      <p class="gcs-note">上傳與執行任務需要教師授權的短效控制憑證；唯讀憑證不能用來控制。</p>
+      {% endif %}
     </section>
 
     <section class="gcs-panel" id="gcs-ai" aria-labelledby="gcs-ai-title">
