@@ -349,9 +349,17 @@ async function cancelRequest(id) {
   refreshRequests();
 }
 
+const BASE_TITLE = document.title;
+const OPEN_STATUSES = new Set(['PENDING', 'APPROVED']);
+
 function renderRequests() {
   const list = $('gcsRequestList');
   list.replaceChildren();
+  const pending = requests.filter((r) => r.can_decide).length;
+  document.title = pending ? `(${pending}) ${BASE_TITLE}` : BASE_TITLE;
+  $('gcsRequestTitle').textContent = pending ? `寫入申請紀錄（待你批准 ${pending} 筆）` : '寫入申請紀錄';
+  $('gcsRequestTitle').classList.toggle('gcs-attention', pending > 0);
+  const reverted = new Set(requests.filter((r) => r.revert_of && (OPEN_STATUSES.has(r.status) || r.status === 'APPLIED')).map((r) => r.revert_of));
   if (!requests.length) {
     const li = document.createElement('li');
     li.textContent = '尚無申請。';
@@ -362,7 +370,7 @@ function renderRequests() {
     const li = document.createElement('li');
     li.dataset.status = item.status;
     const title = document.createElement('strong');
-    title.textContent = `${item.param_name}：${formatValue(item.old_value)} → ${formatValue(item.new_value)}`;
+    title.textContent = `${item.revert_of ? '【還原】' : ''}${item.param_name}：${formatValue(item.old_value)} → ${formatValue(item.new_value)}`;
     const meta = document.createElement('span');
     const who = item.is_mine ? '我' : `${item.requester}${item.cohort ? `（${item.cohort}）` : ''}`;
     const review = item.review_status ? ` · 教師覆核 ${item.review_label}` : '';
@@ -380,6 +388,9 @@ function renderRequests() {
     }
     if (item.is_mine && item.status === 'APPROVED') {
       addButton(actions, '寫入飛控…', () => openApplyPanel(item.id));
+    }
+    if (item.is_mine && item.status === 'APPLIED' && !reverted.has(item.id)) {
+      addButton(actions, '申請還原', () => requestRevert(item));
     }
     if (item.is_mine && (item.status === 'PENDING' || item.status === 'APPROVED')) {
       addButton(actions, '取消申請', () => cancelRequest(item.id));
@@ -600,4 +611,25 @@ async function refreshResults() {
   } catch (error) {
     /* 下次再試 */
   }
+}
+
+// ---- Web 1.1：一鍵還原（仍需教師批准與全部寫入檢查）----
+
+async function requestRevert(item) {
+  const entry = link && link.connected ? link.params.params.get(item.param_name) : null;
+  if (!entry) {
+    window.alert('請先連線飛控並讀取參數，才能申請還原。');
+    return;
+  }
+  const ok = window.confirm(`申請把 ${item.param_name} 從 ${formatValue(entry.value)} 改回 ${formatValue(item.old_value)}？\n送出前請確認：螺旋槳已拆下、動力電池已斷開。`);
+  if (!ok) return;
+  try {
+    await api('/gcs/api/param-requests/', {
+      method: 'POST',
+      body: { revert_of: item.id, old_value: entry.value, safety_ack: true },
+    });
+  } catch (error) {
+    window.alert(error.message);
+  }
+  refreshRequests();
 }

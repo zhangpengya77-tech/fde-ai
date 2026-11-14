@@ -417,3 +417,8 @@
 #gcsTaskCard li[data-ok="false"] {
   color: var(--muted);
 }
+
+/* Web 1.1：教師待批准提醒 */
+.gcs-attention {
+  color: var(--warn);
+}

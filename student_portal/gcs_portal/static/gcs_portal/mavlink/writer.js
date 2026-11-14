@@ -14,7 +14,8 @@ export class WriteBlockedError extends Error {
 }
 
 // 與伺服器 allowlist.py 相同的規則（伺服器在建立申請時也會檢查一次）。
-export function validateChange(allowlist, name, oldValue, newValue) {
+// isRevert：改回某筆已寫入申請的原值，只檢查白名單與範圍，不套用單次幅度限制（伺服器規則相同）。
+export function validateChange(allowlist, name, oldValue, newValue, isRevert = false) {
   const rule = allowlist && allowlist.params[name];
   if (!rule) return [`${name} 不在可修改的白名單內。`];
   if (![oldValue, newValue].every((v) => typeof v === 'number' && Number.isFinite(v))) return ['數值不是有效數字。'];
@@ -22,7 +23,7 @@ export function validateChange(allowlist, name, oldValue, newValue) {
   if (newValue < rule.min || newValue > rule.max) errors.push(`新值必須在 ${rule.min}～${rule.max} 之間。`);
   if (newValue === oldValue) errors.push('新值和原值相同，不需要寫入。');
   const reference = Math.max(Math.abs(oldValue), rule.max * 0.1);
-  if (Math.abs(newValue - oldValue) > reference * allowlist.max_step_ratio + 1e-12) {
+  if (!isRevert && Math.abs(newValue - oldValue) > reference * allowlist.max_step_ratio + 1e-12) {
     errors.push(`單次修改幅度不得超過 ${Math.round(allowlist.max_step_ratio * 100)}%。`);
   }
   return errors;
@@ -38,7 +39,9 @@ export function evaluateWriteChecks({ link, request, allowlist, safetyAckNow, co
   const state = link ? link.linkState() : 'disconnected';
   const entry = link && request ? link.params.params.get(request.param_name) : null;
   const expires = request && request.approval_expires_at ? Date.parse(request.approval_expires_at) : 0;
-  const ruleErrors = request ? validateChange(allowlist, request.param_name, request.old_value, request.new_value) : ['沒有申請'];
+  const ruleErrors = request
+    ? validateChange(allowlist, request.param_name, request.old_value, request.new_value, Boolean(request.revert_of))
+    : ['沒有申請'];
   return [
     { key: 'disarmed', label: '飛控已上鎖（Disarmed）', ok: Boolean(vehicle) && state === 'ok' && link.telemetry.armed === false },
     { key: 'link', label: 'USB 連線正常', ok: state === 'ok' },

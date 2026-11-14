@@ -63,6 +63,10 @@ class ParamWriteRequest(TeacherReviewFields):
     old_value = models.FloatField()
     new_value = models.FloatField()
     safety_ack = models.BooleanField(default=False)
+    revert_of = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="reverts",
+        help_text="還原申請：把這筆已寫入的申請改回它的原值。",
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     decided_by = models.ForeignKey(
@@ -104,6 +108,7 @@ class ParamWriteRequest(TeacherReviewFields):
             "result_value": self.result_value,
             "result_message": self.result_message,
             "allowlist_version": self.allowlist_version,
+            "revert_of": self.revert_of_id,
             **self.review_dict(),
         }
 

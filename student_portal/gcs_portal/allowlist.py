@@ -36,8 +36,12 @@ def load_allowlist():
     return data
 
 
-def validate_change(name, old_value, new_value):
-    """回傳錯誤訊息清單；空清單代表這次修改符合白名單。"""
+def validate_change(name, old_value, new_value, *, is_revert=False):
+    """回傳錯誤訊息清單；空清單代表這次修改符合白名單。
+
+    is_revert=True 只用於「改回某筆已寫入申請的原值」：仍檢查白名單與範圍，但不套用單次幅度限制
+    （幅度以目前值為基準計算，調低後再改回原值時可能超過 30%）。
+    """
     data = load_allowlist()
     rule = data["params"].get(name)
     if is_forbidden(name) or rule is None:
@@ -53,7 +57,7 @@ def validate_change(name, old_value, new_value):
     if new_value == old_value:
         errors.append("新值和原值相同，不需要寫入。")
     reference = max(abs(old_value), rule["max"] * 0.1)
-    if abs(new_value - old_value) > reference * data["max_step_ratio"] + 1e-12:
+    if not is_revert and abs(new_value - old_value) > reference * data["max_step_ratio"] + 1e-12:
         errors.append(f"單次修改幅度不得超過 {int(data['max_step_ratio'] * 100)}%。")
     return errors
 

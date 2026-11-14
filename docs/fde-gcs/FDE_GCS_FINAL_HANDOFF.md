@@ -16,6 +16,7 @@
 | P5 | 參數備份、差異報告、教師 PASS／NG、任務卡、CSV、AI 調參助教、SOP | PASS（AI 回答品質 `PENDING_LOCAL`） | `FDE_GCS_P5_REPORT.md`、`FDE_GCS_STUDENT_SOP.md`、`FDE_GCS_TEACHER_SOP.md` |
 | P6 | 教室驗收 | **PENDING_MANUAL** | 本文件第 5 節 |
 | — | 教室啟動腳本 | 程式完成，靜態檢查 PASS；**Windows 實際執行 `PENDING_LOCAL`** | 本文件第 3 節 |
+| Web 1.1 | 一鍵還原、教師待批准提醒 | PASS（模擬飛控） | `FDE_GCS_WEB11_REPORT.md` |
 
 ## 2. 程式碼位置
 
@@ -25,7 +26,7 @@
 | `student_portal/gcs_portal/static/gcs_portal/mavlink/` | MAVLink 編解碼、連線、參數、遙測、寫入模組 |
 | `student_portal/gcs_portal/param_allowlist/arducopter-4.json` | 寫入白名單（**待教師確認範圍**） |
 | `student_portal/gcs_portal/param_explanations.json` | 參數說明（**待教師確認文字**） |
-| `student_portal/gcs_portal/migrations/` | `0001`（寫入申請）、`0002`（覆核欄位、參數備份）；**只影響 gcs_portal 自己的資料表** |
+| `student_portal/gcs_portal/migrations/` | `0001`（寫入申請）、`0002`（覆核欄位、參數備份）、`0003`（還原申請）；**只影響 gcs_portal 自己的資料表** |
 | `ops/fde-gcs/` | 教室啟動腳本 |
 | `docs/fde-gcs/` | 全部文件與截圖 |
 
@@ -77,10 +78,10 @@ python manage.py createsuperuser
 
 | 測試 | 數量 | 結果 |
 |---|---|---|
-| JavaScript 單元測試（含啟動腳本靜態檢查） | 32 | PASS |
-| Django `gcs_portal` | 48 | PASS |
-| 端到端 P2／P3／P5（Chromium＋pymavlink 模擬飛控） | 8／12／10 | PASS |
-| 完整回歸 `learning`＋`gcs_portal` | 1385 | 失敗項目與改動前基準完全相同（17 failures、19 errors，雲端缺 ffmpeg 與平台檔） |
+| JavaScript 單元測試（含啟動腳本靜態檢查） | 33 | PASS |
+| Django `gcs_portal` | 53 | PASS |
+| 端到端 P2／P3／P5／Web 1.1（Chromium＋pymavlink 模擬飛控） | 8／12／10／9 | PASS |
+| 完整回歸 `learning`＋`gcs_portal` | 1390 | 失敗項目與改動前基準完全相同（17 failures、19 errors，雲端缺 ffmpeg 與平台檔） |
 
 重現指令：
 
@@ -117,7 +118,7 @@ cd student_portal && python manage.py test gcs_portal
 ## 7. Web 1.1 建議
 
 1. **P4 仿真整合**（Gazebo 接管案通過後）
-2. **一鍵還原**：寫入不理想時，讓學員以「還原到申請前的值」送出一筆預先填好的申請
-3. **教師即時通知**：有新申請時在教師頁面提示，目前要靠 5 秒輪詢
+2. ~~一鍵還原~~（Web 1.1 已完成）
+3. ~~教師待批准提醒~~（Web 1.1 已完成，仍為 5 秒輪詢；需要跨分頁即時推播時再評估）
 4. **白名單擴充**：依教學需要加入 `ATC_ANG_*_P` 或 `PSC_*`，每次擴充都要教師確認並更新版本號
 5. **H743 與其他韌體版本的白名單分檔**

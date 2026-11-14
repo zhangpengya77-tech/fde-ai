@@ -111,3 +111,14 @@ test('mismatched readback is reported as failure', async () => {
   for (const l of link.paramListeners) l({ param_id: 'ATC_RAT_RLL_P', param_value: 0.135, param_type: 9 });
   assert.equal((await pending).success, false);
 });
+
+test('revert requests skip only the step limit, never the range or allowlist', () => {
+  assert.ok(validateChange(allowlist, 'ATC_RAT_RLL_P', 0.1, 0.135).length, 'normal request: +35% is rejected');
+  assert.deepEqual(validateChange(allowlist, 'ATC_RAT_RLL_P', 0.1, 0.135, true), []);
+  assert.ok(validateChange(allowlist, 'ATC_RAT_RLL_P', 0.1, 0.9, true).length, 'range still applies');
+  assert.ok(validateChange(allowlist, 'ARMING_CHECK', 0, 1, true).length, 'allowlist still applies');
+  const { link } = makeLink();
+  link.params.params.get('ATC_RAT_RLL_P').value = 0.10000000149011612;
+  const request = approvedRequest({ old_value: 0.10000000149011612, new_value: 0.135, revert_of: 5 });
+  assert.ok(evaluateWriteChecks({ link, request, ...ok }).every((c) => c.ok));
+});

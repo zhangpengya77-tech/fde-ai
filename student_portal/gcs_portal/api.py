@@ -102,7 +102,24 @@ def param_requests(request):
         return _json_error("請求格式錯誤。", 400)
     name = str(data.get("param_name", ""))[:16]
     old_value, new_value = data.get("old_value"), data.get("new_value")
-    errors = validate_change(name, old_value, new_value)
+    revert_of = None
+    if data.get("revert_of") is not None:
+        revert_of = ParamWriteRequest.objects.filter(
+            pk=data.get("revert_of") if isinstance(data.get("revert_of"), int) else -1,
+            requester=request.user,
+            status=Status.APPLIED,
+        ).first()
+        if revert_of is None:
+            return JsonResponse({"error": "validation", "errors": ["只能還原自己已寫入成功的申請。"]}, status=400)
+        if revert_of.reverts.exclude(status__in=(Status.REJECTED, Status.CANCELLED, Status.EXPIRED, Status.FAILED)).exists():
+            return _json_error("這筆寫入已經有還原申請了。", 409)
+        # 還原的內容由伺服器決定：參數、飛控與數值一律取自原申請，不採用瀏覽器送來的值。
+        name = revert_of.param_name
+        new_value = revert_of.old_value
+        data["vehicle_sysid"] = revert_of.vehicle_sysid
+        if not isinstance(old_value, (int, float)) or isinstance(old_value, bool) or not readback_matches(revert_of.new_value, old_value):
+            return JsonResponse({"error": "validation", "errors": ["飛控目前值已經不是當初寫入的值，請重新讀取參數後改用一般申請。"]}, status=400)
+    errors = validate_change(name, old_value, new_value, is_revert=revert_of is not None)
     if data.get("safety_ack") is not True:
         errors.append("請先確認「已拆下螺旋槳、已斷開動力電池」。")
     sysid = data.get("vehicle_sysid")
@@ -131,6 +148,7 @@ def param_requests(request):
             old_value=float(old_value),
             new_value=float(new_value),
             safety_ack=True,
+            revert_of=revert_of,
         )
     return JsonResponse({"request": item.to_dict()}, status=201)
 

@@ -181,3 +181,59 @@ class ParamRequestApiTests(TestCase):
     def test_api_is_404_when_flag_is_off(self):
         self.client.force_login(self.teacher)
         self.assertEqual(self.client.get(API).status_code, 404)
+
+
+@override_settings(FDE_GCS_ENABLED=True, FDE_GCS_COHORTS=frozenset({OPEN}))
+class RevertRequestTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.open = Cohort.objects.create(cohort_id=OPEN, name="開放班")
+        cls.student = create_student_account(email="r1@example.com")
+        enroll_student(cls.student, cls.open)
+        cls.other = create_student_account(email="r2@example.com")
+        enroll_student(cls.other, cls.open)
+
+    def applied(self, requester, old=0.135, new=0.1):
+        return ParamWriteRequest.objects.create(
+            requester=requester.user, student=requester, cohort=self.open, param_name="ATC_RAT_RLL_P",
+            allowlist_version="x", vehicle_sysid=1, old_value=old, new_value=new, safety_ack=True,
+            status=ParamWriteRequest.Status.APPLIED,
+        )
+
+    def post_revert(self, user, revert_of, current=0.1, **extra):
+        self.client.force_login(user)
+        body = {"revert_of": revert_of, "old_value": current, "new_value": 999, "param_name": "ARMING_CHECK",
+                "vehicle_sysid": 9, "safety_ack": True, **extra}
+        return self.client.post(API, json.dumps(body), content_type="application/json")
+
+    def test_revert_back_to_original_value_bypasses_step_limit_only(self):
+        source = self.applied(self.student)
+        self.assertTrue(validate_change("ATC_RAT_RLL_P", 0.1, 0.135))  # 一般申請：超過 30%
+        response = self.post_revert(self.student.user, source.pk)
+        self.assertEqual(response.status_code, 201, response.content)
+        item = ParamWriteRequest.objects.get(pk=response.json()["request"]["id"])
+        # 參數、飛控、新值都取自原申請，不採用瀏覽器送來的 ARMING_CHECK／999／9
+        self.assertEqual((item.param_name, item.new_value, item.vehicle_sysid, item.status), ("ATC_RAT_RLL_P", 0.135, 1, "PENDING"))
+        self.assertEqual(item.revert_of_id, source.pk)
+
+    def test_revert_still_needs_safety_ack_and_range(self):
+        source = self.applied(self.student)
+        self.assertEqual(self.post_revert(self.student.user, source.pk, safety_ack=False).status_code, 400)
+        out_of_range = self.applied(self.other, old=0.9, new=0.2)
+        self.assertEqual(self.post_revert(self.other.user, out_of_range.pk, current=0.2).status_code, 400)
+
+    def test_cannot_revert_someone_elses_or_unfinished_request(self):
+        source = self.applied(self.student)
+        self.assertEqual(self.post_revert(self.other.user, source.pk).status_code, 400)
+        source.status = ParamWriteRequest.Status.APPROVED
+        source.save()
+        self.assertEqual(self.post_revert(self.student.user, source.pk).status_code, 400)
+
+    def test_current_value_must_still_be_the_written_value(self):
+        source = self.applied(self.student)
+        self.assertEqual(self.post_revert(self.student.user, source.pk, current=0.12).status_code, 400)
+
+    def test_only_one_open_revert_per_write(self):
+        source = self.applied(self.student)
+        self.assertEqual(self.post_revert(self.student.user, source.pk).status_code, 201)
+        self.assertEqual(self.post_revert(self.student.user, source.pk).status_code, 409)
