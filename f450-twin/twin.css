@@ -183,3 +183,31 @@ details.truth p{margin:6px 0 0;max-width:110ch;color:#e9d7a6}
 .pr-h{flex:0 0 100%;font-size:12.5px;color:var(--muted)}
 .pr-step button{font-size:12.5px;padding:4px 8px}
 @media (max-width:820px){.pr-step button{white-space:normal;text-align:left}}
+/* P3：2D 接線練習 */
+.train-actions{display:flex;flex-wrap:wrap;gap:8px}
+.wire2d{margin-top:14px}
+.w2-tools{display:inline-flex;flex-wrap:wrap;gap:4px}
+.w2-status{margin:8px 0;min-height:1.55em;font-weight:600}
+.w2-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:rgba(5,15,28,.55)}
+.w2-svg{display:block;width:100%;min-width:720px;height:auto;user-select:none;-webkit-user-select:none}
+.w2-comp rect{fill:#0d2a47;stroke:var(--line2);stroke-width:1.5}
+.w2-name{fill:var(--fg);font-size:17px;font-weight:600}
+.w2-plabel{fill:var(--muted);font-size:13px;pointer-events:none}
+.w2-port{cursor:pointer;outline:none}
+.w2-port circle{fill:#061423;stroke-width:3}
+.w2-port.power circle{stroke:#ff6a4d}.w2-port.signal circle{stroke:#3fd0ff}.w2-port.data circle{stroke:#7ee8c8}
+.w2-port.used circle{fill:currentColor}.w2-port.power{color:#ff6a4d}.w2-port.signal{color:#3fd0ff}.w2-port.data{color:#7ee8c8}
+.w2-port:hover circle,.w2-port:focus-visible circle{r:12}
+.w2-port.pending circle{fill:#fff;stroke:#fff;r:12}
+.w2-port:focus-visible .w2-plabel,.w2-port.pending .w2-plabel{fill:#fff}
+.w2-wire{cursor:pointer;outline:none}
+.w2-wire .hit{fill:none;stroke:transparent;stroke-width:16}
+.w2-wire .line{fill:none;stroke-width:3.5;opacity:.9}
+.w2-wire.sel .line{stroke-width:6;opacity:1;filter:drop-shadow(0 0 4px #fff)}
+.w2-wire.good .line{stroke:var(--ok)}
+.w2-wire.bad .line{stroke:var(--danger);stroke-width:5}
+.w2-preview{fill:none;stroke:#fff;stroke-width:2;stroke-dasharray:6 6;pointer-events:none}
+.w2-legend span{margin-right:12px}
+.w2-sum{font-weight:600;margin:8px 0}.w2-sum.ok{color:var(--ok)}.w2-sum.bad{color:var(--danger)}
+.w2-issues{margin:0 0 8px;padding-left:1.3em}.w2-issues li{margin:3px 0;cursor:pointer}
+.w2-issues.hint li{color:var(--ref);cursor:default}

@@ -9,7 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>F450 數位孿生 1.2｜FDE-AI-UAS</title>
-<link rel="stylesheet" href="./twin.css?v=1.2.2">
+<link rel="stylesheet" href="./twin.css?v=1.2.3">
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -133,12 +133,12 @@
       <p>站內模組：3D 組裝、2D 接線、自動檢查、實訓考核。以本頁 F450 數位孿生為基礎，接線關係與上方「接線圖」同一份資料。</p>
       <ul class="train-list">
         <li>3D 組裝練習（已開放）：依步驟把零件拖到機架上，檢查順序、方向與槳葉轉向</li>
-        <li>2D 接線：在接線畫布上連接飛控、電調、接收機、GPS 等（開發中）</li>
-        <li>自動檢查：系統標出接錯、漏接、極性與安全問題（開發中）</li>
+        <li>2D 接線練習（已開放）：在接線畫布上連接飛控、電調、接收機、GPS 等</li>
+        <li>自動檢查（練習版）：標出接錯、缺線、接頭不合、極性錯等問題</li>
         <li>實訓考核：完成紀錄送教師審核（開發中）</li>
       </ul>
       <p class="note">練習結果目前不記錄、不計成績；規則待實機核對。</p>
-      <button type="button" class="primary" data-mode="practice" id="practice-enter">開始 3D 組裝練習 ↑</button>
+      <div class="train-actions"><button type="button" class="primary" data-mode="practice" id="practice-enter">開始 3D 組裝練習 ↑</button> <button type="button" class="primary" id="wire2d-enter">開始 2D 接線練習 ↓</button></div>
     </article>
     <article class="card train-card">
       <h3>B. FPV 穿越機接線實訓 <span class="tag ref">外部網站</span></h3>
@@ -152,7 +152,10 @@
       <a class="train-link" href="https://hs-fpv.com/wiring-simulator" target="_blank" rel="noopener noreferrer">開啟 FPV 接線模擬器（外部網站，新分頁）↗</a>
     </article>
   </div>
+  <!-- P3：2D 接線練習（內容由 training/wiring-canvas.js 產生；不依賴 3D） -->
+  <section class="card wire2d" id="wire2d" hidden aria-label="2D 接線練習"><div class="w2-root"></div></section>
 </section>
+<script type="module" src="./training/wiring-canvas.js?v=p3-4"></script>
 
 <script type="module" src="./app.js?v=1.3.0"></script>
 </body>
