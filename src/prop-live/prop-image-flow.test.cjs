@@ -62,13 +62,14 @@ test('單支錯：NG、只有 M3（左上）NG、逐位置說明', async () => {
   assert.deepEqual(result.judgeLines, ['左上應為 CW，目前是 CCW，請依正確方向更換。']);
 });
 
-test('缺槳：CHECK、四個位置全是 CHECK、沒有任何 PASS 或綠框', async () => {
+test('缺槳（2026-11-14 新規則）：已辨識的 3 支給參考判定綠框，缺的 1 支為 CHECK，整體 CHECK、不出現 PASS', async () => {
   const { result } = await run(quad(['CW', 'CCW', 'CCW', 'CW']).slice(0, 3));
   assert.equal(result.finalResult, 'CHECK');
-  assert.equal(result.judgeState, 'UNCERTAIN');
-  assert.ok(result.motorChecks.every((m) => m.result === 'CHECK'));
-  assert.ok(!result.overlayBoxes.some((b) => b.color === 'green'));
-  assert.equal(result.summary, '我無法判斷，請找線下老師確認。');
+  assert.equal(result.judgeState, 'BEST_EFFORT');
+  assert.equal(result.motorChecks.filter((m) => m.result === 'CHECK').length, 1);
+  assert.ok(!result.motorChecks.some((m) => m.result === 'NG'));
+  assert.equal(result.overlayBoxes.filter((b) => b.color === 'green').length, 3);
+  assert.match(result.summary, /請老師確認/);
 });
 
 test('機身偏離畫面中央：以重心劃分仍正確（舊版以畫面中線切割會判錯，這是刻意的行為改變）', async () => {
@@ -88,6 +89,12 @@ test('圖片流程結果與 judgePropellers 直接判定完全一致（隨機 30
     if (k === 5) dets.push({ class: 'CW', confidence: 0.8, bbox: [1100, 600, 1180, 680] });
     const direct = judgeModule.judgePropellers(dets, RULES);
     const { result } = await run(dets);
+    if (direct.state === 'UNCERTAIN') {
+      // 2026-11-14：低信心改給參考判定（綠／紅＋待確認），整體結果只能是 NG 或 CHECK，絕不 PASS
+      assert.notEqual(result.finalResult, 'PASS');
+      assert.ok(['BEST_EFFORT', 'UNCERTAIN'].includes(result.judgeState));
+      continue;
+    }
     assert.equal(map[result.finalResult], direct.state);
     assert.deepEqual(result.overlayBoxes, direct.boxes);
   }

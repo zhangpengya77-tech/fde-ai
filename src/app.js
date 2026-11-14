@@ -981,7 +981,7 @@ function eagleTutorPayloadFrom(result) {
   return {
     task: 'f450_propeller_check',
     motors: checks
-      .filter((item) => /^M[1-4]$/.test(String(item.motor || '')))
+      .filter((item) => /^M[1-4]$/.test(String(item.motor || '')) && /^(CW|CCW)$/.test(String(item.detectedDirection || '')))
       .map((item) => ({ motor: item.motor, detected: item.detectedDirection || '' })),
   };
 }
@@ -1287,6 +1287,40 @@ function renderHoverResult(result) {
       </div>
     </article>
   `;
+}
+
+/** 2026-11-14：把照片縮到最長邊 maxSide 並轉 JPEG，手機大圖（PNG 常 5–15 MB）上傳才不會卡住；失敗時回傳原圖。 */
+async function shrinkImageDataUrl(dataUrl, maxSide = 1600, quality = 0.88) {
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = dataUrl;
+    });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const out = canvas.toDataURL('image/jpeg', quality);
+    return out.length < dataUrl.length || scale < 1 ? out : dataUrl;
+  } catch {
+    return dataUrl;
+  }
+}
+
+/** 2026-11-14：帶逾時的 fetch；超過時間中止並丟出中文錯誤，畫面不再無限等待。 */
+function fetchWithTimeout(ms) {
+  return (url, init = {}) => {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), ms);
+    return fetch(url, { ...init, signal: ctl.signal })
+      .catch((error) => {
+        throw new Error(ctl.signal.aborted ? `檢測服務超過 ${Math.round(ms / 1000)} 秒沒有回應，請確認網路後再試一次。` : error.message);
+      })
+      .finally(() => clearTimeout(timer));
+  };
 }
 
 function fileToDataUrl(file) {
@@ -1641,9 +1675,11 @@ function bindActions() {
       return;
     }
     try {
-      const imageData = await fileToDataUrl(file);
+      // 先縮圖再送出（座標以縮圖尺寸計算，疊框與預覽也用同一張縮圖）
+      const imageData = await shrinkImageDataUrl(await fileToDataUrl(file));
       const size = await imageSize(imageData);
       const result = await client.propCheck({
+        fetchImpl: fetchWithTimeout(90000),
         base: visionApiBase(),
         imageDataUrl: imageData,
         imageWidth: size.width,

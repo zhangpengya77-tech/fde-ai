@@ -146,9 +146,14 @@
   function adaptJudgedPropResult(payload, fileName, judge, imageWidth, imageHeight) {
     const { rules, messages } = judge;
     const raw = Array.isArray(payload && payload.detections) ? payload.detections : [];
-    const judgement = judge.judgePropellers(raw, rules);
-    const text = judge.formatJudgement(judgement, messages);
-    const finalResult = judgement.state === 'CORRECT' ? 'PASS' : judgement.state === 'WRONG' ? 'NG' : 'CHECK';
+    let judgement = judge.judgePropellers(raw, rules);
+    let text = judge.formatJudgement(judgement, messages);
+    // 2026-11-14：嚴格規則判為「無法判斷」時，改給參考判定，學員仍能看到每支槳的對錯並取得 AI 說明
+    if (judgement.state === 'UNCERTAIN') {
+      const ref = bestEffortJudgement(raw, rules, imageWidth, imageHeight);
+      if (ref) { judgement = ref.judgement; text = ref.text; }
+    }
+    const finalResult = judgement.state === 'CORRECT' ? 'PASS' : (judgement.state === 'WRONG' || (judgement.state === 'BEST_EFFORT' && judgement.wrong.length)) ? 'NG' : 'CHECK';
     const quadrantOf = {};
     for (const [q, motor] of Object.entries(rules.motorIds || {})) quadrantOf[motor] = q;
     const motorChecks = ['M1', 'M2', 'M3', 'M4'].map((motor) => {
@@ -159,12 +164,12 @@
         return {
           motor, result: 'CHECK', position: place, detectedDirection: 'CHECK',
           expectedDirection: rules.layout[q] || 'CHECK', confidence: null,
-          reason: messages.uncertainReason[judgement.reasonCode] || messages.state.UNCERTAIN,
+          reason: judgement.state === 'BEST_EFFORT' ? '未辨識到此槳，請重拍或由老師確認' : (messages.uncertainReason[judgement.reasonCode] || messages.state.UNCERTAIN),
         };
       }
       return {
         motor, result: item.ok ? 'PASS' : 'NG', position: place, detectedDirection: item.detected,
-        expectedDirection: item.expected, confidence: item.confidence, reason: item.ok ? '' : '旋向錯誤',
+        expectedDirection: item.expected, confidence: item.confidence, reason: item.ok ? (judgement.state === 'BEST_EFFORT' ? '參考判定，請老師確認' : '') : '旋向錯誤',
       };
     });
     const simulationMode = payload?.simulation_mode === true;
@@ -187,6 +192,57 @@
         .map((item) => ({ motor: item.motor, label: item.detectedDirection, confidence: item.confidence })),
       finalResult,
       backendFinalResult: payload?.final_result || null,
+    };
+  }
+
+  /**
+   * 2026-11-14：參考判定（低信心時的退路）。
+   * 規則：信心 ≥ candidateConfidence 的 CW/CCW 框，重疊者留高信心，最多取 4 個；
+   * 以偵測框重心（不足 3 個時用畫面中心）分四象限，與 layout 比對給綠／紅；沒偵測到的位置為待確認。
+   * 參考判定的整體結果最多是 NG 或 CHECK，絕不給 PASS——槳葉安裝仍須老師確認。
+   */
+  function bestEffortJudgement(raw, rules, imageWidth, imageHeight) {
+    const boxOf = (d) => {
+      const b = d && (d.bbox || d.box);
+      return Array.isArray(b) && b.length === 4 ? b.map(Number) : null;
+    };
+    const iou = (a, b) => {
+      const ix = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
+      const iy = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+      const inter = ix * iy;
+      const ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter;
+      return ua > 0 ? inter / ua : 0;
+    };
+    const cands = raw
+      .map((d) => ({ cls: String(d.class || d.className || ''), confidence: Number(d.confidence), box: boxOf(d) }))
+      .filter((c) => c.box && rules.classes.includes(c.cls) && c.confidence >= rules.candidateConfidence)
+      .sort((a, b) => b.confidence - a.confidence);
+    const kept = [];
+    for (const c of cands) if (kept.length < 4 && kept.every((k) => iou(k.box, c.box) <= rules.maxOverlapIoU)) kept.push(c);
+    if (!kept.length) return null;
+    const centers = kept.map((k) => [(k.box[0] + k.box[2]) / 2, (k.box[1] + k.box[3]) / 2]);
+    const cx = kept.length >= 3 ? centers.reduce((t, c) => t + c[0], 0) / centers.length : (imageWidth || 0) / 2;
+    const cy = kept.length >= 3 ? centers.reduce((t, c) => t + c[1], 0) / centers.length : (imageHeight || 0) / 2;
+    const positions = {};
+    kept.forEach((k, i) => {
+      const q = (centers[i][1] < cy ? 'T' : 'B') + (centers[i][0] < cx ? 'L' : 'R');
+      if (positions[q]) return;   // 同象限已有較高信心的框
+      positions[q] = { position: q, expected: rules.layout[q], detected: k.cls, confidence: k.confidence, bbox: k.box, ok: k.cls === rules.layout[q] };
+    });
+    const wrong = Object.keys(positions).filter((q) => !positions[q].ok);
+    const missing = ['TL', 'TR', 'BL', 'BR'].filter((q) => !positions[q]);
+    const boxes = Object.values(positions).map((v) => ({ bbox: v.bbox, class: v.detected, confidence: v.confidence, color: v.ok ? 'green' : 'red', position: v.position }));
+    const headline = wrong.length
+      ? `參考判定：有 ${wrong.length} 支槳葉方向可能裝錯（請老師確認）`
+      : missing.length
+        ? `參考判定：已辨識的槳葉方向正確，另有 ${missing.length} 支未辨識（請老師確認）`
+        : '參考判定：四支槳葉方向皆正確（辨識信心偏低，請老師確認）';
+    const lines = [];
+    if (missing.length) lines.push(`未辨識位置：${missing.map((q) => `${q}（${(rules.motorIds || {})[q] || ''}）`).join('、')}，建議從正上方俯視、機頭朝上重拍。`);
+    lines.push('此為辨識信心偏低時的參考判定，不代表可以起飛，請由老師確認。');
+    return {
+      judgement: { ruleVersion: rules.version || '', state: 'BEST_EFFORT', reasonCode: wrong.length ? 'WRONG_PROP' : 'PARTIAL', positions, wrong, boxes, allReversed: false },
+      text: { tone: wrong.length ? 'red' : 'green', headline, lines },
     };
   }
 
