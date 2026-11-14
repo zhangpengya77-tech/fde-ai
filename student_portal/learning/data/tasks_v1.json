@@ -10,5 +10,6 @@
   {"task_id":"T09","sort_order":9,"stage":"assess","title":"AI 視覺與飛行評測","description":"完成影像採集、抽幀、標註、YOLO 與四面懸停視覺評測。DataFlash Log 由教師提供。","requirements":["完成影像整理、抽幀與標註","使用 YOLO 觀察飛行位置並理解教師提供的 DataFlash Log"],"evidence_required":["Dataset","YOLO 模型","Action 5 影片","AI 初步檢測結果","教師提供的 DataFlash Log"]},
   {"task_id":"T10","sort_order":10,"stage":"assess","title":"機器人與無人系統開發","description":"認識 ROS 2、Gazebo、無人車、LiDAR、SLAM 與多感測器融合。","requirements":["了解無人系統整合概念","認識後續進階學習方向"],"evidence_required":["學習紀錄或課程說明"]},
   {"task_id":"T11","sort_order":11,"stage":"certify","title":"產業應用 Project Pack","description":"依專案方向完成 FPV、巡檢、農業、物流、測繪或搜救等小型驗證。","requirements":["選定產業應用情境","完成小型任務驗證與成果說明"],"evidence_required":["專案成果","任務紀錄","成果說明"]},
-  {"task_id":"T12","sort_order":12,"stage":"certify","title":"空地協同與綜合 Capstone","description":"整合 UAV、UGV、AI、ROS 2、GIS 與感測器融合，作為後續進階方向。","requirements":["理解空地協同系統整合概念","確認後續進階學習方向"],"evidence_required":["綜合學習紀錄或專案說明"]}
+  {"task_id":"T12","sort_order":12,"stage":"certify","title":"空地協同與綜合 Capstone","description":"整合 UAV、UGV、AI、ROS 2、GIS 與感測器融合，作為後續進階方向。","requirements":["理解空地協同系統整合概念","確認後續進階學習方向"],"evidence_required":["綜合學習紀錄或專案說明"]},
+  {"task_id":"T13","sort_order":5,"stage":"practice","title":"FPV 穿越機接線實訓","description":"用外部公開的 FPV 接線模擬器（花生FPV 公開網站 hs-fpv.com，從 F450 數位孿生頁的實訓區進入）練習穿越機飛控、電調、圖傳、接收機的接線關係；完成後匯出接線圖 PNG 上傳本任務卡，由教師審核。外站上的操作不會自動記錄。","requirements":["在 FPV 接線模擬器完成一組完整接線","匯出接線圖 PNG，並用文字說明電源與訊號各接到哪裡"],"evidence_required":["FPV 接線圖 PNG","接線說明"]}
 ]

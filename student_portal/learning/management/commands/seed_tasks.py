@@ -19,4 +19,4 @@ class Command(BaseCommand):
                 task_id=definition["task_id"], defaults=definition
             )
             created += was_created
-        self.stdout.write(self.style.SUCCESS(f"12 項預設任務已就緒；本次新增 {created} 項，既有教師編輯內容未覆寫。"))
+        self.stdout.write(self.style.SUCCESS(f"{len(definitions)} 項預設任務已就緒；本次新增 {created} 項，既有教師編輯內容未覆寫。"))

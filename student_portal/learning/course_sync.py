@@ -28,7 +28,7 @@ def _validate_ids(definitions, key, prefix, expected_count):
 def sync_course_definitions(*, cohorts=None):
     tasks = _load(TASKS_CONFIG)
     growth_records = _load(GROWTH_CONFIG)
-    _validate_ids(tasks, "task_id", "T", 12)
+    _validate_ids(tasks, "task_id", "T", 13)   # 2026-11-14：新增 T13 FPV 穿越機接線實訓
     _validate_ids(growth_records, "slot_id", "R", 8)
 
     task_fields = ("sort_order", "stage", "title", "description", "requirements", "evidence_required", "active")

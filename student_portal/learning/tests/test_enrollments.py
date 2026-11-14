@@ -47,7 +47,7 @@ class EnrollmentWorkflowTests(TestCase):
             response,
             reverse("learning:student_course_dashboard", args=[enrollment.pk]),
         )
-        self.assertEqual(enrollment.task_progress.count(), 12)
+        self.assertEqual(enrollment.task_progress.count(), 13)   # 2026-11-14 加 T13 FPV 穿越機接線實訓
         self.assertEqual(enrollment.phase_progress.count(), 5)
 
     def test_duplicate_join_is_idempotent_and_course_progress_is_separate(self):
@@ -116,7 +116,7 @@ class EnrollmentWorkflowTests(TestCase):
 
         response = self.client.get(reverse("learning:teacher_dashboard"), {"q": "Eagle"})
 
-        self.assertContains(response, "1 / 12")
+        self.assertContains(response, "1 / 13")
         self.assertContains(response, "2026-01")
         detail = self.client.get(reverse("learning:teacher_student_detail", args=[enrollment.pk]))
         self.assertEqual(detail.status_code, 200)

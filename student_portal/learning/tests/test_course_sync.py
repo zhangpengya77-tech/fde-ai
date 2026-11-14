@@ -50,4 +50,4 @@ class CourseDefinitionSyncTests(TestCase):
         call_command("sync_course_definitions", verbosity=0)
         self.assertEqual(TaskDefinition.objects.count(), first_task_count)
         self.assertEqual(GrowthRecordDefinition.objects.filter(cohort=self.cohort).count(), first_growth_count)
-        self.assertEqual(list(TaskDefinition.objects.values_list("task_id", flat=True)), [f"T{i:02d}" for i in range(1, 13)])
+        self.assertEqual(list(TaskDefinition.objects.values_list("task_id", flat=True)), ["T01", "T02", "T03", "T04", "T05", "T13", "T06", "T07", "T08", "T09", "T10", "T11", "T12"])   # 2026-11-14 加 T13（排在 T05 後）
