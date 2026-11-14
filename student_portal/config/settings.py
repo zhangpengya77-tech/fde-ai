@@ -304,7 +304,7 @@ FDE_GCS_COHORTS = frozenset(
 FDE_GCS_GATEWAY_SECRET = os.environ.get('FDE_GCS_GATEWAY_SECRET', '')
 FDE_GCS_GATEWAY_URL = os.environ.get('FDE_GCS_GATEWAY_URL', 'ws://127.0.0.1:8261')
 FDE_GCS_GATEWAY_REVOKE_URL = os.environ.get('FDE_GCS_GATEWAY_REVOKE_URL', 'http://127.0.0.1:8361/revoke')
-FDE_GCS_SIM_URL = os.environ.get('FDE_GCS_SIM_URL', 'http://127.0.0.1:8252/?mode=exam&engine=sitl_follow')
+FDE_GCS_SIM_URL = os.environ.get('FDE_GCS_SIM_URL', 'http://127.0.0.1:8252/?mode=exam&engine=sitl_follow&embed=1')
 
 FDE_EXTERNAL_MODULES = {
     module_id: {

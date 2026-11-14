@@ -38,7 +38,10 @@ from websockets.http11 import Request, Response
 SITL_HOST = "127.0.0.1"          # 寫死：只連本機 SITL
 R_EARTH = 6_371_000.0
 MODE_GUIDED, MODE_AUTO, MODE_RTL, MODE_LAND, MODE_BRAKE = 4, 3, 6, 9, 17
-MODE_NAMES = {v: k for k, v in mavutil.mode_mapping_acm.items()}
+# pymavlink 的 mode_mapping_acm 是「數字 → 名稱」（例如 4 → GUIDED）；保險起見兩種方向都能處理
+MODE_NAMES = {int(k): str(v) for k, v in mavutil.mode_mapping_acm.items()} \
+    if all(isinstance(k, int) for k in mavutil.mode_mapping_acm) \
+    else {int(v): str(k) for k, v in mavutil.mode_mapping_acm.items()}
 LOCAL_ORIGIN = re.compile(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$")
 
 
@@ -257,6 +260,10 @@ class Fleet:
             self.job_thread.join(timeout=5)
         self.cancel = threading.Event()
         self.job = {"name": name, "text": text, "ok": True}
+        if name != "formation":
+            # 不是編隊工作時清掉隊形與誤差，畫面不保留舊數值
+            self.formation = None
+            self.errors = []
         cancel = self.cancel
 
         def wrapper():
@@ -458,7 +465,8 @@ async def main() -> None:
                     await ws.send(json.dumps({"type": "ack", "ok": False, "error": "需要有效的教師控制票"}))
                     continue
                 try:
-                    text = fleet.command(str(msg.get("action")), msg.get("args") or {})
+                    # 在背景執行緒下指令：取消舊工作最多等 5 秒，不能卡住遙測廣播
+                    text = await asyncio.to_thread(fleet.command, str(msg.get("action")), msg.get("args") or {})
                     print(f"[指令] {c.get('sub')} {msg.get('action')} {msg.get('args')}", flush=True)
                     await ws.send(json.dumps({"type": "ack", "ok": True, "text": text}, ensure_ascii=False))
                 except (ValueError, TypeError) as e:
@@ -486,6 +494,13 @@ async def main() -> None:
                         clients.pop(ws, None)
             await asyncio.sleep(0.2)
 
+    async def after_revoke(brake: bool) -> None:
+        for ws, c in list(clients.items()):
+            if c.get("scope") == "control" and (c.get("jti") in revoked or c.get("iat", 0) < state["revoke_all_before"]):
+                await ws.close(4003, "revoked")
+        if brake:
+            await asyncio.to_thread(fleet.command, "brake", {})
+
     async def revoke_server(reader, writer) -> None:
         # 簡易 HTTP：POST /revoke，標頭 X-Gateway-Secret；只綁 127.0.0.1（給 Django 呼叫）
         try:
@@ -496,14 +511,13 @@ async def main() -> None:
             body = json.loads((await reader.readexactly(length)) or b"{}") if length else {}
             ok = lines[0].startswith("POST /revoke") and hmac.compare_digest(hdr.get("x-gateway-secret", "").encode(), secret)
             if ok:
+                # 撤銷名單立刻生效（之後的指令與連線都會被拒），再先回應 Django；
+                # 關閉連線與讓飛機停住放到背景，避免 Django 等太久判成失敗
                 if body.get("jti"):
                     revoked.add(str(body["jti"]))
                 else:
                     state["revoke_all_before"] = time.time()
-                    for ws, c in list(clients.items()):
-                        if c.get("scope") == "control":
-                            await ws.close(4003, "revoked")
-                fleet.command("brake", {}) if body.get("brake") else None
+                asyncio.get_running_loop().create_task(after_revoke(bool(body.get("brake"))))
             writer.write(b"HTTP/1.1 " + (b"200 OK" if ok else b"403 Forbidden") + b"\r\nContent-Length: 0\r\n\r\n")
         except Exception:  # noqa: BLE001
             writer.write(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")

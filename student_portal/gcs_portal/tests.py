@@ -100,7 +100,9 @@ class GcsAccessTests(GcsTestBase):
         self.assertEqual(self.client.post(GCS_URL).status_code, 405)
 
 
-@override_settings(FDE_GCS_ENABLED=True, FDE_GCS_COHORTS=frozenset({OPEN_COHORT}))
+# 這組測試檢查「未啟用 SITL 仿真」的頁面；明確關閉 Gateway 金鑰，避免受執行環境的環境變數影響。
+# 啟用 SITL 時的 CSP 與控制區由 test_sitl_api.py 檢查。
+@override_settings(FDE_GCS_ENABLED=True, FDE_GCS_COHORTS=frozenset({OPEN_COHORT}), FDE_GCS_GATEWAY_SECRET="")
 class GcsPageSafetyTests(GcsTestBase):
     def setUp(self):
         self.client.force_login(make_teacher())
