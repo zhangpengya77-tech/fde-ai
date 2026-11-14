@@ -628,6 +628,8 @@ def create_app(*, vision_adapter=None, session_store=None, rag_adapter=None, gen
         # M0 方向纠偏：在线无人机巡检仿真训练入口（FDE-Power-Inspection-Simulator vite build 产物）。
         # 默认指向 D 盘仿真器 repo 的 dist；可用 FDE_SIM_DIST 覆盖；dist 缺失时该路由返回 404 而不影响启动。
         Mount("/sim", app=StaticFiles(directory=str(Path(os.environ.get("FDE_SIM_DIST") or "D:/FDE-Power-Inspection-Simulator/dist")), html=True, check_dir=False), name="simulator"),
+        # 無人機空域查詢（獨立靜態頁，資料由瀏覽器即時向民航局查詢）
+        Mount("/airspace", app=StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "airspace"), html=True, check_dir=False), name="airspace"),
         Route("/api/downloads", downloads_manifest, methods=["GET"]),
         Route("/api/downloads/{download_id}/file", download_file, methods=["GET"]),
         Route("/api/live/health", health, methods=["GET"]),
