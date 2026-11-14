@@ -10,6 +10,7 @@ import { UnrealBloomPass } from './vendor/three/addons/postprocessing/UnrealBloo
 import { OutlinePass } from './vendor/three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from './vendor/three/addons/postprocessing/OutputPass.js';
 import { PARTS, LAYERS, STATUS, STEPS, WIRING, CHECKS, SPECS, PRIMARY, LABELS, WIRING_LINKS, SIZE_REFS, PHOTOS, VIEW_PHOTOS } from './parts-data.js?v=1.2.1';
+import { createPractice } from './training/assembly-mode.js?v=p2-2';   // P2 實訓：3D 組裝練習（只透過下方幾個掛勾接入）
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
@@ -181,6 +182,7 @@ function dimmed(n) {
   return false;
 }
 function refreshLook() {
+  if (mode === 'practice') { const hot = practice.refresh(); if (outline) outline.selectedObjects = hot; return; }   // P2 掛勾：練習模式自管外觀
   if (outline) outline.selectedObjects = nodes.filter((n) => n.obj.visible && (hotNodes.size ? hotNodes.has(n) : (selectedNode ? n.obj === selectedNode : n.key === selectedKey))).map((n) => n.obj);
   for (const n of nodes) {
     n.obj.visible = visible(n);
@@ -286,6 +288,7 @@ const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let downAt = null;
 renderer.domElement.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener('dblclick', () => setView(currentView === 'front' ? 'iso' : currentView));   // 雙擊復原視角
 renderer.domElement.addEventListener('pointerup', (e) => {
+  if (mode === 'practice') return;   // P2 掛勾：練習模式的點選與拖曳由 assembly-mode.js 處理
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
   const r = renderer.domElement.getBoundingClientRect();
   ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -297,11 +300,18 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   selectPart(n.key, n.obj);
 });
 
+// ───────── P2 實訓：3D 組裝練習 ─────────
+const practice = createPractice({ THREE, nodes, scene, camera, renderer, controls, host, strip: $('strip-practice'),
+  onSelect: (key) => { renderInfo(key, null); selectedKey = key; }, setView: (v) => setView(v) });
+practice.setOnChange(() => refreshLook());
+$('practice-enter')?.addEventListener('click', () => host.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+
 // ───────── 模式 ─────────
 function switchMode(m) {
   mode = m;
+  practice.setActive(m === 'practice');   // P2 掛勾
   document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
-  for (const id of ['explode', 'whole', 'assembly', 'wiring', 'size']) $(`strip-${id}`).hidden = id !== m;
+  for (const id of ['explode', 'whole', 'assembly', 'wiring', 'size', 'practice']) $(`strip-${id}`).hidden = id !== m;
   if (m === 'explode') { if (maxGoal() === 0) setLayers(1); }
   else { pickLayer(0); setLayers(0); }
   if (m === 'assembly') renderStep();
@@ -386,7 +396,7 @@ function updateOverlays() {
   const W = r.width, H = r.height;
   const anchors = LABELS.map(([k, , , kw]) => {
     const n = nodes.find((x) => x.key === k && x.name.includes(kw)) || nodes.find((x) => x.key === k);
-    if (!n || !n.obj.visible || dimmed(n) || !showLabels || mode === 'size') return null;   // 尺寸模式只留尺寸標註
+    if (!n || !n.obj.visible || dimmed(n) || !showLabels || mode === 'size' || mode === 'practice') return null;   // 尺寸、練習模式不顯示引線標籤   // 尺寸模式只留尺寸標註
     v.copy(n.c0).add(n.obj.position).sub(n.base).project(camera);
     if (v.z > 1) return null;
     return { x: (v.x * 0.5 + 0.5) * W, y: (-v.y * 0.5 + 0.5) * H };
@@ -415,7 +425,7 @@ function updateOverlays() {
   svg.innerHTML = lines;
   // 虛線導引：從組裝位置連到目前位置（只在拆解時顯示）
   for (const { n, line } of guides) {
-    const show = n.obj.visible && !dimmed(n) && layerNow[n.layer] > 0.02;
+    const show = mode !== 'practice' && n.obj.visible && !dimmed(n) && layerNow[n.layer] > 0.02;
     line.visible = show; if (!show) continue;
     const pos = line.geometry.attributes.position;
     v.copy(n.c0).add(n.obj.position).sub(n.base);
@@ -637,6 +647,7 @@ function fpsGuard() {
 }
 const tmp = new THREE.Vector3();
 function applyPositions() {   // 依各層拆解程度放置零件
+  if (mode === 'practice') { practice.update(); return; }   // P2 掛勾：練習模式由學員拖曳決定位置
   for (const n of nodes) { n.obj.position.copy(n.base).add(tmp.copy(n.explode).multiplyScalar(Math.max(layerNow[n.layer] * distScale, n.fly))); n.obj.updateMatrixWorld(true); }
 }
 (function tick() {

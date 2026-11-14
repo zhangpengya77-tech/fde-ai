@@ -9,7 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>F450 數位孿生 1.2｜FDE-AI-UAS</title>
-<link rel="stylesheet" href="./twin.css?v=1.2.1">
+<link rel="stylesheet" href="./twin.css?v=1.2.2">
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -88,6 +88,8 @@
       <p class="note">點表格任一列，3D 會只顯示那條連線並高亮兩端零件；光點方向＝電流或訊號流向。</p>
       <div class="tw"><table id="wiring-table"><thead><tr><th>從</th><th>到</th><th>用途</th></tr></thead><tbody></tbody></table></div>
     </section>
+    <!-- P2：3D 組裝練習（內容由 training/assembly-mode.js 產生；從下方實訓區進入） -->
+    <section class="card strip" id="strip-practice" hidden></section>
     <section class="card strip" id="strip-size" hidden>
       <div class="row"><button id="measure-toggle">📏 兩點量測</button><button id="dims-toggle" class="on">3D 尺寸標註</button><span id="measure-out" class="note"></span></div>
       <table class="sizes"><tbody id="size-refs">
@@ -127,16 +129,16 @@
   <p class="note">兩個實訓模組：站內的 F450 開源飛控組裝與接線（開發中），以及外部公開的 FPV 穿越機接線練習。</p>
   <div class="train-grid">
     <article class="card train-card">
-      <h3>A. F450 開源飛控組裝與接線 <span class="tag pending">開發中</span></h3>
+      <h3>A. F450 開源飛控組裝與接線 <span class="tag pending">部分開放</span></h3>
       <p>站內模組：3D 組裝、2D 接線、自動檢查、實訓考核。以本頁 F450 數位孿生為基礎，接線關係與上方「接線圖」同一份資料。</p>
       <ul class="train-list">
-        <li>3D 組裝：依步驟把零件裝到機架上</li>
-        <li>2D 接線：在接線畫布上連接飛控、電調、接收機、GPS 等</li>
-        <li>自動檢查：系統標出接錯、漏接、極性與安全問題</li>
-        <li>實訓考核：完成紀錄送教師審核</li>
+        <li>3D 組裝練習（已開放）：依步驟把零件拖到機架上，檢查順序、方向與槳葉轉向</li>
+        <li>2D 接線：在接線畫布上連接飛控、電調、接收機、GPS 等（開發中）</li>
+        <li>自動檢查：系統標出接錯、漏接、極性與安全問題（開發中）</li>
+        <li>實訓考核：完成紀錄送教師審核（開發中）</li>
       </ul>
-      <p class="note">目前尚未開放；先用上方「組裝流程」與「接線圖」預習。</p>
-      <button type="button" disabled>開發中，暫不開放</button>
+      <p class="note">練習結果目前不記錄、不計成績；規則待實機核對。</p>
+      <button type="button" class="primary" data-mode="practice" id="practice-enter">開始 3D 組裝練習 ↑</button>
     </article>
     <article class="card train-card">
       <h3>B. FPV 穿越機接線實訓 <span class="tag ref">外部網站</span></h3>
@@ -152,6 +154,6 @@
   </div>
 </section>
 
-<script type="module" src="./app.js?v=1.2.2"></script>
+<script type="module" src="./app.js?v=1.3.0"></script>
 </body>
 </html>
