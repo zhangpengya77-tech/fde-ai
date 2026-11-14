@@ -228,3 +228,64 @@ class F450PracticeRecordTests(SimPracticeApiTests.__base__):
             res = self._post(client, payload)
             self.assertEqual(res.status_code, 201, (name, res.content))
             self.assertEqual(SimPracticeRecord.objects.latest("id").summary["train_mode"], mode)
+
+
+class F450PermissionTests(TestCase):
+    """P7 權限：F450 成績只有本人與本班教師看得到；教師與他班都無法寫入或看到"""
+
+    def setUp(self):
+        self.mine = Cohort.objects.create(cohort_id="2099-P7A", name="P7 本班")
+        self.other = Cohort.objects.create(cohort_id="2099-P7B", name="P7 別班")
+        self.a = create_student_account("p7a@example.test", "本班組裝甲")
+        self.b = create_student_account("p7b@example.test", "別班組裝乙")
+        enroll_student(self.a, self.mine)
+        enroll_student(self.b, self.other)
+        summary = dict(F450_GOOD["summary"], trial=True)
+        SimPracticeRecord.objects.create(student=self.a, cohort=self.mine, mode="f450", title="考核（試行分數）", score=94, summary=summary)
+        SimPracticeRecord.objects.create(student=self.b, cohort=self.other, mode="f450", title="練習（試行分數）", score=37, summary=summary)
+        self.teacher = get_user_model().objects.create_user(username="p7-teacher", password="x", is_staff=True)
+        TeacherCohortAccess.objects.create(teacher=self.teacher, cohort=self.mine)
+        self.api = reverse("learning:sim_practice_api")
+
+    def test_student_sees_only_own_f450_records(self):
+        client = Client()
+        client.force_login(self.b.user)
+        page = client.get(reverse("learning:student_sim_practice"))
+        self.assertContains(page, "37 分")
+        self.assertNotContains(page, "94 分")
+
+    def test_teacher_sees_only_own_cohort_f450_records(self):
+        client = Client()
+        client.force_login(self.teacher)
+        page = client.get(reverse("learning:teacher_sim_practice"))
+        self.assertContains(page, "本班組裝甲")
+        self.assertNotContains(page, "別班組裝乙")
+        self.assertNotContains(page, "37 分")
+        # 指定別班的班級參數也看不到
+        page = client.get(reverse("learning:teacher_sim_practice"), {"cohort": self.other.pk})
+        self.assertNotContains(page, "別班組裝乙")
+
+    def test_teacher_and_anonymous_cannot_write_f450_records(self):
+        for user in (self.teacher, None):
+            client = Client(enforce_csrf_checks=True)
+            if user:
+                client.force_login(user)
+            token = client.get(self.api).json()["csrf_token"]
+            res = client.post(self.api, data=json.dumps(F450_GOOD), content_type="application/json", HTTP_X_CSRFTOKEN=token)
+            self.assertEqual(res.status_code, 401, user)
+        self.assertEqual(SimPracticeRecord.objects.count(), 2)
+
+    def test_pages_require_login(self):
+        self.assertEqual(Client().get(reverse("learning:student_sim_practice")).status_code, 302)
+        self.assertIn(Client().get(reverse("learning:teacher_sim_practice")).status_code, (302, 403))
+
+    def test_t13_evidence_cannot_be_added_to_another_students_course(self):
+        from django.core.management import call_command
+        call_command("seed_tasks", verbosity=0)
+        other_enrollment = self.b.enrollments.get()
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.a.user)
+        client.get(reverse("learning:student_dashboard"))
+        token = client.cookies["csrftoken"].value
+        res = client.post(reverse("learning:evidence_add", args=[other_enrollment.pk, "T13"]), {"evidence_type": "image"}, HTTP_X_CSRFTOKEN=token, HTTP_ORIGIN="http://testserver")
+        self.assertEqual(res.status_code, 404)

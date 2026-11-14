@@ -23,8 +23,9 @@ export function createSync3D({ THREE, scene, camera, canvas, nodes, hotNodes, re
   const capBtn = document.createElement('button'); capBtn.type = 'button'; capBtn.textContent = '到 2D 接線畫布 ↓';
   capBtn.onclick = () => { const p = document.getElementById('wire2d'); if (p?.hidden) document.getElementById('wire2d-enter')?.click(); else p?.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
   cap.append(capText, capBtn); host.append(cap);
-  const say = (t) => { capText.textContent = t; cap.hidden = !t; };
+  const say = (t) => { if (capText.textContent !== t) capText.textContent = t; cap.hidden = !t; };
 
+  const comps2d = () => lastFocus?.components || [];
   const nodesOf = (cid) => { const pre = COMPONENT_NODES[cid] || []; return nodes.filter((n) => pre.some((p) => nodeMatches(n.obj.name, p))); };
   // 元件目前的中心（跟著爆炸、組裝練習的位移）；看不到的零件回傳 null
   function centerOf(cid, out) {
@@ -38,14 +39,19 @@ export function createSync3D({ THREE, scene, camera, canvas, nodes, hotNodes, re
     if (!comps.length && !fromTwoD && !focusWire) return;   // 2D 沒選東西：不要清掉 3D 自己的高亮（例如接線圖表格）
     hotNodes.clear();
     comps.forEach((cid) => nodesOf(cid).forEach((n) => hotNodes.add(n)));
-    fromTwoD = comps.length > 0; focusWire = d?.wire || null;
+    fromTwoD = comps.length > 0; focusWire = d?.wire || null; lastFocus = d; lastMode = getMode();
+    rebuild(); refreshLook(); caption();
+  });
+  // 說明條內容依「目前」狀態計算：切換模式、組裝練習裝上零件後都會更新，不會留下過時的「看不到」
+  let lastFocus = null, lastMode = null;
+  function caption() {
+    const comps = fromTwoD ? lastFocus?.components || [] : [];
     const missing = comps.filter((cid) => !(COMPONENT_NODES[cid] || []).length);
     const hidden = comps.filter((cid) => (COMPONENT_NODES[cid] || []).length && !nodesOf(cid).some((n) => n.obj.visible));
-    say(!comps.length ? '' : `2D 選取：${d.label || comps.map(componentName).join('、')}`
+    say(!comps.length ? '' : `2D 選取：${lastFocus.label || comps.map(componentName).join('、')}`
       + (missing.length ? `｜3D 模型沒有：${missing.map(componentName).join('、')}` : '')
       + (hidden.length ? `｜3D 目前看不到：${hidden.map(componentName).join('、')}${getMode() === 'practice' ? '（尚未組裝）' : ''}` : ''));
-    rebuild(); refreshLook();
-  });
+  }
   on('wires2d', (d) => { myWires = d || myWires; rebuild(); });
 
   // ───────── 3D → 2D ─────────
@@ -81,6 +87,9 @@ export function createSync3D({ THREE, scene, camera, canvas, nodes, hotNodes, re
   // 每一格更新線的位置（零件會爆炸、被拖動）
   const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
   function update() {
+    // 切換模式時，app.js 會清掉高亮；2D 仍有選取就補回來
+    if (fromTwoD && getMode() !== lastMode) { lastMode = getMode(); comps2d().forEach((cid) => nodesOf(cid).forEach((n) => hotNodes.add(n))); refreshLook(); }
+    if (fromTwoD) caption();
     let focusCurve = null;
     for (const l of lines) {
       const okA = centerOf(l.from, a), okB = okA && centerOf(l.to, b);

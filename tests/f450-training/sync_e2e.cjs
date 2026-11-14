@@ -86,6 +86,10 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
   ok(s.cap.includes('尚未組裝'), `組裝練習中選 ESC 右前 → ${s.cap}`);
   await page.locator('#strip-practice .pr-tray button', { hasText: '下中心板' }).click();
   ok((await P(() => window.__f450Practice.screen('bottom_plate').status)) === 'held', '同步不影響組裝練習的拿取');
+  await page.locator('[data-mode="explode"]').first().click({ force: true }); await page.waitForTimeout(600);
+  s = await S();
+  ok(!s.cap.includes('看不到') && s.cap.startsWith('2D 選取'), `切回爆炸結構後說明條更新、不留過時的「看不到」[${s.cap}]`);
+  ok(s.hot.some((n) => n.startsWith('ESC FR')), '切換模式後 2D 選取的零件仍然發光');
 
   // 6) 其他模式仍正常
   for (const m of ['whole', 'assembly', 'wiring', 'size', 'explode']) {
