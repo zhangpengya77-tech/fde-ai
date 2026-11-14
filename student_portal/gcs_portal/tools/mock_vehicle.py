@@ -5,6 +5,8 @@
 - REQUEST_MESSAGE 148 → AUTOPILOT_VERSION
 - PARAM_REQUEST_LIST → 送出全部參數，第一輪刻意丟掉約 5%，用來驗證補讀
 - PARAM_REQUEST_READ（依索引）→ 回傳該參數
+- PARAM_SET → 更新參數並回傳 PARAM_VALUE（白名單以外的參數視為不允許）
+- --armed：心跳回報「已解鎖」，用來驗證解鎖時無法寫入
 - 收到的每一則訊息都記錄到 --log，結束時檢查有沒有不允許的訊息
 
 用法：python mock_vehicle.py --port 8263 --log received.json --params 400
@@ -18,8 +20,9 @@ import time
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-ALLOWED = {"HEARTBEAT", "PARAM_REQUEST_LIST", "PARAM_REQUEST_READ", "COMMAND_LONG"}
+ALLOWED = {"HEARTBEAT", "PARAM_REQUEST_LIST", "PARAM_REQUEST_READ", "COMMAND_LONG", "PARAM_SET"}
 ALLOWED_COMMANDS = {511, 512}
+WRITABLE = {"ATC_RAT_%s_%s" % (axis, term) for axis in ("RLL", "PIT", "YAW") for term in ("P", "I", "D")}
 
 
 class Conn:
@@ -59,7 +62,7 @@ def serve(args):
         while time.time() - start < args.duration:
             now = time.time()
             if now - last_hb >= 1:
-                mav.heartbeat_send(2, 3, 81, 5, 3, 3)
+                mav.heartbeat_send(2, 3, 209 if args.armed else 81, 5, 4 if args.armed else 3, 3)
                 last_hb = now
             for msg_id, interval in intervals.items():
                 if now - last_sent.get(msg_id, 0) < interval:
@@ -86,6 +89,9 @@ def serve(args):
                 entry = {"name": name}
                 if name == "COMMAND_LONG":
                     entry["command"] = msg.command
+                if name == "PARAM_SET":
+                    entry["param_id"] = msg.param_id
+                    entry["value"] = msg.param_value
                 received.append(entry)
                 if name == "COMMAND_LONG" and msg.command == 511:
                     intervals[int(msg.param1)] = msg.param2 / 1e6
@@ -98,14 +104,25 @@ def serve(args):
                         if rng.random() < args.drop:
                             continue
                         mav.param_value_send(pname.encode(), value, ptype, len(params), index)
-                elif name == "PARAM_REQUEST_READ" and 0 <= msg.param_index < len(params):
-                    pname, value, ptype = params[msg.param_index]
-                    mav.param_value_send(pname.encode(), value, ptype, len(params), msg.param_index)
+                elif name == "PARAM_REQUEST_READ":
+                    index = msg.param_index
+                    if index < 0:
+                        index = next((i for i, p in enumerate(params) if p[0] == msg.param_id), -1)
+                    if 0 <= index < len(params):
+                        pname, value, ptype = params[index]
+                        mav.param_value_send(pname.encode(), value, ptype, len(params), index)
+                elif name == "PARAM_SET":
+                    index = next((i for i, p in enumerate(params) if p[0] == msg.param_id), -1)
+                    if index >= 0 and not args.armed:
+                        pname, _, ptype = params[index]
+                        params[index] = (pname, msg.param_value, ptype)
+                        mav.param_value_send(pname.encode(), msg.param_value, ptype, len(params), index)
     finally:
         sock.close()
         server.close()
         forbidden = [r for r in received if r["name"] not in ALLOWED
-                     or (r["name"] == "COMMAND_LONG" and r["command"] not in ALLOWED_COMMANDS)]
+                     or (r["name"] == "COMMAND_LONG" and r["command"] not in ALLOWED_COMMANDS)
+                     or (r["name"] == "PARAM_SET" and (r["param_id"] not in WRITABLE or args.armed))]
         with open(args.log, "w", encoding="utf-8") as fh:
             json.dump({"received": received, "forbidden": forbidden}, fh, ensure_ascii=False, indent=1)
         print("received", len(received), "forbidden", len(forbidden), flush=True)
@@ -118,4 +135,5 @@ if __name__ == "__main__":
     parser.add_argument("--params", type=int, default=400)
     parser.add_argument("--drop", type=float, default=0.05)
     parser.add_argument("--duration", type=float, default=60)
+    parser.add_argument("--armed", action="store_true")
     serve(parser.parse_args())

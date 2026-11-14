@@ -79,7 +79,13 @@ def build():
         msg = getattr(mav, name.lower() + "_encode")(**args)
         mav.seq = seq
         outgoing.append({"name": name, "seq": seq, "fields": fields, "hex": bytes(msg.pack(mav)).hex()})
-    return {"pymavlink": importlib.metadata.version("pymavlink"), "incoming": incoming, "outgoing": outgoing}
+    mav = make(2, srcSystem=255, srcComponent=190)
+    mav.seq = 7
+    param_set = mav.param_set_encode(1, 1, b"ATC_RAT_RLL_P", 0.15, 9)
+    param_set_case = {"seq": 7, "fields": dict(target_system=1, target_component=1, param_id="ATC_RAT_RLL_P",
+                                                param_value=0.15, param_type=9), "hex": bytes(param_set.pack(mav)).hex()}
+    return {"pymavlink": importlib.metadata.version("pymavlink"), "incoming": incoming, "outgoing": outgoing,
+            "param_set": param_set_case}
 
 
 if __name__ == "__main__":

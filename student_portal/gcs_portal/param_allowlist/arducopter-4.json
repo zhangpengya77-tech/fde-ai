@@ -1,0 +1,18 @@
+{
+  "version": "2026-11-13.1",
+  "firmware": "ArduCopter 4.x",
+  "approved_by": "PENDING_TEACHER_CONFIRMATION",
+  "note": "第一版只開放角速度 PID。上下限是 F450 級四旋翼的保守教學範圍，教師確認後把 approved_by 改成教師姓名。",
+  "max_step_ratio": 0.3,
+  "params": {
+    "ATC_RAT_RLL_P": {"min": 0.05, "max": 0.30, "default": 0.135, "label": "Roll 角速度 P"},
+    "ATC_RAT_RLL_I": {"min": 0.05, "max": 0.30, "default": 0.135, "label": "Roll 角速度 I"},
+    "ATC_RAT_RLL_D": {"min": 0.001, "max": 0.010, "default": 0.0036, "label": "Roll 角速度 D"},
+    "ATC_RAT_PIT_P": {"min": 0.05, "max": 0.30, "default": 0.135, "label": "Pitch 角速度 P"},
+    "ATC_RAT_PIT_I": {"min": 0.05, "max": 0.30, "default": 0.135, "label": "Pitch 角速度 I"},
+    "ATC_RAT_PIT_D": {"min": 0.001, "max": 0.010, "default": 0.0036, "label": "Pitch 角速度 D"},
+    "ATC_RAT_YAW_P": {"min": 0.10, "max": 0.50, "default": 0.18, "label": "Yaw 角速度 P"},
+    "ATC_RAT_YAW_I": {"min": 0.005, "max": 0.05, "default": 0.018, "label": "Yaw 角速度 I"},
+    "ATC_RAT_YAW_D": {"min": 0.0, "max": 0.02, "default": 0.0, "label": "Yaw 角速度 D"}
+  }
+}

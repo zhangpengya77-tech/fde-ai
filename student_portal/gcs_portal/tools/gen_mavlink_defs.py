@@ -13,12 +13,13 @@ import sys
 
 from pymavlink.dialects.v20 import ardupilotmega as dialect
 
-# P2 只讀取需要的訊息；送出訊息另有白名單（codec.js），這裡只是定義。
+# 只包含需要的訊息；送出訊息另有白名單（codec.js），PARAM_SET 只有寫入模組能編碼。
 MESSAGES = [
     "HEARTBEAT",
     "SYS_STATUS",
     "PARAM_REQUEST_READ",
     "PARAM_REQUEST_LIST",
+    "PARAM_SET",
     "PARAM_VALUE",
     "GPS_RAW_INT",
     "ATTITUDE",

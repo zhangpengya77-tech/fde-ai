@@ -1,4 +1,4 @@
-// 真機連線（P2，唯讀）：瀏覽器 Web Serial ↔ USB ↔ 飛控。
+// 真機連線：瀏覽器 Web Serial ↔ USB ↔ 飛控。本模組本身只送唯讀訊息；參數寫入只能經過 writer.js。
 // 規則：每次由使用者點擊後手動選 COM 埠；不呼叫 getPorts()、斷線時 forget() 授權；
 // COM 埠被占用時只提示，不自動重試；不送出任何寫入或控制訊息（白名單在 codec.js）。
 import {
@@ -50,6 +50,19 @@ export class VehicleLink {
     this.connected = false;
     this.connectedAt = null;
     this.message = '';
+    this.paramListeners = new Set();
+  }
+
+  // 寫入模組使用：送出已經由 writer.js 編碼好的封包（PARAM_SET 只能由 writer.js 帶寫入能力編碼）。
+  writeFrame(frame, name) {
+    if (!this.writer || !this.connected) throw new Error('USB 連線已中斷。');
+    this.seq = (this.seq + 1) & 0xff;
+    this.sent.push(name);
+    return this.writer.write(frame);
+  }
+
+  nextSeq() {
+    return this.seq;
   }
 
   async connectSerial(serial, baudRate) {
@@ -104,6 +117,7 @@ export class VehicleLink {
       if (!this.telemetry.accepts(message)) continue;
       if (message.name === 'PARAM_VALUE') {
         this.params.onParamValue(message.fields, now);
+        for (const listener of this.paramListeners) listener(message.fields);
         changed = true;
         continue;
       }

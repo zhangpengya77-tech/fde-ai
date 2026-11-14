@@ -318,3 +318,67 @@
 .gcs-table tr.gcs-changed td {
   color: var(--warn);
 }
+
+/* P3：寫入申請 */
+.gcs-mini {
+  background: transparent;
+  color: var(--acc);
+  border: 1px solid var(--acc);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gcs-subpanel {
+  border: 1px solid var(--acc);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0 0 12px;
+}
+
+.gcs-subpanel h3,
+.gcs-h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.gcs-subpanel input[type="number"] {
+  width: 8em;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+.gcs-check {
+  display: block;
+  margin: 0 0 10px;
+  color: var(--warn);
+}
+
+.gcs-checklist,
+.gcs-requests {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.gcs-checklist li[data-ok="true"] { color: var(--ok); }
+.gcs-checklist li[data-ok="false"] { color: var(--bad); }
+
+.gcs-requests li {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.gcs-requests li span { color: var(--muted); }
+.gcs-requests li[data-status="APPROVED"] span { color: var(--acc); }
+.gcs-requests li[data-status="APPLIED"] span { color: var(--ok); }
+.gcs-requests li[data-status="FAILED"] span,
+.gcs-requests li[data-status="REJECTED"] span { color: var(--bad); }
+.gcs-requests .gcs-actions { margin: 6px 0 0; }

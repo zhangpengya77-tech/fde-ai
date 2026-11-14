@@ -1,5 +1,5 @@
 // 參數下載狀態機：PARAM_REQUEST_LIST → 收 PARAM_VALUE → 安靜一段時間後，以 PARAM_REQUEST_READ 依索引補讀缺漏。
-// 時間由呼叫端以 tick(now) 推進，方便測試；本模組不會送出 PARAM_SET。
+// 時間由呼叫端以 tick(now) 推進，方便測試；本模組不會送出 PARAM_SET（寫入在 writer.js）。
 
 export const PARAM_TYPE_NAMES = {
   1: 'UINT8', 2: 'INT8', 3: 'UINT16', 4: 'INT16', 5: 'UINT32', 6: 'INT32', 7: 'UINT64', 8: 'INT64', 9: 'REAL32', 10: 'REAL64',
@@ -44,9 +44,14 @@ export class ParamDownloader {
   }
 
   onParamValue(fields, now) {
-    if (this.state !== 'downloading') return;
     const { param_id: name, param_value: raw, param_type: type, param_count: count, param_index: index } = fields;
     if (!name) return;
+    if (this.state !== 'downloading') {
+      // 下載結束後收到的 PARAM_VALUE（例如寫入後的回覆）只更新已知參數的目前值。
+      const known = this.params.get(name);
+      if (known) known.value = normalizeParamValue(raw, type);
+      return;
+    }
     if (count > 0 && count !== 0xffff) this.total = count;
     this.lastRx = now;
     const entry = { name, value: normalizeParamValue(raw, type), type, typeName: PARAM_TYPE_NAMES[type] || `TYPE_${type}`, index };

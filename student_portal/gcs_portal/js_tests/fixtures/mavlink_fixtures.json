@@ -467,5 +467,16 @@
    },
    "hex": "fd20000004ffbe4c00000000144300000000000000000000000000000000000000000000000000020101ca0c"
   }
- ]
+ ],
+ "param_set": {
+  "seq": 7,
+  "fields": {
+   "target_system": 1,
+   "target_component": 1,
+   "param_id": "ATC_RAT_RLL_P",
+   "param_value": 0.15,
+   "param_type": 9
+  },
+  "hex": "fd17000007ffbe1700009a99193e01014154435f5241545f524c4c5f50000000092596"
+ }
 }

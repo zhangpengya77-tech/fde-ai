@@ -1,10 +1,11 @@
-// FDE-GCS Web 1.0 介面（P2：真機 USB 唯讀）。不送出任何寫入或控制訊息；送出白名單在 mavlink/codec.js。
+// FDE-GCS Web 1.0 介面。送出白名單在 mavlink/codec.js；參數寫入只能經過 mavlink/writer.js，且每次都需要教師批准。
 import { VehicleLink } from './mavlink/link.js';
+import { evaluateWriteChecks, validateChange, writeApprovedParam, WriteBlockedError } from './mavlink/writer.js';
 
 const MODE_TEXT = {
   demo: ['DEMO 介面', '目前未連線任何飛控。畫面上沒有真實遙測，也沒有用假資料冒充遙測。'],
   real: ['真機模式（未連線）', '按「選擇 USB 並連線」，在瀏覽器視窗中手動選擇飛控的 COM 埠。本階段只讀取，不會寫入飛控。'],
-  realConnected: ['真機模式（已連線・唯讀）', '資料來自 USB 連線的飛控。本階段不提供解鎖、切換模式、起飛或寫入參數。'],
+  realConnected: ['真機模式（已連線）', '資料來自 USB 連線的飛控。沒有解鎖、切換模式或起飛功能；參數寫入只限白名單，且每次都要教師批准。'],
   sitl: ['仿真模式（未連線）', 'SITL 仿真連線在 P4 開放。目前沒有連線任何仿真。'],
 };
 
@@ -21,6 +22,10 @@ let mode = 'demo';
 let link = null;
 let original = new Map();
 let paramRound = 0;
+let allowlist = null;
+let requests = [];
+let applyTarget = null;
+const csrf = () => document.body.dataset.csrf;
 
 function serialSupport() {
   if (!window.isSecureContext) return [false, '不可用：需要 HTTPS 或本機（localhost）網址'];
@@ -102,7 +107,7 @@ function renderParamRows() {
   if (!rows.length) {
     const tr = body.insertRow();
     const td = tr.insertCell();
-    td.colSpan = 4;
+    td.colSpan = 5;
     td.textContent = query ? '沒有符合的參數。' : '沒有參數資料。';
     return;
   }
@@ -114,10 +119,19 @@ function renderParamRows() {
     for (const text of [p.name, formatValue(before), formatValue(p.value), p.typeName]) {
       tr.insertCell().textContent = text;
     }
+    const action = tr.insertCell();
+    if (allowlist && allowlist.params[p.name]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'gcs-mini';
+      button.textContent = '申請修改';
+      button.addEventListener('click', () => openWriteForm(p.name));
+      action.append(button);
+    }
   }
   if (rows.length > 500) {
     const td = body.insertRow().insertCell();
-    td.colSpan = 4;
+    td.colSpan = 5;
     td.textContent = `只顯示前 500 筆，共 ${rows.length} 筆；請用搜尋縮小範圍。`;
   }
 }
@@ -185,6 +199,224 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('gcsParamExport').addEventListener('click', exportParams);
   $('gcsParamSearch').addEventListener('input', () => link && renderParamRows());
-  setInterval(() => link && render(), 500);
+  $('gcsWriteNew').addEventListener('input', updateWriteForm);
+  $('gcsWriteAck').addEventListener('change', updateWriteForm);
+  $('gcsWriteSubmit').addEventListener('click', submitWriteRequest);
+  $('gcsWriteClose').addEventListener('click', () => { $('gcsWriteForm').hidden = true; });
+  $('gcsApplyAck').addEventListener('change', renderApplyPanel);
+  $('gcsApplyGo').addEventListener('click', applyWrite);
+  $('gcsApplyClose').addEventListener('click', () => { applyTarget = null; $('gcsApplyPanel').hidden = true; });
+  $('gcsWriteClose').disabled = false;
+  $('gcsApplyClose').disabled = false;
+  loadAllowlist();
+  refreshRequests();
+  setInterval(refreshRequests, 5000);
+  setInterval(() => { if (link) render(); if (applyTarget) renderApplyPanel(); }, 500);
   render();
 });
+
+// ---- P3：參數寫入申請、教師批准、寫入飛控 ----
+
+async function api(path, { method = 'GET', body } = {}) {
+  const response = await fetch(path, {
+    method,
+    credentials: 'same-origin',
+    headers: body ? { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data.errors ? data.errors.join(' ') : data.error || `伺服器回應 ${response.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+async function loadAllowlist() {
+  try {
+    allowlist = await api('/gcs/api/allowlist/');
+    if (link && link.params.params.size) renderParamRows();
+  } catch (error) {
+    allowlist = null;
+  }
+}
+
+async function refreshRequests() {
+  try {
+    requests = (await api('/gcs/api/param-requests/')).requests;
+    renderRequests();
+  } catch (error) {
+    /* 下次再試 */
+  }
+}
+
+function openWriteForm(name) {
+  const entry = link && link.params.params.get(name);
+  const rule = allowlist && allowlist.params[name];
+  if (!entry || !rule) return;
+  $('gcsWriteForm').hidden = false;
+  $('gcsWriteForm').dataset.param = name;
+  $('gcsWriteParam').textContent = `${name}（${rule.label}）`;
+  $('gcsWriteRange').textContent = `允許範圍 ${rule.min}～${rule.max}，單次修改不超過 ${Math.round(allowlist.max_step_ratio * 100)}%。白名單版本 ${allowlist.version}。`;
+  $('gcsWriteOld').textContent = formatValue(entry.value);
+  $('gcsWriteNew').value = '';
+  $('gcsWriteAck').checked = false;
+  $('gcsWriteMessage').textContent = '';
+  updateWriteForm();
+  $('gcsWriteNew').focus();
+}
+
+function updateWriteForm() {
+  const name = $('gcsWriteForm').dataset.param;
+  const entry = link && link.params.params.get(name);
+  const value = Number($('gcsWriteNew').value);
+  const errors = entry && $('gcsWriteNew').value !== '' ? validateChange(allowlist, name, entry.value, value) : ['請輸入新值。'];
+  $('gcsWriteMessage').textContent = $('gcsWriteNew').value === '' ? '' : errors.join(' ');
+  $('gcsWriteSubmit').disabled = errors.length > 0 || !$('gcsWriteAck').checked || !link || link.linkState() !== 'ok';
+}
+
+async function submitWriteRequest() {
+  const name = $('gcsWriteForm').dataset.param;
+  const entry = link.params.params.get(name);
+  $('gcsWriteSubmit').disabled = true;
+  try {
+    await api('/gcs/api/param-requests/', {
+      method: 'POST',
+      body: {
+        param_name: name,
+        old_value: entry.value,
+        new_value: Number($('gcsWriteNew').value),
+        vehicle_sysid: link.telemetry.vehicle.sysid,
+        firmware: link.telemetry.values.firmware ? link.telemetry.values.firmware.text : '',
+        safety_ack: $('gcsWriteAck').checked,
+      },
+    });
+    $('gcsWriteForm').hidden = true;
+    await refreshRequests();
+  } catch (error) {
+    $('gcsWriteMessage').textContent = error.message;
+    updateWriteForm();
+  }
+}
+
+function addButton(parent, text, onClick) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'gcs-mini';
+  button.textContent = text;
+  button.addEventListener('click', onClick);
+  parent.append(button);
+  return button;
+}
+
+async function decide(id, decision) {
+  try {
+    await api(`/gcs/api/param-requests/${id}/decision/`, { method: 'POST', body: { decision } });
+  } catch (error) {
+    window.alert(error.message);
+  }
+  refreshRequests();
+}
+
+async function cancelRequest(id) {
+  try {
+    await api(`/gcs/api/param-requests/${id}/cancel/`, { method: 'POST', body: {} });
+  } catch (error) {
+    window.alert(error.message);
+  }
+  refreshRequests();
+}
+
+function renderRequests() {
+  const list = $('gcsRequestList');
+  list.replaceChildren();
+  if (!requests.length) {
+    const li = document.createElement('li');
+    li.textContent = '尚無申請。';
+    list.append(li);
+    return;
+  }
+  for (const item of requests.slice(0, 20)) {
+    const li = document.createElement('li');
+    li.dataset.status = item.status;
+    const title = document.createElement('strong');
+    title.textContent = `${item.param_name}：${formatValue(item.old_value)} → ${formatValue(item.new_value)}`;
+    const meta = document.createElement('span');
+    const who = item.is_mine ? '我' : `${item.requester}${item.cohort ? `（${item.cohort}）` : ''}`;
+    meta.textContent = ` ${item.status_label} · ${who} · 飛控 ${item.vehicle_sysid}${item.result_message ? ` · ${item.result_message}` : ''}`;
+    li.append(title, meta);
+    const actions = document.createElement('div');
+    actions.className = 'gcs-actions';
+    if (item.can_decide) {
+      addButton(actions, '批准', () => decide(item.id, 'approve'));
+      addButton(actions, '退回', () => decide(item.id, 'reject'));
+    }
+    if (item.is_mine && item.status === 'APPROVED') {
+      addButton(actions, '寫入飛控…', () => openApplyPanel(item.id));
+    }
+    if (item.is_mine && (item.status === 'PENDING' || item.status === 'APPROVED')) {
+      addButton(actions, '取消申請', () => cancelRequest(item.id));
+    }
+    if (actions.childElementCount) li.append(actions);
+    list.append(li);
+  }
+}
+
+function openApplyPanel(id) {
+  applyTarget = id;
+  $('gcsApplyAck').checked = false;
+  $('gcsApplyMessage').textContent = '';
+  $('gcsApplyPanel').hidden = false;
+  renderApplyPanel();
+}
+
+function renderApplyPanel() {
+  const request = requests.find((r) => r.id === applyTarget);
+  if (!request) {
+    $('gcsApplyPanel').hidden = true;
+    applyTarget = null;
+    return;
+  }
+  const checks = evaluateWriteChecks({ link, request, allowlist, safetyAckNow: $('gcsApplyAck').checked, confirmed: true });
+  const list = $('gcsChecklist');
+  list.replaceChildren();
+  for (const check of checks.filter((c) => c.key !== 'confirmed')) {
+    const li = document.createElement('li');
+    li.dataset.ok = String(check.ok);
+    li.textContent = `${check.ok ? '✔' : '✘'} ${check.label}${!check.ok && check.detail ? `：${check.detail}` : ''}`;
+    list.append(li);
+  }
+  $('gcsApplyGo').disabled = !checks.every((c) => c.ok);
+}
+
+async function applyWrite() {
+  const request = requests.find((r) => r.id === applyTarget);
+  if (!request) return;
+  const confirmed = window.confirm(`確認把 ${request.param_name} 從 ${formatValue(request.old_value)} 改成 ${formatValue(request.new_value)}？\n請確認螺旋槳已拆下、動力電池已斷開。`);
+  if (!confirmed) return;
+  $('gcsApplyGo').disabled = true;
+  $('gcsApplyMessage').textContent = '寫入中，等待飛控讀回…';
+  let result;
+  try {
+    result = await writeApprovedParam({ link, request, allowlist, safetyAckNow: $('gcsApplyAck').checked, confirmed });
+  } catch (error) {
+    $('gcsApplyMessage').textContent = error instanceof WriteBlockedError ? error.message : `寫入失敗：${error.message}`;
+    if (!(error instanceof WriteBlockedError)) {
+      result = { success: false, readback: null, message: `寫入失敗：${error.message}` };
+    } else {
+      return;
+    }
+  }
+  try {
+    await api(`/gcs/api/param-requests/${request.id}/result/`, {
+      method: 'POST',
+      body: { success: result.success, readback_value: result.readback, message: result.message },
+    });
+  } catch (error) {
+    result.message += `（結果回報伺服器失敗：${error.message}）`;
+  }
+  $('gcsApplyMessage').textContent = result.message;
+  applyTarget = null;
+  await refreshRequests();
+  renderParamRows();
+}

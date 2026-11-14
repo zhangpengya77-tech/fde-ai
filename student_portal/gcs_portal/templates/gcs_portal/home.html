@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="{% static 'gcs_portal/gcs.css' %}">
   <script type="module" src="{% static 'gcs_portal/gcs.js' %}"></script>
 </head>
-<body class="gcs-root" data-gcs-role="{{ gcs_role }}">
+<body class="gcs-root" data-gcs-role="{{ gcs_role }}" data-csrf="{{ csrf_token }}">
   <header class="gcs-header">
     <a class="gcs-brand" href="{% url 'learning:platform' %}"><span class="gcs-mark">FDE</span><span>FDE-AI 地面站<small>FDE-GCS Web 1.0</small></span></a>
     <div class="gcs-header-links">
@@ -73,11 +73,37 @@
       <input class="gcs-search" id="gcsParamSearch" type="search" placeholder="搜尋參數名稱，例如 ATC_RAT" aria-label="搜尋參數" disabled>
       <div class="gcs-table-wrap">
         <table class="gcs-table">
-          <thead><tr><th>參數</th><th>原始值</th><th>目前值</th><th>型別</th></tr></thead>
-          <tbody id="gcsParamBody"><tr><td colspan="4">尚未連線，沒有參數資料。</td></tr></tbody>
+          <thead><tr><th>參數</th><th>原始值</th><th>目前值</th><th>型別</th><th>操作</th></tr></thead>
+          <tbody id="gcsParamBody"><tr><td colspan="5">尚未連線，沒有參數資料。</td></tr></tbody>
         </table>
       </div>
-      <p class="gcs-note">「原始值」是這次連線第一次讀到的值；再讀一次時，有變化的參數會標示出來。本階段只讀取，不提供寫入。寫入只開放教師批准的白名單參數，並且必須：已上鎖（Disarmed）、連線有效、已勾選「已拆槳、已斷電池」、二次確認、寫入後讀回驗證。（P3 開放）</p>
+      <section class="gcs-subpanel" id="gcsWriteForm" hidden aria-labelledby="gcsWriteTitle">
+        <h3 id="gcsWriteTitle">申請修改 <span id="gcsWriteParam"></span></h3>
+        <p class="gcs-note" id="gcsWriteRange"></p>
+        <dl class="gcs-facts">
+          <dt>目前值</dt><dd id="gcsWriteOld">—</dd>
+          <dt><label for="gcsWriteNew">新值</label></dt><dd><input id="gcsWriteNew" type="number" step="any" inputmode="decimal"></dd>
+        </dl>
+        <label class="gcs-check"><input type="checkbox" id="gcsWriteAck"> 我確認已拆下螺旋槳、已斷開動力電池</label>
+        <div class="gcs-actions">
+          <button type="button" id="gcsWriteSubmit" disabled>送出申請給教師</button>
+          <button type="button" id="gcsWriteClose" disabled>取消</button>
+        </div>
+        <p class="gcs-link-message" id="gcsWriteMessage" role="status" aria-live="polite"></p>
+      </section>
+      <section class="gcs-subpanel" id="gcsApplyPanel" hidden aria-labelledby="gcsApplyTitle">
+        <h3 id="gcsApplyTitle">寫入前檢查</h3>
+        <ul class="gcs-checklist" id="gcsChecklist"></ul>
+        <label class="gcs-check"><input type="checkbox" id="gcsApplyAck"> 我再次確認：螺旋槳已拆下、動力電池已斷開</label>
+        <div class="gcs-actions">
+          <button type="button" id="gcsApplyGo" disabled>確認寫入飛控</button>
+          <button type="button" id="gcsApplyClose" disabled>取消</button>
+        </div>
+        <p class="gcs-link-message" id="gcsApplyMessage" role="status" aria-live="polite"></p>
+      </section>
+      <h3 class="gcs-h3">寫入申請紀錄</h3>
+      <ul class="gcs-requests" id="gcsRequestList"><li>尚無申請。</li></ul>
+      <p class="gcs-note">「原始值」是這次連線第一次讀到的值；再讀一次時，有變化的參數會標示出來。寫入只開放白名單內的 PID 參數，每次都要教師批准，並且必須：已上鎖（Disarmed）、連線正常、已勾選「已拆槳、已斷電池」、二次確認；寫入後一定讀回驗證。</p>
     </section>
 
     <section class="gcs-panel" id="gcs-sitl" aria-labelledby="gcs-sitl-title">

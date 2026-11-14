@@ -1,5 +1,5 @@
 // FDE-GCS MAVLink 編解碼器（FDE-AI 自行撰寫）。訊息定義來自 defs.js（MAVLink 產生器輸出，MIT）。
-// 只支援 P2 需要的訊息；送出訊息受白名單限制，不在白名單內的訊息一律無法編碼。
+// 送出訊息受白名單限制，不在白名單內的訊息一律無法編碼；PARAM_SET 需要寫入能力物件。
 import { MESSAGE_DEFS } from './defs.js';
 
 const STX_V1 = 0xfe;
@@ -19,6 +19,9 @@ const OUTGOING_ALLOWED = new Set(['HEARTBEAT', 'PARAM_REQUEST_LIST', 'PARAM_REQU
 const COMMAND_LONG_ALLOWED = new Set([MAV_CMD_SET_MESSAGE_INTERVAL, MAV_CMD_REQUEST_MESSAGE]);
 
 export class OutgoingNotAllowedError extends Error {}
+
+// PARAM_SET 只能由寫入模組（writer.js）編碼：它必須先通過全部安全檢查，再帶著這個能力物件呼叫。
+export const PARAM_WRITE_CAPABILITY = Symbol('fde-gcs-param-write');
 
 export function crcAccumulate(byte, crc) {
   let tmp = (byte ^ (crc & 0xff)) & 0xff;
@@ -148,7 +151,8 @@ export class MavlinkParser {
   }
 }
 
-export function assertOutgoingAllowed(name, fields) {
+export function assertOutgoingAllowed(name, fields, capability) {
+  if (name === 'PARAM_SET' && capability === PARAM_WRITE_CAPABILITY) return;
   if (!OUTGOING_ALLOWED.has(name)) {
     throw new OutgoingNotAllowedError(`FDE-GCS P2 不允許送出 ${name}`);
   }
@@ -157,8 +161,8 @@ export function assertOutgoingAllowed(name, fields) {
   }
 }
 
-export function encodeMessage(name, fields, { seq = 0, sysid = 255, compid = 190 } = {}) {
-  assertOutgoingAllowed(name, fields);
+export function encodeMessage(name, fields, { seq = 0, sysid = 255, compid = 190 } = {}, capability = undefined) {
+  assertOutgoingAllowed(name, fields, capability);
   const def = BY_NAME[name];
   const payload = new Uint8Array(def.length);
   const view = new DataView(payload.buffer);

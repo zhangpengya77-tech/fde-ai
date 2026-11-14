@@ -237,6 +237,43 @@ export const MESSAGE_DEFS = {
   "length": 25,
   "name": "PARAM_VALUE"
  },
+ "23": {
+  "crcExtra": 168,
+  "fields": [
+   [
+    "param_value",
+    "float",
+    0,
+    0
+   ],
+   [
+    "target_system",
+    "uint8_t",
+    0,
+    4
+   ],
+   [
+    "target_component",
+    "uint8_t",
+    0,
+    5
+   ],
+   [
+    "param_id",
+    "char",
+    16,
+    6
+   ],
+   [
+    "param_type",
+    "uint8_t",
+    0,
+    22
+   ]
+  ],
+  "length": 23,
+  "name": "PARAM_SET"
+ },
  "24": {
   "crcExtra": 24,
   "fields": [
