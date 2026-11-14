@@ -1,86 +1,95 @@
 <!doctype html>
-<!-- FDE 空域查詢：無人機飛行前空域風險查詢（獨立頁面，程式自行撰寫；資料取自政府公開資料） -->
+<!-- FDE 空域查詢：無人機飛行前空域風險查詢（手機優先版面：全螢幕地圖＋浮動搜尋列＋底部可拖拉面板；程式自行撰寫，資料取自政府公開資料） -->
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- viewport-fit=cover：讓 iPhone 瀏海／底部橫條區域也能正確套用安全區 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>空域查詢｜FDE-AI-UAS</title>
-  <meta name="description" content="FDE-AI-UAS 無人機空域查詢：禁限航區、臨時空域、國家公園、商港、要塞堡壘地帶。僅供參考，請以民航局官方查詢為準。">
+  <meta name="description" content="FDE-AI 空域查詢：搜尋地點即可查看民航局禁限航區、臨時禁飛、商港、國家公園與要塞堡壘地帶。僅供參考，請以民航局官方查詢為準。">
   <!-- 地圖函式庫 Leaflet 1.9.4（開源，BSD-2 授權） -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=20261114d">
+  <!-- 空白網站圖示，避免瀏覽器去抓不存在的 favicon.ico 而出現 404 -->
+  <link rel="icon" href="data:,">
 </head>
 <body>
-  <!-- 頂部：網站名稱與返回連結 -->
-  <header class="as-top">
-    <a class="as-brand" href="../">FDE-AI-UAS</a>
-    <nav class="as-links">
-      <a href="../sim/">仿真訓練</a>
-      <a aria-current="page" href="./">空域查詢</a>
-    </nav>
-  </header>
+  <!-- 全螢幕地圖 -->
+  <div id="map" aria-label="空域地圖"></div>
 
-  <main class="as-main">
-    <!-- 地圖區 -->
-    <section class="as-mapwrap">
-      <div id="map" aria-label="空域地圖"></div>
-      <!-- 搜尋列 -->
-      <form class="as-search" id="searchForm" role="search">
-        <input id="searchInput" type="search" placeholder="輸入地名、地址或景點" autocomplete="off" aria-label="搜尋地點">
-        <button type="submit">查詢</button>
-      </form>
-      <ul class="as-suggest" id="suggest" hidden></ul>
-      <!-- 我的位置按鈕 -->
-      <button class="as-locate" id="locateBtn" type="button" title="查詢我目前的位置" aria-label="查詢我目前的位置">◎</button>
-      <!-- 載入狀態 -->
-      <p class="as-status" id="status">圖資載入中…</p>
-    </section>
+  <!-- 頂部浮動區：搜尋列＋圖層標籤 -->
+  <div class="as-float">
+    <form class="as-search" id="searchForm" role="search">
+      <input id="searchInput" type="search" placeholder="搜尋地點：武嶺、淡水漁人碼頭、或輸入座標" autocomplete="off" aria-label="搜尋地點或輸入座標">
+      <button type="submit">查詢</button>
+    </form>
+    <!-- 圖層標籤：點一下開／關對應圖層 -->
+    <div class="as-chips" id="chips">
+      <button type="button" class="as-chip" data-layer="uav" aria-pressed="true"><i style="background:var(--red)"></i>禁限航區</button>
+      <button type="button" class="as-chip" data-layer="temp" aria-pressed="true"><i style="background:var(--purple)"></i>臨時禁飛</button>
+      <button type="button" class="as-chip" data-layer="port" aria-pressed="true"><i style="background:var(--blue)"></i>商港</button>
+      <button type="button" class="as-chip" data-layer="np" aria-pressed="true"><i style="background:var(--green)"></i>國家公園</button>
+    </div>
+    <!-- 地圖載入狀態（小字膠囊） -->
+    <p class="as-status" id="status">圖資載入中…</p>
+  </div>
 
-    <!-- 右側（手機在下方）：查詢結果與圖層開關 -->
-    <aside class="as-side">
-      <section class="as-card" id="resultCard">
-        <h2>查詢結果</h2>
-        <p class="as-muted" id="resultHint">在地圖上點任一位置，或搜尋地名、按 ◎ 查目前位置。</p>
-        <div id="result"></div>
-      </section>
+  <!-- 底部面板（手機：可上下拖拉；桌機：固定在左側） -->
+  <section class="as-sheet" id="sheet" aria-label="查詢結果面板">
+    <!-- 右下角定位按鈕：放在面板內，跟著面板上下移動，不會被遮住 -->
+    <button class="as-locate" id="locateBtn" type="button" aria-label="查詢我目前的位置">
+      <!-- 雷達／準星圖示 -->
+      <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M12 12l4-4"/>
+      </svg>
+    </button>
 
-      <section class="as-card">
-        <h2>圖層</h2>
-        <div class="as-layers" id="layerToggles"></div>
-        <p class="as-muted as-small" id="dataDate"></p>
-      </section>
+    <!-- 拖拉把手與切換按鈕 -->
+    <div class="as-handle" id="handle"><span></span></div>
+    <button class="as-toggle" id="toggleBtn" type="button">▲ 看結果</button>
 
-      <section class="as-card">
-        <h2>要塞堡壘地帶是什麼？</h2>
-        <p>依《要塞堡壘地帶法》，國防部公告的要塞周邊分為第一區（約 400–600 公尺）與第二區（約 3–4 公里），區內攝影、測量、空拍等行為受到管制。</p>
-        <p>本頁以 600 公尺與 4 公里的圓圈<strong>示意</strong>位置，正確範圍以國防部公報為準。《營區安全維護條例》自 2025 年 8 月 1 日施行，軍營周邊空拍另有罰則。</p>
-      </section>
+    <div class="as-sheet-body" id="sheetBody">
+      <!-- A. 更新狀態條 -->
+      <p class="as-pill-ok"><b>●</b> <span id="checkText">連線民航局中…</span></p>
+      <!-- 即時時間（台北時區，每秒更新） -->
+      <p class="as-clock">現在時間 <b id="clock">--:--:--</b>（台北時間 UTC+8）</p>
+      <!-- B. 小字提示 -->
+      <p class="as-note">臨時禁飛可能剛公告、來不及同步，起飛前請以<a href="https://www.caa.gov.tw/" target="_blank" rel="noopener">民航局公告</a>為準 ↗</p>
 
-      <section class="as-card">
-        <h2>重要提醒</h2>
-        <ul class="as-list">
-          <li>本頁僅提供<strong>風險提示</strong>，不是官方系統，也不構成法律意見。</li>
-          <li>起飛前請以<a href="https://drone.caa.gov.tw/" target="_blank" rel="noopener">民航局遙控無人機管理資訊系統</a>的空域查詢為準。</li>
-          <li>臨時禁飛公告（活動、維安）可能尚未反映在本頁資料。</li>
-          <li>國家公園空拍多需事先向管理處申請，請點地圖上的國家公園查看規定。</li>
-        </ul>
-      </section>
+      <!-- C. 查詢結果卡片 -->
+      <article class="as-result" id="result" data-state="idle">
+        <h2 class="as-result-title"><i class="as-dot"></i><span>按右下角雷達按鈕，查詢你現在的位置</span></h2>
+      </article>
 
-      <section class="as-card as-small">
-        <h2>資料來源</h2>
-        <ol class="as-list">
-          <li>交通部民用航空局 遙控無人機管理資訊系統 公開圖層（禁限航區、臨時空域、國家公園、商港、金馬地區）：本頁即時向民航局查詢，依該站<a href="https://drone.caa.gov.tw/Default/OpenData" target="_blank" rel="noopener">網站資料開放宣告</a>使用並註明出處。</li>
-          <li>《要塞堡壘地帶法》《營區安全維護條例》：<a href="https://law.moj.gov.tw/" target="_blank" rel="noopener">全國法規資料庫</a>。</li>
-          <li>要塞名單：OSM 台灣社群整理（未經國防部核對）；示意座標：© OpenStreetMap contributors。</li>
-          <li>底圖：內政部國土測繪中心 臺灣通用電子地圖。地名搜尋：OpenStreetMap Nominatim。</li>
-        </ol>
-      </section>
-    </aside>
-  </main>
+      <!-- D. 圖例 -->
+      <ul class="as-legend">
+        <li><i style="background:var(--red)"></i>紅區：禁止飛航</li>
+        <li><i style="background:var(--yellow)"></i>黃區：限制，需申請</li>
+        <li><i style="background:var(--purple)"></i>臨時禁飛區</li>
+        <li><i style="background:var(--blue)"></i>商港範圍</li>
+        <li><i style="background:var(--green)"></i>國家公園（另需申請）</li>
+        <li><i style="background:var(--teal)"></i>要塞堡壘（示意）</li>
+      </ul>
 
-  <footer class="as-foot">FDE-AI-UAS 空域查詢｜僅供參考，請以官方公告為準</footer>
+      <!-- E. 資料來源（數字由程式向民航局即時統計） -->
+      <p class="as-datarow" id="dataRow">民航局圖資統計中…</p>
+
+      <!-- F. FDE-AI 區塊 -->
+      <aside class="as-author">
+        <h3>FDE-AI 空域查詢</h3>
+        <p class="as-author-sub">無人機人才培育・AI 評測系統</p>
+        <p>FDE-AI 空域查詢工具：搜尋地點即可查看禁飛區、限飛區，起飛前先查一下。更多無人機教學與技術內容，歡迎到頻道關注我們。</p>
+        <div class="as-btns">
+          <!-- FDE-AI 官方 YouTube 頻道 -->
+          <a class="as-btn-yt" id="ytLink" href="https://youtube.com/channel/UCqKMXztPAsc2K6crQlKxzLg" target="_blank" rel="noopener">YouTube</a>
+          <a class="as-btn-home" href="../">回首頁</a>
+        </div>
+        <p class="as-fine">本頁僅提供風險提示，不是官方系統。資料：交通部民用航空局 遙控無人機管理資訊系統公開圖層（依該站<a href="https://drone.caa.gov.tw/Default/OpenData" target="_blank" rel="noopener">網站資料開放宣告</a>使用）；要塞名單：OSM 台灣社群整理，示意座標 © OpenStreetMap contributors；底圖：Esri、內政部國土測繪中心。</p>
+      </aside>
+    </div>
+  </section>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20261114d"></script>
 </body>
 </html>
