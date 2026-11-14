@@ -174,10 +174,9 @@
     if (set - now <= 30 * 60000) {
       return `<div class="as-sunbox as-sun-dusk"><strong>⚠️ 即將日落</strong>今天日落時間 ${fmtHM(set)}（距日落 ${dur(set - now)}），日落後不得飛航</div>`;
     }
-    // 日間：只說明時段；是否可飛仍取決於空域狀態
+    // 管制區：日間框只顯示時段，管制說明由上方「飛航建議」呈現，避免重複
     if (current.state && current.state !== 'green') {
-      const why = { red: '此處位於禁止飛航區（紅區），任何時段皆不得飛航。', yellow: '此處位於限制區（黃區），未經主管機關核准不得飛航。', purple: '此處有臨時禁飛公告，公告期間不得飛航。', blue: '此處位於商港範圍，須經港務管理機關同意方可飛航。' }[current.state];
-      return `<div class="as-sunbox as-sun-dusk"><strong>☀️ 目前為日出後、日落前時段（今天日落時間 ${fmtHM(set)}）</strong>${why}</div>`;
+      return `<div class="as-sunbox as-sun-day"><strong>☀️ 目前為日出後、日落前時段</strong>今天日落時間 ${fmtHM(set)}（距日落 ${dur(set - now)}）</div>`;
     }
     return `<div class="as-sunbox as-sun-day"><strong>☀️ 目前為日出後、日落前時段</strong>今天日落時間 ${fmtHM(set)}（距日落 ${dur(set - now)}）。查詢點未位於民航局公告之禁限航區，飛航前仍應依《民用航空法》及《遙控無人機管理規則》確認註冊、操作證、目視範圍、距地面 400 呎以下等規定。</div>`;
   }
