@@ -76,6 +76,7 @@ export function createSync3D({ THREE, scene, camera, canvas, nodes, hotNodes, re
       line.renderOrder = 15; group.add(line);
       lines.push({ line, from: PORTS[w.from].component, to: PORTS[w.to].component, focus: isFocus });
     }
+    update();   // 立刻算出位置與可見性（3D 沒有的零件不畫），不用等下一格畫面
   }
   // 每一格更新線的位置（零件會爆炸、被拖動）
   const curve = new THREE.QuadraticBezierCurve3(a, mid, b);

@@ -1447,6 +1447,8 @@ class SimPracticeRecord(models.Model):
     class Mode(models.TextChoices):
         INSPECTION = "inspection", "電力巡檢"
         EXAM = "exam", "考場模擬"
+        # 2026-11-14：F450 組裝與接線實訓（/f450-twin/）。規則待實機核對前，分數一律是「試行分數」
+        F450 = "f450", "F450 組裝接線"
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name="sim_practice_records")
     # 練習當下所屬班級（學員只有一個有效班級時才記；教師依此做班級隔離）

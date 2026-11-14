@@ -58,6 +58,8 @@ EXPECTED_CHAIN: tuple[str, ...] = (
     "0029_vision_inspection_submission_token",
     "0030_golden_label_two_classes",
     "0031_vision_inspection_teaching_test",  # 2026-11-03 V1.0 教學測試版：候選結果與發布階段
+    "0032_sim_practice_record",  # 2026-11-07 模擬器練飛紀錄（已在正式站；當時未登記，2026-11-14 補登）
+    "0033_sim_practice_f450_mode",  # 2026-11-14 F450 組裝接線實訓：練習紀錄新增 f450 類別（只改允許值，資料表不變）
 )
 
 

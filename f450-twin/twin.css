@@ -241,3 +241,8 @@ details.truth p{margin:6px 0 0;max-width:110ch;color:#e9d7a6}
 @media (prefers-reduced-motion:reduce){.w2-port.suggest circle{animation:none;r:13}}
 /* hidden 屬性要優先於上面的 display:flex（否則練習模式會出現考核計時、空白說明條） */
 .ts-exam[hidden],.sync-cap[hidden]{display:none}
+/* P6：保存成績 */
+.ts-save{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:10px 0 4px;padding:8px 10px;border:1px dashed var(--line2);border-radius:8px;font-size:13.5px}
+.ts-save.ok{border-color:var(--ok);color:var(--ok)}
+.ts-save a{color:var(--accent);font-weight:600}
+.train-list a{color:var(--accent);font-weight:600}

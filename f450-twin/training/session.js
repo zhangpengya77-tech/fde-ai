@@ -2,9 +2,10 @@
 // 教學：一步一步提示（下一件零件、正確接口），錯誤即時說明。
 // 練習：現在的做法；成績單即時更新，可以一直重來。
 // 考核：清空重做、不給提示、不能自行檢查；按「交卷」後鎖定並顯示分數。
-// 分數目前是「試行分數」：規則待實機核對，不記錄、不計正式成績（P6 才接任務卡與教師後台）。
+// 分數目前是「試行分數」：規則待實機核對，不計正式成績。P6：登入後可存入練習紀錄（records.js），老師在後台查看。
 import { CATEGORIES, scoreSession } from './scoring.js?v=p5-1';
 import { emit, on, latest } from './bus.js?v=p4-1';
+import { buildPayload, recordStatus, saveRecord } from './records.js?v=p6-1';   // P6：成績存到練習紀錄
 
 const MODES = [
   ['teach', '教學', '一步一步提示下一件零件與正確接口；錯誤會即時說明。'],
@@ -14,7 +15,7 @@ const MODES = [
 
 export function initSession(root) {
   if (!root) return null;
-  let mode = 'practice', locked = false, examStart = 0, timer = null, final = null;
+  let mode = 'practice', locked = false, examStart = 0, timer = null, final = null, modeStart = Date.now(), saveMsg = null, status = null;
   let assembly = latest('assembly') || null, wires = latest('wires2d')?.wires || [];
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
@@ -30,15 +31,19 @@ export function initSession(root) {
   const bRetry = el('button', '重新考一次'); bRetry.type = 'button';
   exam.append(clock, bSubmit, bRetry);
   const card = el('div', null, 'ts-card');
-  root.append(head, desc, exam, card,
-    el('p', '分數為試行分數：組裝順序與接線規則依 DJI 手冊、Pixhawk 公開文件與教師安裝指導整理，全部待實機核對；目前不記錄、不計正式成績。', 'note'));
+  // P6：保存列（登入狀態、保存按鈕、結果）
+  const saveRow = el('div', null, 'ts-save'); saveRow.setAttribute('aria-live', 'polite');
+  const saveText = el('span'); const bSave = el('button', '保存這次成績到練習紀錄'); bSave.type = 'button';
+  saveRow.append(saveText, bSave);
+  root.append(head, desc, exam, card, saveRow,
+    el('p', '分數為試行分數：組裝順序與接線規則依 DJI 手冊、Pixhawk 公開文件與教師安裝指導整理，全部待實機核對。登入後可存入你的練習紀錄供老師查看，但不計正式成績。', 'note'));
 
   // ───────── 模式切換 ─────────
   function setMode(next) {
     if (next === mode && !(next === 'exam' && locked)) return;
     if (next === 'exam' && !confirm('進入考核會從頭開始：3D 組裝與 2D 接線都清空重做（練習的進度會先保留，離開考核後還原）。要開始嗎？')) return;
     if (mode === 'exam' && next !== 'exam' && !locked && !confirm('考核還沒交卷，離開會放棄這次考核。確定嗎？')) return;
-    mode = next; locked = false; final = null;
+    mode = next; locked = false; final = null; modeStart = Date.now(); saveMsg = null;
     clearInterval(timer); timer = null;
     if (mode === 'exam') { examStart = Date.now(); timer = setInterval(tick, 1000); }
     emit('examLock', { locked: false });
@@ -53,6 +58,7 @@ export function initSession(root) {
     clearInterval(timer); timer = null;
     emit('examLock', { locked: true });
     render();
+    save(final, final.seconds);   // 考核交卷後自動保存
   };
   bRetry.onclick = () => { mode = 'practice'; setMode('exam'); };
   function tick() { const s = Math.round((Date.now() - examStart) / 1000); clock.textContent = `考核計時 ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
@@ -60,8 +66,39 @@ export function initSession(root) {
   on('assembly', (d) => { assembly = d; if (!locked) render(); });
   on('wires2d', (d) => { wires = d?.wires || []; if (!locked) render(); });
 
+  // ───────── 保存（P6） ─────────
+  const counts = () => ({
+    installed: Object.values(assembly?.parts || {}).filter((p) => p.status === 'installed').length,
+    errors: (assembly?.log || []).length,
+  });
+  async function save(result, seconds) {
+    bSave.disabled = true; saveMsg = { text: '正在保存…' }; renderSave();
+    const c = counts(), wiringErrors = result.wiring.issues.filter((i) => i.code !== 'MISSING').length;   // 錯誤次數＝組裝錯誤＋接線錯誤
+    const r = await saveRecord(buildPayload(result, { trainMode: mode, seconds, installed: c.installed, errors: Math.min(999, c.errors + wiringErrors) }));
+    saveMsg = r.saved ? { text: '✓ 已存入你的練習紀錄（試行分數）', link: [r.recordsUrl, '查看紀錄'], ok: true }
+      : r.reason === 'login' ? { text: '登入學員帳號後才能保存成績。', link: [r.loginUrl, '登入'] }
+      : r.reason === 'unavailable' ? { text: '這個網站版本沒有連到教學主機，成績不會保存；請到教學網站登入後練習。' }
+      : { text: `沒有保存：${r.message}` };
+    bSave.disabled = false; renderSave();
+  }
+  bSave.onclick = () => save(scoreSession(assembly, wires), (Date.now() - modeStart) / 1000);
+  function renderSave() {
+    bSave.hidden = mode === 'exam';
+    saveText.replaceChildren();
+    const m = saveMsg || (status === null ? { text: '正在確認登入狀態…' }
+      : !status.available ? { text: '這個網站版本沒有連到教學主機，成績不會保存。' }
+      : status.loggedIn ? { text: `已登入：${status.nickname}。${mode === 'exam' ? '交卷後會自動保存成績。' : '按右邊按鈕保存目前成績。'}` }
+      : { text: '登入學員帳號後可以保存成績。', link: [status.loginUrl, '登入'] });
+    saveText.append(document.createTextNode(m.text));
+    if (m.link) { const a = el('a', m.link[1]); a.href = m.link[0]; a.target = '_blank'; a.rel = 'noopener'; saveText.append(' ', a); }
+    saveRow.classList.toggle('ok', !!m.ok);
+    if (status && (!status.available || !status.loggedIn)) bSave.hidden = true;
+  }
+  recordStatus().then((st) => { status = st; renderSave(); });
+
   // ───────── 成績單 ─────────
   function render() {
+    renderSave();
     btns.forEach((b) => { const on = b.dataset.trainMode === mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
     desc.textContent = MODES.find(([id]) => id === mode)[2];
     exam.hidden = mode !== 'exam';

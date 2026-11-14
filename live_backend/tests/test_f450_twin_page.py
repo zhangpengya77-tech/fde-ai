@@ -50,6 +50,15 @@ class F450TwinPageTests(unittest.TestCase):
         self.assertNotIn('<div class="panel" hidden>', html, "AI 助教面板依使用者要求恢復顯示，不可再隱藏")
         self.assertEqual(self.client.get("/f450-twin/preview.jpg").status_code, 200)
 
+    def test_training_modules_are_served_and_external_link_is_safe(self):
+        # 2026-11-14 F450 組裝與接線實訓（P1–P6）：新模組都要能載入；FPV 只用新分頁外部連結，不嵌入
+        for name in ("model", "assembly-mode", "wiring-canvas", "bus", "sync3d", "scoring", "session", "records"):
+            self.assertEqual(self.client.get(f"/f450-twin/training/{name}.js").status_code, 200, name)
+        html = (ROOT / "f450-twin" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('href="https://hs-fpv.com/wiring-simulator" target="_blank" rel="noopener noreferrer"', html)
+        self.assertNotIn("<iframe", html.lower())
+        self.assertIn("試行", (ROOT / "f450-twin" / "training" / "session.js").read_text(encoding="utf-8"))
+
     def test_twin_page_does_not_embed_teacher_photos(self):
         html = (ROOT / "f450-twin" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("IMG_8", html)

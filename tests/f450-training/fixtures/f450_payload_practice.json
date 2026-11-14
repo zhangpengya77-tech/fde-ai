@@ -1,0 +1,39 @@
+{
+  "mode": "f450",
+  "title": "F450 組裝接線",
+  "score": 3,
+  "duration_seconds": 6,
+  "summary": {
+    "train_mode": "practice",
+    "categories": [
+      {
+        "id": "frame",
+        "score": 1.8,
+        "max": 20
+      },
+      {
+        "id": "motor_esc",
+        "score": 0,
+        "max": 20
+      },
+      {
+        "id": "fc",
+        "score": 0,
+        "max": 15
+      },
+      {
+        "id": "power_signal",
+        "score": 0.3,
+        "max": 30
+      },
+      {
+        "id": "safety",
+        "score": 0.6,
+        "max": 15
+      }
+    ],
+    "installed": 1,
+    "wires_correct": 1,
+    "errors": 1
+  }
+}

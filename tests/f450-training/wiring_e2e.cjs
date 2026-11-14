@@ -6,6 +6,7 @@ const OUT = process.argv[2];
 const URL = require('url').pathToFileURL(path.join(__dirname, '../../f450-twin/index.html')).href;
 
 const log = [];
+const snap = async (fn) => { try { await fn(); } catch (e) { log.push(`SKIP 截圖逾時（只影響報告用截圖，不影響功能檢查）：${String(e.message).split(String.fromCharCode(10))[0]}`); } };
 (async () => {
   const { EXPECTED_WIRES } = await import(require('url').pathToFileURL(path.join(__dirname, '../../f450-twin/training/model.js')).href);
   const browser = await chromium.launch({ args: ['--allow-file-access-from-files', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -43,7 +44,7 @@ const log = [];
       ok((await page.locator('#wire2d .w2-wire.bad').count()) === 3, `${name}: 3 條錯線標紅`);
       await page.locator('#wire2d button', { hasText: '顯示缺少' }).click();
       ok((await page.locator('#wire2d .w2-issues.hint li').count()) === 20, `${name}: 提示列出 20 條缺線`);
-      await page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_errors.png`, timeout: 90000 });
+      await snap(() => page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_errors.png`, timeout: 90000 }));
       // 2) 刪除（選取線 → 刪除）、復原、全部清除
       await page.locator('#wire2d [data-wire]').first().dispatchEvent('click');
       await page.locator('#wire2d button', { hasText: '刪除這條線' }).click();
@@ -65,7 +66,7 @@ const log = [];
       sum = await check();
       ok(sum.startsWith('✓ 全部 20 條都接對了'), `${name}: 全部接對 [${sum}]`);
       ok((await page.locator('#wire2d .w2-wire.good').count()) === 20, `${name}: 20 條線標綠`);
-      await page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_all_correct.png`, timeout: 90000 });
+      await snap(() => page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_all_correct.png`, timeout: 90000 }));
       // 5) 重新整理後草稿還在
       await page.reload({ timeout: 150000 }); await page.locator('#wire2d-enter').click(); await page.waitForSelector('#wire2d [data-wire]');
       ok((await page.locator('#wire2d [data-wire]').count()) === 20, `${name}: 重新整理後草稿保留`);
@@ -79,7 +80,7 @@ const log = [];
       await connect('gps.serial', 'pixhawk.gps');
       ok((await page.locator('#wire2d [data-wire]').count()) === 1, `${name}: 手機觸控連線`);
       ok(await P(() => document.documentElement.scrollWidth <= innerWidth + 1), `${name}: 頁面沒有橫向捲動（畫布在自己的捲動框內）`);
-      await page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_mobile.png`, timeout: 90000 });
+      await snap(() => page.locator('#wire2d').screenshot({ path: `${OUT}/P3_wiring_mobile.png`, timeout: 90000 }));
     }
     ok(errs.length === 0, `${name}: 沒有腳本錯誤 ${errs.slice(0, 3).join(' | ')}`);
     await ctx.close();

@@ -128,3 +128,103 @@ class SimPracticePagesTests(TestCase):
         self.assertContains(client.get(reverse("learning:student_dashboard")), reverse("learning:student_sim_practice"))
         client.force_login(self.teacher)
         self.assertContains(client.get(reverse("learning:teacher_dashboard")), reverse("learning:teacher_sim_practice"))
+
+
+# ───────── 2026-11-14：F450 組裝與接線實訓（mode=f450，試行分數） ─────────
+F450_CATS = [
+    {"id": "frame", "score": 20, "max": 20}, {"id": "motor_esc", "score": 17.5, "max": 20},
+    {"id": "fc", "score": 15, "max": 15}, {"id": "power_signal", "score": 27, "max": 30},
+    {"id": "safety", "score": 14.7, "max": 15},
+]
+F450_GOOD = {
+    "mode": "f450", "title": "前端隨便寫的標題", "score": 94, "passed": True, "duration_seconds": 600,
+    "input_source": "鍵盤",
+    "summary": {"train_mode": "exam", "categories": F450_CATS, "installed": 30, "wires_correct": 19, "errors": 2},
+}
+
+
+class F450PracticeRecordTests(SimPracticeApiTests.__base__):
+    def setUp(self):
+        self.cohort = Cohort.objects.create(cohort_id="2099-03", name="F450 實訓班")
+        self.student = create_student_account("f450@example.test", "組裝學員")
+        enroll_student(self.student, self.cohort)
+        self.api = reverse("learning:sim_practice_api")
+
+    _client = SimPracticeApiTests._client
+    _post = SimPracticeApiTests._post
+
+    def payload(self, **changes):
+        data = json.loads(json.dumps(F450_GOOD))
+        summary = changes.pop("summary", None)
+        if summary is not None:
+            data["summary"].update(summary)
+        data.update(changes)
+        return data
+
+    def test_saves_as_trial_with_server_title_and_no_pass(self):
+        res = self._post(self._client(self.student.user), self.payload())
+        self.assertEqual(res.status_code, 201, res.content)
+        rec = SimPracticeRecord.objects.get()
+        self.assertEqual((rec.mode, rec.score, rec.cohort), ("f450", 94, self.cohort))
+        self.assertEqual(rec.title, "考核（試行分數）")          # 標題由後端決定，不用前端的
+        self.assertIsNone(rec.passed)                            # 試行分數不判定通過
+        self.assertEqual(rec.input_source, "")
+        self.assertTrue(rec.summary["trial"])
+        self.assertEqual(rec.summary["installed"], 30)
+
+    def test_client_cannot_turn_off_trial_or_add_fields(self):
+        res = self._post(self._client(self.student.user), self.payload(summary={"trial": False, "note": "x" * 50}))
+        self.assertEqual(res.status_code, 201)
+        summary = SimPracticeRecord.objects.get().summary
+        self.assertTrue(summary["trial"])
+        self.assertNotIn("note", summary)
+
+    def test_total_must_match_categories(self):
+        res = self._post(self._client(self.student.user), self.payload(score=100))
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("總分與分項不一致", res.json()["detail"])
+        self.assertEqual(SimPracticeRecord.objects.count(), 0)
+
+    def test_invalid_summaries_are_rejected(self):
+        client = self._client(self.student.user)
+        bad = [
+            {"summary": {"train_mode": "cheat"}},
+            {"summary": {"categories": F450_CATS[:4]}},
+            {"summary": {"categories": [dict(F450_CATS[0], score=25)] + F450_CATS[1:]}},
+            {"summary": {"installed": 31}},
+            {"summary": {"wires_correct": -1}},
+            {"summary": {"errors": True}},
+        ]
+        for change in bad:
+            self.assertEqual(self._post(client, self.payload(**change)).status_code, 422, change)
+        self.assertEqual(SimPracticeRecord.objects.count(), 0)
+
+    def test_anonymous_cannot_save(self):
+        self.assertEqual(self._post(self._client(), self.payload()).status_code, 401)
+
+    def test_trial_scores_are_not_best_score_and_show_detail(self):
+        SimPracticeRecord.objects.create(student=self.student, cohort=self.cohort, mode="inspection", title="巡檢", score=60)
+        self._post(self._client(self.student.user), self.payload())
+        client = Client()
+        client.force_login(self.student.user)
+        page = client.get(reverse("learning:student_sim_practice"))
+        self.assertContains(page, "最佳分數 60 分")              # 94 是 F450 試行分數，不算最佳
+        self.assertContains(page, "機架 20.0/20")
+        self.assertContains(page, "試行分數，規則待實機核對，不計正式成績")
+        teacher = get_user_model().objects.create_user(username="f450-teacher", password="x", is_staff=True)
+        TeacherCohortAccess.objects.create(teacher=teacher, cohort=self.cohort)
+        client.force_login(teacher)
+        page = client.get(reverse("learning:teacher_sim_practice"))
+        self.assertContains(page, "F450 組裝接線（試行最佳）")
+        self.assertContains(page, "<td>60</td><td>94</td>", html=False)
+
+    def test_payloads_captured_from_the_f450_page_are_accepted(self):
+        # tests/f450-training/records_e2e.cjs 在瀏覽器裡擷取頁面實際送出的 JSON；這裡原封不動送進真的 API
+        from pathlib import Path
+        fixtures = Path(__file__).resolve().parents[3] / "tests" / "f450-training" / "fixtures"
+        client = self._client(self.student.user)
+        for name, mode in (("f450_payload_practice.json", "practice"), ("f450_payload_exam.json", "exam")):
+            payload = json.loads((fixtures / name).read_text(encoding="utf-8"))
+            res = self._post(client, payload)
+            self.assertEqual(res.status_code, 201, (name, res.content))
+            self.assertEqual(SimPracticeRecord.objects.latest("id").summary["train_mode"], mode)

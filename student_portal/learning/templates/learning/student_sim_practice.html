@@ -1,5 +1,6 @@
 {% extends 'learning/base.html' %}
 {% comment %}
+2026-11-14：加入 F450 組裝接線（試行分數）的分項。
 2026-11-07：模擬器練飛紀錄（學員）。網頁模擬器每完成一次練習就自動存一筆；只顯示自己的紀錄。
 {% endcomment %}
 {% block title %}模擬練飛紀錄｜成長日誌{% endblock %}
@@ -8,7 +9,7 @@
 <section class="page-heading">
   <p class="eyebrow">成長日誌</p>
   <h1>🛩️ 模擬練飛紀錄</h1>
-  <p class="muted">在「仿真訓練專區」登入狀態下練飛，每完成一次就會自動記錄在這裡。共 {{ stats.total }} 次{% if stats.best is not None %}，最佳分數 {{ stats.best }} 分{% endif %}。</p>
+  <p class="muted">在「仿真訓練專區」登入狀態下練飛，每完成一次就會自動記錄在這裡。共 {{ stats.total }} 次{% if stats.best is not None %}，最佳分數 {{ stats.best }} 分{% endif %}。F450 組裝接線實訓的成績也在下表，目前是試行分數，不列入最佳分數。</p>
   <p><a class="button primary" href="/sim/">前往仿真訓練專區</a></p>
 </section>
 <section class="panel">
@@ -19,7 +20,7 @@
         {% for r in records %}
           <tr>
             <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
-            <td>{{ r.get_mode_display }}・{{ r.title }}</td>
+            <td>{{ r.get_mode_display }}・{{ r.title }}{% if r.f450_detail %}<br><small class="muted">{{ r.f450_detail }}{% if r.f450_trial %}（試行分數，規則待實機核對，不計正式成績）{% endif %}</small>{% endif %}</td>
             <td>{% if r.score is not None %}{{ r.score }} 分{% if r.grade %}（{{ r.grade }}）{% endif %}{% elif r.passed is not None %}{% if r.passed %}模擬通過{% else %}未通過{% endif %}{% else %}—{% endif %}</td>
             <td>{{ r.duration_seconds }} 秒</td>
             <td>{{ r.input_source|default:"—" }}</td>

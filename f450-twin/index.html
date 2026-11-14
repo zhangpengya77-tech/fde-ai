@@ -9,7 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>F450 數位孿生 1.2｜FDE-AI-UAS</title>
-<link rel="stylesheet" href="./twin.css?v=1.2.6">
+<link rel="stylesheet" href="./twin.css?v=1.2.7">
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -135,7 +135,7 @@
         <li>3D 組裝練習（已開放）：依步驟把零件拖到機架上，檢查順序、方向與槳葉轉向</li>
         <li>2D 接線練習（已開放）：在接線畫布上連接飛控、電調、接收機、GPS 等</li>
         <li>自動檢查與判分（試行）：標出接錯、缺線、接頭不合、極性錯等問題，100 分分項成績單</li>
-        <li>教學／練習／考核三種模式（已開放）；成績送教師審核（開發中）</li>
+        <li>教學／練習／考核三種模式（已開放）；登入後成績存入 <a href="/student/sim-practice/">我的練習紀錄</a>，老師可在後台查看（試行分數）</li>
       </ul>
       <p class="note">練習結果目前不記錄、不計成績；規則待實機核對。</p>
       <div class="train-actions"><button type="button" class="primary" data-mode="practice" id="practice-enter">開始 3D 組裝練習 ↑</button> <button type="button" class="primary" id="wire2d-enter">開始 2D 接線練習 ↓</button></div>
@@ -147,7 +147,7 @@
       <ol class="train-list">
         <li>點下方按鈕，在新分頁開啟接線模擬器</li>
         <li>完成接線後，用該網站的匯出功能存成 PNG 圖片</li>
-        <li>回到本平台任務卡上傳 PNG，等待教師審核</li>
+        <li>到 <a href="/student/">我的學習</a>，在老師指定的任務卡「上傳佐證」放入 PNG，等待教師審核（需登入學員帳號）</li>
       </ol>
       <a class="train-link" href="https://hs-fpv.com/wiring-simulator" target="_blank" rel="noopener noreferrer">開啟 FPV 接線模擬器（外部網站，新分頁）↗</a>
     </article>
@@ -158,7 +158,7 @@
   <section class="card wire2d" id="wire2d" hidden aria-label="2D 接線練習"><div class="w2-root"></div></section>
 </section>
 <script type="module" src="./training/wiring-canvas.js?v=p5-1"></script>
-<script type="module" src="./training/session.js?v=p5-1"></script>
+<script type="module" src="./training/session.js?v=p6-2"></script>
 
 <script type="module" src="./app.js?v=1.5.0"></script>
 </body>

@@ -9,6 +9,7 @@ const ORDER = ['bottom_plate', 'esc_fr', 'esc_fl', 'esc_rl', 'esc_rr', 'arm_fr',
 (async () => {
   const browser = await chromium.launch({ args: ['--allow-file-access-from-files', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const log = [];
+const snap = async (fn) => { try { await fn(); } catch (e) { log.push(`SKIP 截圖逾時（只影響報告用截圖，不影響功能檢查）：${String(e.message).split(String.fromCharCode(10))[0]}`); } };
   const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.exitCode = 1; };
   for (const [name, vp] of [['desk', { width: 1440, height: 1000 }], ['mob', { width: 390, height: 844, isMobile: true, hasTouch: false }]]) {
     const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
@@ -49,7 +50,7 @@ const ORDER = ['bottom_plate', 'esc_fr', 'esc_fl', 'esc_rl', 'esc_rr', 'arm_fr',
         if (id === 'pixhawk') {
           await drag(id);
           ok((await P(() => window.__f450Practice.screen('pixhawk').status)) === 'wrong_orientation', `${name}: Pixhawk 沒轉正就裝 → 方向錯`);
-          await page.screenshot({ path: `${OUT}/P2_practice_wrong_orientation.png` });
+          await snap(() => page.screenshot({ path: `${OUT}/P2_practice_wrong_orientation.png` }));
           await page.locator('#strip-practice button', { hasText: '旋轉' }).click();
           await page.locator('#strip-practice button', { hasText: '旋轉' }).click();
           ok((await P(() => window.__f450Practice.screen('pixhawk').status)) === 'installed', `${name}: 旋轉 180° 後 Pixhawk 已安裝`);
@@ -64,16 +65,16 @@ const ORDER = ['bottom_plate', 'esc_fr', 'esc_fl', 'esc_rl', 'esc_rr', 'arm_fr',
         const st = await P((i) => window.__f450Practice.screen(i).status, id);
         ok(st === "installed", `${name}: ${id} 拖曳後 ${st} ${st === "installed" ? "" : (await P(() => window.__f450Practice.message())) + JSON.stringify(cur)}`);
         { const vis = await P((i) => window.__f450Practice.visibleNodes(i), id); ok(vis > 0, `${name}: ${id} 安裝後看得到（${vis} 個節點）`); }
-        if (id === 'motor_rr') await page.screenshot({ path: `${OUT}/P2_practice_midway.png` });
+        if (id === 'motor_rr') await snap(() => page.screenshot({ path: `${OUT}/P2_practice_midway.png` }));
       }
       const rep = await P(() => window.__f450Practice.report());
       { const all = await P(() => window.__f450Practice.visibleAll()); ok(all === 59, `${name}: 組完後 59 個節點全部看得到（${all}）`); }
       ok(rep.complete, `${name}: 全部完成 ${rep.installed}/${rep.total}，錯誤 ${rep.errorCount} 次 ${JSON.stringify(rep.errors)}`);
-      await page.screenshot({ path: `${OUT}/P2_practice_complete.png` });
+      await snap(() => page.screenshot({ path: `${OUT}/P2_practice_complete.png` }));
       // 3) 切回其他模式，原有功能仍正常
       await page.locator('[data-mode="explode"]').first().click(); await page.waitForTimeout(1500);
       ok(await P(() => document.getElementById('strip-practice').hidden && !document.getElementById('strip-explode').hidden), `${name}: 切回爆炸結構`);
-      await page.screenshot({ path: `${OUT}/P2_back_to_explode.png` });
+      await snap(() => page.screenshot({ path: `${OUT}/P2_back_to_explode.png` }));
       for (const m of ['whole', 'assembly', 'wiring', 'size']) {
         await page.locator(`[data-mode="${m}"]`).first().click(); await page.waitForTimeout(400);
         ok(await P((mm) => !document.getElementById(`strip-${mm}`).hidden, m), `${name}: 切到 ${m}`);
@@ -86,7 +87,7 @@ const ORDER = ['bottom_plate', 'esc_fr', 'esc_fl', 'esc_rl', 'esc_rr', 'arm_fr',
       await trayBtn('下中心板').click();
       await drag('bottom_plate');
       ok((await P(() => window.__f450Practice.screen('bottom_plate').status)) === 'installed', `${name}: 手機版拖曳下中心板安裝`);
-      await page.screenshot({ path: `${OUT}/P2_practice_mobile.png`, fullPage: false });
+      await snap(() => page.screenshot({ path: `${OUT}/P2_practice_mobile.png`, fullPage: false }));
     }
     ok(errs.length === 0, `${name}: 沒有腳本錯誤 ${errs.slice(0, 3).join(' | ')}`);
     await page.close();

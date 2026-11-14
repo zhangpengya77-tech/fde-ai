@@ -5,6 +5,7 @@ const path = require('path');
 const OUT = process.argv[2];
 const URL = require('url').pathToFileURL(path.join(__dirname, '../../f450-twin/index.html')).href;
 const log = [];
+const snap = async (fn) => { try { await fn(); } catch (e) { log.push(`SKIP 截圖逾時（只影響報告用截圖，不影響功能檢查）：${String(e.message).split(String.fromCharCode(10))[0]}`); } };
 const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.exitCode = 1; };
 
 (async () => {
@@ -16,7 +17,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
   await page.goto(`${URL}?fx=0&syncDebug=1&practiceDebug=1`, { timeout: 150000 });
   await page.waitForFunction(() => !document.getElementById('loading') && window.__f450Sync, null, { timeout: 150000 });
   const P = (fn, ...a) => page.evaluate(fn, ...a);
-  const shot = async (sel, file) => { await P((q) => document.querySelector(q).scrollIntoView({ block: 'start' }), sel); await page.waitForTimeout(500); const r = await P((q) => { const b = document.querySelector(q).getBoundingClientRect(); return { x: b.x, y: Math.max(0, b.y), width: b.width, height: Math.min(b.height, innerHeight - Math.max(0, b.y)) }; }, sel); await page.screenshot({ path: `${OUT}/${file}`, clip: r, timeout: 90000 }); };
+  const shot = async (sel, file) => { await P((q) => document.querySelector(q).scrollIntoView({ block: 'start' }), sel); await page.waitForTimeout(500); const r = await P((q) => { const b = document.querySelector(q).getBoundingClientRect(); return { x: b.x, y: Math.max(0, b.y), width: b.width, height: Math.min(b.height, innerHeight - Math.max(0, b.y)) }; }, sel); await snap(() => page.screenshot({ path: `${OUT}/${file}`, clip: r, timeout: 90000 })); };
   const S = () => P(() => ({ hot: window.__f450Sync.hot(), lines: window.__f450Sync.lines(), pulses: window.__f450Sync.pulses(), cap: window.__f450Sync.caption() }));
   const port = (id) => page.locator(`#wire2d [data-port="${id}"] circle`);
   const connect = async (a, b) => { await port(a).click({ force: true }); await port(b).click({ force: true }); await page.waitForTimeout(400); };

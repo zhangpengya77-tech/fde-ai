@@ -8,13 +8,17 @@ API：/student/sim-practice/api/
   GET  → {logged_in, nickname, csrf_token}（模擬器顯示「成績會存入成長日誌」或「登入後可保存」）
   POST → 存一筆（JSON；需登入學員＋CSRF）；未登入回 401，不跳轉
 安全：不接受前端指定學員或班級；每位學員每天最多 300 筆；欄位長度與數值範圍都在後端檢查。
+
+2026-11-14 F450 組裝與接線實訓（mode=f450，從 /f450-twin/ 送來）：
+- 規則待實機核對（F450_RULES_VERIFIED=False）前，一律標成試行分數：標題由後端決定、不記通過與否、
+  摘要只收白名單欄位並強制 trial=True；最佳分數統計不含 F450 試行分數。
 """
 from __future__ import annotations
 
 import json
 from datetime import timedelta
 
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Q
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import render
@@ -28,6 +32,9 @@ from .views import student_required, teacher_cohorts, teacher_required
 
 DAILY_LIMIT = 300
 MAX_BODY_BYTES = 8 * 1024
+F450_RULES_VERIFIED = False   # 教師逐條核對實機照片後才能改成 True
+F450_TRAIN_MODES = {"teach": "教學", "practice": "練習", "exam": "考核"}
+F450_CATEGORY_IDS = ("frame", "motor_esc", "fc", "power_signal", "safety")
 INPUT_SOURCES = {"鍵盤", "實體遙控器", "手機遙控器", "原子筆（鏡頭）", "手勢（鏡頭）"}
 
 
@@ -36,6 +43,33 @@ def _student_profile(request):
         return None
     profile = getattr(request.user, "student_profile", None)
     return profile if profile is not None and profile.active else None
+
+
+def _int_in(value, low, high):
+    return isinstance(value, int) and not isinstance(value, bool) and low <= value <= high
+
+
+def _clean_f450_summary(summary) -> tuple[dict | None, str]:
+    """F450 摘要只收固定欄位：模式、五個分項分數、安裝件數、接對條數、錯誤次數"""
+    if not isinstance(summary, dict):
+        return None, "摘要格式不正確"
+    mode = summary.get("train_mode")
+    if mode not in F450_TRAIN_MODES:
+        return None, "train_mode 不正確"
+    cats = summary.get("categories")
+    if not isinstance(cats, list) or [c.get("id") if isinstance(c, dict) else None for c in cats] != list(F450_CATEGORY_IDS):
+        return None, "分項格式不正確"
+    clean_cats = []
+    for c in cats:
+        score, top = c.get("score"), c.get("max")
+        if not _int_in(top, 1, 100) or not isinstance(score, (int, float)) or isinstance(score, bool) or not 0 <= score <= top:
+            return None, "分項分數不正確"
+        clean_cats.append({"id": c["id"], "score": round(float(score), 1), "max": top})
+    counts = {k: summary.get(k) for k in ("installed", "wires_correct", "errors")}
+    limits = {"installed": 30, "wires_correct": 20, "errors": 999}
+    if not all(_int_in(counts[k], 0, limits[k]) for k in counts):
+        return None, "安裝件數、接線條數或錯誤次數不正確"
+    return {"train_mode": mode, "categories": clean_cats, **counts, "trial": not F450_RULES_VERIFIED}, ""
 
 
 def _clean_record(payload: dict) -> tuple[dict | None, str]:
@@ -62,6 +96,16 @@ def _clean_record(payload: dict) -> tuple[dict | None, str]:
     summary = payload.get("summary") or {}
     if not isinstance(summary, dict) or len(json.dumps(summary, ensure_ascii=False)) > 2000:
         return None, "摘要格式不正確或太長"
+    if mode == SimPracticeRecord.Mode.F450:
+        summary, error = _clean_f450_summary(summary)
+        if summary is None:
+            return None, error
+        total = sum(c["score"] for c in summary["categories"])
+        if score is None or abs(score - total) > 1:   # 總分必須等於五個分項相加（容許四捨五入）
+            return None, "總分與分項不一致"
+        # 標題與通過與否由後端決定：試行分數不判定通過
+        title = f"{F450_TRAIN_MODES[summary['train_mode']]}{'（試行分數）' if summary['trial'] else ''}"
+        passed, source = (None if summary["trial"] else passed), ""
     return {
         "mode": mode,
         "title": title,
@@ -112,11 +156,25 @@ def sim_practice_api(request):
     return JsonResponse({"ok": True, "id": record.pk, "records_url": reverse("learning:student_sim_practice")}, status=201)
 
 
+F450_CATEGORY_ZH = {"frame": "機架", "motor_esc": "馬達與 ESC", "fc": "飛控", "power_signal": "電源與訊號", "safety": "安全"}
+NOT_TRIAL = ~Q(mode=SimPracticeRecord.Mode.F450)   # 最佳分數只算模擬器練飛，不含 F450 試行分數
+
+
+def _with_f450_detail(records):
+    """F450 紀錄加上分項文字，例如「機架 20/20、…」"""
+    for r in records:
+        if r.mode == SimPracticeRecord.Mode.F450:
+            cats = (r.summary or {}).get("categories") or []
+            r.f450_detail = "、".join(f"{F450_CATEGORY_ZH.get(c.get('id'), c.get('id'))} {c.get('score')}/{c.get('max')}" for c in cats)
+            r.f450_trial = (r.summary or {}).get("trial", True)
+    return records
+
+
 @student_required
 def student_sim_practice(request):
     profile = request.student_profile
-    records = list(SimPracticeRecord.objects.filter(student=profile)[:50])
-    stats = SimPracticeRecord.objects.filter(student=profile).aggregate(total=Count("id"), best=Max("score"))
+    records = _with_f450_detail(list(SimPracticeRecord.objects.filter(student=profile)[:50]))
+    stats = SimPracticeRecord.objects.filter(student=profile).aggregate(total=Count("id"), best=Max("score", filter=NOT_TRIAL))
     return render(request, "learning/student_sim_practice.html", {"profile": profile, "records": records, "stats": stats})
 
 
@@ -131,14 +189,14 @@ def teacher_sim_practice(request):
     # 每位學員的練習次數與最佳分數
     per_student = (
         qs.values("student__public_user_id", "student__nickname")
-        .annotate(total=Count("id"), best=Max("score"), last=Max("created_at"))
+        .annotate(total=Count("id"), best=Max("score", filter=NOT_TRIAL), f450_best=Max("score", filter=~NOT_TRIAL), last=Max("created_at"))
         .order_by("-last")[:200]
     )
     return render(request, "learning/teacher_sim_practice.html", {
         "cohorts": cohorts,
         "selected": selected,
         "per_student": list(per_student),
-        "records": list(qs[:200]),
+        "records": _with_f450_detail(list(qs[:200])),
     })
 
 

@@ -5,6 +5,7 @@ const path = require('path');
 const OUT = process.argv[2];
 const URL = require('url').pathToFileURL(path.join(__dirname, '../../f450-twin/index.html')).href;
 const log = [];
+const snap = async (fn) => { try { await fn(); } catch (e) { log.push(`SKIP 截圖逾時（只影響報告用截圖，不影響功能檢查）：${String(e.message).split(String.fromCharCode(10))[0]}`); } };
 const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.exitCode = 1; };
 
 (async () => {
@@ -29,7 +30,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
     await page.mouse.move((s.held[0] + tx) / 2, (s.held[1] + ty) / 2, { steps: 4 }); await page.mouse.move(tx, ty, { steps: 4 }); await page.mouse.up();
     await page.waitForTimeout(150);
   }
-  const shot = async (sel, file) => { await P((q) => document.querySelector(q).scrollIntoView({ block: 'start' }), sel); await page.waitForTimeout(400); const r = await P((q) => { const b = document.querySelector(q).getBoundingClientRect(); return { x: b.x, y: Math.max(0, b.y), width: b.width, height: Math.min(b.height, innerHeight - Math.max(0, b.y)) }; }, sel); await page.screenshot({ path: `${OUT}/${file}`, clip: r, timeout: 90000 }); };
+  const shot = async (sel, file) => { await P((q) => document.querySelector(q).scrollIntoView({ block: 'start' }), sel); await page.waitForTimeout(400); const r = await P((q) => { const b = document.querySelector(q).getBoundingClientRect(); return { x: b.x, y: Math.max(0, b.y), width: b.width, height: Math.min(b.height, innerHeight - Math.max(0, b.y)) }; }, sel); await snap(() => page.screenshot({ path: `${OUT}/${file}`, clip: r, timeout: 90000 })); };
 
   // 1) 預設練習模式，什麼都沒做是 0 分
   ok(await P(() => document.querySelector('#train-session .ts-modes button.on')?.textContent === '練習'), '預設是練習模式');
