@@ -1,50 +1,57 @@
 /**
  * FDE 空域查詢主程式（自行撰寫）。
  * 資料：交通部民用航空局 遙控無人機管理資訊系統 公開圖層（dronegis.caa.gov.tw，ArcGIS 伺服器）。
- *   - 民航局伺服器不接受其他網站的一般跨站請求，但它本身提供 JSONP（標準的公開資料跨站讀取方式，
- *     由伺服器回傳 callback(...)），因此本頁以 JSONP 讓訪客瀏覽器「即時」向民航局查詢，資料永遠最新。
+ *   民航局伺服器提供 JSONP（伺服器回傳 callback(...) 的公開跨站讀取方式），本頁由訪客瀏覽器即時查詢，資料永遠最新。
  * 功能：
- *  1. 點地圖／搜尋地名／定位 → 即時查詢該點落在哪些管制區（禁限航區、臨時空域、國家公園、商港、金馬）。
- *  2. 地圖放大到縣市層級以上時，載入「目前可視範圍」內的管制區並依縮放程度簡化，移動後自動更新。
- *  3. 要塞堡壘地帶以示意圓圈顯示（data/fortress.json），點查時依距離判斷第一區／第二區。
+ *  1. 點地圖／搜尋地名或座標／定位 → 查該點落在哪些管制區，結果卡片依紅／黃／紫／藍／綠五種狀態顯示。
+ *  2. 依查詢點經緯度計算當天日出日落；以台北時間每秒更新「現在能不能飛」。
+ *  3. 地圖載入可視範圍內的管制區（禁限航區依「限制區」欄位分紅區／黃區上色），移動後自動更新。
+ *  4. 底部面板可拖拉（收合／半開／全開三段）；桌機固定在左側。
+ *  5. 要塞堡壘地帶以示意圓圈＋三角形名稱顯示（data/fortress.json）。
  */
 (function () {
   'use strict';
 
-  // ---------- 圖層設定：鍵、中文名稱、顏色、民航局服務路徑、要取的欄位 ----------
+  // ---------- 圖層設定 ----------
   const CAA = 'https://dronegis.caa.gov.tw/server/rest/services/Hosted/';
   const F_AIR = ['空域名稱', '空域類別名稱', '空域說明', '主管機關名稱', '會商機關名稱', '聯絡方式', '罰則', '限制區'];
+  const C = { red: '#C0392B', yellow: '#C9A227', purple: '#7B3FBF', blue: '#2848D0', green: '#6B9A2A', teal: '#149A8A' };
+  // chip：屬於哪個圖層標籤（金馬地區併入「禁限航區」標籤開關）
   const LAYERS = [
-    { key: 'uav', name: '禁限航區', color: '#e5383b', path: 'UAV_fs/FeatureServer/3', fields: F_AIR },
-    { key: 'temp', name: '臨時空域', color: '#f77f00', path: 'Temporary_Area/FeatureServer/19', fields: F_AIR },
-    { key: 'np', name: '國家公園', color: '#2b9348', path: 'National_Park_fs/FeatureServer/0', fields: ['name_full', '相關規'] },
-    { key: 'port', name: '商港', color: '#3a86ff', path: 'Commercial_Port_fs/FeatureServer/4', fields: ['名稱', '所在地_應公告之地方政府_', '管理_及會商_機關', '管理_及會商_機關聯絡方式', '條件', '說明', '有效日期起', '有效日期迄'] },
-    { key: 'km', name: '金馬地區', color: '#8338ec', path: 'Kinmen_Matsu_Drone_Zone_fs/FeatureServer/0', fields: ['說明'] },
-    { key: 'fort', name: '要塞堡壘（示意）', color: '#ff4fa3' },
+    { key: 'uav', chip: 'uav', name: '禁限航區', color: C.red, path: 'UAV_fs/FeatureServer/3', fields: F_AIR },
+    { key: 'temp', chip: 'temp', name: '臨時禁飛', color: C.purple, path: 'Temporary_Area/FeatureServer/19', fields: F_AIR },
+    { key: 'port', chip: 'port', name: '商港', color: C.blue, path: 'Commercial_Port_fs/FeatureServer/4', fields: ['名稱', '所在地_應公告之地方政府_', '管理_及會商_機關', '管理_及會商_機關聯絡方式', '條件', '說明'] },
+    { key: 'np', chip: 'np', name: '國家公園', color: C.green, path: 'National_Park_fs/FeatureServer/0', fields: ['name_full', '相關規'] },
+    { key: 'km', chip: 'uav', name: '金馬地區', color: C.yellow, path: 'Kinmen_Matsu_Drone_Zone_fs/FeatureServer/0', fields: ['說明'] },
+    { key: 'fort', chip: null, name: '要塞堡壘（示意）', color: C.teal },
   ];
+  const byKey = Object.fromEntries(LAYERS.map((c) => [c.key, c]));
   const FORT_RADII = [600, 4000];   // 要塞第一區、第二區示意半徑（公尺）
-  const MIN_DRAW_ZOOM = 10;         // 放大到這個層級以上才在地圖上畫管制區（避免一次載入 5,000 多筆）
+  const MIN_DRAW_ZOOM = 7;          // 全臺視角（約 7）就開始畫管制區
+  const TW_BOUNDS = [[21.85, 118.15], [26.4, 122.05]]; // 含澎湖、金門、馬祖的全臺範圍
 
   const $ = (id) => document.getElementById(id);
-  const status = $('status');
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const enabled = {};               // 各圖層是否開啟
-  LAYERS.forEach((c) => { enabled[c.key] = true; });
+  const richText = (s) => esc(s).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
 
   // ---------- 地圖與底圖 ----------
-  const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([23.7, 120.95], 8);
-  // 國土測繪中心 臺灣通用電子地圖（WMTS，Google 相容切片）
-  L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
-    maxZoom: 19, attribution: '底圖：內政部國土測繪中心 臺灣通用電子地圖｜圖資：交通部民用航空局',
+  const map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true });
+  map.fitBounds(TW_BOUNDS);
+  // 縮小時：Esri 地形圖（等高線、山影）；放大到街道級（12 以上）：國土測繪中心 臺灣通用電子地圖
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 11, attribution: '底圖：Esri',
   }).addTo(map);
-  const drawGroups = {};            // 各圖層目前畫在地圖上的群組
+  L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}', {
+    minZoom: 12, maxZoom: 19, attribution: '底圖：內政部國土測繪中心｜圖資：交通部民用航空局',
+  }).addTo(map);
+  const drawGroups = {};
   LAYERS.forEach((c) => { drawGroups[c.key] = L.layerGroup().addTo(map); });
   let marker = null;
   let fortItems = [];
 
   // ---------- JSONP：讀取民航局 ArcGIS 公開資料 ----------
   let jsonpSeq = 0;
-  function jsonp(url, timeoutMs = 20000) {
+  function jsonp(url, timeoutMs = 25000) {
     return new Promise((resolve, reject) => {
       const cb = `__fdeAs${Date.now()}_${jsonpSeq++}`;
       const s = document.createElement('script');
@@ -52,26 +59,65 @@
       const timer = setTimeout(() => { cleanup(); reject(new Error('民航局服務逾時')); }, timeoutMs);
       window[cb] = (data) => { cleanup(); data && data.error ? reject(new Error(data.error.message || '民航局服務錯誤')) : resolve(data); };
       s.onerror = () => { cleanup(); reject(new Error('無法連線民航局服務')); };
-      s.src = `${url}&f=pjson&callback=${cb}`;
+      s.src = `${url}${url.includes('?') ? '&' : '?'}f=pjson&callback=${cb}`;
       document.head.appendChild(s);
     });
   }
-  function queryUrl(cfg, params) {
-    return `${CAA}${cfg.path}/query?` + new URLSearchParams(Object.assign({ outFields: cfg.fields.join(','), outSR: '4326' }, params));
+  const queryUrl = (cfg, params, fields) => `${CAA}${cfg.path}/query?` + new URLSearchParams(Object.assign({ outFields: (fields || cfg.fields).join(','), outSR: '4326' }, params));
+
+  // ---------- 台北時間工具 ----------
+  const TPE = 'Asia/Taipei';
+  // 取得台北當地的年月日
+  function tpeYMD(ms) {
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: TPE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms).split('-');
+    return [+p[0], +p[1], +p[2]];
+  }
+  const fmtHM = (ms) => new Intl.DateTimeFormat('zh-TW', { timeZone: TPE, hour: '2-digit', minute: '2-digit', hour12: false }).format(ms);
+  const fmtHMS = (ms) => new Intl.DateTimeFormat('zh-TW', { timeZone: TPE, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(ms);
+  const fmtFull = (ms) => { const [y, m, d] = tpeYMD(ms); return `${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')} ${fmtHMS(ms)}`; };
+  const fmtDate = (ms) => { const [y, m, d] = tpeYMD(ms); return `${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`; };
+  const dur = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} 小時 ${m % 60} 分` : `${m} 分鐘`; };
+
+  /**
+   * 日出／日落計算（常用天文近似公式，誤差約 1–2 分鐘）。
+   * 輸入台北日期與經緯度，回傳該日日出、日落的時間戳（毫秒）。天頂角 90.833° 已含大氣折射與太陽半徑。
+   */
+  function sunTimes(y, m, d, lat, lon) {
+    const rad = Math.PI / 180;
+    const N = Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 0)) / 86400000); // 一年中的第幾天
+    const lngHour = lon / 15;
+    function calc(rise) {
+      const t = N + ((rise ? 6 : 18) - lngHour) / 24;
+      const M = 0.9856 * t - 3.289;
+      let Ls = (M + 1.916 * Math.sin(M * rad) + 0.020 * Math.sin(2 * M * rad) + 282.634) % 360;
+      if (Ls < 0) Ls += 360;
+      let RA = Math.atan(0.91764 * Math.tan(Ls * rad)) / rad;
+      RA = (RA + 360) % 360;
+      RA += Math.floor(Ls / 90) * 90 - Math.floor(RA / 90) * 90;   // 赤經放到與黃經同象限
+      RA /= 15;
+      const sinDec = 0.39782 * Math.sin(Ls * rad), cosDec = Math.cos(Math.asin(sinDec));
+      const cosH = (Math.cos(90.833 * rad) - sinDec * Math.sin(lat * rad)) / (cosDec * Math.cos(lat * rad));
+      if (cosH > 1 || cosH < -1) return null;                       // 極區無日出日落（臺灣不會發生）
+      const H = (rise ? 360 - Math.acos(cosH) / rad : Math.acos(cosH) / rad) / 15;
+      const T = H + RA - 0.06571 * t - 6.622;
+      const local = (((T - lngHour) + 8) % 24 + 24) % 24;           // 換成台北時間（UTC+8）的小時數
+      return Date.UTC(y, m - 1, d) + (local - 8) * 3600000;
+    }
+    return { rise: calc(true), set: calc(false) };
   }
 
-  // ---------- 每個圖層要顯示的文字 ----------
+  // ---------- 每個圖層的說明文字 ----------
   function describe(key, p) {
     if (key === 'uav' || key === 'temp') {
-      return { title: p['空域名稱'] || '（未命名區域）', rows: [['類別', p['空域類別名稱']], ['主管機關', p['主管機關名稱']], ['會商機關', p['會商機關名稱']], ['說明', p['空域說明']], ['限制', p['限制區']], ['罰則', p['罰則']], ['聯絡方式', p['聯絡方式']]] };
+      return { title: p['空域名稱'] || '（未命名區域）', zone: p['限制區'], rows: [['類別', p['空域類別名稱']], ['限制', p['限制區']], ['主管機關', p['主管機關名稱']], ['會商機關', p['會商機關名稱']], ['說明', p['空域說明']], ['罰則', p['罰則']], ['聯絡方式', p['聯絡方式']]] };
     }
     if (key === 'np') return { title: p['name_full'] || '國家公園', rows: [['相關規定', p['相關規']]] };
     if (key === 'port') return { title: p['名稱'] || '商港', rows: [['所在地', p['所在地_應公告之地方政府_']], ['管理機關', p['管理_及會商_機關']], ['聯絡方式', p['管理_及會商_機關聯絡方式']], ['條件', p['條件']], ['說明', p['說明']]] };
     if (key === 'km') return { title: '金馬地區管制', rows: [['說明', p['說明']]] };
     return { title: '', rows: [] };
   }
-  // 純文字轉 HTML（保留換行、網址變連結）
-  const richText = (s) => esc(s).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
+  // 禁限航區單筆的顏色：限制區＝黃區 用黃色，其餘紅色
+  const zoneColor = (key, attrs) => (key === 'uav' && attrs['限制區'] === '黃區') ? C.yellow : byKey[key].color;
 
   // 兩點距離（公尺，球面近似）
   function meters(lat1, lon1, lat2, lon2) {
@@ -81,177 +127,303 @@
     return 2 * R * Math.asin(Math.sqrt(h));
   }
 
+  // ---------- 結果卡片 ----------
+  const card = $('result');
+  let current = null;   // 目前查詢點 { lat, lon, label, sun }
+  const STATE_TEXT = {
+    red: '這裡是紅區（禁飛區），不能飛',
+    yellow: '這裡是黃區（限制區），需申請',
+    purple: '這裡有臨時禁飛',
+    blue: '這裡是商港範圍',
+    green: '這裡不在禁限航區內',
+  };
+  function showMessage(state, text) {
+    card.dataset.state = state;
+    card.innerHTML = `<h2 class="as-result-title"><i class="as-dot"></i><span>${esc(text)}</span></h2>`;
+  }
+
+  // 日出日落提示框（每秒由時鐘重繪，跨過日出／日落自動切換）
+  function sunBoxHtml(now) {
+    if (!current || !current.sun.rise) return '';
+    const { rise, set } = current.sun;
+    if (now < rise) {
+      return `<div class="as-sunbox as-sun-night"><strong>⛔ 還沒日出，現在不能飛</strong>今天 ${fmtHM(rise)} 日出後才可以起飛（還要 ${dur(rise - now)}）<small>依民用航空法第 99 條之 14，日落後到日出前不得飛航（政府機關、學校、法人經民航局核准者除外；違者可罰 3～15 萬元）</small></div>`;
+    }
+    if (now >= set) {
+      const [y, m, d] = tpeYMD(now + 86400000);
+      const next = sunTimes(y, m, d, current.lat, current.lon).rise;
+      return `<div class="as-sunbox as-sun-night"><strong>⛔ 已經日落，現在不能飛</strong>明天 ${fmtHM(next)} 日出後才可以起飛（還要 ${dur(next - now)}）<small>依民用航空法第 99 條之 14，日落後到日出前不得飛航（政府機關、學校、法人經民航局核准者除外；違者可罰 3～15 萬元）</small></div>`;
+    }
+    if (set - now <= 30 * 60000) {
+      return `<div class="as-sunbox as-sun-dusk"><strong>⚠️ 快日落了，請注意時間</strong>今天 ${fmtHM(set)} 日落（剩 ${dur(set - now)}），日落後不得飛航</div>`;
+    }
+    return `<div class="as-sunbox as-sun-day"><strong>☀️ 現在是白天，可以飛</strong>日落前還有 ${dur(set - now)}（今天 ${fmtHM(set)} 日落）</div>`;
+  }
+  function refreshSun() {
+    const box = card.querySelector('[data-sunbox]');
+    if (box) box.innerHTML = sunBoxHtml(Date.now());
+  }
+
   // ---------- 點查：即時向民航局查該點所在的所有區域 ----------
   async function query(lat, lon, label) {
     if (marker) marker.remove();
-    marker = L.marker([lat, lon]).addTo(map);
-    const where = label ? `<p class="as-where">📍 ${esc(label)}</p>` : '';
-    const coord = `<p class="as-muted as-small">座標 ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>`;
-    $('result').innerHTML = `${where}${coord}<p class="as-muted">向民航局查詢中…</p>`;
-    $('resultHint').hidden = true;
+    marker = L.marker([lat, lon], { icon: L.divIcon({ className: '', html: '<div class="as-here"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), interactive: false }).addTo(map);
+    const [y, m, d] = tpeYMD(Date.now());
+    current = { lat, lon, label, sun: sunTimes(y, m, d, lat, lon) };
+    openSheet('half');
+    showMessage('idle', '向民航局查詢中…');
 
     const hits = [];
     let failed = false;
     const point = { geometry: `${lon},${lat}`, geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', returnGeometry: 'false' };
     await Promise.all(LAYERS.filter((c) => c.path).map(async (cfg) => {
       try {
-        const d = await jsonp(queryUrl(cfg, point));
-        for (const f of d.features || []) hits.push({ cfg, d: describe(cfg.key, f.attributes || {}) });
+        const res = await jsonp(queryUrl(cfg, point));
+        for (const f of res.features || []) {
+          const a = f.attributes || {};
+          hits.push({ cfg, color: zoneColor(cfg.key, a), d: describe(cfg.key, a) });
+        }
       } catch (e) { failed = true; }
     }));
+    if (!current || current.lat !== lat || current.lon !== lon) return; // 期間已改查別的點
     // 要塞：依距離判斷落在第一區或第二區示意範圍
     for (const ft of fortItems) {
       const dist = meters(lat, lon, ft.lat, ft.lon);
       if (dist <= FORT_RADII[1]) {
         const zone = dist <= FORT_RADII[0] ? '第一區（示意 600 公尺內）' : '第二區（示意 4 公里內）';
-        hits.push({ cfg: LAYERS[5], d: { title: `${ft.name}要塞堡壘地帶`, rows: [['位置', `${ft.county}；距離約 ${(dist / 1000).toFixed(2)} 公里`], ['示意範圍', zone], ['國防部公告', ft.gazette], ['提醒', '示意位置非公告範圍，正確範圍以國防部公報為準。']] } });
+        hits.push({ cfg: byKey.fort, color: C.teal, d: { title: `${ft.name}要塞堡壘地帶`, rows: [['位置', `${ft.county}；距離約 ${(dist / 1000).toFixed(2)} 公里`], ['示意範圍', zone], ['國防部公告', ft.gazette], ['提醒', '示意位置非公告範圍，正確範圍以國防部公報為準。']] } });
       }
     }
-    // 依類別排序：禁限航區、臨時空域優先
-    const order = LAYERS.map((c) => c.key);
-    hits.sort((a, b) => order.indexOf(a.cfg.key) - order.indexOf(b.cfg.key));
 
-    let html = `${where}${coord}`;
-    if (failed) html += '<p class="as-warn">⚠️ 部分民航局圖層查詢失敗，結果可能不完整，請以官方查詢為準。</p>';
-    if (!hits.length && !failed) {
-      html += '<p class="as-ok">✅ 民航局公開圖層顯示此點不在禁限航區、臨時空域、國家公園或商港範圍內。</p><p class="as-muted">仍須遵守一般規定（日間、視距內、高度 400 呎以下等），起飛前請以民航局官方查詢確認。</p>';
-    } else if (hits.length) {
-      html += `<p class="as-warn">⚠️ 此點位於 ${hits.length} 個管制相關區域：</p>` + hits.map(({ cfg, d }) => `
-        <article class="as-hit" style="border-left-color:${cfg.color}">
-          <span class="as-tag" style="background:${cfg.color}">${esc(cfg.name)}</span>
-          <h3>${esc(d.title)}</h3>
-          <dl>${d.rows.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${richText(v)}</dd>`).join('')}</dl>
-        </article>`).join('');
-    }
-    $('result').innerHTML = html;
-    if (window.innerWidth < 900) $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 判斷卡片狀態：紅 > 黃 > 紫 > 藍 > 綠
+    const has = (fn) => hits.some(fn);
+    let state = 'green';
+    if (has((h) => h.cfg.key === 'uav' && h.d.zone !== '黃區')) state = 'red';
+    else if (has((h) => (h.cfg.key === 'uav' && h.d.zone === '黃區') || h.cfg.key === 'km' || h.cfg.key === 'fort')) state = 'yellow';
+    else if (has((h) => h.cfg.key === 'temp')) state = 'purple';
+    else if (has((h) => h.cfg.key === 'port')) state = 'blue';
+
+    const order = ['uav', 'temp', 'km', 'port', 'fort', 'np'];
+    hits.sort((a, b) => order.indexOf(a.cfg.key) - order.indexOf(b.cfg.key));
+    const inPark = has((h) => h.cfg.key === 'np');
+    let extra = '';
+    if (failed) extra += '<p class="as-msg" style="color:#a3401c">⚠️ 部分民航局圖層查詢失敗，結果可能不完整，請以官方查詢為準。</p>';
+    if (state === 'green') extra += `<p class="as-msg">${inPark ? '⚠️ 此點在國家公園範圍內，空拍需先向管理處申請。' : '國家公園內飛行另需向管理處申請。'}仍須遵守日間、目視範圍內、高度 400 呎以下等一般規定。</p>`;
+    const list = hits.map(({ cfg, color, d }) => `
+      <li style="border-left-color:${color}"><details><summary><span class="as-tag" style="background:${color}">${esc(cfg.key === 'uav' ? (d.zone || '禁限航區') : cfg.name)}</span>${esc(d.title)}</summary>
+      <dl>${d.rows.filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${richText(v)}</dd>`).join('')}</dl></details></li>`).join('');
+
+    card.dataset.state = state;
+    card.innerHTML = `
+      <h2 class="as-result-title"><i class="as-dot"></i><span>${STATE_TEXT[state]}</span></h2>
+      <p class="as-coord">${esc(label || '地圖選取位置')} · <span>${lat.toFixed(5)}, ${lon.toFixed(5)}</span></p>
+      <p class="as-sun">🌅 日出 <b>${current.sun.rise ? fmtHM(current.sun.rise) : '—'}</b>　🌇 日落 <b>${current.sun.set ? fmtHM(current.sun.set) : '—'}</b></p>
+      <div data-sunbox>${sunBoxHtml(Date.now())}</div>
+      ${extra}
+      ${list ? `<ul class="as-hits">${list}</ul>` : ''}`;
   }
 
   // ---------- 在地圖上畫出目前可視範圍內的管制區 ----------
-  // Esri JSON 的 rings（外環＋洞）→ Leaflet 多邊形座標（[緯度, 經度]）
-  const ringsToLatLngs = (rings) => rings.map((ring) => ring.map(([x, y]) => [y, x]));
+  const ringsToLatLngs = (rings) => rings.map((ring) => ring.map(([x, yy]) => [yy, x]));
   let drawSeq = 0;
   async function drawVisible() {
     const z = map.getZoom();
     if (z < MIN_DRAW_ZOOM) {
       LAYERS.forEach((c) => c.path && drawGroups[c.key].clearLayers());
-      setStatus(`放大地圖（至縣市以上層級）即可顯示民航局管制區；點任一處可直接查詢`);
+      setStatus('放大地圖即可顯示民航局管制區');
       return;
     }
     const seq = ++drawSeq;
     const b = map.getBounds();
-    // 依縮放程度簡化幾何：越放大越精細（度；約 1 公尺 ≈ 0.00001 度）
-    const offset = z >= 15 ? 0.00002 : z >= 13 ? 0.0001 : z >= 11 ? 0.0004 : 0.001;
-    const env = { geometry: `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`, geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', maxAllowableOffset: String(offset), geometryPrecision: '6', resultRecordCount: '2000' };
+    // 依縮放程度簡化幾何（度；約 1 公尺 ≈ 0.00001 度）
+    const offset = z >= 15 ? 0.00002 : z >= 13 ? 0.0001 : z >= 11 ? 0.0004 : z >= 9 ? 0.0015 : 0.004;
+    const env = { geometry: `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`, geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects', maxAllowableOffset: String(offset), geometryPrecision: z >= 11 ? '6' : '4', resultRecordCount: '2000', orderByFields: 'objectid' };
     setStatus('載入民航局管制區…');
     let total = 0, failed = 0;
     await Promise.all(LAYERS.filter((c) => c.path).map(async (cfg) => {
+      const fields = cfg.key === 'uav' || cfg.key === 'temp' ? ['空域名稱', '限制區'] : cfg.fields.slice(0, 1);
+      const feats = [];
       try {
-        const d = await jsonp(queryUrl(Object.assign({}, cfg, { fields: cfg.key === 'uav' || cfg.key === 'temp' ? ['空域名稱', '空域類別名稱'] : cfg.fields.slice(0, 1) }), env));
-        if (seq !== drawSeq) return;             // 使用者已經移動地圖，丟掉舊結果
-        drawGroups[cfg.key].clearLayers();
-        for (const f of d.features || []) {
-          if (!f.geometry || !f.geometry.rings) continue;
-          const name = Object.values(f.attributes || {}).filter(Boolean).join('｜');
-          L.polygon(ringsToLatLngs(f.geometry.rings), { color: cfg.color, weight: 1, fillColor: cfg.color, fillOpacity: cfg.key === 'np' ? 0.12 : 0.22, interactive: false, title: name }).addTo(drawGroups[cfg.key]);
-          total++;
+        // 分頁讀取（伺服器每次最多 2000 筆）
+        for (let off = 0; off < 8000; off += 2000) {
+          const res = await jsonp(queryUrl(cfg, Object.assign({ resultOffset: String(off) }, env), fields));
+          if (seq !== drawSeq) return;            // 使用者已移動地圖，丟掉舊結果
+          feats.push(...(res.features || []));
+          if (!res.exceededTransferLimit) break;
         }
-      } catch (e) { failed++; }
+      } catch (e) { failed++; return; }
+      drawGroups[cfg.key].clearLayers();
+      for (const f of feats) {
+        if (!f.geometry || !f.geometry.rings) continue;
+        const a = f.attributes || {};
+        const color = zoneColor(cfg.key, a);
+        const isPark = cfg.key === 'np';
+        const poly = L.polygon(ringsToLatLngs(f.geometry.rings), { color, weight: isPark ? 2.5 : 1.2, fillColor: color, fillOpacity: isPark ? 0 : 0.28 });
+        // 點紅／黃／紫區：彈出區域名稱（同時照常查詢該點）
+        const name = Object.values(a).filter((v) => typeof v === 'string' && v).join('｜') || cfg.name;
+        poly.bindPopup(esc(name));
+        poly.addTo(drawGroups[cfg.key]);
+        total++;
+      }
     }));
     if (seq !== drawSeq) return;
-    setStatus(failed ? `部分民航局圖層載入失敗（${failed} 層），點地圖仍可查詢` : `此範圍內共 ${total} 個管制區；點任一處查詢詳細內容`, failed > 0);
+    setStatus(failed ? `部分民航局圖層載入失敗（${failed} 層），點地圖仍可查詢` : `此範圍共 ${total.toLocaleString()} 個管制區・點地圖任一處可查詢`, failed > 0);
   }
 
   function setStatus(msg, warn = false) {
-    status.hidden = false;
-    status.textContent = msg;
-    status.classList.toggle('as-status-warn', warn);
+    const s = $('status');
+    s.textContent = msg;
+    s.classList.toggle('as-status-warn', warn);
   }
 
-  // ---------- 圖層開關 ----------
-  function buildToggles() {
-    const box = $('layerToggles');
-    for (const cfg of LAYERS) {
-      const label = document.createElement('label');
-      const count = cfg.key === 'fort' ? `${fortItems.length} 處` : '即時查詢';
-      label.innerHTML = `<input type="checkbox" checked><i style="background:${cfg.color}"></i>${esc(cfg.name)} <small>${count}</small>`;
-      box.appendChild(label);
-      label.querySelector('input').addEventListener('change', (ev) => {
-        enabled[cfg.key] = ev.target.checked;
-        if (ev.target.checked) drawGroups[cfg.key].addTo(map); else drawGroups[cfg.key].remove();
-      });
-    }
-    $('dataDate').textContent = '民航局圖層為即時查詢（每次查詢都向民航局取得最新資料）';
+  // ---------- 圖層標籤開關 ----------
+  for (const chip of document.querySelectorAll('.as-chip')) {
+    chip.addEventListener('click', () => {
+      const on = chip.getAttribute('aria-pressed') !== 'true';
+      chip.setAttribute('aria-pressed', String(on));
+      for (const cfg of LAYERS.filter((c) => c.chip === chip.dataset.layer)) {
+        if (on) drawGroups[cfg.key].addTo(map); else drawGroups[cfg.key].remove();
+      }
+    });
   }
 
-  // ---------- 要塞示意資料 ----------
+  // ---------- 民航局資料統計（數字與更新時間全部即時取得，不寫死） ----------
+  async function loadStats() {
+    const checked = Date.now();
+    const names = { uav: '禁限航區', temp: '臨時', port: '商港', np: '國家公園' };
+    const parts = [];
+    let lastEdit = 0;
+    await Promise.all(Object.keys(names).map(async (k) => {
+      try {
+        const cnt = await jsonp(`${CAA}${byKey[k].path}/query?where=1%3D1&returnCountOnly=true`);
+        names[k] = `${names[k]} ${Number(cnt.count).toLocaleString()}${k === 'uav' ? ' 區' : ''}`;
+        const info = await jsonp(`${CAA}${byKey[k].path}?x=1`);   // 圖層資訊：取最後編修時間
+        const t = (info.editingInfo && (info.editingInfo.dataLastEditDate || info.editingInfo.lastEditDate)) || 0;
+        if (t > lastEdit) lastEdit = t;
+      } catch (e) { names[k] += ' ?'; }
+    }));
+    ['uav', 'temp', 'port', 'np'].forEach((k) => parts.push(names[k]));
+    $('checkText').textContent = `即時連線民航局・最後檢查 ${fmtFull(checked).slice(0, 16)}`;
+    $('dataRow').textContent = `民航局圖資更新：${lastEdit ? fmtDate(lastEdit) : '（民航局未提供）'}（最後檢查 ${fmtFull(checked)}） · ${parts.join(' · ')}`;
+  }
+
+  // ---------- 要塞示意資料：圓圈＋黑色三角形名稱 ----------
   async function loadForts() {
     try {
       const fort = await fetch('./data/fortress.json', { cache: 'no-cache' }).then((r) => r.json());
       fortItems = fort.items.filter((x) => x.lat != null);
       for (const ft of fortItems) {
-        L.circle([ft.lat, ft.lon], { radius: FORT_RADII[1], color: '#ff4fa3', weight: 1, dashArray: '4 4', fillOpacity: 0.05, interactive: false }).addTo(drawGroups.fort);
-        L.circle([ft.lat, ft.lon], { radius: FORT_RADII[0], color: '#ff4fa3', weight: 1, fillOpacity: 0.25, interactive: false }).addTo(drawGroups.fort);
+        L.circle([ft.lat, ft.lon], { radius: FORT_RADII[1], color: C.teal, weight: 1, dashArray: '4 4', fillOpacity: 0.04, interactive: false }).addTo(drawGroups.fort);
+        L.circle([ft.lat, ft.lon], { radius: FORT_RADII[0], color: C.teal, weight: 1, fillOpacity: 0.25, interactive: false }).addTo(drawGroups.fort);
+        L.marker([ft.lat, ft.lon], { icon: L.divIcon({ className: '', html: `<span class="as-peak">${esc(ft.name)}</span>`, iconSize: null, iconAnchor: [8, 10] }), interactive: false }).addTo(drawGroups.fort);
       }
     } catch (e) { /* 要塞資料缺少時不影響民航局查詢 */ }
   }
+
+  // ---------- 底部面板：收合／半開／全開，可拖拉 ----------
+  const sheet = $('sheet'), toggleBtn = $('toggleBtn');
+  const isDesktop = () => window.innerWidth >= 900;
+  let sheetState = 'half';
+  // 各段面板「露出高度」換算成位移量（面板本身高 88dvh）
+  function sheetY(state) {
+    const H = sheet.offsetHeight, vh = window.innerHeight;
+    const show = state === 'full' ? H : state === 'half' ? vh * 0.42 : 150;
+    return Math.max(0, H - show);
+  }
+  function openSheet(state) {
+    if (isDesktop()) return;
+    sheetState = state;
+    sheet.dataset.state = state;   // 讓樣式知道目前段落（全開時隱藏定位鈕）
+    sheet.style.setProperty('--sheet-y', `${sheetY(state)}px`);
+    toggleBtn.textContent = state === 'full' ? '▼ 看地圖' : '▲ 看結果';
+  }
+  toggleBtn.addEventListener('click', () => openSheet(sheetState === 'full' ? 'peek' : 'full'));
+  // 拖拉：從把手或面板頂端開始拖，放開後吸附到最近的一段
+  let drag = null;
+  sheet.addEventListener('pointerdown', (e) => {
+    if (isDesktop() || e.target.closest('.as-sheet-body, button')) return;
+    drag = { y0: e.clientY, base: sheetY(sheetState) };
+    sheet.classList.add('as-dragging');
+    sheet.setPointerCapture(e.pointerId);
+  });
+  sheet.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const y = Math.min(sheet.offsetHeight - 110, Math.max(0, drag.base + e.clientY - drag.y0));
+    drag.cur = y;
+    sheet.style.setProperty('--sheet-y', `${y}px`);
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    sheet.classList.remove('as-dragging');
+    const y = drag.cur ?? drag.base;
+    drag = null;
+    const best = ['full', 'half', 'peek'].map((s) => [s, Math.abs(sheetY(s) - y)]).sort((a, b) => a[1] - b[1])[0][0];
+    openSheet(best);
+  };
+  sheet.addEventListener('pointerup', endDrag);
+  sheet.addEventListener('pointercancel', endDrag);
+  window.addEventListener('resize', () => openSheet(sheetState));
 
   // ---------- 互動：點地圖、移動地圖、搜尋、定位 ----------
   map.on('click', (e) => query(e.latlng.lat, e.latlng.lng, null));
   let moveTimer = 0;
   map.on('moveend', () => { clearTimeout(moveTimer); moveTimer = setTimeout(drawVisible, 350); });
 
-  // 地名搜尋（OpenStreetMap Nominatim；限定臺灣，最多 5 筆）
-  const suggest = $('suggest');
+  // 搜尋：「緯度,經度」直接定位；否則用 OpenStreetMap Nominatim 找臺灣地名，取第一筆
   $('searchForm').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const q = $('searchInput').value.trim();
     if (!q) return;
-    suggest.hidden = false;
-    suggest.innerHTML = '<li class="as-muted">搜尋中…</li>';
+    $('searchInput').blur();
+    const mm = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (mm) {
+      let lat = +mm[1], lon = +mm[2];
+      if (Math.abs(lat) > 90) [lat, lon] = [lon, lat];   // 使用者把經度寫在前面時自動對調
+      map.setView([lat, lon], 15);
+      query(lat, lon, `座標 ${lat}, ${lon}`);
+      return;
+    }
+    openSheet('half');
+    showMessage('idle', '搜尋地點中…');
     try {
-      const url = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({ q, format: 'json', limit: '5', countrycodes: 'tw', 'accept-language': 'zh-TW' });
+      const url = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({ q, format: 'json', limit: '1', countrycodes: 'tw', 'accept-language': 'zh-TW' });
       const list = await fetch(url).then((r) => r.json());
-      if (!list.length) { suggest.innerHTML = '<li class="as-muted">找不到這個地點，換個關鍵字試試</li>'; return; }
-      suggest.innerHTML = '';
-      for (const it of list) {
-        const li = document.createElement('li');
-        li.textContent = it.display_name;
-        li.tabIndex = 0;
-        const go = () => {
-          const lat = +it.lat, lon = +it.lon;
-          map.setView([lat, lon], 14);
-          query(lat, lon, it.display_name.split(',').slice(0, 3).join('，'));
-          suggest.hidden = true;
-        };
-        li.addEventListener('click', go);
-        li.addEventListener('keydown', (k) => { if (k.key === 'Enter') go(); });
-        suggest.appendChild(li);
-      }
+      if (!list.length) { current = null; showMessage('idle', '找不到這個地點，請換個關鍵字或輸入座標'); return; }
+      const lat = +list[0].lat, lon = +list[0].lon;
+      map.setView([lat, lon], 15);
+      query(lat, lon, q);
     } catch (e) {
-      suggest.innerHTML = '<li class="as-muted">搜尋服務暫時無法使用</li>';
+      showMessage('idle', '搜尋服務暫時無法使用，請改輸入座標（例如 24.1789, 120.6045）');
     }
   });
-  document.addEventListener('click', (e) => { if (!e.target.closest('.as-search, .as-suggest')) suggest.hidden = true; });
 
   // 目前位置
   $('locateBtn').addEventListener('click', () => {
-    if (!navigator.geolocation) { setStatus('此瀏覽器不支援定位', true); return; }
+    if (!navigator.geolocation) { showMessage('idle', '此瀏覽器不支援定位'); openSheet('half'); return; }
     setStatus('定位中…');
     navigator.geolocation.getCurrentPosition(
-      (pos) => { const { latitude: lat, longitude: lon } = pos.coords; map.setView([lat, lon], 14); query(lat, lon, '我目前的位置'); },
-      () => setStatus('無法取得位置（請允許定位權限）', true),
+      (pos) => { const { latitude: lat, longitude: lon } = pos.coords; map.setView([lat, lon], 15); query(lat, lon, '我目前的位置'); },
+      () => { current = null; openSheet('half'); showMessage('idle', '請允許定位權限'); setStatus('無法取得位置', true); },
       { enableHighAccuracy: true, timeout: 15000 },
     );
   });
 
+  // ---------- 即時時鐘：每秒更新台北時間，並重繪日出日落提示 ----------
+  function tick() {
+    $('clock').textContent = fmtHMS(Date.now());
+    refreshSun();
+  }
+  setInterval(tick, 1000);
+  tick();
+
   // 給自動化測試使用的掛鉤（只能查詢，不會改資料）
-  window.__fdeAirspace = { map, query, drawVisible };
+  window.__fdeAirspace = { map, query, drawVisible, sunTimes, openSheet };
 
   // ---------- 啟動 ----------
+  openSheet('half');
   (async () => {
     await loadForts();
-    buildToggles();
     drawVisible();
+    loadStats();
   })();
 })();

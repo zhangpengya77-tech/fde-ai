@@ -1,0 +1,120 @@
+/* FDE 空域查詢頁樣式（手機優先：全螢幕地圖、浮動搜尋列、底部可拖拉面板；桌機面板固定左側） */
+:root {
+  --main: #2F6B8A;     /* 主色：深青藍 */
+  --red: #C0392B;      /* 紅區 */
+  --yellow: #C9A227;   /* 黃區 */
+  --purple: #7B3FBF;   /* 臨時禁飛 */
+  --blue: #2848D0;     /* 商港 */
+  --green: #6B9A2A;    /* 國家公園 */
+  --teal: #149A8A;     /* 要塞堡壘 */
+  --fg: #1d2731;
+  --muted: #6b7782;
+  --card: #ffffff;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100dvh; overflow: hidden; background: #dfe6ea; color: var(--fg);
+  font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+a { color: var(--main); }
+#map { position: fixed; inset: 0; background: #cfd8dc; }
+
+/* ---------- 頂部浮動：搜尋列、圖層標籤、狀態 ---------- */
+.as-float { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; right: 12px; z-index: 800; pointer-events: none; }
+.as-float > * { pointer-events: auto; }
+.as-search { display: flex; height: 52px; background: #fff; border-radius: 26px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+.as-search input { flex: 1; min-width: 0; border: 0; padding: 0 20px; font-size: 16px; background: transparent; outline: none; color: var(--fg); }
+.as-search button { border: 0; padding: 0 22px; background: var(--main); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer; }
+/* 四個標籤平均分配寬度，窄手機（360px）也能一排放下 */
+.as-chips { display: flex; gap: 6px; margin-top: 10px; }
+.as-chip { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 8px 4px; border: 0; border-radius: 999px; background: #fff;
+  font-size: 13.5px; white-space: nowrap; color: var(--fg); box-shadow: 0 2px 8px rgba(0,0,0,.15); cursor: pointer; transition: opacity .2s; }
+.as-chip i { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 3px; }
+/* 面板全開時隱藏定位鈕，避免蓋到搜尋列 */
+.as-sheet[data-state="full"] .as-locate { opacity: 0; pointer-events: none; }
+.as-locate { transition: opacity .2s; }
+.as-chip[aria-pressed="false"] { opacity: .45; }
+.as-status { display: inline-block; margin: 8px 0 0; padding: 4px 12px; border-radius: 999px; background: rgba(29,39,49,.78); color: #fff; font-size: 12px; }
+.as-status-warn { background: rgba(160,50,20,.9); }
+
+/* ---------- 底部面板 ---------- */
+.as-sheet { position: fixed; left: 0; right: 0; bottom: 0; height: 88dvh; z-index: 900; background: #fff; border-radius: 22px 22px 0 0;
+  box-shadow: 0 -6px 24px rgba(0,0,0,.16); transform: translateY(var(--sheet-y, 50dvh)); transition: transform .28s cubic-bezier(.2,.8,.2,1); touch-action: none; }
+.as-sheet.as-dragging { transition: none; }
+.as-handle { height: 30px; display: flex; align-items: center; justify-content: center; cursor: grab; }
+.as-handle span { width: 56px; height: 6px; border-radius: 3px; background: #c8ced3; }
+.as-toggle { position: absolute; top: 12px; right: 14px; padding: 6px 14px; border: 0; border-radius: 999px; background: #eef1f3; color: var(--fg); font-size: 14px; font-weight: 700; cursor: pointer; }
+.as-sheet-body { height: calc(100% - 30px); overflow-y: auto; padding: 18px 18px calc(24px + var(--safe-b)); touch-action: pan-y; overscroll-behavior: contain; }
+
+/* 定位按鈕：在面板上緣右側，帶淡色光暈 */
+.as-locate { position: absolute; right: 18px; top: -86px; width: 64px; height: 64px; border-radius: 50%; border: 0; background: var(--main); color: #fff;
+  display: grid; place-items: center; cursor: pointer; box-shadow: 0 0 0 10px rgba(47,107,138,.18), 0 6px 16px rgba(0,0,0,.25); }
+
+/* A、B：狀態條、即時時間、小字 */
+.as-pill-ok { display: inline-block; margin: 0 0 8px; padding: 7px 16px; border-radius: 999px; background: #eaf6ec; border: 1.5px solid #9fd3a9; color: #3a4a3e; font-size: 14px; }
+.as-pill-ok b { color: #2f9a4a; }
+.as-clock { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+.as-clock b { font-family: var(--mono); color: var(--fg); font-size: 16px; }
+.as-note { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+
+/* C：結果卡片（框線顏色依狀態變化） */
+.as-result { --c: #b9c1c7; border: 2px solid var(--c); border-radius: 20px; padding: 16px 18px; margin-bottom: 18px; background: var(--card); box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+.as-result[data-state="red"] { --c: var(--red); }
+.as-result[data-state="yellow"] { --c: var(--yellow); }
+.as-result[data-state="purple"] { --c: var(--purple); }
+.as-result[data-state="blue"] { --c: var(--blue); }
+.as-result[data-state="green"] { --c: var(--green); }
+.as-result-title { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 8px; font-size: 21px; line-height: 1.35; font-weight: 800; }
+.as-dot { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 6px; border-radius: 50%; background: var(--c); }
+.as-coord { margin: 0 0 8px; color: var(--muted); font-size: 15px; }
+.as-coord span { font-family: var(--mono); }
+.as-sun { display: flex; gap: 18px; margin: 0 0 10px; font-size: 15px; }
+.as-sun b { font-family: var(--mono); }
+.as-sunbox { border-radius: 14px; padding: 10px 14px; margin: 0 0 10px; font-size: 14px; }
+.as-sunbox strong { display: block; font-size: 16px; margin-bottom: 2px; }
+.as-sunbox small { display: block; margin-top: 4px; color: #7a5a5a; font-size: 12px; }
+.as-sun-night { background: #fbe4e4; border: 1px solid #f0bcbc; }
+.as-sun-day { background: #e9f6e6; border: 1px solid #b9dcae; }
+.as-sun-dusk { background: #fdf3d6; border: 1px solid #ecd48a; }
+.as-msg { margin: 6px 0; font-size: 14px; }
+.as-hits { margin: 8px 0 0; padding: 0; list-style: none; }
+.as-hits li { border-left: 4px solid; padding: 6px 10px; margin-bottom: 6px; background: #f6f8f9; border-radius: 0 10px 10px 0; font-size: 14px; }
+.as-hits details summary { cursor: pointer; font-weight: 700; }
+.as-hits dl { margin: 6px 0 0; display: grid; grid-template-columns: 64px 1fr; gap: 2px 8px; font-size: 12.5px; }
+.as-hits dt { color: var(--muted); }
+.as-hits dd { margin: 0; word-break: break-word; }
+.as-tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; color: #fff; font-size: 12px; }
+
+/* D：圖例 */
+.as-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0 0 16px; padding: 0; list-style: none; font-size: 15px; }
+.as-legend li { display: flex; align-items: center; gap: 8px; }
+.as-legend i { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 4px; }
+
+/* E：資料來源 */
+.as-datarow { margin: 0 0 18px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+
+/* F：FDE-AI 區塊 */
+.as-author { border: 1px solid #e3e7ea; border-left: 4px solid var(--main); border-radius: 0 16px 16px 0; padding: 14px 16px; }
+.as-author h3 { margin: 0; font-size: 20px; }
+.as-author-sub { margin: 2px 0 8px; color: var(--muted); font-size: 14px; }
+.as-author p { margin: 0 0 10px; font-size: 15px; line-height: 1.6; }
+.as-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.as-btns a { padding: 10px 22px; border-radius: 999px; color: #fff; text-decoration: none; font-weight: 700; }
+.as-btn-yt { background: #C62828; }
+.as-btn-home { background: var(--main); }
+.as-author .as-fine { font-size: 11.5px; color: var(--muted); margin: 0; }
+
+/* 地圖上的要塞／山名標記（黑色三角形＋文字） */
+.as-peak { white-space: nowrap; font-weight: 800; font-size: 13px; color: #111; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; }
+.as-peak::before { content: "▲"; margin-right: 2px; }
+/* 查詢點：藍色圓點 */
+.as-here { width: 22px; height: 22px; border-radius: 50%; background: #1f6fa8; border: 4px solid #fff; box-shadow: 0 0 0 6px rgba(31,111,168,.25); }
+
+/* ---------- 桌機：面板固定左側，寬度不超過 480px ---------- */
+@media (min-width: 900px) {
+  .as-sheet { top: 0; right: auto; width: 440px; height: 100dvh; border-radius: 0; transform: none !important; }
+  .as-handle, .as-toggle { display: none; }
+  .as-sheet-body { height: 100%; padding-top: 20px; }
+  .as-float { left: 456px; max-width: 640px; }
+  .as-locate { position: fixed; top: auto; right: 24px; bottom: 32px; }
+}
