@@ -1,7 +1,7 @@
 // F450 實訓中心｜3D 組裝練習（P2）
 // 學員從零件盤拿起零件 → 在 3D 上拖到發光圈附近放開 → 自動吸附；順序、方向、槳葉轉向由 model.js 判斷。
 // 絕不用動畫假裝完成：每一件都必須由學員自己拖到位置。成績不記錄（P5／P6 才接判分與任務卡）。
-import { ASSEMBLY, ASSEMBLY_BY_ID, PRACTICE_ONLY, assemblyReport, createAssemblyState, install, pick, putBack, rotate, slotsFor, stepTitle, unitOfNode } from './model.js?v=p2-2';
+import { ASSEMBLY, ASSEMBLY_BY_ID, PRACTICE_ONLY, assemblyReport, createAssemblyState, install, pick, putBack, rotate, slotsFor, stepTitle, unitOfNode } from './model.js?v=p4-1';
 
 const SNAP_PX = matchMedia('(pointer: coarse)').matches ? 64 : 46;   // 螢幕上距離多近就吸附（手機放寬）
 const LIFT = 170;                                                     // 拿起時放在安裝位置上方多少 mm
@@ -59,13 +59,13 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
     }
   }
 
-  // 外觀：在零件盤的隱藏；拿著的發藍光；方向錯的發紅光。回傳要描邊的物件
-  function refresh() {
+  // 外觀：在零件盤的隱藏；拿著的發藍光；方向錯的發紅光；2D 選取的（extra）發青光。回傳要描邊的物件
+  function refresh(extra = new Set()) {
     const hot = [];
     for (const n of nodes) {
       const id = unitOfNode(n.obj.name), p = id && state.parts[id];
       n.obj.visible = !!p && p.status !== 'tray';
-      const glow = !p ? null : p.status === 'held' ? 0x1f7bff : p.status === 'wrong_orientation' ? 0xff3b3b : null;
+      const glow = !p ? null : p.status === 'held' ? 0x1f7bff : p.status === 'wrong_orientation' ? 0xff3b3b : extra.has(n) ? 0x19b6c8 : null;
       if (glow && n.obj.visible) hot.push(n.obj);
       for (const m of n.meshes) for (const mat of [].concat(m.material)) {
         mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
@@ -200,6 +200,7 @@ export function createPractice({ THREE, nodes, scene, camera, renderer, controls
         return { held: s(u.pos), slots: Object.fromEntries(slotsFor(state, id).map((sid) => [sid, s(units.get(sid).pivot)])), status: state.parts[id].status, yaw: state.parts[id].yaw }; },
       message: () => message,
       visibleNodes: (id) => units.get(id).nodes.filter((n) => n.obj.visible).length,
+      visibleAll: () => nodes.filter((n) => n.obj.visible).length,   // 全部 59 個節點中看得到幾個
     };
   }
 

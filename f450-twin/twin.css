@@ -211,3 +211,10 @@ details.truth p{margin:6px 0 0;max-width:110ch;color:#e9d7a6}
 .w2-sum{font-weight:600;margin:8px 0}.w2-sum.ok{color:var(--ok)}.w2-sum.bad{color:var(--danger)}
 .w2-issues{margin:0 0 8px;padding-left:1.3em}.w2-issues li{margin:3px 0;cursor:pointer}
 .w2-issues.hint li{color:var(--ref);cursor:default}
+/* P4：2D／3D 同步 */
+.w2-sync{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px}
+.w2-sync .note{margin:0}
+.w2-comp rect{cursor:pointer}
+.w2-comp.focus3d rect{stroke:#ffc857;stroke-width:4;filter:drop-shadow(0 0 6px rgba(255,200,87,.7))}
+.sync-cap{position:absolute;left:10px;right:10px;top:52px;z-index:3;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--accent);border-radius:8px;background:rgba(6,20,35,.85);font-size:13px}
+.sync-cap button{font-size:12.5px;padding:3px 8px}

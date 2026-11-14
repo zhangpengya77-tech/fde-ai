@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ASSEMBLY, ASSEMBLY_BY_ID, EXPECTED_WIRES, PORTS, PRACTICE_ONLY, SPAWN_YAW,
+  ASSEMBLY, ASSEMBLY_BY_ID, COMPONENT_NODES, EXPECTED_WIRES, componentOfNode, componentsOfKind, PORTS, PRACTICE_ONLY, SPAWN_YAW,
   assemblyReport, blockingParts, createAssemblyState, install, pick, putBack, rotate, slotsFor, unitOfNode, validateWiring, wiringSource,
 } from '../../f450-twin/training/model.js';
 import { WIRING, STEPS } from '../../f450-twin/parts-data.js';
@@ -32,8 +32,23 @@ test('每個 GLB 節點都對應到唯一的組裝單元', () => {
     const hits = ASSEMBLY.filter((a) => a.nodes.some((p) => n.startsWith(p)));
     assert.equal(hits.length, 1, `${n} → ${hits.map((h) => h.id)}`);
     assert.equal(unitOfNode(n), hits[0].id);
-    assert.equal(unitOfNode(n.replace(/ /g, '_')), hits[0].id);    // three.js 載入後空白會變底線
+    const three = n.replace(/\s/g, '_').replace(/[[\].:/]/g, '');   // three.js PropertyBinding.sanitizeNodeName 的規則
+    assert.equal(unitOfNode(three), hits[0].id, three);
   }
+});
+
+test('2D 元件 ↔ 3D 節點：每個有 3D 零件的元件都對得到，名稱改過也一樣', () => {
+  for (const [cid, prefixes] of Object.entries(COMPONENT_NODES)) {
+    for (const p of prefixes) {
+      const node = GLB_NODES.find((n) => n.startsWith(p));
+      assert.ok(node, `${cid}：找不到 ${p}`);
+      assert.equal(componentOfNode(node.replace(/\s/g, '_').replace(/[[\].:/]/g, '')), cid);
+    }
+  }
+  assert.equal(componentOfNode('Pixhawk_248'), 'pixhawk');
+  assert.equal(componentOfNode('Arm_FR'), null);
+  assert.deepEqual(componentsOfKind('esc'), ['esc_fr', 'esc_fl', 'esc_rl', 'esc_rr']);
+  assert.deepEqual(componentsOfKind('pixhawk'), ['pixhawk']);           // 安全開關、蜂鳴器 3D 沒有零件，不算
 });
 
 test('組裝單元涵蓋 STEPS 的 10 個步驟，且 ID 不重複', () => {

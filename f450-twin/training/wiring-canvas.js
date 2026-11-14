@@ -2,7 +2,8 @@
 // 原生 SVG，不依賴 3D／WebGL。元件、接口、檢查規則全部來自 model.js（與 3D 組裝共用）。
 // 操作：點一個接口、再點另一個接口 → 連線；點線 → 選取，可刪除或「紅黑對調」；按「檢查接線」看結果。
 // 草稿只存在這台裝置的瀏覽器（localStorage）；不記錄成績（P5／P6 才接判分與任務卡）。
-import { COMPONENTS, PORTS, EXPECTED_WIRES, PRACTICE_ONLY, validateWiring } from './model.js?v=p2-2';
+import { COMPONENTS, PORTS, EXPECTED_WIRES, PRACTICE_ONLY, validateWiring } from './model.js?v=p4-1';
+import { emit, on } from './bus.js?v=p4-1';   // P4：與 3D 同步
 
 const NS = 'http://www.w3.org/2000/svg';
 const STORE = 'f450twin-wire2d-v1';
@@ -51,6 +52,7 @@ for (const [cid, [x, y, w, h, sides]] of Object.entries(LAYOUT)) {
 
 export function initWiringCanvas(root) {
   if (!root) return null;
+  let compFocus = null, from3d = [], show3d = false, lastFocusKey = '', lastWiresKey = '';   // P4 同步狀態
   let wires = load(), pending = null, selected = null, result = null, showHints = false, seq = wires.reduce((m, w) => Math.max(m, Number(String(w.id).slice(1)) || 0), 0);
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
   const sv = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
@@ -62,6 +64,13 @@ export function initWiringCanvas(root) {
   const B = (text, cls) => { const b = el('button', text, cls); b.type = 'button'; tools.append(b, ' '); return b; };
   const bCheck = B('✓ 檢查接線', 'primary'), bSwap = B('紅黑對調'), bDel = B('刪除這條線'), bUndo = B('復原'), bClear = B('全部清除');
   head.append(el('b', '2D 接線練習'), tools);
+  const syncRow = el('div', null, 'row w2-sync');
+  const lab3d = el('label', null, 'inline'); const cb3d = el('input'); cb3d.type = 'checkbox'; cb3d.id = 'w2-show3d';
+  lab3d.append(cb3d, document.createTextNode(' 在 3D 顯示我的接線'));
+  const bTo3d = el('button', '到 3D 畫面看 ↑'); bTo3d.type = 'button';
+  bTo3d.onclick = () => document.getElementById('viewer')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  syncRow.append(lab3d, bTo3d, el('span', '點元件、接口或線，3D 會同步高亮對應零件', 'note'));
+  cb3d.onchange = () => { show3d = cb3d.checked; draw(); };
   const status = el('p', null, 'w2-status'); status.setAttribute('aria-live', 'polite');
   const scroller = el('div', null, 'w2-scroll');
   const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'w2-svg', role: 'application', 'aria-label': 'F450 接線畫布：先選一個接口，再選另一個接口連線' });
@@ -70,7 +79,7 @@ export function initWiringCanvas(root) {
   legend.append(...[['power', '電源'], ['signal', '訊號'], ['data', '資料／周邊']].map(([k, t]) => { const s = el('span', `━ ${t}`); s.style.color = KIND_COLOR[k]; return s; }),
     el('span', '｜虛線＝紅黑接反｜示意版面，不是實際尺寸與腳位'));
   const results = el('div', null, 'w2-results');
-  root.append(head, status, scroller, legend, results,
+  root.append(head, syncRow, status, scroller, legend, results,
     el('p', '操作：點一個接口（圓點）→ 再點要接的另一個接口，就會連線；點線可選取，再按「刪除這條線」或「紅黑對調」。鍵盤：Tab 移到接口、Enter 選取、Esc 取消。', 'note'),
     el('p', PRACTICE_ONLY ? '練習模式：接線規則依 Pixhawk 1／2.4.8 公開文件與教師安裝指導整理，全部待實機核對；不提供腳位定義，結果不記錄、不計正式成績。實際接線前務必先拆槳，並對照實機外殼印字。' : '', 'note'));
 
@@ -82,7 +91,8 @@ export function initWiringCanvas(root) {
   for (const c of COMPONENTS) {
     const [x, y, w, h] = LAYOUT[c.id];
     const g = sv('g', { class: 'w2-comp', 'data-comp': c.id });
-    g.append(sv('rect', { x, y, width: w, height: h, rx: 10 }));
+    const rect = sv('rect', { x, y, width: w, height: h, rx: 10 }); g.append(rect);
+    g.addEventListener('click', (e) => { e.stopPropagation(); pending = null; selected = null; compFocus = c.id; say(`已選元件：${c.zh}`); draw(); });   // 點框或名稱都算（接口自己會攔下點擊）
     const t = sv('text', { x: x + w / 2, y: y + h / 2 + 6, 'text-anchor': 'middle', class: 'w2-name' }); t.textContent = c.zh; g.append(t);   // 名稱置中；接口標籤都放在框外，避免重疊
     for (const p of c.ports) {
       const pos = PORT_POS[p.id];
@@ -100,6 +110,7 @@ export function initWiringCanvas(root) {
 
   // ───────── 互動 ─────────
   function clickPort(pid) {
+    compFocus = null;
     if (!pending) { pending = pid; selected = null; say(`已選 ${desc(pid)}，再點要接的另一個接口（Esc 取消）`); return draw(); }
     if (pending === pid) { pending = null; say('已取消'); return draw(); }
     const w = { id: `w${++seq}`, from: pending, to: pid, reversed: false };
@@ -107,7 +118,7 @@ export function initWiringCanvas(root) {
     say(`已連線：${desc(w.from)} ↔ ${desc(w.to)}`);
     save(); draw();
   }
-  svg.addEventListener('click', () => { if (pending) { pending = null; say('已取消'); draw(); } else if (selected) { selected = null; draw(); } });
+  svg.addEventListener('click', () => { if (pending) { pending = null; say('已取消'); draw(); } else if (selected || compFocus) { selected = null; compFocus = null; draw(); } });
   svg.addEventListener('pointermove', (e) => {
     if (!pending) return;
     const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
@@ -155,7 +166,7 @@ export function initWiringCanvas(root) {
       const g = sv('g', { class: `w2-wire${w.id === selected ? ' sel' : ''}${bad.has(w.id) ? ' bad' : good.has(w.id) ? ' good' : ''}`, 'data-wire': w.id, tabindex: 0, role: 'button', 'aria-label': `導線 ${desc(w.from)} 到 ${desc(w.to)}` });
       const d = path(w.from, w.to);
       g.append(sv('path', { d, class: 'hit' }), sv('path', { d, class: 'line', stroke: KIND_COLOR[kind], 'stroke-dasharray': w.reversed ? '10 7' : 'none' }));
-      g.addEventListener('click', (e) => { e.stopPropagation(); pending = null; selected = w.id; say(`已選取：${desc(w.from)} ↔ ${desc(w.to)}${w.reversed ? '（紅黑接反）' : ''}`); draw(); });
+      g.addEventListener('click', (e) => { e.stopPropagation(); pending = null; compFocus = null; selected = w.id; say(`已選取：${desc(w.from)} ↔ ${desc(w.to)}${w.reversed ? '（紅黑接反）' : ''}`); draw(); });
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter') g.dispatchEvent(new MouseEvent('click', { bubbles: false })); });
       gWires.append(g);
     }
@@ -164,9 +175,27 @@ export function initWiringCanvas(root) {
       pe.classList.toggle('pending', pid === pending);
       pe.classList.toggle('used', used.has(pid));
     }
+    for (const g of gComps.children) g.classList.toggle('focus3d', from3d.includes(g.dataset.comp));
     status.textContent = msg;
     renderResults();
+    syncOut();
   }
+  // P4：把 2D 目前的選取與接線送給 3D（只有變動時才送）
+  function syncOut() {
+    const w = wires.find((x) => x.id === selected);
+    const comps = w ? [PORTS[w.from].component, PORTS[w.to].component] : pending ? [PORTS[pending].component] : compFocus ? [compFocus] : [];
+    const label = w ? `${desc(w.from)} ↔ ${desc(w.to)}` : pending ? desc(pending) : compFocus ? COMPONENTS.find((c) => c.id === compFocus).zh : '';
+    const fk = JSON.stringify([comps, w?.from, w?.to]);
+    if (fk !== lastFocusKey) { lastFocusKey = fk; emit('focus2d', { components: [...new Set(comps)], wire: w ? { from: w.from, to: w.to } : null, label }); }
+    const wk = JSON.stringify([show3d, wires, result ? [result.correct, result.issues.map((i) => i.wire)] : null]);
+    if (wk !== lastWiresKey) { lastWiresKey = wk; emit('wires2d', { wires: wires.map((x) => ({ ...x })), result, show: show3d }); }
+  }
+  // P4：3D 選取零件 → 2D 框出對應元件
+  on('focus3d', (d) => {
+    from3d = d?.components || [];
+    if (from3d.length) say(`3D 選取：${d.label}（已在畫布上框出）`);
+    draw();
+  });
   function renderResults() {
     results.replaceChildren();
     if (!result) { results.append(el('p', `目前 ${wires.length} 條線（正確接線共 ${EXPECTED_WIRES.length} 條）。接完後按「✓ 檢查接線」。`, 'note')); return; }

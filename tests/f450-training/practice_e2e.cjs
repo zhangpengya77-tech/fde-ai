@@ -67,6 +67,7 @@ const ORDER = ['bottom_plate', 'esc_fr', 'esc_fl', 'esc_rl', 'esc_rr', 'arm_fr',
         if (id === 'motor_rr') await page.screenshot({ path: `${OUT}/P2_practice_midway.png` });
       }
       const rep = await P(() => window.__f450Practice.report());
+      { const all = await P(() => window.__f450Practice.visibleAll()); ok(all === 59, `${name}: 組完後 59 個節點全部看得到（${all}）`); }
       ok(rep.complete, `${name}: 全部完成 ${rep.installed}/${rep.total}，錯誤 ${rep.errorCount} 次 ${JSON.stringify(rep.errors)}`);
       await page.screenshot({ path: `${OUT}/P2_practice_complete.png` });
       // 3) 切回其他模式，原有功能仍正常

@@ -39,11 +39,14 @@ export const ASSEMBLY_BY_ID = Object.fromEntries(ASSEMBLY.map((a) => [a.id, a]))
 export const stepTitle = (n) => STEPS[n - 1]?.title || `第 ${n} 步`;
 export const SPAWN_YAW = 180;   // 需要對準機頭的零件，從零件盤拿出時故意轉反，學員要自己轉正
 
+// three.js 的 GLTFLoader 會改節點名稱：空白變底線、刪掉 . : / [ ]（Pixhawk 2.4.8 → Pixhawk_248）。
+// 比對時兩邊都去掉這些字元再比，原始名稱與載入後的名稱都能對上。
+const normName = (s) => String(s).replace(/[\s_.:/[\]]/g, '').toLowerCase();
+export const nodeMatches = (name, prefix) => normName(name).startsWith(normName(prefix));
+
 // GLB 節點名稱 → 組裝單元 id（找不到回傳 null）
-// three.js 的 GLTFLoader 會把節點名稱的空白換成底線（Bottom plate → Bottom_plate），比對前先換回空白
 export function unitOfNode(name) {
-  const clean = String(name).replace(/_/g, ' ');
-  const hit = ASSEMBLY.find((a) => a.nodes.some((p) => clean.startsWith(p)));
+  const hit = ASSEMBLY.find((a) => a.nodes.some((p) => nodeMatches(name, p)));
   return hit ? hit.id : null;
 }
 
@@ -236,3 +239,20 @@ export function validateWiring(wires) {
   }
   return { ok: issues.length === 0, issues, correct, expectedTotal: EXPECTED_WIRES.length, practiceOnly: PRACTICE_ONLY };
 }
+
+// ───────── 2D 元件 ↔ 3D 節點（P4 同步用） ─────────
+// 2D 元件 id → GLB 節點名稱開頭；空陣列＝3D 模型沒有這個零件
+export const COMPONENT_NODES = {
+  battery: ['Battery 4S'], power_module: ['Power module'], pdb: ['Bottom plate'],
+  ...Object.fromEntries(CORNERS.flatMap(([c, C]) => [[`esc_${c}`, [`ESC ${C}`]], [`motor_${c}`, [`Motor ${C}`, `Motor shaft ${C}`]]])),
+  pixhawk: ['Pixhawk 2.4.8', 'Pixhawk foam'], receiver: ['Receiver R9DS'], gps: ['GPS M8N', 'GPS mast'],
+  safety_switch: [], buzzer: [],
+};
+// GLB 節點名稱 → 2D 元件 id（線材、機臂等沒有接口的零件回傳 null）
+export function componentOfNode(name) {
+  const hit = Object.entries(COMPONENT_NODES).find(([, prefixes]) => prefixes.some((p) => nodeMatches(name, p)));
+  return hit ? hit[0] : null;
+}
+// parts-data.js 的零件 key → 2D 元件 id（例如 esc → 四顆 ESC）
+export const componentsOfKind = (kind) => COMPONENTS.filter((c) => c.kind === kind && COMPONENT_NODES[c.id]?.length).map((c) => c.id);
+export const componentName = (id) => COMPONENTS.find((c) => c.id === id)?.zh || id;

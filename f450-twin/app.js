@@ -10,7 +10,8 @@ import { UnrealBloomPass } from './vendor/three/addons/postprocessing/UnrealBloo
 import { OutlinePass } from './vendor/three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from './vendor/three/addons/postprocessing/OutputPass.js';
 import { PARTS, LAYERS, STATUS, STEPS, WIRING, CHECKS, SPECS, PRIMARY, LABELS, WIRING_LINKS, SIZE_REFS, PHOTOS, VIEW_PHOTOS } from './parts-data.js?v=1.2.1';
-import { createPractice } from './training/assembly-mode.js?v=p2-2';   // P2 實訓：3D 組裝練習（只透過下方幾個掛勾接入）
+import { createPractice } from './training/assembly-mode.js?v=p4-1';   // P2 實訓：3D 組裝練習（只透過下方幾個掛勾接入）
+import { createSync3D } from './training/sync3d.js?v=p4-1';   // P4 實訓：2D／3D 同步
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
@@ -182,7 +183,7 @@ function dimmed(n) {
   return false;
 }
 function refreshLook() {
-  if (mode === 'practice') { const hot = practice.refresh(); if (outline) outline.selectedObjects = hot; return; }   // P2 掛勾：練習模式自管外觀
+  if (mode === 'practice') { const hot = practice.refresh(hotNodes); if (outline) outline.selectedObjects = hot; return; }   // P2 掛勾：練習模式自管外觀
   if (outline) outline.selectedObjects = nodes.filter((n) => n.obj.visible && (hotNodes.size ? hotNodes.has(n) : (selectedNode ? n.obj === selectedNode : n.key === selectedKey))).map((n) => n.obj);
   for (const n of nodes) {
     n.obj.visible = visible(n);
@@ -222,7 +223,7 @@ function partButton(key, title, sub) {
   const img = el('img'); img.src = imgSrc(`part-${key}.png`); img.alt = ''; img.loading = 'lazy';
   const t = el('div'); t.append(el('b', title), el('span', sub));
   b.append(img, t, Object.assign(el('span', p.status === 'PLACEHOLDER' ? '示意' : '參考', `tag ${STATUS[p.status].tone}`), { title: STATUS[p.status].zh }));
-  b.onclick = () => selectPart(key, null, true);
+  b.onclick = () => userSelect(key, null, true);
   return b;
 }
 PRIMARY.forEach(([k, t, s]) => $('part-list').append(partButton(k, t, s)));
@@ -297,13 +298,16 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const hit = ray.intersectObjects(pick, false)[0]; if (!hit) return;
   const n = nodes.find((x) => x.meshes.includes(hit.object)); if (!n) return;
   if (mode === 'size' && measure.on) { pickMeasure(n); return; }
-  selectPart(n.key, n.obj);
+  userSelect(n.key, n.obj);
 });
 
 // ───────── P2 實訓：3D 組裝練習 ─────────
 const practice = createPractice({ THREE, nodes, scene, camera, renderer, controls, host, strip: $('strip-practice'),
   onSelect: (key) => { renderInfo(key, null); selectedKey = key; }, setView: (v) => setView(v) });
 practice.setOnChange(() => refreshLook());
+// P4 掛勾：學員親手選零件（3D 點選、零件清單、標籤）時通知 2D；2D 選取時由 sync3d 高亮 3D
+const sync3d = createSync3D({ THREE, scene, camera, canvas: renderer.domElement, nodes, hotNodes, refreshLook, host, getMode: () => mode });
+function userSelect(key, node = null, frame = false) { sync3d.fromSelect(key, node); selectPart(key, node, frame); }
 $('practice-enter')?.addEventListener('click', () => host.scrollIntoView({ block: 'start', behavior: 'smooth' }));
 
 // ───────── 模式 ─────────
@@ -377,7 +381,7 @@ checkProgress();
 // ───────── 引線標籤與藍色虛線導引 ─────────
 const labelEls = LABELS.map(([k, a, b]) => {
   const d = el('div', null, 'lbl'); d.style.display = 'none'; d.append(el('b', a)); if (b) d.append(el('span', b));  // 載入前先隱藏
-  d.onclick = () => selectPart(k, null, true); $('labels').append(d); return d;
+  d.onclick = () => userSelect(k, null, true); $('labels').append(d); return d;
 });
 const svg = $('leaders');
 const guideGroup = new THREE.Group(); scene.add(guideGroup);
@@ -656,7 +660,7 @@ function applyPositions() {   // 依各層拆解程度放置零件
   applyPositions();
   controls.update();
   if (animatingCam) { camera.position.lerp(camGoal, 0.1); controls.target.lerp(tgtGoal, 0.1); if (camera.position.distanceTo(camGoal) < 0.5) animatingCam = false; }
-  if (nodes.length) { updateOverlays(); updateWiring(); updateDims(); }
+  if (nodes.length) { updateOverlays(); updateWiring(); updateDims(); sync3d.update(); }
   if (composer) composer.render(); else renderer.render(scene, camera);
   fpsGuard();
   requestAnimationFrame(tick);
