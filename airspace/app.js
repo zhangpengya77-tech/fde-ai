@@ -143,7 +143,24 @@
   }
 
   // 日出日落提示框（每秒由時鐘重繪，跨過日出／日落自動切換）
-  function sunBoxHtml(now) {
+  // 飛航建議（每秒隨日出日落重算）：紅／臨時＝不可飛航；黃／商港＝須申請；綠＋日間＝建議可飛航
+  function verdictHtml(now) {
+    if (!current || !current.state || !current.sun.rise) return '';
+    const night = now < current.sun.rise || now >= current.sun.set;
+    let cls = 'as-sun-dusk', head = '', body = '';
+    if (current.state === 'red') { cls = 'as-sun-night'; head = '⛔ 建議：不可飛航'; body = '此處為禁止飛航區（紅區）。'; }
+    else if (current.state === 'purple') { cls = 'as-sun-night'; head = '⛔ 建議：公告期間不可飛航'; body = '此處有臨時禁限航公告。'; }
+    else if (night) { cls = 'as-sun-night'; head = '⛔ 建議：目前時段不可飛航'; body = '日落後至日出前不得飛航。'; }
+    else if (current.state === 'yellow') { head = '⚠️ 建議：須先申請，核准後方可飛航'; body = '請依該區說明向主管機關申請核准（區域說明請點下方名稱展開）。'; }
+    else if (current.state === 'blue') { head = '⚠️ 建議：須先經商港管理機關同意'; body = '同意後方可飛航。'; }
+    else {
+      cls = 'as-sun-day'; head = '✅ 建議：可飛航';
+      body = '限飛高度：距地面 400 呎（約 120 公尺）以下，並保持目視範圍內。<br>報備：此處非民航局公告之禁限航區，一般無須事先申請；機重 250 公克以上之無人機須完成註冊，並依機重取得相應操作證（詳見民航局規定）。';
+    }
+    return `<div class="as-sunbox ${cls}"><strong>${head}</strong>${body}<small>※ 以上為建議，非飛航許可；一切以交通部民用航空局規定及公告為準。</small></div>`;
+  }
+  function sunBoxHtml(now) { return verdictHtml(now) + sunOnlyHtml(now); }
+  function sunOnlyHtml(now) {
     if (!current || !current.sun.rise) return '';
     const { rise, set } = current.sun;
     if (now < rise) {
@@ -227,7 +244,7 @@
       <div data-sunbox>${sunBoxHtml(Date.now())}</div>
       ${extra}
       ${list ? `<ul class="as-hits">${list}</ul>` : ''}
-      <p class="as-msg" style="color:var(--muted);font-size:12.5px">本查詢結果僅供參考，不代表飛航許可；實際飛航應以交通部民用航空局「遙控無人機管理資訊系統」查詢結果及公告為準。</p>`;
+      <p class="as-msg" style="color:var(--muted);font-size:12.5px">免責聲明：本頁內容為建議，僅供飛航前參考，不代表飛航許可；實際飛航應以交通部民用航空局規定、「遙控無人機管理資訊系統」查詢結果及公告為準。</p>`;
   }
 
   // ---------- 在地圖上畫出目前可視範圍內的管制區 ----------
