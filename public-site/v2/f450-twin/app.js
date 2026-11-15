@@ -10,6 +10,8 @@ import { UnrealBloomPass } from './vendor/three/addons/postprocessing/UnrealBloo
 import { OutlinePass } from './vendor/three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from './vendor/three/addons/postprocessing/OutputPass.js';
 import { PARTS, LAYERS, STATUS, STEPS, WIRING, CHECKS, SPECS, PRIMARY, LABELS, WIRING_LINKS, SIZE_REFS, PHOTOS, VIEW_PHOTOS } from './parts-data.js?v=1.2.1';
+import { createPractice } from './training/assembly-mode.js?v=p7-2';   // P2 實訓：3D 組裝練習（只透過下方幾個掛勾接入）
+import { createSync3D } from './training/sync3d.js?v=p7-1';   // P4 實訓：2D／3D 同步
 
 const $ = (id) => document.getElementById(id);
 const query = new URLSearchParams(location.search);
@@ -132,6 +134,23 @@ function setView(v) {
 document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 $('toggle-labels').onclick = (e) => { showLabels = !showLabels; e.currentTarget.classList.toggle('on', showLabels); };
 $('toggle-pip').onclick = (e) => { showPip = !showPip; e.currentTarget.classList.toggle('on', showPip); updatePip(); };
+// 3D 主畫面全螢幕：電腦用瀏覽器原生全螢幕（Esc 離開）；iPhone 等不支援元素全螢幕時改成鋪滿整頁（按鈕或 Esc 離開）
+const fullBtn = $('toggle-full');
+const isFull = () => document.fullscreenElement === host || host.classList.contains('pseudo-full');
+function setFull(on, pseudo = false) {
+  host.classList.toggle('pseudo-full', on && pseudo);
+  document.documentElement.classList.toggle('f450-full', on && pseudo);   // 鋪滿整頁時鎖住背景捲動
+  fullBtn.classList.toggle('on', on);
+  fullBtn.textContent = on ? '✕ 離開全螢幕' : '⛶ 全螢幕';
+  requestAnimationFrame(() => { resize(); setView(currentView); });       // 重新計算 3D 畫面大小，不變形
+}
+fullBtn.onclick = () => {
+  if (isFull()) { if (document.fullscreenElement) document.exitFullscreen(); else setFull(false); return; }
+  if (document.fullscreenEnabled && host.requestFullscreen) host.requestFullscreen().catch(() => setFull(true, true));
+  else setFull(true, true);
+};
+document.addEventListener('fullscreenchange', () => setFull(document.fullscreenElement === host));
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && host.classList.contains('pseudo-full')) setFull(false); });
 
 // ───────── 零件註冊與外觀 ─────────
 function medianPoint(obj) {
@@ -181,6 +200,7 @@ function dimmed(n) {
   return false;
 }
 function refreshLook() {
+  if (mode === 'practice') { const hot = practice.refresh(hotNodes); if (outline) outline.selectedObjects = hot; return; }   // P2 掛勾：練習模式自管外觀
   if (outline) outline.selectedObjects = nodes.filter((n) => n.obj.visible && (hotNodes.size ? hotNodes.has(n) : (selectedNode ? n.obj === selectedNode : n.key === selectedKey))).map((n) => n.obj);
   for (const n of nodes) {
     n.obj.visible = visible(n);
@@ -220,7 +240,7 @@ function partButton(key, title, sub) {
   const img = el('img'); img.src = imgSrc(`part-${key}.png`); img.alt = ''; img.loading = 'lazy';
   const t = el('div'); t.append(el('b', title), el('span', sub));
   b.append(img, t, Object.assign(el('span', p.status === 'PLACEHOLDER' ? '示意' : '參考', `tag ${STATUS[p.status].tone}`), { title: STATUS[p.status].zh }));
-  b.onclick = () => selectPart(key, null, true);
+  b.onclick = () => userSelect(key, null, true);
   return b;
 }
 PRIMARY.forEach(([k, t, s]) => $('part-list').append(partButton(k, t, s)));
@@ -286,6 +306,7 @@ const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let downAt = null;
 renderer.domElement.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
 renderer.domElement.addEventListener('dblclick', () => setView(currentView === 'front' ? 'iso' : currentView));   // 雙擊復原視角
 renderer.domElement.addEventListener('pointerup', (e) => {
+  if (mode === 'practice') return;   // P2 掛勾：練習模式的點選與拖曳由 assembly-mode.js 處理
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
   const r = renderer.domElement.getBoundingClientRect();
   ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -294,14 +315,24 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const hit = ray.intersectObjects(pick, false)[0]; if (!hit) return;
   const n = nodes.find((x) => x.meshes.includes(hit.object)); if (!n) return;
   if (mode === 'size' && measure.on) { pickMeasure(n); return; }
-  selectPart(n.key, n.obj);
+  userSelect(n.key, n.obj);
 });
+
+// ───────── P2 實訓：3D 組裝練習 ─────────
+const practice = createPractice({ THREE, nodes, scene, camera, renderer, controls, host, strip: $('strip-practice'),
+  onSelect: (key) => { renderInfo(key, null); selectedKey = key; }, setView: (v) => setView(v) });
+practice.setOnChange(() => refreshLook());
+// P4 掛勾：學員親手選零件（3D 點選、零件清單、標籤）時通知 2D；2D 選取時由 sync3d 高亮 3D
+const sync3d = createSync3D({ THREE, scene, camera, canvas: renderer.domElement, nodes, hotNodes, refreshLook, host, getMode: () => mode });
+function userSelect(key, node = null, frame = false) { sync3d.fromSelect(key, node); selectPart(key, node, frame); }
+$('practice-enter')?.addEventListener('click', () => host.scrollIntoView({ block: 'start', behavior: 'smooth' }));
 
 // ───────── 模式 ─────────
 function switchMode(m) {
   mode = m;
+  practice.setActive(m === 'practice');   // P2 掛勾
   document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
-  for (const id of ['explode', 'whole', 'assembly', 'wiring', 'size']) $(`strip-${id}`).hidden = id !== m;
+  for (const id of ['explode', 'whole', 'assembly', 'wiring', 'size', 'practice']) $(`strip-${id}`).hidden = id !== m;
   if (m === 'explode') { if (maxGoal() === 0) setLayers(1); }
   else { pickLayer(0); setLayers(0); }
   if (m === 'assembly') renderStep();
@@ -367,7 +398,7 @@ checkProgress();
 // ───────── 引線標籤與藍色虛線導引 ─────────
 const labelEls = LABELS.map(([k, a, b]) => {
   const d = el('div', null, 'lbl'); d.style.display = 'none'; d.append(el('b', a)); if (b) d.append(el('span', b));  // 載入前先隱藏
-  d.onclick = () => selectPart(k, null, true); $('labels').append(d); return d;
+  d.onclick = () => userSelect(k, null, true); $('labels').append(d); return d;
 });
 const svg = $('leaders');
 const guideGroup = new THREE.Group(); scene.add(guideGroup);
@@ -386,7 +417,7 @@ function updateOverlays() {
   const W = r.width, H = r.height;
   const anchors = LABELS.map(([k, , , kw]) => {
     const n = nodes.find((x) => x.key === k && x.name.includes(kw)) || nodes.find((x) => x.key === k);
-    if (!n || !n.obj.visible || dimmed(n) || !showLabels || mode === 'size') return null;   // 尺寸模式只留尺寸標註
+    if (!n || !n.obj.visible || dimmed(n) || !showLabels || mode === 'size' || mode === 'practice') return null;   // 尺寸、練習模式不顯示引線標籤   // 尺寸模式只留尺寸標註
     v.copy(n.c0).add(n.obj.position).sub(n.base).project(camera);
     if (v.z > 1) return null;
     return { x: (v.x * 0.5 + 0.5) * W, y: (-v.y * 0.5 + 0.5) * H };
@@ -415,7 +446,7 @@ function updateOverlays() {
   svg.innerHTML = lines;
   // 虛線導引：從組裝位置連到目前位置（只在拆解時顯示）
   for (const { n, line } of guides) {
-    const show = n.obj.visible && !dimmed(n) && layerNow[n.layer] > 0.02;
+    const show = mode !== 'practice' && n.obj.visible && !dimmed(n) && layerNow[n.layer] > 0.02;
     line.visible = show; if (!show) continue;
     const pos = line.geometry.attributes.position;
     v.copy(n.c0).add(n.obj.position).sub(n.base);
@@ -472,6 +503,33 @@ function selectWire(i) {
 document.querySelectorAll('[data-wire]').forEach((b) => (b.onclick = () => {
   wireFilter = b.dataset.wire; document.querySelectorAll('[data-wire]').forEach((x) => x.classList.toggle('on', x === b)); selectWire(-1);
 }));
+// 2026-11-06：「▶ 接線教學」——依序播放每一條連線：3D 只顯示該線並高亮兩端零件，下方顯示「從 → 到：用途」
+let wirePlayTimer = null;
+function stopWirePlay() {
+  if (wirePlayTimer) { clearInterval(wirePlayTimer); wirePlayTimer = null; }
+  $('wire-play').textContent = '▶ 接線教學';
+}
+$('wire-play').onclick = () => {
+  if (wirePlayTimer) { stopWirePlay(); return; }
+  let k = -1;
+  const total = WIRING.length;
+  const step = () => {
+    k += 1;
+    if (k >= total) { stopWirePlay(); selectWire(-1); $('wire-caption').textContent = '接線教學播放完畢。接線前務必先拆槳，並對照實機外殼印字。'; return; }
+    selectWire(k);
+    const [a, b, c] = WIRING[k];
+    $('wire-caption').hidden = false;
+    $('wire-caption').textContent = `第 ${k + 1}／${total} 條：${a} → ${b}｜${c}`;
+    $('wiring-table').tBodies[0].rows[k]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+  $('wire-play').textContent = '⏸ 暫停';
+  step();
+  wirePlayTimer = setInterval(step, 3000);
+};
+// 手動點表格列或切換篩選時，停止自動播放
+$('wiring-table').addEventListener('click', stopWirePlay);
+document.querySelectorAll('[data-wire]').forEach((b) => b.addEventListener('click', stopWirePlay));
+
 function updateWiring() {
   wireGroup.visible = mode === 'wiring'; if (!wireGroup.visible) return;
   const t = performance.now() / 1600;
@@ -610,6 +668,7 @@ function fpsGuard() {
 }
 const tmp = new THREE.Vector3();
 function applyPositions() {   // 依各層拆解程度放置零件
+  if (mode === 'practice') { practice.update(); return; }   // P2 掛勾：練習模式由學員拖曳決定位置
   for (const n of nodes) { n.obj.position.copy(n.base).add(tmp.copy(n.explode).multiplyScalar(Math.max(layerNow[n.layer] * distScale, n.fly))); n.obj.updateMatrixWorld(true); }
 }
 (function tick() {
@@ -618,7 +677,7 @@ function applyPositions() {   // 依各層拆解程度放置零件
   applyPositions();
   controls.update();
   if (animatingCam) { camera.position.lerp(camGoal, 0.1); controls.target.lerp(tgtGoal, 0.1); if (camera.position.distanceTo(camGoal) < 0.5) animatingCam = false; }
-  if (nodes.length) { updateOverlays(); updateWiring(); updateDims(); }
+  if (nodes.length) { updateOverlays(); updateWiring(); updateDims(); sync3d.update(); }
   if (composer) composer.render(); else renderer.render(scene, camera);
   fpsGuard();
   requestAnimationFrame(tick);

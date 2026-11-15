@@ -9,7 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>F450 數位孿生 1.2｜FDE-AI-UAS</title>
-<link rel="stylesheet" href="./twin.css?v=1.2.0">
+<link rel="stylesheet" href="./twin.css?v=1.7.0">
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -28,6 +28,7 @@
     <button data-mode="assembly"><svg viewBox="0 0 24 24"><path d="M7 4l12 8-12 8z"/></svg>組裝流程</button>
     <button data-mode="wiring"><svg viewBox="0 0 24 24"><path d="M12 3v6 M6 15v-3h12v3 M6 15a2 2 0 100 4 2 2 0 000-4 M18 15a2 2 0 100 4 2 2 0 000-4 M12 9a2 2 0 100-.1"/></svg>接線圖</button>
     <button data-mode="size"><svg viewBox="0 0 24 24"><path d="M4 20L20 4 M14 4h6v6 M4 14v6h6"/></svg>尺寸規格</button>
+    <a class="sim-link" href="./wiring.html" title="全螢幕接線模擬器：從零件欄拖入零件、點引腳接線、上電測試"><svg viewBox="0 0 24 24"><path d="M4 6h5v5H4z M15 13h5v5h-5z M9 8.5h3a2 2 0 012 2v3.5a2 2 0 002 2"/><circle cx="12" cy="20" r="1"/></svg>接線模擬器</a>
   </nav>
 </header>
 <details class="truth"><summary>資料狀態</summary>
@@ -56,7 +57,7 @@
       <div id="pip" hidden><img alt="同角度真機照片"><span></span></div>
       <div class="viewbar">
         <button data-view="iso" class="on">等軸</button><button data-view="top">上視</button><button data-view="right">右視</button><button data-view="front">前視</button>
-        <button id="toggle-labels" class="on">標籤</button><button id="toggle-pip">📷 實拍對照</button>
+        <button id="toggle-labels" class="on">標籤</button><button id="toggle-pip">📷 實拍對照</button><button id="toggle-full" title="3D 主畫面全螢幕（按 Esc 或再按一次離開）">⛶ 全螢幕</button>
       </div>
     </div>
     <p class="hint">拖曳旋轉｜滾輪或雙指縮放｜右鍵或雙指拖曳平移｜點零件看介紹</p>
@@ -83,10 +84,13 @@
     <section class="card strip" id="strip-wiring" hidden>
       <div class="safety">⚠ 只列連接關係，全部「待實機核對」；不提供腳位定義。接線前對照實機外殼印字並先拆槳。</div>
       <div class="row"><span class="legend-line power">━ 電源路徑</span><span class="legend-line signal">━ 訊號路徑</span>
-        <span class="sep"></span><button data-wire="all" class="on">全部</button><button data-wire="power">只看電源</button><button data-wire="signal">只看訊號</button></div>
+        <span class="sep"></span><button data-wire="all" class="on">全部</button><button data-wire="power">只看電源</button><button data-wire="signal">只看訊號</button><span class="sep"></span><button id="wire-play" class="primary">▶ 接線教學</button></div>
+      <p class="note" id="wire-caption" aria-live="polite" hidden></p>
       <p class="note">點表格任一列，3D 會只顯示那條連線並高亮兩端零件；光點方向＝電流或訊號流向。</p>
       <div class="tw"><table id="wiring-table"><thead><tr><th>從</th><th>到</th><th>用途</th></tr></thead><tbody></tbody></table></div>
     </section>
+    <!-- P2：3D 組裝練習（內容由 training/assembly-mode.js 產生；從下方實訓區進入） -->
+    <section class="card strip" id="strip-practice" hidden></section>
     <section class="card strip" id="strip-size" hidden>
       <div class="row"><button id="measure-toggle">📏 兩點量測</button><button id="dims-toggle" class="on">3D 尺寸標註</button><span id="measure-out" class="note"></span></div>
       <table class="sizes"><tbody id="size-refs">
@@ -120,6 +124,43 @@
   </aside>
 </main>
 
-<script type="module" src="./app.js?v=1.2.1"></script>
+<!-- P1：無人機組裝與接線實訓入口（只加在既有 F450 孿生下方，不改上方模式與零件功能） -->
+<section class="training" id="training" aria-labelledby="training-title">
+  <h2 id="training-title">無人機組裝與接線實訓</h2>
+  <p class="note">兩個實訓模組：站內的 F450 開源飛控組裝與接線（開發中），以及外部公開的 FPV 穿越機接線練習。</p>
+  <div class="train-grid">
+    <article class="card train-card">
+      <h3>A. F450 開源飛控組裝與接線 <span class="tag pending">部分開放</span></h3>
+      <p>站內模組：3D 組裝、2D 接線、自動檢查、實訓考核。以本頁 F450 數位孿生為基礎，接線關係與上方「接線圖」同一份資料。</p>
+      <ul class="train-list">
+        <li>3D 組裝練習（已開放）：依步驟把零件拖到機架上，檢查順序、方向與槳葉轉向</li>
+        <li>2D 接線練習（已開放）：在接線畫布上連接飛控、電調、接收機、GPS 等</li>
+        <li>自動檢查與判分（試行）：標出接錯、缺線、接頭不合、極性錯等問題，100 分分項成績單</li>
+        <li>教學／練習／考核三種模式（已開放）；登入後成績存入 <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/sim-practice/" target="_blank" rel="noopener">我的練習紀錄</a>，老師可在後台查看（試行分數）</li>
+      </ul>
+      <p class="note">練習結果目前不記錄、不計成績；規則待實機核對。</p>
+      <div class="train-actions"><button type="button" class="primary" data-mode="practice" id="practice-enter">開始 3D 組裝練習 ↑</button> <button type="button" class="primary" id="wire2d-enter">開始 2D 接線練習 ↓</button></div>
+    </article>
+    <article class="card train-card">
+      <h3>B. FPV 穿越機接線實訓 <span class="tag ref">外部網站</span></h3>
+      <p>用外部公開的 FPV 接線模擬器，練習穿越機飛控、電調、圖傳、接收機的接線關係。</p>
+      <p class="note">來源：花生FPV 公開網站（hs-fpv.com）。本平台未嵌入、未複製該網站內容，該網站上的操作不會自動記錄到本平台。</p>
+      <ol class="train-list">
+        <li>點下方按鈕，在新分頁開啟接線模擬器</li>
+        <li>完成接線後，用該網站的匯出功能存成 PNG 圖片</li>
+        <li>到 <a href="https://fde-ai-v2.fde-ai-gateway.workers.dev/student/" target="_blank" rel="noopener">我的學習</a>，打開任務卡「M13 FPV 穿越機接線實訓」，在「上傳佐證」放入 PNG 並寫接線說明，等待教師審核（需登入學員帳號）</li>
+      </ol>
+      <a class="train-link" href="https://hs-fpv.com/wiring-simulator" target="_blank" rel="noopener noreferrer">開啟 FPV 接線模擬器（外部網站，新分頁）↗</a>
+    </article>
+  </div>
+  <!-- P5：教學／練習／考核模式與成績單（內容由 training/session.js 產生） -->
+  <section class="card train-session" id="train-session" aria-label="實訓模式與成績單"></section>
+  <!-- P3：2D 接線練習（內容由 training/wiring-canvas.js 產生；不依賴 3D） -->
+  <section class="card wire2d" id="wire2d" hidden aria-label="2D 接線練習"><div class="w2-level" role="tablist" aria-label="接線層級"><button type="button" data-level="pin" class="on" role="tab" aria-selected="true">零件組裝接線（拖入零件・接線・上電測試）</button><button type="button" data-level="base" role="tab" aria-selected="false">接頭級（基礎）</button></div><div class="w2-root"></div><div class="w2-pin-root" hidden></div></section>
+</section>
+<script type="module" src="./training/wiring-canvas.js?v=p14-1"></script>
+<script type="module" src="./training/session.js?v=p11-1"></script>
+
+<script type="module" src="./app.js?v=1.6.0"></script>
 </body>
 </html>
