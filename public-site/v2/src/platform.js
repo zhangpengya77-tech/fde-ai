@@ -303,7 +303,7 @@ export const cohorts = [
         url: 'https://www.youtube.com/watch?v=oXK6lE6KFmI'
       }
     ],
-    githubUrl: 'https://github.com/Elijahieee/fde-ai',
+    githubUrl: 'https://github.com/zhangpengya77-tech/fde-ai',
     coverImage: ''
   }
 ];
