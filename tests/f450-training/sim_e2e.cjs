@@ -48,7 +48,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
   ok(await page.locator('#bench-root .bench-part').count() === 16, '完整接線示例放好 16 個零件');
   if (OUT) await page.screenshot({ path: path.join(OUT, 'P14_sim_demo.png') });
   await act('demo').click();
-  const pin = (id) => page.locator(`#bench-root [data-pin="${id}"] circle`);
+  const pin = (id) => page.locator(`#bench-root [data-pin="${id}"] circle.pin-dot`);
   const wire = async (a, b) => { await pin(a).click({ force: true }); await pin(b).click({ force: true }); };
   // 先接電池到電源模組，再把電源模組 6P 的 VCC 接到 POWER 的 GND（短路）→ 上電「砰」
   await wire('battery.xt60#+', 'power_module.in#+'); await wire('battery.xt60#-', 'power_module.in#-');

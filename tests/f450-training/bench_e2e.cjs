@@ -32,7 +32,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
   const act = (n) => page.locator(`${R} [data-act="${n}"]`);
   const parts = () => P((r) => [...document.querySelectorAll(`${r} .bench-part`)].map((g) => g.dataset.part), R);
   const wireCount = () => page.locator(`${R} [data-wire]`).count();
-  const pin = (id) => page.locator(`${R} [data-pin="${id}"] circle`);
+  const pin = (id) => page.locator(`${R} [data-pin="${id}"] circle.pin-dot`);
   const wire = async (a, b) => { await pin(a).click({ force: true }); await pin(b).click({ force: true }); };
   const total = () => P(() => Number(document.querySelector('#train-session .ts-total b')?.textContent));
   const report = () => P((r) => document.querySelector(`${r} .bench-report`)?.textContent || '', R);
