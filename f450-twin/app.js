@@ -134,6 +134,23 @@ function setView(v) {
 document.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 $('toggle-labels').onclick = (e) => { showLabels = !showLabels; e.currentTarget.classList.toggle('on', showLabels); };
 $('toggle-pip').onclick = (e) => { showPip = !showPip; e.currentTarget.classList.toggle('on', showPip); updatePip(); };
+// 3D 主畫面全螢幕：電腦用瀏覽器原生全螢幕（Esc 離開）；iPhone 等不支援元素全螢幕時改成鋪滿整頁（按鈕或 Esc 離開）
+const fullBtn = $('toggle-full');
+const isFull = () => document.fullscreenElement === host || host.classList.contains('pseudo-full');
+function setFull(on, pseudo = false) {
+  host.classList.toggle('pseudo-full', on && pseudo);
+  document.documentElement.classList.toggle('f450-full', on && pseudo);   // 鋪滿整頁時鎖住背景捲動
+  fullBtn.classList.toggle('on', on);
+  fullBtn.textContent = on ? '✕ 離開全螢幕' : '⛶ 全螢幕';
+  requestAnimationFrame(() => { resize(); setView(currentView); });       // 重新計算 3D 畫面大小，不變形
+}
+fullBtn.onclick = () => {
+  if (isFull()) { if (document.fullscreenElement) document.exitFullscreen(); else setFull(false); return; }
+  if (document.fullscreenEnabled && host.requestFullscreen) host.requestFullscreen().catch(() => setFull(true, true));
+  else setFull(true, true);
+};
+document.addEventListener('fullscreenchange', () => setFull(document.fullscreenElement === host));
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && host.classList.contains('pseudo-full')) setFull(false); });
 
 // ───────── 零件註冊與外觀 ─────────
 function medianPoint(obj) {

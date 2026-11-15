@@ -270,3 +270,7 @@ details.truth p{margin:6px 0 0;max-width:110ch;color:#e9d7a6}
 .w2-src a,.w2-steps a{color:var(--accent)}
 .w2-demo .demo-line{fill:none;stroke-width:4;stroke-dasharray:10 6;opacity:.95;filter:drop-shadow(0 0 3px rgba(255,255,255,.6))}
 .w2-demo-cap{font-weight:600;color:var(--ref)}
+/* 3D 主畫面全螢幕 */
+#viewer:fullscreen{width:100vw;height:100vh;min-height:0;border-radius:0;border:0}
+#viewer.pseudo-full{position:fixed;inset:0;z-index:200;width:100vw;height:100vh;height:100dvh;min-height:0;border-radius:0;border:0;margin:0}
+html.f450-full,html.f450-full body{overflow:hidden}
