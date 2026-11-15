@@ -379,19 +379,23 @@ const enter = document.getElementById('wire2d-enter');
 if (panel && enter) {
   let api = null;
   let pinApi = null;
+  // P13：預設進入零件組裝接線工作台；記住學員上次選的分頁
+  const LEVEL_KEY = 'f450twin-wire-level';
+  const savedLevel = () => { try { return localStorage.getItem(LEVEL_KEY) === 'base' ? 'base' : 'pin'; } catch { return 'pin'; } };
   // P11：接頭級（基礎）／引腳級（進階）切換；引腳級畫布第一次切換時才載入
   async function setLevel(level) {
     const pinRoot = panel.querySelector('.w2-pin-root'), baseRoot = panel.querySelector('.w2-root');
     panel.querySelectorAll('[data-level]').forEach((b) => { b.classList.toggle('on', b.dataset.level === level); b.setAttribute('aria-selected', String(b.dataset.level === level)); });
     baseRoot.hidden = level !== 'base'; pinRoot.hidden = level !== 'pin';
+    try { localStorage.setItem(LEVEL_KEY, level); } catch { /* 無痕模式 */ }
     // P12：進階改成零件組裝接線工作台（從左邊零件欄拖入零件，再點引腳接線、上電測試）
-    if (level === 'pin' && !pinApi) pinApi = (await import('./bench.js?v=p12-1')).initBench(pinRoot);
+    if (level === 'pin' && !pinApi) pinApi = (await import('./bench.js?v=p13-1')).initBench(pinRoot);
     api?.setActive(level === 'base'); pinApi?.setActive(level === 'pin');
   }
   panel.querySelectorAll('[data-level]').forEach((b) => (b.onclick = () => setLevel(b.dataset.level)));
   enter.addEventListener('click', () => {
     panel.hidden = false;
-    if (!api) api = initWiringCanvas(panel.querySelector('.w2-root'));
+    if (!api) { api = initWiringCanvas(panel.querySelector('.w2-root')); setLevel(savedLevel()); }
     panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
   });
   if (new URLSearchParams(location.search).get('wireLevel') === 'pin') { enter.click(); setLevel('pin'); }   // 截圖與驗收用

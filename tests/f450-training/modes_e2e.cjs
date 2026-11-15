@@ -11,6 +11,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
 (async () => {
   const browser = await chromium.launch({ args: ['--allow-file-access-from-files', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+  await page.addInitScript(() => { try { localStorage.setItem('f450twin-wire-level', 'base'); } catch { /* 無痕 */ } });   // P13：這組測試走接頭級分頁
   const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   page.on('dialog', (d) => d.accept());
   await page.goto(`${URL}?fx=0&practiceDebug=1&mode=practice`, { timeout: 150000 });

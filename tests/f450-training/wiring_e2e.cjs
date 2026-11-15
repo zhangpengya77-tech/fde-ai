@@ -14,6 +14,7 @@ const snap = async (fn) => { try { await fn(); } catch (e) { log.push(`SKIP 截�
   for (const [name, vp] of [['desk', { width: 1440, height: 1000 }], ['mob', { width: 390, height: 844 }]]) {
     const ctx = await browser.newContext({ viewport: vp, hasTouch: name === 'mob' });
     const page = await ctx.newPage();
+    await page.addInitScript(() => { try { localStorage.setItem('f450twin-wire-level', 'base'); } catch { /* 無痕 */ } });   // P13：這組測試走接頭級分頁
     const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
     page.on('dialog', (d) => d.accept());
     await page.goto(`${URL}?fx=0&lite=1`, { timeout: 150000 });

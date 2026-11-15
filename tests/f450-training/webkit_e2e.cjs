@@ -52,6 +52,7 @@ async function touchDrag(page, [x0, y0], [x1, y1]) {
     const { defaultBrowserType, ...opts } = r.ctx;
     const context = await browser.newContext(opts);
     const page = await context.newPage();
+    await page.addInitScript(() => { try { localStorage.setItem('f450twin-wire-level', 'base'); } catch { /* 無痕 */ } });   // P13：這組測試走接頭級分頁
     const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
     page.on('dialog', (d) => d.accept());
     const posts = [];

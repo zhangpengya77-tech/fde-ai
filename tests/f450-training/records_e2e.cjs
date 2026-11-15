@@ -15,6 +15,7 @@ const ok = (c, m) => { log.push(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) process.
 
 async function openPage(browser, api) {
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
+  await page.addInitScript(() => { try { localStorage.setItem('f450twin-wire-level', 'base'); } catch { /* 無痕 */ } });   // P13：這組測試走接頭級分頁
   const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
   page.on('dialog', (d) => d.accept());
   await page.route(`${HOST}/**`, async (route) => {

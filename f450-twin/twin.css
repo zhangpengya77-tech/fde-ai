@@ -295,36 +295,62 @@ html.f450-full,html.f450-full body{overflow:hidden}
 .pinwire.bad .line{stroke:var(--danger)!important;stroke-width:4}
 .pinwire.good .line{opacity:1}
 .w2-demo .demo-line{stroke-width:3}
-/* P12 零件組裝接線工作台：左零件欄＋右工作區（可平移、縮放、拖曳零件） */
-.bench-tools{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
-.bench-tools button.power{background:#7a1f1f;border-color:#d84b4b;color:#fff;font-weight:700}
-.bench-tools button[hidden]{display:none}
-.bench-zoom{align-self:center;min-width:3.2em;text-align:center;font-family:var(--mono);font-size:12px;color:#c8d2dc}
-.bench-body{display:grid;grid-template-columns:220px 1fr;gap:8px;min-height:560px}
-.bench-palette{overflow:auto;max-height:640px;border:1px solid #2a3a4c;border-radius:8px;padding:6px;background:#0a1624}
-.bench-ph{font-weight:700;margin:2px 4px 6px;color:#e8f2fc}
-.bench-item{display:flex;align-items:center;gap:6px;padding:6px;margin-bottom:4px;border:1px solid #24364a;border-radius:6px;background:#0f2133;cursor:grab;user-select:none}
-.bench-item b{display:block;font-size:13px;color:#e8f2fc}
-.bench-item span{display:block;font-size:11px;color:#9aa8b6}
-.bench-item>div{flex:1;min-width:0}
-.bench-item button{min-width:30px}
-.bench-item.placed{opacity:.5;cursor:default}
-.bench-stage{position:relative;border:1px solid #2a3a4c;border-radius:8px;background:#071320;background-image:radial-gradient(#1b2c3f 1px,transparent 1px);background-size:24px 24px;overflow:hidden}
-.bench-svg{display:block;width:100%;height:640px;cursor:grab;touch-action:none;outline:none}
+/* P13 零件組裝接線工作台：點陣工作區上疊浮動工具列、彈出零件欄、右上檢查鈕、右下縮放列；淺色為預設，可切深色 */
+.bench{--b-bg:#f4f5f7;--b-dot:#c9ced6;--b-ink:#1d2329;--b-sub:#5d6772;--b-panel:#fff;--b-line:#dfe3e8;--b-shadow:0 6px 20px rgba(20,30,40,.14);--b-hover:#eef1f4}
+.bench.bench-dark{--b-bg:#071320;--b-dot:#1b2c3f;--b-ink:#e8f2fc;--b-sub:#9aa8b6;--b-panel:#0f2133;--b-line:#2a3a4c;--b-shadow:0 6px 20px rgba(0,0,0,.45);--b-hover:#16304a}
+.bench-stage{position:relative;height:min(78vh,760px);min-height:520px;border:1px solid var(--b-line);border-radius:14px;overflow:hidden;background-color:var(--b-bg);background-image:radial-gradient(var(--b-dot) 1.2px,transparent 1.3px);background-size:22px 22px}
+.bench-svg{display:block;width:100%;height:100%;cursor:grab;touch-action:none;outline:none}
 .bench-svg.grabbing{cursor:grabbing}
+.bench button{font:inherit;color:var(--b-ink);background:transparent;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;line-height:1.1}
+.bench button:hover:not(:disabled){background:var(--b-hover)}
+.bench button:disabled{opacity:.4;cursor:default}
+.bench button[hidden],.bench-menu[hidden],.bench-palette[hidden]{display:none}
+.bench-topbar{position:absolute;top:12px;left:12px;right:96px;display:flex;flex-wrap:wrap;gap:2px;align-items:center;width:max-content;max-width:calc(100% - 108px);padding:5px;background:var(--b-panel);border:1px solid var(--b-line);border-radius:14px;box-shadow:var(--b-shadow)}
+.bench-topbar button{font-size:15px;font-weight:600}
+.bench-topbar button.strong{background:var(--b-hover)}
+.bench-topbar button.on{outline:2px solid #2e9a63}
+.bench-menu{position:absolute;top:66px;left:12px;display:flex;flex-direction:column;min-width:200px;padding:6px;background:var(--b-panel);border:1px solid var(--b-line);border-radius:12px;box-shadow:var(--b-shadow);z-index:3}
+.bench-menu button{text-align:left}
+.bench-actions{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:8px}
+.bench-actions button{width:58px;height:58px;border-radius:16px;font-size:26px;color:#fff;box-shadow:var(--b-shadow)}
+.bench-actions button.go{background:#1f8a4c}.bench-actions button.go:hover{background:#18733f}
+.bench-actions button.power{background:#c0392b}.bench-actions button.power:hover{background:#a42f23}
+.bench-palette{position:absolute;top:70px;left:12px;bottom:84px;width:min(330px,calc(100% - 24px));overflow:auto;padding:6px;background:var(--b-panel);border:1px solid var(--b-line);border-radius:16px;box-shadow:var(--b-shadow);z-index:2}
+.bench-ph{display:flex;justify-content:space-between;align-items:center;padding:4px 8px 6px;color:var(--b-ink)}
+.bench-ph button{padding:4px 8px}
+.bench-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px;cursor:grab;user-select:none;color:var(--b-ink)}
+.bench-item:hover{background:var(--b-hover)}
+.bench-item>div{flex:1;min-width:0}
+.bench-item b{display:block;font-size:15px}
+.bench-item span{display:block;font-size:11.5px;color:var(--b-sub)}
+.bench-item button{font-size:22px;padding:2px 8px;color:var(--b-sub)}
+.bench-item.placed{opacity:.45;cursor:default}
+.bench-thumb{width:64px;height:46px;flex:none}
+.bench-zoombar{position:absolute;right:12px;bottom:12px;display:flex;align-items:center;gap:2px;padding:5px;background:var(--b-panel);border:1px solid var(--b-line);border-radius:14px;box-shadow:var(--b-shadow)}
+.bench-zoombar button{font-size:18px;padding:6px 10px}
+.bench-zoom{min-width:3.4em;text-align:center;font-family:var(--mono);font-size:14px;color:var(--b-ink)}
 .bench-part{cursor:move}
-.bench-part.sel>rect:first-child{stroke:#7ee8c8;stroke-width:4}
-.bench-boom{fill:#ffcf33;stroke:#ff5a1f;stroke-width:5;animation:benchboom .6s ease-out}
-.bench-boom-txt{fill:#7a1100;font-size:26px;font-weight:900}
+.bench-selbox{fill:transparent;stroke:none}
+.bench-part.sel .bench-selbox{stroke:#2e9a63;stroke-width:3;stroke-dasharray:8 5}
+.bench-cap{fill:var(--b-ink);font-size:15px;font-weight:700;pointer-events:none}
+.bench .pin-label{fill:var(--b-sub);font-weight:600}
+.bench .pin-dot{fill:var(--b-panel)}
+.bench .pin.used .pin-dot{fill:currentColor}
+.bench .pin.pending .pin-dot{fill:#ffd400}
+.bench .w2-preview{stroke:var(--b-ink)}
+.bench .pinwire.sel .line{filter:drop-shadow(0 0 3px #2e9a63)}
+.ba-silk{fill:#e6ebf0;font-size:10px;font-family:var(--mono)}
+.ba-silk.light{fill:#e6ebf0}.ba-silk.dark{fill:#3a2e05}.ba-silk.gold{fill:#e0b54a;font-size:14px}
+.ba-label{fill:#1d2329;font-size:11px;font-weight:700}.ba-label.dark{fill:#1d2329;font-size:15px}
+.ba-big{font-size:30px;font-weight:900}.ba-big.dark{fill:#3a2e05}
+.bench-boom{fill:#ffcf33;stroke:#ff5a1f;stroke-width:5;transform-box:fill-box;transform-origin:center;animation:benchboom .6s ease-out}
+.bench-boom-txt{fill:#7a1100;font-weight:900}
 @keyframes benchboom{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
-.bench-boom{transform-box:fill-box;transform-origin:center}
 .bench-svg.shake{animation:benchshake .45s linear}
 @keyframes benchshake{0%,100%{transform:none}20%{transform:translate(-8px,4px)}40%{transform:translate(7px,-5px)}60%{transform:translate(-5px,-3px)}80%{transform:translate(4px,3px)}}
 .bench-report{margin-top:8px}
 .bench-power{list-style:none;padding:0;margin:6px 0}
-.bench-power li{padding:3px 8px;margin:2px 0;border-left:4px solid #888;background:#0f2133}
-.bench-power li.ok{border-color:#43a047}
-.bench-power li.warn{border-color:#fb8c00}
-.bench-power li.bad{border-color:#e53935;color:#ffd0d0}
-@media (max-width:760px){.bench-body{grid-template-columns:1fr}.bench-palette{max-height:180px;display:grid;grid-template-columns:1fr 1fr;gap:4px}.bench-ph{grid-column:1/-1}.bench-svg{height:460px}}
+.bench-power li{padding:3px 8px;margin:2px 0;border-left:4px solid #888;background:rgba(127,127,127,.08)}
+.bench-power li.ok{border-color:#43a047}.bench-power li.warn{border-color:#fb8c00}.bench-power li.bad{border-color:#e53935}
+@media (max-width:760px){.bench-stage{height:72vh;min-height:480px}.bench-topbar{right:76px;max-width:calc(100% - 88px)}.bench-topbar button{font-size:14px;padding:7px 9px}.bench-actions button{width:50px;height:50px;font-size:22px}.bench-palette{bottom:76px}}
 @media (prefers-reduced-motion:reduce){.bench-boom,.bench-svg.shake{animation:none}}

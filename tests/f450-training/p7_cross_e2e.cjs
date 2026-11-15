@@ -85,6 +85,7 @@ async function smoke(page, name, { touch = false, cdp = null } = {}) {
       const { defaultBrowserType, ...ctxOpts } = r.ctx;
       const context = await browser.newContext(ctxOpts);
       const page = await context.newPage();
+      await page.addInitScript(() => { try { localStorage.setItem('f450twin-wire-level', 'base'); } catch { /* 無痕 */ } });   // P13：這組測試走接頭級分頁
       const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
       page.on('dialog', (d) => d.accept());
       const cdp = r.touch ? await context.newCDPSession(page) : null;
