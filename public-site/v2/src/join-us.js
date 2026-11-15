@@ -7,7 +7,8 @@
   var LINE_URL = 'https://line.me/ti/g/jnXbd7PKK8';   // QR 碼內容（LINE 群邀請連結）
   var PHONE = '0901189740', PHONE_SHOW = '0901-189-740';
   var KEY = 'fde-joinus-collapsed';
-  var base = (document.currentScript && document.currentScript.src) ? document.currentScript.src.replace(/src\/join-us\.js.*$/, '') : './';
+  // QR 圖片放在這支程式旁邊（GitHub 頁面與教師電腦的平台路徑不同，用程式自己的位置找）
+  var QR = (document.currentScript && document.currentScript.src) ? new URL('line-group-qr.png', document.currentScript.src).href : './src/line-group-qr.png';
 
   var css = [
     '.joinus{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:60;font-family:Arial,"Microsoft JhengHei","PingFang TC",sans-serif;color:#e8f6ff}',
@@ -36,7 +37,7 @@
       '<div class="joinus-card">' +
         '<button type="button" class="joinus-x" aria-label="收合">×</button>' +
         '<h3>加入我們</h3>' +
-        '<img class="joinus-qr" src="' + base + 'assets/line-group-qr.png" width="168" height="168" alt="FDE-AI LINE 群組 QR 碼">' +
+        '<img class="joinus-qr" src="' + QR + '" width="168" height="168" alt="FDE-AI LINE 群組 QR 碼">' +
         '<p class="joinus-note">LINE 掃碼加入學習群組</p>' +
         '<a class="joinus-line" href="' + LINE_URL + '" target="_blank" rel="noopener">用 LINE 加入群組</a>' +
         '<a class="joinus-tel" href="tel:' + PHONE + '">聯繫教師<br><b>' + PHONE_SHOW + '</b></a>' +
