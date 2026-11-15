@@ -434,11 +434,12 @@ const learningResources = learningTracks.flatMap((track) =>
 
 const practiceResources = [
   {
-    category: 'phoenix-simulator',
-    title: '鳳凰模擬器飛行練習',
-    description: '安裝完成後練習起飛、定點懸停、方向控制、降落與四面懸停。',
-    url: 'https://www.flugsimulatoren.ch/',
-    steps: ['向管理員取得安裝包並完成本地安裝', '開啟 Phoenix RC 社群資源確認模型與更新說明', '完成遙控器或鍵盤控制設定', '每天練習起飛、懸停、轉向與降落', '錄製一次穩定四面懸停作為測評素材']
+    // 2026-11-15：原「鳳凰模擬器飛行練習」改為首頁「仿真訓練」裡的「無人機考照模擬訓練」（站內網頁模擬器）
+    category: 'exam-simulator',
+    title: '無人機考照模擬訓練',
+    description: '依民航局 AC 107-005D 考場尺寸練習四面停懸、8 字水平圓、側飛、五邊、緊急返航、矩形航線；可選機型、定位／姿態模式與風況，飛完逐段評等並可 3D 回放（本站自訂評等，非民航局官方評分）。',
+    url: '/sim/app/?mode=exam&exam=0',
+    steps: ['按「開始練習」進入考照模擬訓練（也可從首頁「仿真訓練」進入）', '設定遙控器（USB 遙控器請用 Windows Chrome／Edge）或使用鍵盤', '依序練習四面停懸、8 字水平圓、側飛、五邊等科目', '看逐段評等與 3D 回放，重練弱項', '登入學員帳號後，成績會自動存入練習紀錄']
   },
   {
     category: 'license-simulator',
