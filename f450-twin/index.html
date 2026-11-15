@@ -9,7 +9,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>F450 數位孿生 1.2｜FDE-AI-UAS</title>
-<link rel="stylesheet" href="./twin.css?v=1.3.5">
+<link rel="stylesheet" href="./twin.css?v=1.4.0">
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -155,10 +155,10 @@
   <!-- P5：教學／練習／考核模式與成績單（內容由 training/session.js 產生） -->
   <section class="card train-session" id="train-session" aria-label="實訓模式與成績單"></section>
   <!-- P3：2D 接線練習（內容由 training/wiring-canvas.js 產生；不依賴 3D） -->
-  <section class="card wire2d" id="wire2d" hidden aria-label="2D 接線練習"><div class="w2-root"></div></section>
+  <section class="card wire2d" id="wire2d" hidden aria-label="2D 接線練習"><div class="w2-level" role="tablist" aria-label="接線層級"><button type="button" data-level="base" class="on" role="tab" aria-selected="true">接頭級（基礎）</button><button type="button" data-level="pin" role="tab" aria-selected="false">引腳級（進階：一根一根接）</button></div><div class="w2-root"></div><div class="w2-pin-root" hidden></div></section>
 </section>
-<script type="module" src="./training/wiring-canvas.js?v=p9-7"></script>
-<script type="module" src="./training/session.js?v=p6-2"></script>
+<script type="module" src="./training/wiring-canvas.js?v=p11-1"></script>
+<script type="module" src="./training/session.js?v=p11-1"></script>
 
 <script type="module" src="./app.js?v=1.6.0"></script>
 </body>

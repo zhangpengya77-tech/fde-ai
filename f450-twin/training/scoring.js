@@ -36,12 +36,19 @@ const DEDUCT = {
   SELF_LOOP: { cat: 'power_signal', pts: 1, zh: '自己接自己' },
   UNKNOWN_PORT: { cat: 'power_signal', pts: 1, zh: '未知接口' },
   POLARITY: { cat: 'safety', pts: 5, zh: '電源紅黑接反（會燒毀設備）' },
+  // P11 引腳級
+  SHORT: { cat: 'safety', pts: 5, zh: '電源接到地線（短路，會燒板）' },
+  TX_NOT_CROSSED: { cat: 'power_signal', pts: 2, zh: 'TX／RX 沒交叉' },
+  PIN_WRONG: { cat: 'power_signal', pts: 2, zh: '接錯腳' },
+  UNUSED_PIN: { cat: 'power_signal', pts: 1, zh: '接到不用的腳' },
+  ESC_RED_ON_RAIL: { cat: 'safety', pts: 2, zh: '電調紅線接到排針' },
+  PIN_BUSY: { cat: 'power_signal', pts: 1, zh: '一腳接多根線' },
 };
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
 // assembly：model.js 的組裝狀態（含 log）；wires：2D 接線陣列
-export function scoreSession(assembly, wires) {
+export function scoreSession(assembly, wires, pinIssues = []) {
   const cats = Object.fromEntries(CATEGORIES.map((c) => [c.id, { ...c, earned: 0, deductions: [], items: [] }]));
   const parts = assembly?.parts || {};
   const done = (id) => parts[id]?.status === 'installed';
@@ -76,6 +83,7 @@ export function scoreSession(assembly, wires) {
     else deduct(e.code, e.message);
   }
   for (const i of result.issues) if (i.code !== 'MISSING') deduct(i.code, i.message);
+  for (const i of pinIssues) deduct(i.code, i.message);   // P11：引腳級錯誤
 
   // 合計（每項不低於 0、不高於滿分）
   for (const c of Object.values(cats)) {

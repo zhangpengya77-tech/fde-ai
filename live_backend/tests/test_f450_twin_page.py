@@ -52,7 +52,7 @@ class F450TwinPageTests(unittest.TestCase):
 
     def test_training_modules_are_served_and_external_link_is_safe(self):
         # 2026-11-14 F450 組裝與接線實訓（P1–P6）：新模組都要能載入；FPV 只用新分頁外部連結，不嵌入
-        for name in ("model", "assembly-mode", "wiring-canvas", "bus", "sync3d", "scoring", "session", "records", "parts-art"):
+        for name in ("model", "assembly-mode", "wiring-canvas", "bus", "sync3d", "scoring", "session", "records", "parts-art", "pins", "pin-canvas"):
             self.assertEqual(self.client.get(f"/f450-twin/training/{name}.js").status_code, 200, name)
         html = (ROOT / "f450-twin" / "index.html").read_text(encoding="utf-8")
         self.assertIn('href="https://hs-fpv.com/wiring-simulator" target="_blank" rel="noopener noreferrer"', html)

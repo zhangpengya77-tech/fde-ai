@@ -113,6 +113,7 @@ export const WIRING_NOTES = [
 
 export function initWiringCanvas(root) {
   if (!root) return null;
+  let activeLevel = true;   // P11：接頭級／引腳級切換
   let trainMode = latest('trainMode')?.mode || 'practice', locked = !!latest('examLock')?.locked, stash = null;   // P5
   const isExam = () => trainMode === 'exam';
   let compFocus = null, from3d = [], show3d = false, lastFocusKey = '', lastWiresKey = '';   // P4 同步狀態
@@ -315,6 +316,7 @@ export function initWiringCanvas(root) {
   }
   function syncOut() {
     renderInfo();
+    if (!activeLevel) return;   // P11：切到引腳級時，由引腳畫布送出
     const w = wires.find((x) => x.id === selected);
     const comps = w ? [PORTS[w.from].component, PORTS[w.to].component] : pending ? [PORTS[pending].component] : compFocus ? [compFocus] : [];
     const label = w ? `${desc(w.from)} ↔ ${desc(w.to)}` : pending ? desc(pending) : compFocus ? COMPONENTS.find((c) => c.id === compFocus).zh : '';
@@ -368,7 +370,7 @@ export function initWiringCanvas(root) {
   if (isExam()) { trainMode = 'practice'; applyMode('exam'); }
 
   draw();
-  return { get wires() { return wires; }, check: () => validateWiring(wires) };
+  return { get wires() { return wires; }, check: () => validateWiring(wires), setActive(on) { activeLevel = on; lastWiresKey = ''; lastFocusKey = ''; if (on) draw(); } };
 }
 
 // 頁面入口：按「開始 2D 接線練習」才顯示畫布
@@ -376,10 +378,21 @@ const panel = document.getElementById('wire2d');
 const enter = document.getElementById('wire2d-enter');
 if (panel && enter) {
   let api = null;
+  let pinApi = null;
+  // P11：接頭級（基礎）／引腳級（進階）切換；引腳級畫布第一次切換時才載入
+  async function setLevel(level) {
+    const pinRoot = panel.querySelector('.w2-pin-root'), baseRoot = panel.querySelector('.w2-root');
+    panel.querySelectorAll('[data-level]').forEach((b) => { b.classList.toggle('on', b.dataset.level === level); b.setAttribute('aria-selected', String(b.dataset.level === level)); });
+    baseRoot.hidden = level !== 'base'; pinRoot.hidden = level !== 'pin';
+    if (level === 'pin' && !pinApi) pinApi = (await import('./pin-canvas.js?v=p11-1')).initPinCanvas(pinRoot);
+    api?.setActive(level === 'base'); pinApi?.setActive(level === 'pin');
+  }
+  panel.querySelectorAll('[data-level]').forEach((b) => (b.onclick = () => setLevel(b.dataset.level)));
   enter.addEventListener('click', () => {
     panel.hidden = false;
     if (!api) api = initWiringCanvas(panel.querySelector('.w2-root'));
     panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
   });
+  if (new URLSearchParams(location.search).get('wireLevel') === 'pin') { enter.click(); setLevel('pin'); }   // 截圖與驗收用
   if (new URLSearchParams(location.search).get('wire2d') === '1') enter.click();   // 截圖與驗收用
 }

@@ -274,3 +274,24 @@ details.truth p{margin:6px 0 0;max-width:110ch;color:#e9d7a6}
 #viewer:fullscreen{width:100vw;height:100vh;min-height:0;border-radius:0;border:0}
 #viewer.pseudo-full{position:fixed;inset:0;z-index:200;width:100vw;height:100vh;height:100dvh;min-height:0;border-radius:0;border:0;margin:0}
 html.f450-full,html.f450-full body{overflow:hidden}
+/* P11：接線層級切換與引腳級畫布 */
+.w2-level{display:inline-flex;gap:4px;margin-bottom:8px}
+.w2-pin-root[hidden],.w2-root[hidden]{display:none}
+.pin-svg{min-width:1000px}
+.pin-silk{fill:#e6ebf0;font-size:11px;font-family:var(--mono)}
+.pin-silk.big{font-size:15px;font-weight:700}
+.pin-name{fill:#e8f2fc;font-size:15px;font-weight:700;paint-order:stroke;stroke:#061423;stroke-width:4px;stroke-linejoin:round}
+.pin-name.dark{fill:#2b2205;stroke:none}
+.pin-label{fill:#c8d2dc;font-size:11px;pointer-events:none}
+.pin{cursor:pointer;outline:none}
+.pin circle{transform-box:fill-box;transform-origin:center}
+.pin:hover circle,.pin:focus-visible circle{transform:scale(1.5)}
+.pin.used circle{fill:currentColor}
+.pin.pending circle{fill:#fff;transform:scale(1.6)}
+.pin.suggest circle{stroke:#fff;stroke-width:3.5;animation:w2pulse 1s ease-in-out infinite}
+.pinwire .line{fill:none;stroke-width:2.6;opacity:.95}
+.pinwire .hit{fill:none;stroke:transparent;stroke-width:12}
+.pinwire.sel .line{stroke-width:4.5;filter:drop-shadow(0 0 3px #fff)}
+.pinwire.bad .line{stroke:var(--danger)!important;stroke-width:4}
+.pinwire.good .line{opacity:1}
+.w2-demo .demo-line{stroke-width:3}

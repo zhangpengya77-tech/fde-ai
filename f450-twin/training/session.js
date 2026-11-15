@@ -3,7 +3,7 @@
 // 練習：現在的做法；成績單即時更新，可以一直重來。
 // 考核：清空重做、不給提示、不能自行檢查；按「交卷」後鎖定並顯示分數。
 // 分數目前是「試行分數」：規則待實機核對，不計正式成績。P6：登入後可存入練習紀錄（records.js），老師在後台查看。
-import { CATEGORIES, scoreSession } from './scoring.js?v=p5-1';
+import { CATEGORIES, scoreSession } from './scoring.js?v=p11-1';
 import { emit, on, latest } from './bus.js?v=p4-1';
 import { buildPayload, recordStatus, saveRecord } from './records.js?v=p6-1';   // P6：成績存到練習紀錄
 
@@ -16,7 +16,7 @@ const MODES = [
 export function initSession(root) {
   if (!root) return null;
   let mode = 'practice', locked = false, examStart = 0, timer = null, final = null, modeStart = Date.now(), saveMsg = null, status = null;
-  let assembly = latest('assembly') || null, wires = latest('wires2d')?.wires || [];
+  let assembly = latest('assembly') || null, wires = latest('wires2d')?.wires || [], pinIssues = latest('wires2d')?.pinIssues || [];
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
   root.replaceChildren();
@@ -51,7 +51,7 @@ export function initSession(root) {
     render();
   }
   bSubmit.onclick = () => {
-    const r = scoreSession(assembly, wires);
+    const r = scoreSession(assembly, wires, pinIssues);
     const miss = [!r.assemblyDone && '3D 組裝還沒完成', wires.length === 0 && '2D 還沒有接任何線'].filter(Boolean);
     if (!confirm(`${miss.length ? `注意：${miss.join('、')}。\n` : ''}交卷後就不能再修改，確定交卷嗎？`)) return;
     locked = true; final = { ...r, seconds: Math.round((Date.now() - examStart) / 1000) };
@@ -64,7 +64,7 @@ export function initSession(root) {
   function tick() { const s = Math.round((Date.now() - examStart) / 1000); clock.textContent = `考核計時 ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
 
   on('assembly', (d) => { assembly = d; if (!locked) render(); });
-  on('wires2d', (d) => { wires = d?.wires || []; if (!locked) render(); });
+  on('wires2d', (d) => { wires = d?.wires || []; pinIssues = d?.pinIssues || []; if (!locked) render(); });
 
   // ───────── 保存（P6） ─────────
   const counts = () => ({
@@ -81,7 +81,7 @@ export function initSession(root) {
       : { text: `沒有保存：${r.message}` };
     bSave.disabled = false; renderSave();
   }
-  bSave.onclick = () => save(scoreSession(assembly, wires), (Date.now() - modeStart) / 1000);
+  bSave.onclick = () => save(scoreSession(assembly, wires, pinIssues), (Date.now() - modeStart) / 1000);
   function renderSave() {
     bSave.hidden = mode === 'exam';
     saveText.replaceChildren();
@@ -109,7 +109,7 @@ export function initSession(root) {
       card.append(el('p', '考核進行中：分數在交卷後才顯示。請到上方完成「3D 組裝練習」，到下方完成「2D 接線練習」。', 'ts-wait'));
       return;
     }
-    const r = locked ? final : scoreSession(assembly, wires);
+    const r = locked ? final : scoreSession(assembly, wires, pinIssues);
     const top = el('div', null, 'ts-total');
     top.append(el('b', `${r.total}`), el('span', ' / 100'), el('span', locked ? `　考核結果（用時 ${Math.floor(final.seconds / 60)} 分 ${final.seconds % 60} 秒）` : '　目前分數（即時）', 'note'));
     if (r.practiceOnly) top.append(el('span', '試行分數，不計正式成績', 'tag pending'));
