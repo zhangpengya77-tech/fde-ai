@@ -84,3 +84,61 @@ test("主機離線時配對 API 仍回跨網站許可，讓 GitHub 頁面能顯�
   assert.equal(res.status, 503);
   assert.equal(res.headers.get("access-control-allow-origin"), gh);
 });
+
+// 2026-11-15：主機離線時，公開頁面改由 GitHub 頁面提供（網址不變）
+const PAGES = "https://zhangpengya77-tech.github.io/fde-ai/v2/";
+const pagesFake = (calls) => async (req) => {
+  const u = new URL(req.url);
+  if (u.hostname.endsWith("trycloudflare.com")) return new Response("", { status: 530 });
+  calls.push(req.url);
+  if (u.pathname === "/fde-ai/v2/" ) return new Response("<html>首頁</html>", { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+  if (u.pathname === "/fde-ai/v2/src/app.js") return new Response("js", { status: 200, headers: { "content-type": "application/javascript" } });
+  if (u.pathname === "/fde-ai/v2/about") return new Response("<html>SPA</html>", { status: 404, headers: { "content-type": "text/html" } });
+  return new Response("nf", { status: 404, headers: { "content-type": "text/plain" } });
+};
+
+test("主機離線：首頁改由 GitHub 頁面提供，網址不變、狀態 200", async () => {
+  const calls = [];
+  const res = await worker.fetch(new Request(`${FIXED}/`, { headers: { accept: "text/html" } }), env, {}, pagesFake(calls));
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("x-fde-gateway"), "pages-fallback");
+  assert.match(await res.text(), /首頁/);
+  assert.deepEqual(calls, [PAGES]);
+});
+
+test("主機離線：靜態檔與前端路由頁（404.html）都由 GitHub 頁面提供", async () => {
+  const calls = [];
+  let res = await worker.fetch(new Request(`${FIXED}/src/app.js?v=1`), env, {}, pagesFake(calls));
+  assert.equal(res.status, 200); assert.equal(await res.text(), "js");
+  assert.equal(calls[0], `${PAGES}src/app.js?v=1`);
+  res = await worker.fetch(new Request(`${FIXED}/about`, { headers: { accept: "text/html" } }), env, {}, pagesFake(calls));
+  assert.equal(res.status, 200, "前端路由頁改回 200");
+  assert.match(await res.text(), /首頁/, "前端路由頁改給 v2 首頁");
+  res = await worker.fetch(new Request(`${FIXED}/nope.png`), env, {}, pagesFake(calls));
+  assert.equal(res.status, 404, "真的不存在的檔案維持 404");
+});
+
+test("主機離線：登入、學員、API 與 POST 仍顯示離線說明，不去 GitHub 頁面", async () => {
+  const calls = [];
+  for (const path of ["/login/", "/register/", "/student/growth/", "/teacher/login/", "/api/simlink/x"]) {
+    const res = await worker.fetch(new Request(`${FIXED}${path}`, { headers: { accept: "text/html" } }), env, {}, pagesFake(calls));
+    assert.equal(res.status, 503, path);
+  }
+  const post = await worker.fetch(new Request(`${FIXED}/`, { method: "POST", body: "x" }), env, {}, pagesFake(calls));
+  assert.equal(post.status, 503);
+  assert.deepEqual(calls, []);
+});
+
+test("沒有設定通道網址時，公開頁面也走 GitHub 頁面", async () => {
+  const calls = [];
+  const res = await worker.fetch(new Request(`${FIXED}/`, { headers: { accept: "text/html" } }), {}, {}, pagesFake(calls));
+  assert.equal(res.status, 200);
+  assert.equal(calls.length, 1);
+});
+
+test("主機在線時照常轉送到教師電腦，不碰 GitHub 頁面", async () => {
+  const seen = [];
+  const res = await worker.fetch(new Request(`${FIXED}/`), env, {}, async (req) => { seen.push(req.url); return new Response("live", { status: 200 }); });
+  assert.equal(await res.text(), "live");
+  assert.deepEqual(seen, [`${ORIGIN}/`]);
+});

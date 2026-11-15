@@ -5,7 +5,9 @@
 // 這支 Worker 提供一個「永遠不變」的網址，收到的請求一律轉送到目前的通道網址。
 //   - 目前通道網址存在 Worker 的祕密設定 ORIGIN_URL（開機時由教師電腦的排程自動更新）
 //   - GitHub 頁面只要記這個固定網址，以後不用每次重開機都重新推送
-//   - 主機關機（通道連不到）時，回一頁「教學主機離線」說明，並引導回 GitHub 頁面看公開課程
+//   - 主機關機（通道連不到）時（2026-11-15 起）：公開頁面（首頁、關於我們、F450 數位孿生、接線模擬器、
+//     模擬器、空域查詢、課程…）改由 GitHub 頁面提供，網址不變；登入、註冊、上傳、學員／教師後台、API
+//     才顯示「教學主機離線」說明。這樣對外只要給這個固定網址，教師電腦關機也照常能看。
 // 不保存任何帳號、密碼、Cookie；Cookie 由瀏覽器與 Django 直接往來（Worker 只轉送）。
 // =============================================================================
 
@@ -64,6 +66,36 @@ function offlineResponse(request) {
     status: 503,
     headers: { "content-type": "application/json; charset=UTF-8", "cache-control": "no-store", "x-fde-gateway": "offline" }
   });
+}
+
+// 主機離線時仍要顯示「離線說明」的動態路徑（需要教師電腦的功能）；其餘 GET 改由 GitHub 頁面提供
+const DYNAMIC_PREFIXES = ["/login", "/logout", "/register", "/activate", "/accounts/", "/student/", "/teacher/", "/api/", "/admin/", "/media/", "/pid-lab/", "/flight-health/", "/password", "/static/admin/"];
+export function isDynamicPath(pathname) {
+  return DYNAMIC_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+// 主機離線時的備援：公開頁面向 GitHub 頁面取同一路徑（/ → /fde-ai/v2/、/about → /fde-ai/v2/about）
+// GitHub 頁面的前端路由頁（關於我們等）沒有實體檔案 → 改給 v2 首頁（前端路由依網址顯示），狀態 200
+export async function pagesFallback(request, fetchImpl) {
+  const incoming = new URL(request.url);
+  if (!["GET", "HEAD"].includes(request.method) || isDynamicPath(incoming.pathname)) return offlineResponse(request);
+  const target = new URL(PAGES_HOME + incoming.pathname.replace(/^\/+/, ""));
+  target.search = incoming.search;
+  let r;
+  try { r = await fetchImpl(new Request(target, { method: request.method, headers: { accept: request.headers.get("accept") || "*/*" }, redirect: "follow" })); }
+  catch { return offlineResponse(request); }
+  let html = (r.headers.get("content-type") || "").includes("text/html");
+  if (r.status >= 500) return offlineResponse(request);
+  // 前端路由頁（/about、/f450…）在 GitHub 頁面沒有實體檔案：改給 v2 首頁，前端路由依網址顯示對應頁面
+  if (r.status === 404 && html && !/\.[a-z0-9]{2,5}$/i.test(incoming.pathname)) {
+    try { const home = await fetchImpl(new Request(PAGES_HOME, { headers: { accept: "text/html" }, redirect: "follow" })); if (home.ok) { r = home; html = true; } } catch { /* 用原本的回應 */ }
+  }
+  const headers = new Headers();
+  for (const k of ["content-type", "etag", "last-modified"]) if (r.headers.get(k)) headers.set(k, r.headers.get(k));
+  headers.set("cache-control", html ? "no-cache" : "public, max-age=300");
+  headers.set("x-fde-gateway", "pages-fallback");
+  const status = r.status;
+  return new Response(request.method === "HEAD" ? null : r.body, { status, headers });
 }
 
 // 通道已失效時 Cloudflare 會回 530（找不到通道）或 521～523（連不到主機）；視為主機離線
@@ -151,14 +183,14 @@ export default {
       });
     }
 
-    if (!origin) return withCors(offlineResponse(request), simlink, request);
+    if (!origin) return withCors(await pagesFallback(request, fetchImpl), simlink, request);
     try {
       const response = await fetchImpl(targetRequest(request, origin));
-      // 通道本身掛了（Cloudflare 回 530／52x，不是 Django 回的錯誤）→ 顯示離線說明
-      if (isTunnelDown(response.status)) return withCors(offlineResponse(request), simlink, request);
+      // 通道本身掛了（Cloudflare 回 530／52x，不是 Django 回的錯誤）→ 公開頁面改由 GitHub 頁面提供，其餘顯示離線說明
+      if (isTunnelDown(response.status)) return withCors(await pagesFallback(request, fetchImpl), simlink, request);
       return withCors(rewriteResponse(response, origin, fixedOrigin), simlink, request);
     } catch {
-      return withCors(offlineResponse(request), simlink, request);
+      return withCors(await pagesFallback(request, fetchImpl), simlink, request);
     }
   }
 };
