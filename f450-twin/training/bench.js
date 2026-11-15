@@ -6,7 +6,7 @@
 import { PORTS, PRACTICE_ONLY } from './model.js?v=p4-1';
 import { ALL_PINS, EXPECTED_PIN_WIRES, PIN_WIRE_TOTAL, validatePinWiring } from './pins.js?v=p11-1';
 import { PIN_POS, BOX, CASE, px, FMU, FMU_OTHER, RAIL_X0, RAIL_Y, RAIL_P, KIND_COLOR } from './pin-canvas.js?v=p12-1';
-import { ensureDefs, drawBody, thumb } from './bench-art.js?v=p13-1';
+import { ensureDefs, drawBody, drawPixhawkCase, thumb } from './bench-art.js?v=p14-1';
 import { emit, on, latest } from './bus.js?v=p4-1';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -26,7 +26,7 @@ const LOCAL = {};   // pinId → { lx, ly, n }
 for (const [pid, p] of Object.entries(PIN_POS)) { const cid = ALL_PINS[pid].component, [x, y] = RECT[cid]; LOCAL[pid] = { lx: p.x - x, ly: p.y - y, n: p.n }; }
 const PINS_OF = Object.fromEntries(PALETTE.map(([id]) => [id, Object.keys(LOCAL).filter((pid) => ALL_PINS[pid].component === id)]));
 
-export function initBench(root) {
+export function initBench(root, opts = {}) {
   if (!root) return null;
   ensureDefs();
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -72,6 +72,12 @@ export function initBench(root) {
   root.append(head, status, stage, report,
     el('p', 'Pixhawk 2.4.8 依 PX4 開源硬體 FMUv2.4.6 電路板座標等比例繪製（© PX4／3D Robotics，CC-BY-SA 3.0；本圖同授權）。引腳依 PX4 官方《Pixhawk 1》引腳表；R9DS 依樂迪官方說明書（SBUS 由 CH9 輸出）。版面與操作參考 FPV 接線模擬器，零件圖與程式為自製。GPS 模組端、電調 BEC、接頭類型待實機核對。', 'note'),
     el('p', PRACTICE_ONLY ? '練習用：上電測試是模擬，實機通電前務必拆槳；規則待教師以實機核對，結果不計正式成績。' : '', 'note'));
+  // 獨立全頁模式（wiring.html）：工作區佔滿畫面，狀態列與上電報告浮在工作區左下，說明文字交給頁面選單
+  if (opts.full) {
+    root.classList.add('bench-full'); head.hidden = true;
+    for (const n of root.querySelectorAll(':scope > .note')) n.hidden = true;
+    const dock = el('div', null, 'bench-dock'); dock.append(status, report); stage.append(dock);
+  }
   const say = (t) => { status.textContent = t; };
 
   // ───────── 復原 ─────────
@@ -304,25 +310,26 @@ export function initBench(root) {
     add(g, 'rect', { x: -6, y: -6, width: w + 12, height: h + 12, rx: 14, class: 'bench-selbox' });   // 選取框（也讓整塊都能拖）
     const A = (tag, attrs, text) => add(g, tag, attrs, text);
     if (id === 'pixhawk') {
-      A('rect', { x: 0, y: 0, width: w, height: h, rx: 26, fill: 'url(#bg-case)', stroke: '#454c55', 'stroke-width': 3, filter: 'url(#bg-shadow)' });
-      A('path', { d: `M${w / 2},20 l14,22 h-8 v14 h-12 v-14 h-8 z`, fill: '#e8ecef' });
-      A('circle', { cx: w / 2, cy: 80, r: 10, fill: '#2f6fd6', stroke: '#9cc0ff' });
-      A('text', { x: w / 2, y: 190, 'text-anchor': 'middle', class: 'pin-silk big' }, 'Pixhawk 2.4.8');
-      for (const [sx, sy] of [[18, 18], [w - 18, 18], [18, h - 18], [w - 18, h - 18]]) A('circle', { cx: sx, cy: sy, r: 6, fill: '#0c0d0f', stroke: '#5a626b' });
+      drawPixhawkCase(A, w, h);
       const silk = (x, y, t) => A('text', { x, y, 'text-anchor': 'middle', class: 'pin-silk' }, t);
       const L = (xm, ym) => { const [x, y] = px(xm, ym); return [x - CASE[0], y - CASE[1]]; };
       for (const [xm, ym, nm, n] of FMU_OTHER) { const [x, y] = L(xm, ym); A('rect', { x: x - n * 6 - 4, y: y - 6, width: n * 12 + 8, height: 12, rx: 2, fill: '#2c3239', stroke: '#4b535c' }); silk(x, y - 11, nm); }
       for (const [port, [xm, ym, nm]] of Object.entries(FMU)) { const [x, y] = L(xm, ym), n = PINS_OF.pixhawk.filter((q) => ALL_PINS[q].port === port).length; A('rect', { x: x - n * 8 - 6, y: y - 9, width: n * 16 + 12, height: 18, rx: 3, fill: '#f2f2f2', stroke: '#7ee8c8', 'stroke-width': 2 }); silk(x, y - 15, nm); }
       const rx0 = RAIL_X0 - CASE[0], ry0 = RAIL_Y - CASE[1];
-      A('rect', { x: rx0 - 12, y: ry0 - 10, width: 16 * RAIL_P + 4, height: 60, rx: 3, fill: '#0b0c0e' });
+      A('rect', { x: rx0 - 12, y: ry0 - 10, width: 16 * RAIL_P + 4, height: 60, rx: 3, fill: '#0b0c0e', stroke: '#30353b' });
       for (let c = 0; c < 16; c++) for (let r = 0; r < 3; r++) A('rect', { x: rx0 + c * RAIL_P - 3, y: ry0 + r * 20 - 3, width: 6, height: 6, fill: '#d9b44a' });
       silk(rx0, ry0 - 14, 'RC'); silk(rx0 + RAIL_P, ry0 - 14, 'SB'); [8, 7, 6, 5, 4, 3, 2, 1].forEach((m, i) => silk(rx0 + (2 + i) * RAIL_P, ry0 - 14, String(m)));
       silk(rx0 + 5.5 * RAIL_P, ry0 - 28, 'MAIN OUT 8 ← 1'); silk(rx0 + 12.5 * RAIL_P, ry0 - 28, 'AUX 6 ← 1');
       ['S', '+', '−'].forEach((t, r) => A('text', { x: rx0 + 16 * RAIL_P - 4, y: ry0 + r * 20 + 4, class: 'pin-silk' }, t));
     } else drawBody(A, id, w, h);
     // 名稱放在沒有引腳的那一邊（下方優先，下方有引腳就放上方）；電調的位置直接寫在本體上
-    if (id.startsWith('esc_')) A('text', { x: w / 2, y: h / 2 + 30, 'text-anchor': 'middle', class: 'ba-label dark' }, NAME[id].split('・')[1]);
-    else { const pinsAt = (yy) => PINS_OF[id].some((q) => Math.abs(LOCAL[q].ly - yy) < 2); const capY = !pinsAt(h) ? h + 22 : !pinsAt(0) ? -12 : h / 2; A('text', { x: w / 2, y: capY, 'text-anchor': 'middle', class: 'bench-cap', transform: p.rot ? `rotate(${-p.rot} ${w / 2} ${h / 2})` : '' }, NAME[id]); }
+    if (id.startsWith('esc_')) A('text', { x: 96, y: 86, 'text-anchor': 'middle', class: 'ba-label dark' }, NAME[id].split('・')[1]);
+    else {
+      // 名稱放在沒有引腳的一邊：下 → 上 → 右 → 左
+      const pinsAt = (yy) => PINS_OF[id].some((q) => Math.abs(LOCAL[q].ly - yy) < 2), pinsAtX = (xx) => PINS_OF[id].some((q) => Math.abs(LOCAL[q].lx - xx) < 2);
+      const [cx, cy, anchor] = !pinsAt(h) ? [w / 2, h + 22, 'middle'] : !pinsAt(0) ? [w / 2, -12, 'middle'] : !pinsAtX(w) ? [w + 10, h / 2 + 5, 'start'] : [-10, h / 2 + 5, 'end'];
+      A('text', { x: cx, y: cy, 'text-anchor': anchor, class: 'bench-cap', transform: p.rot ? `rotate(${-p.rot} ${w / 2} ${h / 2})` : '' }, NAME[id]);
+    }
   }
   function draw(full = true) {
     gParts.replaceChildren(); gWires.replaceChildren(); gPins.replaceChildren(); prev.setAttribute('d', '');

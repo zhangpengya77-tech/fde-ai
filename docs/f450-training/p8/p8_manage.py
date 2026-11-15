@@ -57,6 +57,8 @@ def verify():
     for name in ("model", "assembly-mode", "wiring-canvas", "bus", "sync3d", "scoring", "session", "records", "parts-art", "pins", "pin-canvas", "bench", "bench-art"):
         if get(f"http://127.0.0.1:8141/f450-twin/training/{name}.js")[0] != 200:
             problems.append(f"載入失敗：training/{name}.js")
+    if get("http://127.0.0.1:8141/f450-twin/wiring.html")[0] != 200:
+        problems.append("載入失敗：wiring.html（接線模擬器）")
     status, body = get("http://127.0.0.1:8140/student/sim-practice/api/")
     if status != 200 or '"logged_in"' not in body:
         problems.append("成績 API（8140）回應不正常")

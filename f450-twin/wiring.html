@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  F450 接線模擬器（P14）— FDE-AI-UAS v2.0 獨立全螢幕頁（/f450-twin/wiring.html）
+  操作方式參考 FPV 接線模擬器（頁首＋點陣工作區、「＋ 配件」、復原、刪除、完整接線示例、檔案、檢查、縮放列）；
+  畫面、零件圖、音效與程式全部自製，不使用任何第三方程式、圖片或 Logo。
+  工作台程式與 3D 頁「2D 接線練習」共用（training/bench.js），草稿也共用同一份（瀏覽器本機保存）。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>F450 接線模擬器｜FDE-AI-UAS</title>
+<link rel="stylesheet" href="./twin.css?v=1.7.0">
+<style>
+  /* 頁面外框：淺色頁首＋佔滿剩下高度的工作台；工作台切深色時頁首一起變深 */
+  html,body{height:100%;overflow:hidden}
+  body.sim{display:flex;flex-direction:column;background:#f4f5f7;color:#1d2329;color-scheme:light}
+  body.sim:has(.bench-dark){background:#071320;color:#e8f2fc;color-scheme:dark}
+  .sim-head{flex:none;display:flex;align-items:center;gap:12px;padding:8px max(14px,env(safe-area-inset-right)) 8px max(14px,env(safe-area-inset-left));background:#fff;border-bottom:1px solid #dfe3e8}
+  body.sim:has(.bench-dark) .sim-head{background:#0f2133;border-color:#2a3a4c}
+  .sim-logo{display:flex;align-items:center;gap:8px;color:inherit;text-decoration:none;font-weight:800;letter-spacing:.02em}
+  .sim-logo svg{width:34px;height:34px;color:#1f8a4c}
+  .sim-logo small{display:block;font-weight:500;font-size:11.5px;opacity:.65}
+  .sim-head .grow{flex:1}
+  .sim-head a.btn,.sim-head button{font:inherit;font-size:14px;color:inherit;background:transparent;border:1px solid transparent;border-radius:10px;padding:7px 12px;text-decoration:none;cursor:pointer;box-shadow:none}
+  .sim-head a.btn:hover,.sim-head button:hover{background:rgba(127,140,155,.14)}
+  .sim-head .menu-btn{font-size:20px;padding:4px 10px}
+  .sim-menu{position:absolute;top:56px;right:12px;z-index:20;display:flex;flex-direction:column;min-width:230px;padding:6px;background:#fff;color:#1d2329;border:1px solid #dfe3e8;border-radius:14px;box-shadow:0 10px 30px rgba(20,30,40,.18)}
+  .sim-menu[hidden]{display:none}
+  .sim-menu a,.sim-menu button{display:block;text-align:left;font:inherit;font-size:14.5px;color:inherit;background:none;border:0;border-radius:10px;padding:10px 12px;text-decoration:none;cursor:pointer;box-shadow:none}
+  .sim-menu a:hover,.sim-menu button:hover{background:#eef1f4}
+  #bench-root{flex:1;min-height:0;position:relative}
+  #bench-root.bench{display:flex;flex-direction:column}
+  #bench-root .bench-stage{flex:1}
+  dialog.sim-info{max-width:min(640px,92vw);border:0;border-radius:16px;padding:20px 22px;color:#1d2329;background:#fff;box-shadow:0 20px 50px rgba(0,0,0,.3);line-height:1.65}
+  dialog.sim-info::backdrop{background:rgba(10,20,30,.45)}
+  dialog.sim-info h2{margin:0 0 8px;font-size:18px}
+  dialog.sim-info ul{padding-left:1.2em;margin:6px 0}
+  dialog.sim-info button{font:inherit;color:#fff;background:#1f8a4c;border:0;border-radius:10px;padding:8px 18px;cursor:pointer;box-shadow:none}
+  @media (max-width:760px){.sim-head .hide-narrow{display:none}.sim-logo small{display:none}}
+</style>
+</head>
+<body class="sim">
+<header class="sim-head">
+  <a class="sim-logo" href="/platform/#build" title="回 FDE-AI 首頁">
+    <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="3"><circle cx="11" cy="11" r="7"/><circle cx="37" cy="11" r="7"/><circle cx="11" cy="37" r="7"/><circle cx="37" cy="37" r="7"/><path d="M16 16l16 16M32 16L16 32"/><rect x="19" y="19" width="10" height="10" rx="2" fill="currentColor"/></g></svg>
+    <span>F450 接線模擬器<small>FDE-AI UAS 實訓平台</small></span>
+  </a>
+  <span class="grow"></span>
+  <a class="btn hide-narrow" href="./index.html" title="回 F450 數位孿生 3D 頁">◧ 3D 數位孿生</a>
+  <button type="button" class="hide-narrow" id="info-open">說明</button>
+  <button type="button" class="menu-btn" id="menu-btn" aria-label="選單" aria-expanded="false">☰</button>
+  <nav class="sim-menu" id="sim-menu" hidden aria-label="選單">
+    <a href="./index.html">F450 數位孿生（3D 組裝・練習・考核）</a>
+    <a href="./index.html#train-session">練習成績與保存紀錄</a>
+    <button type="button" id="info-open2">操作說明與資料來源</button>
+    <a href="/platform/#build">回平台首頁</a>
+  </nav>
+</header>
+<main id="bench-root" aria-label="F450 接線模擬器"></main>
+<dialog class="sim-info" id="sim-info">
+  <h2>F450 接線模擬器・操作說明</h2>
+  <ul>
+    <li>按「＋ 配件」打開零件欄，把零件拖進工作區，或按零件右邊的「＋」。</li>
+    <li>拖曳空白處平移；滾輪、雙指或右下角「－／＋」縮放；「⛶」看全部零件。</li>
+    <li>點一根引腳，再點另一根引腳就接好一條線；選取零件或線後按 🗑（或 Delete）刪除，↻ 旋轉 90°，↶ 復原。</li>
+    <li>右上綠色 ✓ 檢查接線；紅色 ⚡ 上電測試，短路會「砰」並說明原因。</li>
+    <li>「完整接線示例」會放好全部零件並依序畫出 54 根正確接線；「檔案」可匯出、匯入接線檔。</li>
+    <li>這一頁是自由練習；要記錄成績、教學或考核，請到 3D 數位孿生頁的「2D 接線練習」。兩邊的草稿共用。</li>
+  </ul>
+  <p><b>資料來源：</b>Pixhawk 2.4.8 外形依 PX4 開源硬體 FMUv2 電路板座標等比例繪製（© PX4／3D Robotics，CC-BY-SA 3.0；本圖同授權）；引腳依 PX4 官方《Pixhawk 1》引腳表；R9DS 依樂迪官方說明書（SBUS 由 CH9 輸出）。電調 20A、馬達 A2212 930KV 依教師實機照片。GPS 模組端線序、電調 BEC、接頭類型待實機核對。</p>
+  <p><b>注意：</b>上電測試是依接線推論的模擬，實機通電前務必拆槳；規則待教師以實機核對，結果不計正式成績。版面與操作參考 FPV 接線模擬器，零件圖與程式為本平台自製。</p>
+  <form method="dialog"><button>知道了</button></form>
+</dialog>
+<script type="module">
+  // 全頁模式掛載工作台（自由練習）；選單與說明視窗
+  import { initBench } from './training/bench.js?v=p14-1';
+  const api = initBench(document.getElementById('bench-root'), { full: true });
+  api?.setActive?.(true);
+  const menu = document.getElementById('sim-menu'), mb = document.getElementById('menu-btn'), info = document.getElementById('sim-info');
+  mb.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; mb.setAttribute('aria-expanded', String(!menu.hidden)); };
+  document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; mb.setAttribute('aria-expanded', 'false'); } });
+  for (const id of ['info-open', 'info-open2']) document.getElementById(id).onclick = () => { menu.hidden = true; info.showModal(); };
+</script>
+</body>
+</html>

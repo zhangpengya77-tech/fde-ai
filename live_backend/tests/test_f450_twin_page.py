@@ -58,6 +58,10 @@ class F450TwinPageTests(unittest.TestCase):
         self.assertIn('href="https://hs-fpv.com/wiring-simulator" target="_blank" rel="noopener noreferrer"', html)
         self.assertNotIn("<iframe", html.lower())
         self.assertIn("試行", (ROOT / "f450-twin" / "training" / "session.js").read_text(encoding="utf-8"))
+        # 2026-11-15 P14：獨立全螢幕接線模擬器頁，3D 頁導覽列有入口
+        self.assertEqual(self.client.get("/f450-twin/wiring.html").status_code, 200)
+        self.assertIn('href="./wiring.html"', html)
+        self.assertNotIn("<iframe", (ROOT / "f450-twin" / "wiring.html").read_text(encoding="utf-8").lower())
 
     def test_twin_page_does_not_embed_teacher_photos(self):
         html = (ROOT / "f450-twin" / "index.html").read_text(encoding="utf-8")

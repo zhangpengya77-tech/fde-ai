@@ -389,7 +389,7 @@ if (panel && enter) {
     baseRoot.hidden = level !== 'base'; pinRoot.hidden = level !== 'pin';
     try { localStorage.setItem(LEVEL_KEY, level); } catch { /* 無痕模式 */ }
     // P12：進階改成零件組裝接線工作台（從左邊零件欄拖入零件，再點引腳接線、上電測試）
-    if (level === 'pin' && !pinApi) pinApi = (await import('./bench.js?v=p13-1')).initBench(pinRoot);
+    if (level === 'pin' && !pinApi) pinApi = (await import('./bench.js?v=p14-1')).initBench(pinRoot);
     api?.setActive(level === 'base'); pinApi?.setActive(level === 'pin');
   }
   panel.querySelectorAll('[data-level]').forEach((b) => (b.onclick = () => setLevel(b.dataset.level)));
