@@ -54,7 +54,7 @@ def verify():
     for text in ("無人機組裝與接線實訓", "train-session", "wiring-canvas.js", "M13 FPV 穿越機接線實訓"):
         if text not in html:
             problems.append(f"F450 頁面缺少：{text}")
-    for name in ("model", "assembly-mode", "wiring-canvas", "bus", "sync3d", "scoring", "session", "records", "parts-art", "pins", "pin-canvas"):
+    for name in ("model", "assembly-mode", "wiring-canvas", "bus", "sync3d", "scoring", "session", "records", "parts-art", "pins", "pin-canvas", "bench"):
         if get(f"http://127.0.0.1:8141/f450-twin/training/{name}.js")[0] != 200:
             problems.append(f"載入失敗：training/{name}.js")
     status, body = get("http://127.0.0.1:8140/student/sim-practice/api/")

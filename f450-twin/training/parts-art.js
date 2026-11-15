@@ -10,7 +10,7 @@ export const PART_INFO = {
   gps: { desc: 'M8N GPS／羅盤：圓餅箭頭朝機頭、遠離電源線；6pin 接 GPS 埠，4pin 羅盤接 I2C。', links: [['ArduPilot：GPS／羅盤安裝', 'https://ardupilot.org/copter/docs/common-installing-3dr-ublox-gps-compass-module.html']] },
   safety_switch: { desc: '安全開關：解鎖前長按到燈常亮；3pin 接 Pixhawk SWITCH。', links: [['ArduPilot：安全開關', 'https://ardupilot.org/copter/docs/common-safety-switch-pixhawk.html']] },
   buzzer: { desc: '蜂鳴器：開機、解鎖與故障提示音；2pin 接 Pixhawk BUZZER。', links: [['ArduPilot：蜂鳴器', 'https://ardupilot.org/copter/docs/common-buzzer.html']] },
-  esc: { desc: '30A 電調（黃色熱縮）：紅黑粗線焊到配電板（紅正黑負），三相線接馬達，3pin 訊號線依 Quad X 順序接 MAIN OUT。', links: [['ArduPilot：電調與馬達接線', 'https://ardupilot.org/copter/docs/connect-escs-and-motors.html'], ['ArduPilot：電調校準', 'https://ardupilot.org/copter/docs/esc-calibration.html']] },
+  esc: { desc: '20A 電調（黃色熱縮）：紅黑粗線焊到配電板（紅正黑負），三相線接馬達，3pin 訊號線依 Quad X 順序接 MAIN OUT。', links: [['ArduPilot：電調與馬達接線', 'https://ardupilot.org/copter/docs/connect-escs-and-motors.html'], ['ArduPilot：電調校準', 'https://ardupilot.org/copter/docs/esc-calibration.html']] },
   motor: { desc: 'A2212 930KV 無刷馬達：三相線接電調；轉向不對時交換任兩條。', links: [['ArduPilot：馬達順序與轉向（Quad X）', 'https://ardupilot.org/copter/docs/connect-escs-and-motors.html']] },
   pdb: { desc: 'F450 下中心板兼配電板：四組焊盤接 ESC 電源（紅正黑負），主電源由電源模組輸出供電。', links: [['DJI：Flame Wheel F450 產品頁', 'https://www.dji.com/flame-wheel-arf']] },
   power_module: { desc: '電源模組：XT60 串在電池與配電板之間；6pin 線供電給 Pixhawk 並量測電壓電流。', links: [['ArduPilot：電源模組', 'https://ardupilot.org/copter/docs/common-3dr-power-module.html'], ['ArduPilot：Pixhawk 供電', 'https://ardupilot.org/copter/docs/common-powering-the-pixhawk.html']] },
@@ -74,7 +74,7 @@ export function drawArt(cid, [x, y, w, h], ports, sv) {
     stubs(10);
   } else if (kind === 'esc') {
     add('rect', { x: x + 30, y: y + 28, width: w - 60, height: h - 56, rx: 8, fill: '#e2bd2b', stroke: '#a88912', 'stroke-width': 2 });
-    add('text', { x: cx, y: cy + 22, 'text-anchor': 'middle', class: 'w2-art-dark' }, '30A');
+    add('text', { x: cx, y: cy + 22, 'text-anchor': 'middle', class: 'w2-art-dark' }, '20A');
     ports.forEach((p) => {                                                    // 電源紅黑雙線、三相三線、訊號三色細線
       const ex = p.x - p.n[0] * 22, ey = p.y - p.n[1] * 22;
       const cols = p.id.endsWith('.power') ? ['#c0392b', '#1b1b1b'] : p.id.endsWith('.phase') ? ['#1b1b1b', '#1b1b1b', '#1b1b1b'] : ['#6b3f1f', '#c0392b', '#e8a33d'];

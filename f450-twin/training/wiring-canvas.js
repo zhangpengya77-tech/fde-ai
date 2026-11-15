@@ -384,7 +384,8 @@ if (panel && enter) {
     const pinRoot = panel.querySelector('.w2-pin-root'), baseRoot = panel.querySelector('.w2-root');
     panel.querySelectorAll('[data-level]').forEach((b) => { b.classList.toggle('on', b.dataset.level === level); b.setAttribute('aria-selected', String(b.dataset.level === level)); });
     baseRoot.hidden = level !== 'base'; pinRoot.hidden = level !== 'pin';
-    if (level === 'pin' && !pinApi) pinApi = (await import('./pin-canvas.js?v=p11-1')).initPinCanvas(pinRoot);
+    // P12：進階改成零件組裝接線工作台（從左邊零件欄拖入零件，再點引腳接線、上電測試）
+    if (level === 'pin' && !pinApi) pinApi = (await import('./bench.js?v=p12-1')).initBench(pinRoot);
     api?.setActive(level === 'base'); pinApi?.setActive(level === 'pin');
   }
   panel.querySelectorAll('[data-level]').forEach((b) => (b.onclick = () => setLevel(b.dataset.level)));

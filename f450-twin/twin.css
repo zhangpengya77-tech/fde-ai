@@ -295,3 +295,36 @@ html.f450-full,html.f450-full body{overflow:hidden}
 .pinwire.bad .line{stroke:var(--danger)!important;stroke-width:4}
 .pinwire.good .line{opacity:1}
 .w2-demo .demo-line{stroke-width:3}
+/* P12 零件組裝接線工作台：左零件欄＋右工作區（可平移、縮放、拖曳零件） */
+.bench-tools{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.bench-tools button.power{background:#7a1f1f;border-color:#d84b4b;color:#fff;font-weight:700}
+.bench-tools button[hidden]{display:none}
+.bench-zoom{align-self:center;min-width:3.2em;text-align:center;font-family:var(--mono);font-size:12px;color:#c8d2dc}
+.bench-body{display:grid;grid-template-columns:220px 1fr;gap:8px;min-height:560px}
+.bench-palette{overflow:auto;max-height:640px;border:1px solid #2a3a4c;border-radius:8px;padding:6px;background:#0a1624}
+.bench-ph{font-weight:700;margin:2px 4px 6px;color:#e8f2fc}
+.bench-item{display:flex;align-items:center;gap:6px;padding:6px;margin-bottom:4px;border:1px solid #24364a;border-radius:6px;background:#0f2133;cursor:grab;user-select:none}
+.bench-item b{display:block;font-size:13px;color:#e8f2fc}
+.bench-item span{display:block;font-size:11px;color:#9aa8b6}
+.bench-item>div{flex:1;min-width:0}
+.bench-item button{min-width:30px}
+.bench-item.placed{opacity:.5;cursor:default}
+.bench-stage{position:relative;border:1px solid #2a3a4c;border-radius:8px;background:#071320;background-image:radial-gradient(#1b2c3f 1px,transparent 1px);background-size:24px 24px;overflow:hidden}
+.bench-svg{display:block;width:100%;height:640px;cursor:grab;touch-action:none;outline:none}
+.bench-svg.grabbing{cursor:grabbing}
+.bench-part{cursor:move}
+.bench-part.sel>rect:first-child{stroke:#7ee8c8;stroke-width:4}
+.bench-boom{fill:#ffcf33;stroke:#ff5a1f;stroke-width:5;animation:benchboom .6s ease-out}
+.bench-boom-txt{fill:#7a1100;font-size:26px;font-weight:900}
+@keyframes benchboom{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+.bench-boom{transform-box:fill-box;transform-origin:center}
+.bench-svg.shake{animation:benchshake .45s linear}
+@keyframes benchshake{0%,100%{transform:none}20%{transform:translate(-8px,4px)}40%{transform:translate(7px,-5px)}60%{transform:translate(-5px,-3px)}80%{transform:translate(4px,3px)}}
+.bench-report{margin-top:8px}
+.bench-power{list-style:none;padding:0;margin:6px 0}
+.bench-power li{padding:3px 8px;margin:2px 0;border-left:4px solid #888;background:#0f2133}
+.bench-power li.ok{border-color:#43a047}
+.bench-power li.warn{border-color:#fb8c00}
+.bench-power li.bad{border-color:#e53935;color:#ffd0d0}
+@media (max-width:760px){.bench-body{grid-template-columns:1fr}.bench-palette{max-height:180px;display:grid;grid-template-columns:1fr 1fr;gap:4px}.bench-ph{grid-column:1/-1}.bench-svg{height:460px}}
+@media (prefers-reduced-motion:reduce){.bench-boom,.bench-svg.shake{animation:none}}
