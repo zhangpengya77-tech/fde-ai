@@ -36,7 +36,9 @@ export function initBench(root, opts = {}) {
   let view = { x: 0, y: 0, k: 0.6 }, sel = null, pending = null, seq = wires.length, active = false, sound = true, hist = [];
   let trainMode = latest('trainMode')?.mode || 'practice', locked = !!latest('examLock')?.locked, stash = null, lastWiresKey = '', lastFocusKey = '';
   const isExam = () => trainMode === 'exam';
-  const narrow = () => matchMedia('(max-width: 760px)').matches;
+  // 精簡版：手機直式（寬度窄）或手機橫式（高度矮、觸控）→ 零件欄改成上方橫向滑動列、縮放列改到右側直排
+  const COMPACT_Q = '(max-width: 760px), (max-height: 560px) and (pointer: coarse)';
+  const narrow = () => matchMedia(COMPACT_Q).matches;
 
   // ───────── 版面：工作區上疊浮動工具列、零件欄、檢查鈕、縮放列 ─────────
   root.replaceChildren(); root.classList.add('bench');
@@ -54,6 +56,8 @@ export function initBench(root, opts = {}) {
   const top = el('div', null, 'bench-topbar');
   const bParts = B(top, '＋ 配件', '打開零件欄', 'parts', 'strong'), bUndo = B(top, '↶', '復原上一步', 'undo'), bDel = B(top, '🗑', '刪除選取的零件或導線（Delete 鍵）', 'delete'), bRot = B(top, '↻', '選取的零件旋轉 90°', 'rotate');
   const bDemo = B(top, '完整接線示例', '放好全部零件並依序畫出 54 根正確接線', 'demo'), bFile = B(top, '檔案', '匯出、匯入、清除', 'file');
+  const demoLabel = (t) => { if (t === '完整接線示例') bDemo.replaceChildren(el('span', '完整接線', 'lg'), '示例'); else bDemo.textContent = t; };
+  demoLabel('完整接線示例');
   const fileMenu = el('div', null, 'bench-menu'); fileMenu.hidden = true;
   const bExport = B(fileMenu, '匯出接線檔（JSON）', '把目前的零件與接線存成檔案', 'export'), bImport = B(fileMenu, '匯入接線檔', '讀入之前匯出的接線檔', 'import'), bClear = B(fileMenu, '清除全部', '清空工作台', 'clear');
   const fileInput = el('input'); fileInput.type = 'file'; fileInput.accept = '.json,application/json'; fileInput.hidden = true;
@@ -73,12 +77,14 @@ export function initBench(root, opts = {}) {
     el('p', 'Pixhawk 2.4.8 依 PX4 開源硬體 FMUv2.4.6 電路板座標等比例繪製（© PX4／3D Robotics，CC-BY-SA 3.0；本圖同授權）。引腳依 PX4 官方《Pixhawk 1》引腳表；R9DS 依樂迪官方說明書（SBUS 由 CH9 輸出）。版面與操作參考 FPV 接線模擬器，零件圖與程式為自製。GPS 模組端、電調 BEC、接頭類型待實機核對。', 'note'),
     el('p', PRACTICE_ONLY ? '練習用：上電測試是模擬，實機通電前務必拆槳；規則待教師以實機核對，結果不計正式成績。' : '', 'note'));
   // 獨立全頁模式（wiring.html）：工作區佔滿畫面，狀態列與上電報告浮在工作區左下，說明文字交給頁面選單
+  let dock = null;
   if (opts.full) {
     root.classList.add('bench-full'); head.hidden = true;
     for (const n of root.querySelectorAll(':scope > .note')) n.hidden = true;
-    const dock = el('div', null, 'bench-dock'); dock.append(status, report); stage.append(dock);
+    dock = el('div', null, 'bench-dock'); dock.append(status, report); stage.append(dock);
+    dock.title = '點一下展開／收合'; dock.onclick = () => { if (narrow()) dock.classList.toggle('open'); };
   }
-  const say = (t) => { status.textContent = t; };
+  const say = (t) => { status.textContent = t; if (narrow()) layoutOverlays(); };
 
   // ───────── 復原 ─────────
   const snapshot = () => { hist.push(JSON.stringify({ parts, wires })); if (hist.length > 100) hist.shift(); };
@@ -89,21 +95,56 @@ export function initBench(root, opts = {}) {
 
   // ───────── 零件欄 ─────────
   const below = () => `${top.offsetTop + top.offsetHeight + 8}px`;   // 工具列在手機上會換行，零件欄與檔案選單接在它下面
-  const openPalette = (on) => { const was = !palette.hidden; palette.style.top = below(); palette.hidden = !on; bParts.classList.toggle('on', on); bParts.setAttribute('aria-expanded', String(on)); if (was !== on && Object.keys(parts).length) fit(); };
+  const openPalette = (on) => { const was = !palette.hidden; palette.hidden = !on; bParts.classList.toggle('on', on); bParts.setAttribute('aria-expanded', String(on)); layoutOverlays(); if (was !== on && Object.keys(parts).length) fit(); };
+  // 浮動層位置：零件欄接在工具列下方；精簡版的狀態列再接在零件欄（或工具列）下方
+  function layoutOverlays() {
+    const compact = narrow(); root.classList.toggle('bench-compact', compact);
+    palette.style.top = below();
+    if (dock) dock.style.top = compact ? `${!palette.hidden ? palette.offsetTop + palette.offsetHeight + 8 : top.offsetTop + top.offsetHeight + 8}px` : '';
+  }
   bParts.onclick = () => openPalette(palette.hidden);
   function renderPalette() {
     palette.replaceChildren();
     const ph = el('div', null, 'bench-ph'); ph.append(el('b', '配件')); const x = el('button', '✕'); x.type = 'button'; x.title = '關閉零件欄'; x.onclick = () => openPalette(false); ph.append(x); palette.append(ph);
     for (const [id, n, spec] of PALETTE) {
       const placed = !!parts[id];
-      const item = el('div', null, `bench-item${placed ? ' placed' : ''}`); item.draggable = !placed && !locked; item.dataset.part = id;
+      const item = el('div', null, `bench-item${placed ? ' placed' : ''}`); item.dataset.part = id;
       const txt = el('div'); txt.append(el('b', n), el('span', spec));
       const b = el('button', placed ? '✓' : '＋'); b.type = 'button'; b.disabled = placed || locked; b.title = placed ? '已放在工作區' : `加入 ${n}`; b.setAttribute('aria-label', b.title);
-      b.onclick = () => { place(id); if (narrow()) openPalette(false); };
-      item.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'copy'; });
+      b.onclick = (e) => { e.stopPropagation(); place(id); };
+      item.addEventListener('pointerdown', (e) => startPaletteDrag(e, id));
+      item.addEventListener('click', () => { if (Date.now() - lastPdragEnd > 350) place(id); });   // 點一下＝加入到建議位置
       item.append(thumb(id, RECT[id].slice(2)), txt, b); palette.append(item);
     }
   }
+  // 從零件欄拖進工作區（指標事件：滑鼠與觸控螢幕共用；拖曳時零件欄變淡，零件圖跟著手指）
+  let pdrag = null, lastPdragEnd = 0;
+  function startPaletteDrag(e, id) {
+    if (locked || parts[id] || e.button > 0 || e.target.closest('button')) return;
+    pdrag = { id, pid: e.pointerId, sx: e.clientX, sy: e.clientY, on: false, ghost: null, touch: e.pointerType !== 'mouse' };
+  }
+  addEventListener('pointermove', (e) => {
+    if (!pdrag || e.pointerId !== pdrag.pid) return;
+    if (!pdrag.on) {
+      if (Math.hypot(e.clientX - pdrag.sx, e.clientY - pdrag.sy) < 8) return;
+      pdrag.on = true; palette.classList.add('dragging');
+      const g = el('div', null, 'bench-ghost'); g.append(thumb(pdrag.id, RECT[pdrag.id].slice(2))); document.body.append(g); pdrag.ghost = g;
+      say(`把 ${NAME[pdrag.id]} 拖到工作區放開`);
+    }
+    pdrag.ghost.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+  });
+  const endPaletteDrag = (e) => {
+    if (!pdrag || e.pointerId !== pdrag.pid) return;
+    const d = pdrag; pdrag = null; palette.classList.remove('dragging'); d.ghost?.remove();
+    if (!d.on) { if (d.touch && e.type === 'pointerup') { lastPdragEnd = Date.now(); place(d.id); } return; }   // 手指點一下＝加入（有些手機瀏覽器不送 click）
+    lastPdragEnd = Date.now();
+    if (e.type === 'pointercancel') return say('已取消拖曳');
+    const r = svg.getBoundingClientRect(), pr = palette.getBoundingClientRect(), x = e.clientX, y = e.clientY;
+    const inSvg = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom, overPal = x >= pr.left && x <= pr.right && y >= pr.top && y <= pr.bottom;
+    if (!inSvg || overPal) return say('沒有放到工作區：拖到點格區再放開（或點一下零件直接加入）');
+    const [wx, wy] = toWorld(x, y); place(d.id, wx - RECT[d.id][2] / 2, wy - RECT[d.id][3] / 2);
+  };
+  addEventListener('pointerup', endPaletteDrag); addEventListener('pointercancel', endPaletteDrag);
   svg.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
   svg.addEventListener('drop', (e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (RECT[id]) { const [wx, wy] = toWorld(e.clientX, e.clientY); place(id, wx - RECT[id][2] / 2, wy - RECT[id][3] / 2); } });
   function place(id, x, y) {
@@ -128,8 +169,9 @@ export function initBench(root, opts = {}) {
     if (!ids.length || !r.width) { view = { x: 20, y: 80, k: Math.min((r.width || 840) / 1500, 0.8) }; return applyView(); }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const id of ids) { const p = parts[id], [, , w, h] = RECT[id], s = Math.max(w, h); x0 = Math.min(x0, p.x - (s - w) / 2); y0 = Math.min(y0, p.y - (s - h) / 2); x1 = Math.max(x1, p.x + w + (s - w) / 2); y1 = Math.max(y1, p.y + h + (s - h) / 2 + 24); }
-    const padTop = 80, padBot = 70, padR = 84;   // 讓出上方工具列、下方縮放列、右側檢查鈕
-    const padL = !palette.hidden && !narrow() ? palette.offsetWidth + 24 : 20;   // 零件欄開著時，零件排在它右邊
+    const compact = narrow(), lowest = Math.max(...[top, !palette.hidden && palette, dock].filter(Boolean).map((n) => n.offsetTop + n.offsetHeight));
+    const padTop = compact ? lowest + 10 : 80, padBot = compact ? 14 : 70, padR = compact ? 70 : 84;   // 讓出工具列、零件欄、縮放列、右側檢查鈕
+    const padL = !palette.hidden && !compact ? palette.offsetWidth + 24 : compact ? 10 : 20;   // 零件欄開在左邊時，零件排在它右邊
     const aw = r.width - padL - padR, ah = r.height - padTop - padBot;
     const k = Math.min(1.6, Math.max(0.15, Math.min(aw / (x1 - x0), ah / (y1 - y0))));
     view = { k, x: padL + (aw - (x1 - x0) * k) / 2 - x0 * k, y: padTop + (ah - (y1 - y0) * k) / 2 - y0 * k }; applyView();
@@ -142,13 +184,28 @@ export function initBench(root, opts = {}) {
     return { x: p.x + w / 2 + dx * c - dy * s, y: p.y + h / 2 + dx * s + dy * c, n: [L.n[0] * c - L.n[1] * s, L.n[0] * s + L.n[1] * c] };
   };
 
+  // 找手指／滑鼠附近最近的引腳（螢幕像素半徑內）；縮小時引腳很密也能點中
+  function nearPin(cx, cy, radius, except) {
+    const r = svg.getBoundingClientRect(); let best = null, bd = radius;
+    for (const id of Object.keys(parts)) for (const pid of PINS_OF[id]) {
+      if (pid === except) continue;
+      const p = pinWorld(pid), d = Math.hypot(r.left + view.x + p.x * view.k - cx, r.top + view.y + p.y * view.k - cy);
+      if (d <= bd) { bd = d; best = pid; }
+    }
+    return best;
+  }
+  let snapEl = null;
+  const snapMark = (pid) => { snapEl?.classList.remove('snap'); snapEl = pid ? svg.querySelector(`[data-pin="${CSS.escape(pid)}"]`) : null; snapEl?.classList.add('snap'); };
+
   // ───────── 拖曳：空白處平移（小手），零件可移動；雙指縮放 ─────────
   let drag = null; const touches = new Map();
   svg.addEventListener('pointerdown', (e) => {
     touches.set(e.pointerId, [e.clientX, e.clientY]);
-    if (touches.size === 2) { const [[ax, ay], [bx, by]] = [...touches.values()]; drag = { kind: 'pinch', d: Math.hypot(ax - bx, ay - by), moved: true }; return; }
+    if (touches.size === 2) { const [[ax, ay], [bx, by]] = [...touches.values()]; if (drag?.kind === 'wire') { snapMark(null); prev.setAttribute('d', ''); } drag = { kind: 'pinch', d: Math.hypot(ax - bx, ay - by), moved: true }; return; }
+    const pinHit = !locked && (nearPin(e.clientX, e.clientY, e.pointerType === 'mouse' ? 9 : 24) || e.target.closest('[data-pin]')?.dataset.pin);
     const partEl = e.target.closest('[data-part]');
-    if (partEl && !locked) { const id = partEl.dataset.part, [wx, wy] = toWorld(e.clientX, e.clientY); snapshot(); drag = { kind: 'part', id, dx: wx - parts[id].x, dy: wy - parts[id].y, moved: false }; sel = { part: id }; }
+    if (pinHit) drag = { kind: 'wire', from: pinHit, sx: e.clientX, sy: e.clientY, touch: e.pointerType !== 'mouse', moved: false, to: null };
+    else if (partEl && !locked) { const id = partEl.dataset.part, [wx, wy] = toWorld(e.clientX, e.clientY); snapshot(); drag = { kind: 'part', id, dx: wx - parts[id].x, dy: wy - parts[id].y, moved: false }; sel = { part: id }; }
     else if (!e.target.closest('[data-pin],[data-wire]')) drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
     if (drag) { try { svg.setPointerCapture(e.pointerId); } catch { /* Safari 偶爾不支援 */ } svg.classList.add('grabbing'); svg.focus({ preventScroll: true }); }
     if (!fileMenu.hidden) fileMenu.hidden = true;
@@ -158,6 +215,14 @@ export function initBench(root, opts = {}) {
     if (pending && !drag) { const [wx, wy] = toWorld(e.clientX, e.clientY), a = pinWorld(pending); prev.setAttribute('d', `M${a.x},${a.y} L${wx},${wy}`); }
     if (!drag) return;
     if (drag.kind === 'pinch') { if (touches.size < 2) return; const [[ax, ay], [bx, by]] = [...touches.values()], d = Math.hypot(ax - bx, ay - by); zoomAt(d / drag.d, (ax + bx) / 2, (ay + by) / 2); drag.d = d; return; }
+    if (drag.kind === 'wire') {
+      if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 6) return;
+      if (!drag.moved) { drag.moved = true; pending = null; draw(false); svg.querySelector(`[data-pin="${CSS.escape(drag.from)}"]`)?.classList.add('pending'); }
+      const a = pinWorld(drag.from), [wx, wy] = toWorld(e.clientX, e.clientY);
+      drag.to = nearPin(e.clientX, e.clientY, drag.touch ? 30 : 16, drag.from); snapMark(drag.to);
+      const b = drag.to ? pinWorld(drag.to) : { x: wx, y: wy };
+      prev.setAttribute('d', `M${a.x},${a.y} L${b.x},${b.y}`); return;
+    }
     if (drag.kind === 'pan') { view.x = drag.vx + e.clientX - drag.sx; view.y = drag.vy + e.clientY - drag.sy; drag.moved = true; applyView(); return; }
     const [wx, wy] = toWorld(e.clientX, e.clientY); parts[drag.id].x = Math.round(wx - drag.dx); parts[drag.id].y = Math.round(wy - drag.dy); drag.moved = true; draw(false);
   });
@@ -166,6 +231,13 @@ export function initBench(root, opts = {}) {
     if (!drag) return;
     const d = drag; if (d.kind === 'pinch' && touches.size) return;
     drag = null; svg.classList.remove('grabbing');
+    if (d.kind === 'wire') {
+      snapMark(null); prev.setAttribute('d', '');
+      if (!d.moved) return clickPin(d.from);   // 點一下：先選這根，再點另一根
+      if (e.type === 'pointercancel') return draw();
+      if (d.to) connect(d.from, d.to); else { say('沒有放到引腳上：拖到另一根引腳的圓點再放開'); draw(); }
+      return;
+    }
     if (d.kind === 'part') { if (d.moved) save(); else hist.pop(); say(`已選取 ${NAME[d.id]}：可「↻」旋轉或「🗑」刪除。`); draw(); }
     else if (d.kind === 'pan' && !d.moved) { if (pending) { pending = null; say('已取消'); } sel = null; if (narrow()) openPalette(false); draw(); }
   };
@@ -207,10 +279,14 @@ export function initBench(root, opts = {}) {
   const pname = (pid) => { const P = ALL_PINS[pid]; return `${NAME[P.component] || P.component} ${PORTS[P.port]?.label || ''} ${P.label}`; };
   function clickPin(pid) {
     if (locked) return say('已交卷，接線已鎖定');
-    if (!pending) { pending = pid; sel = null; say(`已選 ${pname(pid)}，再點要接的另一根引腳（Esc 取消）`); return draw(); }
+    if (!pending) { pending = pid; sel = null; say(`已選 ${pname(pid)}：再點另一根引腳（也可以按住引腳直接拖過去）`); return draw(); }
     if (pending === pid) { pending = null; say('已取消'); return draw(); }
+    const a = pending; pending = null; connect(a, pid);
+  }
+  function connect(a, b) {
+    if (locked || a === b) return draw();
     snapshot();
-    const w = { id: `b${++seq}`, a: pending, b: pid }; wires.push(w); pending = null; sel = { wire: w.id }; result = null;
+    const w = { id: `b${++seq}`, a, b }; wires.push(w); sel = { wire: w.id }; result = null;
     say(`已接：${pname(w.a)} ↔ ${pname(w.b)}`); save(); draw();
   }
   let result = null;
@@ -285,7 +361,7 @@ export function initBench(root, opts = {}) {
 
   // ───────── 完整接線示例 ─────────
   let demoTimer = null;
-  function stopDemo() { clearInterval(demoTimer); demoTimer = null; gDemo.replaceChildren(); bDemo.textContent = '完整接線示例'; }
+  function stopDemo() { clearInterval(demoTimer); demoTimer = null; gDemo.replaceChildren(); demoLabel('完整接線示例'); }
   bDemo.onclick = () => {
     if (isExam() || locked) return;
     if (demoTimer || gDemo.childNodes.length) { stopDemo(); return; }
@@ -352,10 +428,9 @@ export function initBench(root, opts = {}) {
       const P = ALL_PINS[pid], pos = pinWorld(pid);
       const col = KIND_COLOR[P.kind] === '#222' ? (theme === 'dark' ? '#9aa4ae' : '#2a2e33') : KIND_COLOR[P.kind];
       const g = add(gPins, 'g', { class: `pin${used.has(pid) ? ' used' : ''}${pending === pid ? ' pending' : ''}${sug.has(pid) ? ' suggest' : ''}`, 'data-pin': pid, tabindex: 0, role: 'button', 'aria-label': pname(pid), style: `color:${col}` });
+      add(g, 'circle', { cx: pos.x, cy: pos.y, r: 8, class: 'pin-hit' });
       add(g, 'circle', { cx: pos.x, cy: pos.y, r: 6, class: 'pin-dot', stroke: 'currentColor', 'stroke-width': 2.5 });
       if (!/pixhawk\.(rc_in|main_out)/.test(P.port)) add(g, 'text', { x: pos.x + pos.n[0] * 10, y: pos.y + (pos.n[1] < 0 ? -10 : pos.n[1] > 0 ? 18 : 4), 'text-anchor': pos.n[0] < 0 ? 'end' : pos.n[0] > 0 ? 'start' : 'middle', class: 'pin-label' }, P.label);
-      g.addEventListener('pointerdown', (e) => e.stopPropagation());
-      g.addEventListener('click', (e) => { e.stopPropagation(); clickPin(pid); });
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); clickPin(pid); } });
     }
     if (!full) return;
@@ -390,11 +465,11 @@ export function initBench(root, opts = {}) {
   function load() { try { return sanitize(JSON.parse(localStorage.getItem(STORE) || '{}')); } catch { return { parts: {}, wires: [] }; } }
   function save() { if (isExam()) return; try { localStorage.setItem(STORE, JSON.stringify({ parts, wires })); } catch { /* 無痕模式 */ } }
   if (isExam()) { stash = { parts, wires }; parts = {}; wires = []; }
-  addEventListener('resize', () => { if (active) fit(); });   // 手機轉向、視窗改變時重新適配
+  addEventListener('resize', () => { layoutOverlays(); if (active) fit(); });   // 手機轉向、視窗改變時重新適配
   root.classList.toggle('bench-dark', theme === 'dark'); bTheme.textContent = theme === 'dark' ? '☀' : '☾';
   applyView(); draw();
   return {
-    setActive(onoff) { active = onoff; lastWiresKey = ''; lastFocusKey = ''; if (onoff) { draw(); openPalette(!Object.keys(parts).length && !isExam()); requestAnimationFrame(fit); } else stopDemo(); },
+    setActive(onoff) { active = onoff; lastWiresKey = ''; lastFocusKey = ''; if (onoff) { layoutOverlays(); draw(); openPalette(!Object.keys(parts).length && !isExam()); requestAnimationFrame(fit); } else stopDemo(); },
     get state() { return { parts, wires }; },
   };
 }

@@ -10,10 +10,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>F450 接線模擬器｜FDE-AI-UAS</title>
-<link rel="stylesheet" href="./twin.css?v=1.7.0">
+<link rel="stylesheet" href="./twin.css?v=1.8.0">
 <style>
   /* 頁面外框：淺色頁首＋佔滿剩下高度的工作台；工作台切深色時頁首一起變深 */
   html,body{height:100%;overflow:hidden}
+  body.sim{height:100dvh;overscroll-behavior:none}
   body.sim{display:flex;flex-direction:column;background:#f4f5f7;color:#1d2329;color-scheme:light}
   body.sim:has(.bench-dark){background:#071320;color:#e8f2fc;color-scheme:dark}
   .sim-head{flex:none;display:flex;align-items:center;gap:12px;padding:8px max(14px,env(safe-area-inset-right)) 8px max(14px,env(safe-area-inset-left));background:#fff;border-bottom:1px solid #dfe3e8}
@@ -38,6 +39,7 @@
   dialog.sim-info ul{padding-left:1.2em;margin:6px 0}
   dialog.sim-info button{font:inherit;color:#fff;background:#1f8a4c;border:0;border-radius:10px;padding:8px 18px;cursor:pointer;box-shadow:none}
   @media (max-width:760px){.sim-head .hide-narrow{display:none}.sim-logo small{display:none}}
+  @media (max-height:560px){.sim-head{padding-top:3px;padding-bottom:3px}.sim-logo svg{width:24px;height:24px}.sim-logo small{display:none}.sim-head a.btn,.sim-head button{padding:4px 10px}}
 </style>
 </head>
 <body class="sim">
@@ -74,7 +76,7 @@
 </dialog>
 <script type="module">
   // 全頁模式掛載工作台（自由練習）；選單與說明視窗
-  import { initBench } from './training/bench.js?v=p14-1';
+  import { initBench } from './training/bench.js?v=p15-1';
   const api = initBench(document.getElementById('bench-root'), { full: true });
   api?.setActive?.(true);
   const menu = document.getElementById('sim-menu'), mb = document.getElementById('menu-btn'), info = document.getElementById('sim-info');
