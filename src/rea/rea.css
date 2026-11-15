@@ -68,6 +68,11 @@
 .rea-table .m.t2 { color:var(--t2); } .rea-table .m.t3 { color:var(--t3); }
 .rea-replay { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:10px; }
 .rea-scrub { position:relative; flex:1; min-width:160px; } .rea-scrub input { width:100%; }
+/* 回放收合：只留回放列在底部，3D 畫面不被擋住 */
+.rea-result.mini { top:auto; max-height:none; overflow:visible; padding:8px 12px; background:rgba(15,20,26,.82); }
+.rea-result.mini > :not(.rea-replay) { display:none; }
+.rea-result.mini .rea-replay { margin-top:0; }
+.rea-mini-btn { font-weight:700; }
 .rea-markers { position:absolute; left:0; right:0; top:-4px; height:6px; pointer-events:none; }
 .rea-markers i { position:absolute; width:2px; height:6px; background:var(--t2); }
 @media (max-width: 900px) {

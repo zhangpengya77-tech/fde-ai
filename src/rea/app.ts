@@ -262,6 +262,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
   let lastExport: TrainingExportRecord | null = null;
   let demo: Autopilot | null = null;
   let countdownT = 0;
+  let miniToggle: (() => void) | null = null;   // 結果畫面的收合／展開（快捷鍵 H）
   let replay: { samples: Sample[]; t: number; speed: number; playing: boolean; result: CourseResult; coloring: TrackColoring } | null = null;
   let raf = 0;
   /** 最近一次的輸入來源（存成長日誌時記錄操作方式） */
@@ -754,6 +755,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
     else if (e.key === 'Backspace') { e.preventDefault(); restart(); }
     else if (e.key === 'v' || e.key === 'V') cycleView();
     else if (e.key === 'g' || e.key === 'G') toggleFull();
+    else if ((e.key === 'h' || e.key === 'H') && phase === 'result') miniToggle?.();   // 回放時收合／展開評等表
   };
   window.addEventListener('keydown', onKey);
   // 唯讀 ticket 飛行中續發：只在 attach 模式有效；身分與效期由 SitlEngine 再次驗證，伺服器也會獨立驗證
@@ -978,12 +980,22 @@ export function createReaApp(root: HTMLElement): ReaApp {
         <div class="rea-table-wrap"><table class="rea-table"><thead><tr><th>步驟</th><th>評等</th><th>指標</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4">沒有完成任何步驟</td></tr>'}</tbody></table></div>
       </div>
       <div class="rea-replay">
+        <button class="rea-chip rea-mini-btn" data-rea-mini title="收合評等表，只留回放列看 3D 畫面（快捷鍵 H）">⤓ 收合看畫面</button>
         <button class="rea-chip" data-rea-play>▶ 回放</button>
         ${[1, 1.5, 3, 6].map((x) => `<button class="rea-chip${x === 1 ? ' on' : ''}" data-rea-speed="${x}">×${x}</button>`).join('')}
         <div class="rea-scrub"><input type="range" min="0" max="${r.durationS.toFixed(2)}" step="0.05" value="0" data-rea-scrub><div class="rea-markers">${markers}</div></div>
         <span data-rea-time>00:00 / ${fmt(r.durationS)}</span>
       </div>`;
     box.hidden = false;
+    box.classList.remove('mini');
+    // 回放時評等表會擋住 3D 畫面：可收合成只剩回放列（按「看這段」或開始回放時自動收合）
+    const setMini = (on: boolean): void => {
+      box.classList.toggle('mini', on);
+      const b = box.querySelector('[data-rea-mini]');
+      if (b) b.textContent = on ? '📋 展開評等' : '⤓ 收合看畫面';
+    };
+    box.querySelector('[data-rea-mini]')!.addEventListener('click', () => setMini(!box.classList.contains('mini')));
+    miniToggle = () => setMini(!box.classList.contains('mini'));
     box.querySelector('[data-rea-export-json]')?.addEventListener('click', () => {
       if (!lastExport) return;
       // 純前端下載：不送出任何網路請求
@@ -1001,6 +1013,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
       if (!replay) return;
       if (replay.t >= r.durationS - 0.05) replay.t = 0;
       replay.playing = !replay.playing;
+      if (replay.playing) setMini(true);
       updateReplayUi();
     });
     box.querySelectorAll<HTMLElement>('[data-rea-speed]').forEach((b) => b.addEventListener('click', () => {
@@ -1018,6 +1031,7 @@ export function createReaApp(root: HTMLElement): ReaApp {
       if (!replay) return;
       replay.t = Number(b.dataset.reaSeek);
       replay.playing = true;
+      setMini(true);
       updateReplayUi();
     }));
     box.querySelector<HTMLSelectElement>('[data-rea-coloring]')!.addEventListener('change', (e) => {
