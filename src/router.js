@@ -14,7 +14,14 @@
     { key: 'inspection', sectionId: 'inspection', path: 'eagle' },
     { key: 'certify', sectionId: 'certify', path: 'github' },
     { key: 'cohorts', sectionId: 'cohorts', path: 'results' },
-    { key: 'teacher', sectionId: 'teacher', path: 'teacher' }
+    { key: 'teacher', sectionId: 'teacher', path: 'teacher' },
+    // 2026-11-17：課程開設（五大職業實訓課程）總覽與五門課程詳情；內容見 src/data/vocational-programs.js
+    { key: 'programs', sectionId: 'programs', path: 'programs' },
+    { key: 'program-drone-license', sectionId: 'programs', path: 'drone-license' },
+    { key: 'program-seed-teacher', sectionId: 'programs', path: 'seed-teacher' },
+    { key: 'program-pro-pilot', sectionId: 'programs', path: 'pro-pilot' },
+    { key: 'program-rd-engineer', sectionId: 'programs', path: 'rd-engineer' },
+    { key: 'program-maintenance-engineer', sectionId: 'programs', path: 'maintenance-engineer' }
   ];
 
   const routesByKey = new Map(routeDefinitions.map((route) => [route.key, route]));

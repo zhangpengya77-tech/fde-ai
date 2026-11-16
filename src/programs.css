@@ -1,0 +1,131 @@
+/* FDE-AI 五大職業實訓課程｜樣式（2026-11-17）
+   深海軍藍科技風、青藍光效、透明玻璃卡片；只作用在 .programs-home、.programs-page 與 .pg-* 類別，不影響其他頁面。
+   手機單列、無橫向捲動；prefers-reduced-motion 時關閉動畫。 */
+.programs-home, .programs-page { --pg-glass: rgba(15, 32, 51, 0.72); --pg-line: rgba(0, 194, 255, 0.28); --pg-glow: 0 0 0 1px rgba(0, 194, 255, 0.18), 0 12px 36px rgba(0, 0, 0, 0.35); color: var(--text, #ddf3ff); min-width: 0; }
+.programs-home { padding: 8px clamp(14px, 3vw, 40px) 40px; }
+.programs-page { padding: 64px clamp(14px, 3vw, 40px) 60px; }
+.pg-head { max-width: 980px; margin: 0 0 22px; }
+.pg-head h2 { margin: 6px 0 10px; font-size: clamp(1.35rem, 2.6vw, 2.1rem); line-height: 1.3; }
+.pg-head p { color: var(--muted, #94abc2); line-height: 1.8; margin: 0; }
+.pg-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+.pg-grid > .pg-card { grid-column: span 2; }
+.pg-grid > .pg-card:nth-child(4) { grid-column: 2 / span 2; }
+.pg-grid > .pg-card:nth-child(5) { grid-column: 4 / span 2; }
+.pg-card { display: flex; flex-direction: column; min-width: 0; background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; overflow: hidden; box-shadow: var(--pg-glow); backdrop-filter: blur(6px); transition: transform 0.25s ease, border-color 0.25s ease; }
+.pg-card:hover { transform: translateY(-3px); border-color: rgba(0, 194, 255, 0.6); }
+.pg-card-media { display: block; aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--pg-line); }
+.pg-card-media svg, .pg-art svg, .pg-hero-art svg { display: block; width: 100%; height: 100%; }
+.pg-card-body { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 16px; flex: 1; }
+.pg-card-no { margin: 0; font: 700 11px/1 monospace; letter-spacing: 0.18em; color: var(--cyan, #00c2ff); }
+.pg-card h3 { margin: 0; font-size: 1.12rem; line-height: 1.4; }
+.pg-card-hours { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pg-card-hours b { color: var(--green, #35e6a8); font-size: 1.05rem; }
+.pg-badge { padding: 2px 8px; border-radius: 999px; background: rgba(245, 184, 75, 0.16); border: 1px solid rgba(245, 184, 75, 0.6); color: var(--yellow, #f5b84b); font-size: 12px; font-weight: 700; }
+.pg-card-tagline { margin: 0; color: #c4d8ea; line-height: 1.7; font-size: 14px; }
+.pg-card-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 2px 0; font-size: 13px; }
+.pg-card-meta dt { color: var(--cyan, #00c2ff); white-space: nowrap; }
+.pg-card-meta dd { margin: 0; color: #c4d8ea; min-width: 0; }
+.pg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pg-chip { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--pg-line); background: rgba(0, 194, 255, 0.08); font-size: 12px; color: #bfe6ff; }
+.pg-chip.link { text-decoration: none; }
+.pg-chip.link:hover { border-color: var(--cyan, #00c2ff); }
+.pg-btn { display: inline-block; align-self: flex-start; margin-top: auto; padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(0, 194, 255, 0.7); background: linear-gradient(180deg, #168bff, #0d5fb5); color: #fff; font-weight: 700; text-decoration: none; cursor: pointer; font: inherit; font-weight: 700; }
+.pg-btn:hover { filter: brightness(1.12); }
+.pg-btn.ghost { background: transparent; color: var(--cyan, #00c2ff); }
+.pg-btn:focus-visible, .pg-card a:focus-visible, .pg-form :focus-visible { outline: 2px solid var(--yellow, #f5b84b); outline-offset: 2px; }
+.pg-more { margin: 20px 0 0; text-align: center; }
+
+/* 上課制度 */
+.pg-rules, .pg-calc, .pg-consult, .pg-box { background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; padding: 18px; margin: 0 0 22px; box-shadow: var(--pg-glow); }
+.pg-rules h3, .pg-calc h3, .pg-consult h3, .pg-sec h3 { margin: 0 0 10px; font-size: 1.15rem; color: #fff; }
+.pg-rule-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.pg-rule { display: grid; gap: 2px; padding: 10px 14px; border-radius: 12px; background: rgba(0, 194, 255, 0.1); border: 1px solid var(--pg-line); }
+.pg-rule span { color: var(--muted, #94abc2); font-size: 13px; }
+.pg-rule.muted { opacity: 0.75; }
+.pg-table-wrap { overflow-x: auto; max-width: 100%; }
+.pg-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pg-table th, .pg-table td { padding: 8px 10px; border-bottom: 1px solid rgba(0, 194, 255, 0.16); text-align: left; vertical-align: top; }
+.pg-table th { color: var(--cyan, #00c2ff); font-weight: 700; white-space: nowrap; }
+.pg-table a { color: #bfe6ff; }
+
+/* 詳情頁 */
+.pg-crumb { margin-bottom: 12px; }
+.pg-crumb a, .pg-pager a { color: var(--cyan, #00c2ff); text-decoration: none; }
+.pg-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; align-items: center; margin-bottom: 26px; }
+.pg-hero-art { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--pg-line); box-shadow: var(--pg-glow); aspect-ratio: 16 / 10; }
+.pg-tag-art, .pg-art figcaption { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 6px; background: rgba(5, 13, 24, 0.75); color: #9fc4dc; font-size: 11px; }
+.pg-hero-copy h2 { margin: 6px 0 10px; font-size: clamp(1.3rem, 2.6vw, 2rem); line-height: 1.35; }
+.pg-lead { color: #c4d8ea; line-height: 1.8; margin: 0 0 14px; }
+.pg-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.pg-facts div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(0, 194, 255, 0.08); border: 1px solid var(--pg-line); min-width: 0; }
+.pg-facts span { font-size: 12px; color: var(--muted, #94abc2); }
+.pg-facts b { font-size: 14px; line-height: 1.5; }
+.pg-hero-copy .pg-chips { margin-bottom: 14px; }
+.pg-sec { margin: 0 0 24px; min-width: 0; }
+.pg-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.pg-two > div { background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; padding: 16px; min-width: 0; }
+.pg-list { margin: 0; padding-left: 1.2em; line-height: 1.85; color: #d5e8f7; }
+.pg-sub { margin: 10px 0 4px; color: var(--cyan, #00c2ff); font-weight: 700; }
+.pg-note { color: #9fc4dc; font-size: 13.5px; line-height: 1.7; margin: 8px 0 0; }
+.pg-pending { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--yellow, #f5b84b); background: rgba(245, 184, 75, 0.08); color: #f3d79c; font-size: 13px; line-height: 1.7; }
+.pg-stages { display: grid; gap: 14px; }
+.pg-stage { display: grid; grid-template-columns: minmax(150px, 260px) minmax(0, 1fr); gap: 16px; align-items: start; background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; padding: 12px; min-width: 0; }
+.pg-stage h4 { margin: 2px 0 6px; font-size: 1.05rem; }
+.pg-stage-no { margin: 0; color: var(--green, #35e6a8); font: 700 12px/1.4 monospace; letter-spacing: 0.06em; }
+.pg-art { position: relative; margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--pg-line); aspect-ratio: 16 / 10; background: #050d18; }
+.pg-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pg-daily summary { cursor: pointer; font-weight: 700; color: #fff; padding: 10px 0; }
+.pg-pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 10px 0 18px; }
+.pg-legal { color: #7f97ad; font-size: 12.5px; line-height: 1.7; border-top: 1px solid rgba(0, 194, 255, 0.16); padding-top: 12px; }
+
+/* 選課計算器 */
+.pg-calc-mods { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 12px 0; }
+.pg-calc-mod { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--pg-line); background: rgba(0, 194, 255, 0.06); cursor: pointer; }
+.pg-calc-mod:has(input:checked) { border-color: var(--green, #35e6a8); background: rgba(53, 230, 168, 0.1); }
+.pg-calc-mod input { margin-top: 4px; width: 18px; height: 18px; accent-color: #35e6a8; }
+.pg-calc-mod small { display: block; color: var(--muted, #94abc2); }
+.pg-calc-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.pg-calc-sum div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(5, 13, 24, 0.5); border: 1px solid var(--pg-line); }
+.pg-calc-sum span { font-size: 12px; color: var(--muted, #94abc2); }
+.pg-calc-sum b { color: var(--green, #35e6a8); }
+.pg-calc-formula { font-family: monospace; color: #bfe6ff; margin: 10px 0 0; }
+
+/* 課程諮詢 */
+.pg-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+.pg-form label { display: grid; gap: 6px; font-size: 14px; color: #c4d8ea; min-width: 0; }
+.pg-form input, .pg-form select, .pg-form textarea { font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--pg-line); background: rgba(5, 13, 24, 0.7); color: #fff; min-width: 0; }
+.pg-form .pg-wide { grid-column: 1 / -1; }
+.pg-form .pg-consent { display: flex; gap: 8px; align-items: flex-start; }
+.pg-form .pg-consent input { margin-top: 4px; width: 18px; height: 18px; }
+.pg-form .pg-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.pg-form .pg-btn { margin-top: 0; }
+.pg-form-msg { grid-column: 1 / -1; margin: 0; font-size: 14px; }
+.pg-form-msg.bad { color: #ff9aa9; }
+.pg-form-msg.ok { color: var(--green, #35e6a8); }
+.pg-consult a { color: var(--cyan, #00c2ff); }
+
+/* 示意圖動畫：旋翼轉動、掃描、航線流動（系統要求減少動態時關閉） */
+.pa-spin { animation: pa-spin 1.2s linear infinite; }
+.pa-dash { animation: pa-dash 2.4s linear infinite; }
+.pa-scan { animation: pa-scan 2s ease-in-out infinite; }
+@keyframes pa-spin { to { transform: rotate(360deg); } }
+@keyframes pa-dash { to { stroke-dashoffset: -44; } }
+@keyframes pa-scan { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .pa-spin, .pa-dash, .pa-scan { animation: none; } .pg-card, .pg-card:hover { transition: none; transform: none; } }
+
+@media (max-width: 1100px) {
+  .pg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pg-grid > .pg-card, .pg-grid > .pg-card:nth-child(4), .pg-grid > .pg-card:nth-child(5) { grid-column: auto; }
+}
+@media (max-width: 760px) {
+  .pg-grid, .pg-hero, .pg-two, .pg-form, .pg-facts { grid-template-columns: minmax(0, 1fr); }
+  .pg-stage { grid-template-columns: minmax(0, 1fr); }
+  .programs-home, .programs-page { padding-left: 14px; padding-right: 14px; }
+}
+
+/* 寬螢幕首頁原本固定一屏（styles.css：body.home-view overflow-y:hidden、只顯示 #home）；
+   為了在「一分鐘認識 FDE-AI」下方放課程專區，只在首頁開放往下捲動並顯示 #programs-home，其他區塊維持隱藏。 */
+@media (min-width: 1101px) {
+  body.home-view { overflow-y: auto; }
+  body.home-view main > section#programs-home { display: block; }
+}

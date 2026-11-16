@@ -80,17 +80,22 @@ function escapeHtml(value) {
 }
 
 function renderNavigation() {
+  // 2026-11-17：導航前後的附加項目改由資料設定檔提供（src/data/nav-config.js），其他專案（如 FDE-GCS）新增導航時只改設定檔，避免互相衝突
+  const navExtra = window.FdeNavConfig || {};
   const primaryNav = [
+    ...(navExtra.before || []),
     // 2026-11-06：「關於我們」入口移到左上角品牌（點我），導航從「學」開始；12 任務資料與 /platform/tasks 路由保留不刪
     ...moduleSections,
     { label: '健', title: '飛行健康 AI / Flight Health', href: '/flight-health/' },
     { label: '調', title: 'AI PID 與濾波實驗室 / AI PID & Filter Lab', href: '/pid-lab/' },
     { key: 'cohorts', label: '展', title: '歷屆學員成果' },
-    { key: 'teacher', label: '師', title: '教師復核中心' }
+    { key: 'teacher', label: '師', title: '教師復核中心' },
+    ...(navExtra.after || [])
   ];
   // 2026-11-06：左側導航改為「藍底圓形徽章（繁體楷書大字）＋下方英文小字」，旁邊的項目名稱縮小。
   // 學練做測證是核心五步，徽章再大一號（is-core）。
   const NAV_EN = { 關: 'ABOUT', 學: 'LEARN', 練: 'PRACTICE', 做: 'BUILD', 作: 'BUILD', 測: 'TEST', 證: 'CERTIFY', 健: 'HEALTH', 調: 'TUNE', 展: 'SHOWCASE', 師: 'TEACHER' };
+  for (const item of [...(navExtra.before || []), ...(navExtra.after || [])]) if (item.en && !NAV_EN[item.label]) NAV_EN[item.label] = item.en;
   const CORE = new Set(['學', '練', '做', '作', '測', '證']);
   $('#moduleNav').innerHTML = primaryNav
     .map(
@@ -111,7 +116,8 @@ function renderNavigation() {
 function applyRoute(routeKey) {
   const route = router.definitions.find((item) => item.key === routeKey) || router.definitions[0];
   document.querySelectorAll('main > .section-block').forEach((section) => {
-    const isActive = section.id === route.sectionId;
+    // 2026-11-17：data-also-route 讓同一個區塊也出現在其他頁（首頁下方的「五大職業實訓課程」專區）
+    const isActive = section.id === route.sectionId || (section.dataset.alsoRoute || '').split(' ').includes(route.key);
     section.hidden = !isActive;
     section.style.display = isActive ? '' : 'none';
     section.setAttribute('aria-hidden', String(!isActive));
@@ -125,7 +131,7 @@ function applyRoute(routeKey) {
 
   document.querySelectorAll('#moduleNav a, .mobile-demo-nav a').forEach((link) => {
     const linkRoute = link.dataset.route || router.routeFromHref(link.getAttribute('href'));
-    const activeRoute = route.key === 'fde-column' ? 'learn' : route.key;
+    const activeRoute = route.key === 'fde-column' ? 'learn' : route.sectionId === 'programs' ? 'programs' : route.key;
     if (linkRoute === activeRoute) {
       link.setAttribute('aria-current', 'page');
     } else {
