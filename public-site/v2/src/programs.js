@@ -3,7 +3,7 @@
  * - 首頁專區（#programsHome）、課程總覽與五門課程詳情（#programsRoot）、職業飛手選課計算器、課程諮詢入口。
  * - 內容全部來自 src/data/vocational-programs.js；每門課一張概念圖 assets/programs/<課程>.webp（Pexels 授權，見 assets/CREDITS.md）。
  * - 路由沿用平台既有 FdeRouter：/platform/programs（總覽）、/platform/<課程代號>（詳情）；app.js 切換頁面時會設定 body[data-route]。
- * - 諮詢表單目前只有前端驗證與示範，不送出、不儲存任何資料（儲存方案待老師批准）。
+ * - 課程諮詢表單送到 /api/public/course-inquiry/（教師電腦的 Django）：存在獨立資料庫、寄通知信給老師，教師後台「課程諮詢」查看；GitHub 頁面上改送到固定入口。
  */
 (function () {
   'use strict';
@@ -165,11 +165,12 @@
       ${legalNote()}`;
   }
 
-  // ───────── 課程諮詢（示範模式：不送出、不儲存） ─────────
+  // ───────── 課程諮詢：送到教師後台（獨立資料庫，保存 180 天） ─────────
+  const INQUIRY_URL = ON_PAGES ? `${GATEWAY}/api/public/course-inquiry/` : '/api/public/course-inquiry/';
   function consultForm(selected = '') {
     return `<section class="pg-consult" id="pg-consult" aria-label="課程諮詢">
       <h3>課程諮詢</h3>
-      <p class="pg-note">目前為<b>示範模式</b>：表單只檢查欄位，不會送出也不會儲存資料。現在想諮詢，請直接<a href="${LINE_URL}" target="_blank" rel="noopener">加入 LINE 群組</a>或來電 <a href="tel:0901189740">${PHONE}</a>。</p>
+      <p class="pg-note">留下聯絡方式，老師會主動聯絡你；也可以直接<a href="${LINE_URL}" target="_blank" rel="noopener">加入 LINE 群組</a>或來電 <a href="tel:0901189740">${PHONE}</a>。</p>
       <form class="pg-form" novalidate data-consult-form>
         <label>稱呼 <input name="name" maxlength="30" autocomplete="name" required></label>
         <label>聯絡方式（手機或 Email）<input name="contact" maxlength="80" autocomplete="email" required></label>
@@ -177,8 +178,9 @@
         <label>班別 <select name="format"><option>周末班</option><option>常日班</option><option>都可以／未定</option></select></label>
         <label class="pg-wide">想問的問題（選填）<textarea name="message" rows="3" maxlength="500"></textarea></label>
         <label class="pg-hp" aria-hidden="true">網站 <input name="website" tabindex="-1" autocomplete="off"></label>
-        <label class="pg-wide pg-consent"><input type="checkbox" name="consent" required> 我已閱讀並同意：FDE-AI 只會用這些資料回覆本次課程諮詢，不另作他用；可隨時要求刪除。</label>
-        <button class="pg-btn" type="submit">送出諮詢（示範）</button>
+        <input type="hidden" name="started_ms" value="${Date.now()}">
+        <label class="pg-wide pg-consent"><input type="checkbox" name="consent" required> 我同意：FDE-AI 只用這些資料回覆本次課程諮詢，不另作他用；資料保存 180 天後自動刪除，也可以來電要求提前刪除。</label>
+        <button class="pg-btn" type="submit">送出諮詢</button>
         <p class="pg-form-msg" role="status" aria-live="polite" data-consult-msg></p>
       </form>
     </section>`;
@@ -201,8 +203,21 @@
         if (!f.get('consent')) errs.push('請勾選同意個資告知');
         if (errs.length) { msg.textContent = errs.join('；'); msg.className = 'pg-form-msg bad'; return; }
         last = Date.now();
-        msg.className = 'pg-form-msg ok';
-        msg.innerHTML = `欄位檢查通過。<b>目前為示範模式，資料沒有送出也沒有儲存。</b>請改用 <a href="${LINE_URL}" target="_blank" rel="noopener">LINE 群組</a>或來電 ${PHONE} 聯繫教師。`;
+        const btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true; msg.className = 'pg-form-msg'; msg.textContent = '送出中…';
+        const fallback = `請改用 <a href="${LINE_URL}" target="_blank" rel="noopener">LINE 群組</a>或來電 ${PHONE} 聯繫老師。`;
+        // 用一般表單格式送出（不需要跨網站預檢）；不帶 Cookie
+        fetch(INQUIRY_URL, { method: 'POST', body: new URLSearchParams(f), credentials: 'omit' })
+          .then(async (r) => ({ status: r.status, data: await r.json().catch(() => ({})) }))
+          .then(({ status, data }) => {
+            if (status === 200 && data.ok) { msg.className = 'pg-form-msg ok'; msg.textContent = '已送出！老師收到後會盡快和你聯絡。'; form.reset(); return; }
+            msg.className = 'pg-form-msg bad';
+            if (status === 503) msg.innerHTML = `教學主機目前離線，諮詢暫時無法送出。${fallback}`;
+            else msg.innerHTML = `${esc(data.error || '送出失敗')}。${fallback}`;
+            if (status !== 400) last = Date.now(); else last = 0;
+          })
+          .catch(() => { msg.className = 'pg-form-msg bad'; msg.innerHTML = `網路連線失敗，諮詢沒有送出。${fallback}`; last = 0; })
+          .finally(() => { btn.disabled = false; });
       });
     });
     scope.querySelectorAll('[data-consult]').forEach((a) => a.addEventListener('click', (e) => {
