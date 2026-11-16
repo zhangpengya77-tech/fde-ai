@@ -77,7 +77,7 @@
       stages: [
         { title: '法規、安全與考照流程', hours: 4, items: ['遙控無人機相關法規與飛航安全', '考照流程與報考類別說明', '飛行場地與禁限航區觀念'], art: 'rules' },
         { title: '模擬器與基礎操控', hours: 7, items: ['遙控器握法與搖桿模式', '起飛、降落、懸停', '方向與姿態控制'], art: 'simulator' },
-        { title: '實機基礎飛行', hours: 7, items: ['定點懸停', '姿態控制', '基本飛行路線'], art: 'hover', photo: '/f450-twin/img/photo-view-iso.jpg' },
+        { title: '實機基礎飛行', hours: 7, items: ['定點懸停', '姿態控制', '基本飛行路線'], art: 'hover' },
         { title: '術科路線強化', hours: 7, items: ['依報考類別練習對應術科項目', '路線節奏與修正技巧', '錯誤動作分析'], art: 'route' },
         { title: '模擬考核與弱項強化', hours: 7, items: ['飛前檢查 SOP 實作', '模擬考試流程', '弱項針對性修正'], art: 'checklist' },
       ],
@@ -105,7 +105,7 @@
       classSize: '5 人即可開班',
       stages: [
         { title: '無人載具基礎與飛行', hours: 14, items: ['飛行安全', '模擬器訓練', '飛行操作', '任務規劃'], art: 'simulator' },
-        { title: 'F450 裝調檢修', hours: 28, items: ['機架與動力', '飛控安裝與調參', '故障排除', '維修與複測'], art: 'f450', photo: '/f450-twin/img/photo-wiring.jpg' },
+        { title: 'F450 裝調檢修', hours: 28, items: ['機架與動力', '飛控安裝與調參', '故障排除', '維修與複測'], art: 'f450' },
         { title: '3D 建模與列印', hours: 21, items: ['Fusion 360', 'Blender', '結構建模', '零件列印'], art: 'cad' },
         { title: 'AI 視覺目標檢測', hours: 21, items: ['YOLO 原理與應用', '資料蒐集與標註', '模型訓練與應用'], art: 'ai' },
         { title: '產業應用與數位實訓平台', hours: 14, items: ['巡檢、測繪、農業應用', '數位孿生（開發中）', '學練做測證平台操作'], art: 'industry' },
@@ -209,9 +209,9 @@
       classSize: '開班人數依設備、場地、師資與安全條件而定，' + PENDING,
       days: [
         { title: '電學安全、工具與檢測規範', art: 'tools' },
-        { title: 'F450 機架與動力裝配', art: 'f450', photo: '/f450-twin/img/photo-view-top.jpg' },
-        { title: '配電、線束與電源測試', art: 'wiring', photo: '/f450-twin/img/photo-wiring.jpg' },
-        { title: '飛控、感測器、接收機安裝與校準', art: 'fc', photo: '/f450-twin/img/photo-pixhawk.jpg' },
+        { title: 'F450 機架與動力裝配', art: 'f450' },
+        { title: '配電、線束與電源測試', art: 'wiring' },
+        { title: '飛控、感測器、接收機安裝與校準', art: 'fc' },
         { title: '無槳上電與地面檢查', art: 'checklist' },
         { title: '受控首飛與飛行測試', art: 'hover' },
         { title: '動力、電壓、振動故障診斷', art: 'diagnose' },

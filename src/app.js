@@ -97,7 +97,20 @@ function renderNavigation() {
   const NAV_EN = { 關: 'ABOUT', 學: 'LEARN', 練: 'PRACTICE', 做: 'BUILD', 作: 'BUILD', 測: 'TEST', 證: 'CERTIFY', 健: 'HEALTH', 調: 'TUNE', 展: 'SHOWCASE', 師: 'TEACHER' };
   for (const item of [...(navExtra.before || []), ...(navExtra.after || [])]) if (item.en && !NAV_EN[item.label]) NAV_EN[item.label] = item.en;
   const CORE = new Set(['學', '練', '做', '作', '測', '證']);
-  $('#moduleNav').innerHTML = primaryNav
+  // 2026-11-18：最上方的主推卡片（課程專區）與系統區塊分開，中間用小標題隔開；學練做測證健維持原本圓形徽章樣式
+  const featuredHtml = (navExtra.featured || [])
+    .map(
+      (item) =>
+        `<a href="${item.href || router.hrefFor(item.key)}"${item.key ? ` data-route="${item.key}"` : ''} class="nav-feature">` +
+        `<span class="nav-feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 8-4v6h2V8L12 3Z"/><path d="M6 11.2V15c0 1.7 2.7 3 6 3s6-1.3 6-3v-3.8l-6 3-6-3Z"/></svg></span>` +
+        `<span class="nav-feature-text"><b>${item.title}</b><small>${item.subtitle || ''}</small></span>` +
+        `<span class="nav-feature-go" aria-hidden="true">›</span></a>`
+    )
+    .join('');
+  const systemLabel = navExtra.systemLabel && featuredHtml
+    ? `<p class="nav-system-label"><b>${navExtra.systemLabel.title}</b><small>${navExtra.systemLabel.en || ''}</small></p>`
+    : '';
+  $('#moduleNav').innerHTML = featuredHtml + systemLabel + primaryNav
     .map(
       (section) =>
         `<a href="${section.href || router.hrefFor(section.key)}"${section.key ? ` data-route="${section.key}"` : ''} class="nav-item${CORE.has(section.label) ? ' is-core' : ''}">` +

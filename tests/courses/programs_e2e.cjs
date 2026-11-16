@@ -43,12 +43,18 @@ async function serve(ctx) {
   const go = async (p) => { await page.goto(`http://fde.test/platform/${p}`); await page.waitForSelector('#moduleNav a'); await page.waitForTimeout(250); };
   const visible = (sel) => page.locator(sel).isVisible();
 
-  // 1) 導航順序：首頁／一分鐘認識／課程開設／學練做測證／原有項目
+  // 1) 導航：最上方「課程專區」主推卡片＋「學習系統」小標題＋原本圓形徽章（不再有首頁、一分鐘認識）
   await go('');
   const nav = await page.$$eval('#moduleNav .nav-title', (n) => n.map((x) => x.textContent.trim()));
-  ok(nav.slice(0, 3).join('|') === '首頁|一分鐘認識 FDE-AI|課程開設', `導航前三項：${nav.slice(0, 3).join('、')}`);
-  ok(nav.slice(3, 8).length === 5 && nav.includes('教師復核中心') && nav.includes('歷屆學員成果'), `原有導航項目保留（共 ${nav.length} 項）`);
-  ok(await page.$$eval('#mobileNavList .nav-title', (n) => n.length) === nav.length, '手機抽屜導航同步');
+  const first = await page.$eval('#moduleNav', (n) => n.firstElementChild.className + '|' + n.firstElementChild.textContent.trim());
+  ok(first.startsWith('nav-feature|') && first.includes('課程專區') && first.includes('課程介紹與報名'), `導航最上方是課程專區主推卡片（${first}）`);
+  ok(!nav.includes('首頁') && !(await page.locator('#moduleNav').innerText()).includes('一分鐘認識'), '導航沒有首頁、一分鐘認識');
+  ok((await page.$eval('#moduleNav .nav-system-label', (n) => n.textContent)).includes('學習系統'), '主推卡片與系統區塊之間有「學習系統」小標題');
+  const badges = await page.$$eval('#moduleNav .nav-item .nav-zh', (n) => n.map((x) => x.textContent.trim()).join(''));
+  ok(badges.startsWith('學練做測證健'), `學練做測證健原順序保留（${badges}）`);
+  ok(await page.locator('#moduleNav .nav-feature .nav-badge').count() === 0 && await page.locator('#moduleNav .nav-item .nav-badge').count() === nav.length, '課程專區不用圓形徽章，系統項目都保留徽章');
+  ok(nav.includes('教師復核中心') && nav.includes('歷屆學員成果'), `原有導航項目保留（共 ${nav.length} 項）`);
+  ok(await page.$$eval('#mobileNavList .nav-title', (n) => n.length) === nav.length && await page.locator('#mobileNavList .nav-feature').count() === 1, '手機抽屜導航同步（含主推卡片）');
 
   // 2) 首頁專區
   ok(await visible('#programs-home') && await visible('#home'), '首頁同時顯示 hero 與課程專區');
@@ -58,16 +64,24 @@ async function serve(ctx) {
   const rows = await page.$$eval('#programsHome .pg-card', (c) => c.map((x) => Math.round(x.getBoundingClientRect().top)));
   ok(rows[0] === rows[1] && rows[1] === rows[2] && rows[3] === rows[4] && rows[3] > rows[0], `桌面 3+2 排列（${rows.join(',')}）`);
   const card = await page.locator('#programsHome .pg-card').first().innerText();
-  ok(['32 小時', '適合對象', '結訓成果', '發展方向', '了解課程'].every((t) => card.includes(t)) && await page.locator('#programsHome .pg-card').first().locator('svg').count() > 0, '卡片含主視覺、時數、對象、標籤、成果、發展、了解課程');
+  ok(['COURSE 01', '32 小時', '適合對象', '結訓成果', '發展方向', '了解課程'].every((t) => card.includes(t)) && await page.locator('#programsHome .pg-card').first().locator('img.pg-card-img').count() === 1, '卡片含頂部小圖、編號、時數、對象、成果、發展、了解課程');
+  const heights = await page.$$eval('#programsHome .pg-card-media', (n) => n.map((x) => Math.round(x.getBoundingClientRect().height)));
+  ok(heights.every((h) => h > 0 && h <= 120), `卡片頂部圖片高度 ≤120px（${heights.join(',')}）`);
+  const info = await page.locator('#programsHome .pg-card-info').first().innerText();
+  ok(info.includes('5 天') && info.includes('依設備、場地、師資與安全條件開班'), `卡片小字顯示天數與開班條件（${info}）`);
   ok(homeTxt.includes('5 人即可開班'), '種子教師卡片標示 5 人即可開班');
   if (OUT) await page.locator('#programs-home').screenshot({ path: path.join(OUT, 'C1_home_programs_desktop.png') });
 
-  // 3) 由導航進課程開設總覽（站內切換，不重新載入）
+  // 3) 由導航進課程專區（站內切換，不重新載入）
   await page.locator('#moduleNav a[data-route="programs"]').click(); await page.waitForTimeout(300);
-  ok(page.url().endsWith('/platform/programs') && await visible('#programs') && !(await visible('#home')), '導航「課程開設」→ /platform/programs');
-  ok(await page.locator('#moduleNav a[data-route="programs"][aria-current="page"]').count() === 1, '導航「課程開設」標示目前頁');
+  ok(page.url().endsWith('/platform/programs') && await visible('#programs') && !(await visible('#home')), '導航「課程專區」→ /platform/programs');
+  ok(await page.locator('#moduleNav a[data-route="programs"][aria-current="page"]').count() === 1, '導航「課程專區」標示目前頁');
   const ov = await page.locator('#programsRoot').innerText();
-  ok(['09:00–12:00', '13:00–17:00', '午休', '周末班', '常日班', '5 天（最後一天 4 小時', '23 天（最後一天 6 小時', '46 天（最後一天 5 小時'].every((t) => ov.includes(t)), '總覽：上課制度與五門課時數天數表');
+  ok(!['統一上課制度', '每天最多', '午休', '上課日'].some((t) => ov.includes(t)) && await page.locator('#programsRoot table').count() === 0, '課程專區沒有上課制度區塊與總表');
+  const order = await page.$$eval('#programsRoot .pg-list-cards > .pg-card h3', (n) => n.map((x) => x.textContent.trim()));
+  ok(order.join('|') === P.programs.map((x) => x.title).join('|'), `一進來就是課程列表，順序正確（${order.length} 門）`);
+  ok(await page.$$eval('#programsRoot .pg-list-cards > .pg-card', (c) => c.every((x) => x.querySelector('.pg-card-no') && x.querySelector('h3') && x.querySelector('.pg-card-hours') && x.querySelector('.pg-card-tagline') && x.querySelector('.pg-card-meta') && x.querySelector('.pg-card-stages') && x.querySelector('.pg-chips') && x.querySelector('.pg-btn'))), '五張卡片版型一致（編號、名稱、時數、簡介、細項、階段、標籤、按鈕）');
+  ok((await page.locator('#programsRoot .pg-card[data-program="seed"] .pg-card-stages').innerText()).includes('階段 9') && (await page.locator('#programsRoot .pg-card[data-program="pilot"] .pg-card-stages').innerText()).includes('模組 E'), '卡片列出階段（含時數、名稱與子項目）');
   if (OUT) await page.screenshot({ path: path.join(OUT, 'C2_programs_overview.png'), fullPage: false });
 
   // 4) 五門詳情
@@ -77,7 +91,8 @@ async function serve(ctx) {
     ok(await page.locator('#programsRoot').getAttribute('data-view') === p.id && t.includes(p.title), `詳情 ${p.slug}：直接開網址可顯示`);
     const need = ['適合對象', '設備', '軟體與平台', '學習成果', '發展方向', '開班形式', '課程諮詢'];
     ok(need.every((x) => t.includes(x)), `詳情 ${p.slug}：各區塊齊全`);
-    ok(await page.locator('#programsRoot .pg-stage').count() >= 5 && await page.locator('#programsRoot .pg-stage .pg-art').count() >= 5, `詳情 ${p.slug}：階段大綱與每階段圖片（${await page.locator('#programsRoot .pg-stage').count()} 個）`);
+    ok(await page.locator('#programsRoot .pg-stage').count() >= 5 && await page.locator('#programsRoot img.pg-hero-img').count() === 1, `詳情 ${p.slug}：主視覺概念圖與階段大綱（${await page.locator('#programsRoot .pg-stage').count()} 個）`);
+    ok(!/實拍|示意圖/.test(await page.locator('body').innerText()) && await page.locator('svg.pa-art').count() === 0, `詳情 ${p.slug}：沒有「實拍」「示意圖」字樣與線稿圖`);
     if (p.daily) {
       const rowsN = await page.locator('#programsRoot .pg-daily tbody tr').count();
       ok(rowsN === p.daily.length, `詳情 ${p.slug}：每日內容 ${rowsN} 天`);
@@ -140,13 +155,13 @@ async function serve(ctx) {
   ok(new Set(xs).size === 1, '手機：首頁卡片單列');
   if (OUT) { await mp.locator('#programs-home').screenshot({ path: path.join(OUT, 'C5_home_programs_mobile.png') }); await mp.goto('http://fde.test/platform/pro-pilot'); await mp.waitForTimeout(300); await mp.screenshot({ path: path.join(OUT, 'C6_pilot_mobile.png'), fullPage: false }); }
 
-  // 9) 減少動態效果
-  const r = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' }); await serve(r);
-  const rp = await r.newPage(); await rp.goto('http://fde.test/platform/'); await rp.waitForTimeout(300);
-  ok(await rp.$eval('#programsHome .pa-spin', (e) => getComputedStyle(e).animationName) === 'none', '減少動態效果時示意圖動畫關閉');
+  // 9) 概念圖都在、已壓縮、延遲載入
+  for (const p of P.programs) { const f = path.join(ROOT, 'assets/programs', `${p.id}.webp`); ok(fs.existsSync(f) && fs.statSync(f).size < 80 * 1024, `概念圖 ${p.id}.webp 存在且小於 80 KB`); }
+  await go('programs'); await page.waitForTimeout(800);
+  ok(await page.$$eval('#programsRoot img.pg-card-img', (n) => n.length === 5 && n.every((i) => i.getAttribute('loading') === 'lazy')), '課程卡片圖片都延遲載入');
 
-  // 10) 首頁圖片預算：課程專區不載入點陣圖
-  ok(await page.evaluate(() => true) && (await (async () => { const pg = await ctx.newPage(); const imgs = []; pg.on('request', (q) => { if (q.resourceType() === 'image' && /programs|f450-twin\/img/.test(q.url())) imgs.push(q.url()); }); await pg.goto('http://fde.test/platform/'); await pg.waitForTimeout(500); await pg.close(); return imgs.length === 0; })()), '首頁課程專區不額外下載點陣圖（原創 SVG）');
+  // 10) 課程頁不再載入任何實拍照片
+  ok(await (async () => { const pg = await ctx.newPage(); const imgs = []; pg.on('request', (q) => { if (q.resourceType() === 'image' && /f450-twin\/img\/photo-/.test(q.url())) imgs.push(q.url()); }); for (const u of ['', 'programs', 'maintenance-engineer', 'seed-teacher']) { await pg.goto('http://fde.test/platform/' + u); await pg.waitForTimeout(400); } await pg.close(); return imgs.length === 0; })(), '課程頁不再載入任何實拍照片');
 
   ok(errs.length === 0, `沒有腳本錯誤${errs.length ? '：' + errs.slice(0, 3).join(' | ') : ''}`);
   console.log(log.join('\n')); console.log(`${log.filter((l) => l.startsWith('PASS')).length}/${log.length} 通過`);
