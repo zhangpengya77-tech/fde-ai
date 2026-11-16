@@ -31,10 +31,15 @@ def manage(*args):
         sys.exit(f"指令失敗：manage.py {' '.join(args)}")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # 不跟著轉址，才看得到 302
+        return None
+
+
 def status(url, method="GET"):
     req = urllib.request.Request(url, method=method, headers={"X-Forwarded-Proto": "https"})
     try:
-        with urllib.request.urlopen(req, timeout=20) as res:
+        with urllib.request.build_opener(_NoRedirect).open(req, timeout=20) as res:
             return res.status
     except urllib.error.HTTPError as err:
         return err.code
