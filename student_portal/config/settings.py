@@ -119,6 +119,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'learning.apps.LearningConfig',
+    # 2026-11-18：課程諮詢（獨立資料庫，見下方 DATABASES['inquiries'] 與 DATABASE_ROUTERS）
+    'inquiries.apps.InquiriesConfig',
 ]
 
 MIDDLEWARE = [
@@ -179,6 +181,18 @@ else:
         }
     }
 
+
+# 2026-11-18：課程諮詢使用獨立的 SQLite 資料庫，不寫入學員系統的 default 資料庫。
+# 預設放在 default 資料庫同一個資料夾（inquiries.sqlite3）；可用 DJANGO_INQUIRY_DB_NAME 指定。
+_default_db_name = DATABASES['default'].get('NAME') if DATABASES['default'].get('ENGINE', '').endswith('sqlite3') else None
+INQUIRY_DB_NAME = os.environ.get('DJANGO_INQUIRY_DB_NAME') or (
+    Path(_default_db_name).with_name('inquiries.sqlite3') if _default_db_name and str(_default_db_name) != ':memory:' else BASE_DIR / 'inquiries.sqlite3'
+)
+DATABASES['inquiries'] = {'ENGINE': 'django.db.backends.sqlite3', 'NAME': INQUIRY_DB_NAME}
+DATABASE_ROUTERS = ['inquiries.routers.InquiryRouter']
+# 新諮詢通知信收件人（逗號分隔）；沒設定就寄到寄件帳號本身。寄信只是輔助，教師後台才是主要查看處。
+COURSE_INQUIRY_NOTIFY_EMAILS = os.environ.get('FDE_COURSE_INQUIRY_NOTIFY_EMAILS', '')
+COURSE_INQUIRY_ALLOWED_HOSTS = os.environ.get('FDE_COURSE_INQUIRY_ALLOWED_HOSTS', '')
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

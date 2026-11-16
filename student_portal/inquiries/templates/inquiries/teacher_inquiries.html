@@ -1,0 +1,75 @@
+{% extends 'learning/base.html' %}
+{% comment %}
+2026-11-18：課程諮詢（官網「課程專區」表單）。資料在獨立資料庫，保存 {{ retention_days }} 天後自動刪除。
+{% endcomment %}
+{% block title %}課程諮詢｜教師後台{% endblock %}
+{% block content %}
+<style>
+  .ci-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+  .ci-stat { padding: 12px 14px; border: 1px solid rgba(0,194,255,.3); border-radius: 12px; }
+  .ci-stat b { display: block; font-size: 26px; }
+  .ci-stat.hot b { color: #ffd36b; }
+  .ci-bars { display: grid; gap: 6px; }
+  .ci-bar { display: grid; grid-template-columns: 7em 1fr 3em; gap: 8px; align-items: center; font-size: 14px; }
+  .ci-bar i { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #168bff, #00c2ff); }
+  .ci-unread td { background: rgba(255, 211, 107, .08); }
+  .ci-unread td:first-child { border-left: 3px solid #ffd36b; }
+  .ci-msg { white-space: pre-wrap; max-width: 28em; }
+  .ci-actions form { display: inline; }
+  .ci-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+</style>
+<a class="back-link" href="{% url 'learning:teacher_dashboard' %}">返回教師總覽</a>
+<section class="page-heading">
+  <p class="eyebrow">課程專區 · 招生</p>
+  <h1>📨 課程諮詢</h1>
+  <p class="muted">官網「課程專區」送出的諮詢會出現在這裡（同時寄一封通知信給老師作為輔助）。資料存在獨立資料庫，不與學員資料混在一起，保存 {{ retention_days }} 天後自動刪除。聯絡資料只用於回覆諮詢。</p>
+</section>
+
+<section class="panel">
+  <h2>統計</h2>
+  <div class="ci-stats">
+    <div class="ci-stat{% if stats.unread %} hot{% endif %}"><span>未讀新諮詢</span><b data-ci-unread>{{ stats.unread }}</b></div>
+    <div class="ci-stat"><span>近 7 天</span><b>{{ stats.week }}</b></div>
+    <div class="ci-stat"><span>保存中的總數</span><b data-ci-total>{{ stats.total }}</b></div>
+  </div>
+  <div class="ci-two">
+    <div><h3>各課程</h3><div class="ci-bars">{% for cid, title, n in stats.courses %}<div class="ci-bar"><span title="{{ title }}">{{ title|truncatechars:8 }}</span><i style="width:{% if stats.total %}{% widthratio n stats.total 100 %}{% else %}0{% endif %}%"></i><b>{{ n }}</b></div>{% endfor %}</div></div>
+    <div><h3>班別</h3><div class="ci-bars">{% for f, n in stats.formats %}<div class="ci-bar"><span>{{ f }}</span><i style="width:{% widthratio n stats.total 100 %}%"></i><b>{{ n }}</b></div>{% empty %}<p class="muted">尚無資料</p>{% endfor %}</div></div>
+    <div><h3>近 8 週</h3><div class="ci-bars">{% for d, n, pct in stats.weeks %}<div class="ci-bar"><span>{{ d|date:"m/d" }} 週</span><i style="width:{{ pct }}%"></i><b>{{ n }}</b></div>{% endfor %}</div></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+    <h2>諮詢列表{% if only_unread %}（只看未讀）{% endif %}</h2>
+    <div class="ci-actions">
+      {% if only_unread %}<a class="button secondary" href="?">看全部</a>{% else %}<a class="button secondary" href="?view=unread">只看未讀</a>{% endif %}
+      {% if stats.unread %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="read_all"><button class="button primary" type="submit">全部標示為已讀</button></form>{% endif %}
+    </div>
+  </div>
+  {% if items %}
+  <table class="data-table">
+    <thead><tr><th>時間</th><th>稱呼</th><th>聯絡方式</th><th>課程</th><th>班別</th><th>問題</th><th>狀態</th></tr></thead>
+    <tbody>
+    {% for x in items %}
+      <tr class="{% if not x.is_read %}ci-unread{% endif %}" data-ci-row="{{ x.pk }}">
+        <td>{{ x.created_at|date:"Y-m-d H:i" }}</td>
+        <td>{{ x.name }}</td>
+        <td>{{ x.contact }}</td>
+        <td>{{ x.course_title }}</td>
+        <td>{{ x.class_format|default:"—" }}</td>
+        <td class="ci-msg">{{ x.message|default:"—" }}</td>
+        <td class="ci-actions">{% if x.is_read %}已讀<br><small class="muted">{{ x.read_by }} {{ x.read_at|date:"m/d H:i" }}</small>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="unread"><input type="hidden" name="id" value="{{ x.pk }}"><button class="button secondary" type="submit">改回未讀</button></form>
+        {% else %}<b style="color:#ffd36b">🔔 新</b>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="read"><input type="hidden" name="id" value="{{ x.pk }}"><button class="button secondary" type="submit">標示已讀</button></form>{% endif %}
+          {% if not x.email_sent %}<br><small class="muted">（通知信未寄出）</small>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">{% if only_unread %}沒有未讀的諮詢。{% else %}目前沒有課程諮詢。{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

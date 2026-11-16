@@ -1,6 +1,6 @@
 // FDE-AI 五大職業實訓課程｜瀏覽器端對端驗收
 // 用 Playwright 攔截請求，把專案根目錄當成 /platform/ 提供（比照 Django：HTML 注入 <base href="/platform/">、無副檔名路徑回首頁），不啟動伺服器。
-// 驗收：導航順序、首頁專區 3+2、總覽、五門課程詳情、每日課表、選課計算器 32 種組合、諮詢表單（示範模式不送出）、
+// 驗收：導航順序、首頁專區 3+2、總覽、五門課程詳情、每日課表、選課計算器 32 種組合、諮詢表單（送到教師後台 API）、
 //       既有頁面仍正常、手機單列無橫向捲動、減少動態效果、沒有腳本錯誤。
 // 用法：set PLAYWRIGHT_PATH=<playwright 路徑> 後執行 node tests/courses/programs_e2e.cjs <截圖資料夾>
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
@@ -17,6 +17,7 @@ const posted = [];
 async function serve(ctx) {
   await ctx.route('http://fde.test/**', (route) => {
     const req = route.request(), u = new URL(req.url());
+    if (req.method() === 'POST' && u.pathname === '/api/public/course-inquiry/') { posted.push(Object.fromEntries(new URLSearchParams(req.postData() || ''))); return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); }
     if (req.method() !== 'GET') { posted.push(`${req.method()} ${u.pathname}`); return route.fulfill({ status: 405, body: '' }); }
     let p = decodeURIComponent(u.pathname);
     if (p.startsWith('/platform/')) {
@@ -123,15 +124,19 @@ async function serve(ctx) {
   ok((await page.locator('#programsRoot').innerText()).includes('依法須具備的操作資格') && (await page.locator('#programsRoot').innerText()).includes('依主管機關公告'), '職業飛手：崗位與資格分開，資格依主管機關公告');
   if (OUT) await page.locator('[data-calc]').screenshot({ path: path.join(OUT, 'C4_calculator.png') });
 
-  // 6) 諮詢表單：前端驗證、示範模式不送出任何請求
+  // 6) 諮詢表單：前端驗證 → 送到 /api/public/course-inquiry/（教師後台），成功訊息、30 秒限流
   const form = page.locator('[data-consult-form]');
   await form.locator('button[type="submit"]').click();
-  ok((await form.locator('[data-consult-msg]').textContent()).includes('請填寫稱呼'), '表單：空白送出顯示錯誤');
+  ok((await form.locator('[data-consult-msg]').textContent()).includes('請填寫稱呼') && posted.length === 0, '表單：空白送出顯示錯誤、不送出');
   await form.locator('input[name="name"]').fill('測試'); await form.locator('input[name="contact"]').fill('0912345678'); await form.locator('input[name="consent"]').check();
   ok(await form.locator('select[name="course"]').inputValue() === 'pilot', '表單：詳情頁預選目前課程');
-  const before = posted.length;
+  await page.waitForTimeout(3100);
   await form.locator('button[type="submit"]').click();
-  ok((await form.locator('[data-consult-msg]').textContent()).includes('示範模式') && posted.length === before, '表單：通過驗證後顯示示範模式，沒有送出任何請求');
+  await page.waitForFunction(() => /已送出/.test(document.querySelector('[data-consult-msg]').textContent), null, { timeout: 5000 }).catch(() => {});
+  const sent = posted.at(-1) || {};
+  ok((await form.locator('[data-consult-msg]').textContent()).includes('已送出') && sent.name === '測試' && sent.contact === '0912345678' && sent.course === 'pilot' && sent.consent === 'on' && Number(sent.started_ms) > 0 && sent.website === '', `表單：送出到課程諮詢 API（${JSON.stringify(sent)}）`);
+  ok(!/示範/.test(await page.locator('#pg-consult').innerText()) && (await page.locator('#pg-consult').innerText()).includes('180 天'), '表單：不再是示範模式，個資告知寫明保存 180 天');
+  await form.locator('input[name="name"]').fill('測試2'); await form.locator('input[name="contact"]').fill('0912345678'); await form.locator('input[name="consent"]').check();
   await form.locator('button[type="submit"]').click();
   ok((await form.locator('[data-consult-msg]').textContent()).includes('30 秒'), '表單：30 秒內重送被限流');
 

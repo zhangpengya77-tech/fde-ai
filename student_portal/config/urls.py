@@ -19,5 +19,7 @@ from django.urls import include, path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # 2026-11-18：課程諮詢（官網表單 API 與教師後台頁）
+    path('', include('inquiries.urls')),
     path('', include('learning.urls')),
 ]

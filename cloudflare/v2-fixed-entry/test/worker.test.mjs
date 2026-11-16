@@ -154,3 +154,14 @@ test("主機離線：/platform/ 底下的平台頁與檔案對應到 GitHub 頁�
   res = await worker.fetch(new Request(`${FIXED}/platform/programs`, { headers: { accept: "text/html" } }), env, {}, pagesFake(calls));
   assert.equal(res.status, 200, "課程開設等前端路由頁改給 v2 首頁");
 });
+
+test("課程諮詢：GitHub 頁面送出的表單會轉送到教師電腦，回應開放給 GitHub 頁面讀取", async () => {
+  let seen;
+  const req = new Request(`${FIXED}/api/public/course-inquiry/`, { method: "POST", body: "name=a", headers: { origin: "https://zhangpengya77-tech.github.io", "content-type": "application/x-www-form-urlencoded" } });
+  const res = await worker.fetch(req, env, {}, async (r) => { seen = r; return new Response('{"ok":true}', { status: 200, headers: { "content-type": "application/json" } }); });
+  assert.equal(seen.url, `${ORIGIN}/api/public/course-inquiry/`);
+  assert.equal(res.headers.get("access-control-allow-origin"), "https://zhangpengya77-tech.github.io");
+  const off = await worker.fetch(req.clone ? new Request(`${FIXED}/api/public/course-inquiry/`, { method: "POST", body: "x", headers: { origin: "https://zhangpengya77-tech.github.io" } }) : req, env, {}, async () => new Response("", { status: 530 }));
+  assert.equal(off.status, 503);
+  assert.equal(off.headers.get("access-control-allow-origin"), "https://zhangpengya77-tech.github.io");
+});

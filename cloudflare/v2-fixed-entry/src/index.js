@@ -179,6 +179,8 @@ export default {
 
     // 手機配對 API（2026-11-07）：模擬器放在 GitHub 頁面時要跨網站呼叫，只對 GitHub 頁面開放
     const simlink = incoming.pathname.startsWith("/api/simlink/");
+    // 2026-11-18：課程諮詢表單（GitHub 頁面跨網站送出，一般表單格式不需預檢）；回應開放給 GitHub 頁面讀取結果
+    const crossSite = simlink || incoming.pathname === "/api/public/course-inquiry/";
     if (simlink && request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -186,14 +188,14 @@ export default {
       });
     }
 
-    if (!origin) return withCors(await pagesFallback(request, fetchImpl), simlink, request);
+    if (!origin) return withCors(await pagesFallback(request, fetchImpl), crossSite, request);
     try {
       const response = await fetchImpl(targetRequest(request, origin));
       // 通道本身掛了（Cloudflare 回 530／52x，不是 Django 回的錯誤）→ 公開頁面改由 GitHub 頁面提供，其餘顯示離線說明
-      if (isTunnelDown(response.status)) return withCors(await pagesFallback(request, fetchImpl), simlink, request);
-      return withCors(rewriteResponse(response, origin, fixedOrigin), simlink, request);
+      if (isTunnelDown(response.status)) return withCors(await pagesFallback(request, fetchImpl), crossSite, request);
+      return withCors(rewriteResponse(response, origin, fixedOrigin), crossSite, request);
     } catch {
-      return withCors(await pagesFallback(request, fetchImpl), simlink, request);
+      return withCors(await pagesFallback(request, fetchImpl), crossSite, request);
     }
   }
 };
