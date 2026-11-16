@@ -142,3 +142,15 @@ test("主機在線時照常轉送到教師電腦，不碰 GitHub 頁面", async 
   assert.equal(await res.text(), "live");
   assert.deepEqual(seen, [`${ORIGIN}/`]);
 });
+
+test("主機離線：/platform/ 底下的平台頁與檔案對應到 GitHub 頁面的 v2 根目錄", async () => {
+  const calls = [];
+  let res = await worker.fetch(new Request(`${FIXED}/platform/`, { headers: { accept: "text/html" } }), env, {}, pagesFake(calls));
+  assert.equal(res.status, 200);
+  assert.equal(calls.at(-1), PAGES);
+  res = await worker.fetch(new Request(`${FIXED}/platform/src/app.js?v=1`), env, {}, pagesFake(calls));
+  assert.equal(await res.text(), "js");
+  assert.equal(calls.at(-1), `${PAGES}src/app.js?v=1`);
+  res = await worker.fetch(new Request(`${FIXED}/platform/programs`, { headers: { accept: "text/html" } }), env, {}, pagesFake(calls));
+  assert.equal(res.status, 200, "課程開設等前端路由頁改給 v2 首頁");
+});

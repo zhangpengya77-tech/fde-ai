@@ -79,7 +79,9 @@ export function isDynamicPath(pathname) {
 export async function pagesFallback(request, fetchImpl) {
   const incoming = new URL(request.url);
   if (!["GET", "HEAD"].includes(request.method) || isDynamicPath(incoming.pathname)) return offlineResponse(request);
-  const target = new URL(PAGES_HOME + incoming.pathname.replace(/^\/+/, ""));
+  // 教師電腦上的平台在 /platform/ 底下（/platform/programs、/platform/src/app.js…）；GitHub 頁面把同一份平台放在 v2 根目錄 → 去掉 /platform 前綴
+  const pagesPath = incoming.pathname.replace(/^\/platform(?=\/|$)/, "") || "/";
+  const target = new URL(PAGES_HOME + pagesPath.replace(/^\/+/, ""));
   target.search = incoming.search;
   let r;
   try { r = await fetchImpl(new Request(target, { method: request.method, headers: { accept: request.headers.get("accept") || "*/*" }, redirect: "follow" })); }
@@ -87,7 +89,8 @@ export async function pagesFallback(request, fetchImpl) {
   let html = (r.headers.get("content-type") || "").includes("text/html");
   if (r.status >= 500) return offlineResponse(request);
   // 前端路由頁（/about、/f450…）在 GitHub 頁面沒有實體檔案：改給 v2 首頁，前端路由依網址顯示對應頁面
-  if (r.status === 404 && html && !/\.[a-z0-9]{2,5}$/i.test(incoming.pathname)) {
+  const wantsHtml = (request.headers.get("accept") || "").includes("text/html");
+  if (r.status === 404 && (html || wantsHtml) && !/\.[a-z0-9]{2,5}$/i.test(incoming.pathname)) {
     try { const home = await fetchImpl(new Request(PAGES_HOME, { headers: { accept: "text/html" }, redirect: "follow" })); if (home.ok) { r = home; html = true; } } catch { /* 用原本的回應 */ }
   }
   const headers = new Headers();

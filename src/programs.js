@@ -12,13 +12,22 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const byRoute = Object.fromEntries(D.programs.map((p) => [`program-${p.slug}`, p]));
   const LINE_URL = 'https://line.me/ti/g/jnXbd7PKK8', PHONE = '0901-189-740';
+  // GitHub Pages 靜態版（教師電腦關機也能看）：站內的靜態頁改用 Pages 上的相對路徑，需要教師電腦的功能改連固定入口
+  const GATEWAY = 'https://fde-ai-v2.fde-ai-gateway.workers.dev';
+  const ON_PAGES = /github\.io$/.test(location.hostname);
+  const link = (href) => {
+    if (!ON_PAGES || !href.startsWith('/')) return href;
+    if (href.startsWith('/f450-twin/') || href.startsWith('/sim/')) return `.${href}`;
+    if (href.startsWith('/live/airspace/')) return './airspace/';
+    return GATEWAY + href;
+  };
 
   const hoursLabel = (p) => p.hoursLabel || `${p.totalHours} 小時`;
   const daysLabel = (p) => (p.id === 'pilot' ? '7～14 天（依選修）' : `${p.schedule.days} 天（最後一天 ${p.schedule.lastDayHours} 小時）`);
   const chips = (list, cls = 'pg-chip') => list.map((t) => `<span class="${cls}">${esc(t)}</span>`).join('');
   const ul = (list) => `<ul class="pg-list">${list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
   const art = (kind, title) => `<figure class="pg-art">${ART.svg(kind, { title })}<figcaption>示意圖</figcaption></figure>`;
-  const photo = (src, alt) => `<figure class="pg-art pg-photo"><img src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async" width="320" height="200"><figcaption>實拍（教師提供，已同意公開）</figcaption></figure>`;
+  const photo = (src, alt) => `<figure class="pg-art pg-photo"><img src="${esc(link(src))}" alt="${esc(alt)}" loading="lazy" decoding="async" width="320" height="200"><figcaption>實拍（教師提供，已同意公開）</figcaption></figure>`;
 
   // ───────── 課程卡片（首頁與總覽共用） ─────────
   function card(p) {
@@ -152,7 +161,7 @@
       <section class="pg-sec">${dailyTable(p)}${p.id === 'pilot' ? '<p class="pg-note">實際上課日數依選修模組計算，見上方選課計算器。</p>' : ''}</section>
       <section class="pg-sec pg-two"><div><h3>設備</h3>${ul(p.equipment)}</div><div><h3>軟體與平台</h3>${ul(p.software)}</div></section>
       <section class="pg-sec pg-two"><div><h3>學習成果</h3>${ul(p.outcomes)}<p class="pg-note">結訓成果記錄在 FDE-AI 平台的作業、學習成長日誌、AI 測評與成果存證中。</p></div><div><h3>發展方向</h3>${p.id === 'pilot' ? `<p class="pg-sub">訓練後可應徵的崗位</p>${ul(p.careers)}<p class="pg-sub">依法須具備的操作資格</p><p class="pg-pending">${esc(p.qualificationNote)}</p>` : ul(p.careers)}</div></section>
-      ${p.platformLinks ? `<section class="pg-sec"><h3>平台上的相關練習</h3><div class="pg-chips">${p.platformLinks.map((l) => `<a class="pg-chip link" href="${esc(l.href)}">${esc(l.label)}</a>`).join('')}</div></section>` : ''}
+      ${p.platformLinks ? `<section class="pg-sec"><h3>平台上的相關練習</h3><div class="pg-chips">${p.platformLinks.map((l) => `<a class="pg-chip link" href="${esc(link(l.href))}">${esc(l.label)}</a>`).join('')}</div></section>` : ''}
       ${p.notes?.length ? `<section class="pg-sec pg-box"><h3>注意事項</h3>${ul(p.notes)}</section>` : ''}
       ${consultForm(p.id)}
       <nav class="pg-pager">${prev ? `<a href="./${prev.slug}" data-route="program-${prev.slug}">← ${esc(prev.title)}</a>` : '<span></span>'}${next ? `<a href="./${next.slug}" data-route="program-${next.slug}">${esc(next.title)} →</a>` : ''}</nav>
