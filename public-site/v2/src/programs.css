@@ -1,4 +1,4 @@
-/* FDE-AI 五大職業實訓課程｜樣式（2026-11-17）
+/* FDE-AI 五大職業實訓課程｜樣式（2026-11-17；2026-11-18 改版：統一卡片、頂部小橫幅、移除線稿與實拍）
    深海軍藍科技風、青藍光效、透明玻璃卡片；只作用在 .programs-home、.programs-page 與 .pg-* 類別，不影響其他頁面。
    手機單列、無橫向捲動；prefers-reduced-motion 時關閉動畫。 */
 .programs-home, .programs-page { --pg-glass: rgba(15, 32, 51, 0.72); --pg-line: rgba(0, 194, 255, 0.28); --pg-glow: 0 0 0 1px rgba(0, 194, 255, 0.18), 0 12px 36px rgba(0, 0, 0, 0.35); color: var(--text, #ddf3ff); min-width: 0; }
@@ -13,15 +13,27 @@
 .pg-grid > .pg-card:nth-child(5) { grid-column: 4 / span 2; }
 .pg-card { display: flex; flex-direction: column; min-width: 0; background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; overflow: hidden; box-shadow: var(--pg-glow); backdrop-filter: blur(6px); transition: transform 0.25s ease, border-color 0.25s ease; }
 .pg-card:hover { transform: translateY(-3px); border-color: rgba(0, 194, 255, 0.6); }
-.pg-card-media { display: block; aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--pg-line); }
-.pg-card-media svg, .pg-art svg, .pg-hero-art svg { display: block; width: 100%; height: 100%; }
+.pg-card-media { position: relative; display: block; height: 96px; overflow: hidden; background: #071a2e; }
+.pg-card-media::after, .pg-hero-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7, 17, 31, 0) 30%, rgba(7, 17, 31, 0.85)), linear-gradient(90deg, rgba(0, 120, 255, 0.28), rgba(0, 194, 255, 0.05)); pointer-events: none; }
+.pg-card-img, .pg-hero-img { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(1.05) contrast(1.05); }
 .pg-card-body { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 16px; flex: 1; }
 .pg-card-no { margin: 0; font: 700 11px/1 monospace; letter-spacing: 0.18em; color: var(--cyan, #00c2ff); }
 .pg-card h3 { margin: 0; font-size: 1.12rem; line-height: 1.4; }
 .pg-card-hours { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.pg-card-hours b { color: var(--green, #35e6a8); font-size: 1.05rem; }
+.pg-card-hours b { color: var(--green, #35e6a8); font-size: 1.12rem; }
+.pg-card-info { margin: 0; color: var(--muted, #94abc2); font-size: 13px; line-height: 1.6; }
+.pg-card-tagline { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pg-card-stages { list-style: none; margin: 4px 0 2px; padding: 10px 0 0; border-top: 1px solid rgba(0, 194, 255, 0.16); display: grid; gap: 10px; }
+.pg-card-stages li { min-width: 0; }
+.pg-st-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0; font-size: 14.5px; }
+.pg-st-head span { color: var(--cyan, #00c2ff); font-weight: 700; white-space: nowrap; }
+.pg-st-head b { color: #fff; font-weight: 700; }
+.pg-st-head em { font-style: normal; color: var(--green, #35e6a8); white-space: nowrap; }
+.pg-st-items { margin: 2px 0 0; color: #c4d8ea; font-size: 13.5px; line-height: 1.7; }
+.pg-list-cards { display: grid; gap: 22px; max-width: 980px; }
+.pg-list-cards > .pg-card:hover { transform: none; }
 .pg-badge { padding: 2px 8px; border-radius: 999px; background: rgba(245, 184, 75, 0.16); border: 1px solid rgba(245, 184, 75, 0.6); color: var(--yellow, #f5b84b); font-size: 12px; font-weight: 700; }
-.pg-card-tagline { margin: 0; color: #c4d8ea; line-height: 1.7; font-size: 14px; }
+.pg-card-tagline { margin: 0; color: #c4d8ea; line-height: 1.7; font-size: 14px; font-weight: 400; }
 .pg-card-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 2px 0; font-size: 13px; }
 .pg-card-meta dt { color: var(--cyan, #00c2ff); white-space: nowrap; }
 .pg-card-meta dd { margin: 0; color: #c4d8ea; min-width: 0; }
@@ -52,8 +64,7 @@
 .pg-crumb { margin-bottom: 12px; }
 .pg-crumb a, .pg-pager a { color: var(--cyan, #00c2ff); text-decoration: none; }
 .pg-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; align-items: center; margin-bottom: 26px; }
-.pg-hero-art { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--pg-line); box-shadow: var(--pg-glow); aspect-ratio: 16 / 10; }
-.pg-tag-art, .pg-art figcaption { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 6px; background: rgba(5, 13, 24, 0.75); color: #9fc4dc; font-size: 11px; }
+.pg-hero-art { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--pg-line); box-shadow: var(--pg-glow); aspect-ratio: 5 / 3; background: #071a2e; }
 .pg-hero-copy h2 { margin: 6px 0 10px; font-size: clamp(1.3rem, 2.6vw, 2rem); line-height: 1.35; }
 .pg-lead { color: #c4d8ea; line-height: 1.8; margin: 0 0 14px; }
 .pg-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
@@ -69,11 +80,9 @@
 .pg-note { color: #9fc4dc; font-size: 13.5px; line-height: 1.7; margin: 8px 0 0; }
 .pg-pending { margin: 8px 0 0; padding: 6px 10px; border-left: 3px solid var(--yellow, #f5b84b); background: rgba(245, 184, 75, 0.08); color: #f3d79c; font-size: 13px; line-height: 1.7; }
 .pg-stages { display: grid; gap: 14px; }
-.pg-stage { display: grid; grid-template-columns: minmax(150px, 260px) minmax(0, 1fr); gap: 16px; align-items: start; background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; padding: 12px; min-width: 0; }
+.pg-stage { background: var(--pg-glass); border: 1px solid var(--pg-line); border-radius: 16px; padding: 14px 16px; min-width: 0; }
 .pg-stage h4 { margin: 2px 0 6px; font-size: 1.05rem; }
 .pg-stage-no { margin: 0; color: var(--green, #35e6a8); font: 700 12px/1.4 monospace; letter-spacing: 0.06em; }
-.pg-art { position: relative; margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--pg-line); aspect-ratio: 16 / 10; background: #050d18; }
-.pg-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .pg-daily summary { cursor: pointer; font-weight: 700; color: #fff; padding: 10px 0; }
 .pg-pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 10px 0 18px; }
 .pg-legal { color: #7f97ad; font-size: 12.5px; line-height: 1.7; border-top: 1px solid rgba(0, 194, 255, 0.16); padding-top: 12px; }
@@ -104,14 +113,7 @@
 .pg-form-msg.ok { color: var(--green, #35e6a8); }
 .pg-consult a { color: var(--cyan, #00c2ff); }
 
-/* 示意圖動畫：旋翼轉動、掃描、航線流動（系統要求減少動態時關閉） */
-.pa-spin { animation: pa-spin 1.2s linear infinite; }
-.pa-dash { animation: pa-dash 2.4s linear infinite; }
-.pa-scan { animation: pa-scan 2s ease-in-out infinite; }
-@keyframes pa-spin { to { transform: rotate(360deg); } }
-@keyframes pa-dash { to { stroke-dashoffset: -44; } }
-@keyframes pa-scan { 50% { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { .pa-spin, .pa-dash, .pa-scan { animation: none; } .pg-card, .pg-card:hover { transition: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pg-card, .pg-card:hover { transition: none; transform: none; } }
 
 @media (max-width: 1100px) {
   .pg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -119,7 +121,6 @@
 }
 @media (max-width: 760px) {
   .pg-grid, .pg-hero, .pg-two, .pg-form, .pg-facts { grid-template-columns: minmax(0, 1fr); }
-  .pg-stage { grid-template-columns: minmax(0, 1fr); }
   .programs-home, .programs-page { padding-left: 14px; padding-right: 14px; }
 }
 
@@ -129,3 +130,25 @@
   body.home-view { overflow-y: auto; }
   body.home-view main > section#programs-home { display: block; }
 }
+
+/* 左側導航／手機抽屜：最上方「課程專區」主推卡片（與下方圓形徽章系統區塊明顯不同） */
+.nav .nav-feature, .mobile-nav-list .nav-feature { position: relative; display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; padding: 14px 14px; border-radius: 16px; text-decoration: none; color: #fff; background: linear-gradient(135deg, rgba(22, 139, 255, 0.55), rgba(0, 194, 255, 0.18) 55%, rgba(53, 230, 168, 0.22)); border: 1px solid rgba(0, 194, 255, 0.75); box-shadow: 0 0 0 1px rgba(0, 194, 255, 0.25), 0 0 22px rgba(0, 194, 255, 0.35), inset 0 0 18px rgba(255, 255, 255, 0.06); }
+.nav .nav-feature:hover, .mobile-nav-list .nav-feature:hover { filter: brightness(1.1); }
+.nav .nav-feature[aria-current="page"], .mobile-nav-list .nav-feature[aria-current="page"] { border-color: #ffd36b; box-shadow: 0 0 0 2px rgba(255, 211, 107, 0.55), 0 0 26px rgba(0, 194, 255, 0.45); }
+.nav-feature-icon { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; background: rgba(4, 18, 31, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); }
+.nav-feature-icon svg { width: 28px; height: 28px; fill: #fff; }
+.nav-feature-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.nav-feature-text b { font-size: 17px; letter-spacing: 0.06em; }
+.nav-feature-text small { font-size: 12.5px; color: #d6f1ff; opacity: 0.9; }
+.nav-feature-go { flex: none; font-size: 22px; color: #bfe6ff; }
+.nav .nav-system-label, .mobile-nav-list .nav-system-label { display: grid; gap: 2px; margin: 0 0 8px; padding: 10px 2px 0; border-top: 1px solid rgba(0, 194, 255, 0.25); }
+.nav-system-label b { font-size: 13px; color: #9fc4dc; letter-spacing: 0.12em; }
+.nav-system-label small { font: 700 9.5px/1.4 monospace; letter-spacing: 0.08em; color: rgba(0, 194, 255, 0.75); }
+/* 主推卡片內的元素不要套到既有「.nav span／.mobile-nav-list span」的小標籤框樣式 */
+.nav .nav-feature span, .mobile-nav-list .nav-feature span { min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font-size: inherit; font-weight: inherit; }
+.nav .nav-feature .nav-feature-icon, .mobile-nav-list .nav-feature .nav-feature-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; background: rgba(4, 18, 31, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); }
+.nav .nav-feature .nav-feature-text, .mobile-nav-list .nav-feature .nav-feature-text { display: grid; gap: 2px; }
+.nav .nav-feature .nav-feature-text b, .mobile-nav-list .nav-feature .nav-feature-text b { white-space: nowrap; color: #fff; }
+.nav .nav-feature .nav-feature-go, .mobile-nav-list .nav-feature .nav-feature-go { font-size: 22px; color: #bfe6ff; }
+.nav .nav-feature:hover { transform: none; }
+.nav .nav-feature::before, .nav .nav-feature:hover::before { display: none; }
