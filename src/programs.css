@@ -152,3 +152,54 @@
 .nav .nav-feature .nav-feature-go, .mobile-nav-list .nav-feature .nav-feature-go { font-size: 22px; color: #bfe6ff; }
 .nav .nav-feature:hover { transform: none; }
 .nav .nav-feature::before, .nav .nav-feature:hover::before { display: none; }
+
+/* ───────── 2026-11-18：專項課程專區（FPV 競技／足球無人機／固定翼，開發中）─────────
+   與下方五大職業實訓課程分開；圖示為飛機概念造型線條，右上角「開發中」閃亮標籤。 */
+.pg-section-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; max-width: 980px; margin: 8px 0 14px; padding-left: 12px; border-left: 4px solid var(--cyan, #00c2ff); }
+.pg-section-title span { font-size: 1.15rem; font-weight: 800; color: #fff; }
+.pg-section-title em { font: 700 11px/1 monospace; letter-spacing: 0.18em; color: var(--cyan, #00c2ff); font-style: normal; }
+.pg-zones { max-width: 980px; margin: 0 0 34px; }
+.pg-zone-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.pg-zone { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 26px 14px 20px; text-align: center; background: radial-gradient(circle at 50% 30%, rgba(0, 194, 255, 0.16), rgba(15, 32, 51, 0.78) 62%); border: 1px solid var(--pg-line); border-radius: 18px; box-shadow: var(--pg-glow); overflow: hidden; cursor: default; }
+.pg-zone::before { content: ""; position: absolute; inset: -40% auto -40% -60%; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent); transform: skewX(-20deg); animation: pg-shine 4.5s ease-in-out infinite; pointer-events: none; }
+.pg-zone-icon { width: 76px; height: 76px; display: grid; place-items: center; border-radius: 50%; color: var(--cyan, #00c2ff); background: rgba(0, 194, 255, 0.08); border: 1px solid rgba(0, 194, 255, 0.35); box-shadow: 0 0 18px rgba(0, 194, 255, 0.35) inset, 0 0 22px rgba(0, 194, 255, 0.25); }
+.pg-zone-icon svg { width: 50px; height: 50px; filter: drop-shadow(0 0 6px rgba(0, 194, 255, 0.7)); }
+.pg-zone[data-zone="soccer"] .pg-zone-icon { color: var(--green, #35e6a8); }
+.pg-zone[data-zone="fixedwing"] .pg-zone-icon { color: #9ec5fe; }
+.pg-zone-en { margin: 6px 0 0; font: 700 11px/1 monospace; letter-spacing: 0.18em; color: var(--muted, #94abc2); }
+.pg-zone h3 { margin: 0; font-size: 1.02rem; line-height: 1.4; color: #fff; }
+.pg-zone-badge { position: absolute; top: 10px; right: 10px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #1b1b1b; background: linear-gradient(90deg, #ffd43b, #ffe066, #ffd43b); box-shadow: 0 0 10px rgba(255, 212, 59, 0.75); animation: pg-blink 1.6s ease-in-out infinite; }
+
+/* 右上角「課程諮詢」閃亮提示（只在課程專區與課程詳情頁顯示） */
+.pg-fab { position: fixed; top: 72px; right: 20px; z-index: 900; display: none; font-family: inherit; }
+body[data-route="programs"] .pg-fab, body[data-route^="program-"] .pg-fab { display: block; }
+.pg-fab-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border: 0; border-radius: 999px; font-size: 15px; font-weight: 800; color: #1b1b1b; background: linear-gradient(90deg, #ffd43b, #ffe066); cursor: pointer; box-shadow: 0 0 0 0 rgba(255, 212, 59, 0.7); animation: pg-pulse 1.8s ease-out infinite; overflow: hidden; }
+.pg-fab-btn::after { content: ""; position: absolute; inset: -50% auto -50% -60%; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent); transform: skewX(-20deg); animation: pg-shine 2.6s ease-in-out infinite; }
+.pg-fab-dot { width: 9px; height: 9px; border-radius: 50%; background: #e03131; box-shadow: 0 0 8px #e03131; animation: pg-blink 1s steps(2, start) infinite; }
+.pg-fab-panel { position: absolute; top: calc(100% + 10px); right: 0; width: 230px; padding: 16px; display: grid; justify-items: center; gap: 8px; text-align: center; background: rgba(10, 24, 40, 0.97); border: 1px solid rgba(255, 212, 59, 0.6); border-radius: 16px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+.pg-fab-panel[hidden] { display: none; }
+.pg-fab-title { margin: 0; font-weight: 800; color: #ffe066; }
+.pg-fab-phone { font-size: 1.15rem; font-weight: 800; color: #fff; text-decoration: none; }
+.pg-fab-qr { width: 180px; height: 180px; border-radius: 10px; background: #fff; padding: 6px; box-sizing: border-box; }
+.pg-fab-hint { margin: 0; font-size: 13px; color: #c4d8ea; }
+.pg-fab-line, .pg-fab-form { display: block; width: 100%; padding: 7px 0; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none; box-sizing: border-box; }
+.pg-fab-line { background: #06c755; color: #fff; }
+.pg-fab-form { border: 1px solid var(--cyan, #00c2ff); color: var(--cyan, #00c2ff); }
+
+@keyframes pg-shine { 0%, 55% { left: -60%; } 100% { left: 130%; } }
+@keyframes pg-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes pg-pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 212, 59, 0.7); } 70% { box-shadow: 0 0 0 14px rgba(255, 212, 59, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 212, 59, 0); } }
+
+@media (max-width: 760px) {
+  .pg-zone-grid { grid-template-columns: 1fr; gap: 12px; }
+  .pg-zone { flex-direction: row; justify-content: flex-start; text-align: left; padding: 14px 16px; gap: 14px; }
+  .pg-zone-icon { width: 56px; height: 56px; flex: none; }
+  .pg-zone-icon svg { width: 38px; height: 38px; }
+  .pg-zone-en { display: none; }
+  /* 手機：仍在右上角，但讓開頂部的手機版標題列 */
+  .pg-fab { top: 70px; right: 12px; }
+  .pg-fab-btn { padding: 7px 13px; font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pg-zone::before, .pg-zone-badge, .pg-fab-btn, .pg-fab-btn::after, .pg-fab-dot { animation: none; }
+}

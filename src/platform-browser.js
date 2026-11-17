@@ -299,6 +299,17 @@ const cohorts = [
         title: 'FD-AI无人载具在职培训2026-06-7',
         url: 'https://youtu.be/O_QmYD-b4QU?si=ej5g6w67y-7D77lv'
       },
+      // 2026-11-18：使用者指定加入的兩支學員作品影片
+      {
+        phase: '08',
+        title: '忙碌的一天修修修',
+        url: 'https://youtu.be/TS1AfaruRr8'
+      },
+      {
+        phase: '09',
+        title: '苗栗亞太飛行基地空景',
+        url: 'https://youtu.be/p44VPMd-Fys'
+      },
       {
         phase: '職前',
         title: '2026風電無人機巡檢ai應用職前教育（嘉義）',

@@ -1,6 +1,7 @@
 /*
  * FDE-AI 五大職業實訓課程｜頁面（2026-11-17）
  * - 首頁專區（#programsHome）、課程總覽與五門課程詳情（#programsRoot）、職業飛手選課計算器、課程諮詢入口。
+ * - 2026-11-18：總覽最上面加「專項課程專區」（FPV 競技／足球無人機／固定翼，開發中）；右上角「課程諮詢」閃亮提示（電話＋LINE 二維碼）。
  * - 內容全部來自 src/data/vocational-programs.js；每門課一張概念圖 assets/programs/<課程>.webp（Pexels 授權，見 assets/CREDITS.md）。
  * - 路由沿用平台既有 FdeRouter：/platform/programs（總覽）、/platform/<課程代號>（詳情）；app.js 切換頁面時會設定 body[data-route]。
  * - 課程諮詢表單送到 /api/public/course-inquiry/（教師電腦的 Django）：存在獨立資料庫、寄通知信給老師，教師後台「課程諮詢」查看；GitHub 頁面上改送到固定入口。
@@ -75,12 +76,68 @@
       <p class="pg-more"><a class="pg-btn ghost" href="./programs" data-route="programs">前往課程專區與課程諮詢 →</a></p>`;
   }
 
-  // ───────── 課程總覽：一進來就是課程列表 ─────────
+  // ───────── 專項課程專區（2026-11-18）：FPV 競技、足球無人機、固定翼 ─────────
+  // 放在課程專區最上面、與下方職訓課程分開；目前都是「開發中」，先不放課程內容。
+  // 圖示是飛機概念造型的線條 SVG（currentColor），不使用外部圖片。
+  const ZONE_ICONS = {
+    // FPV 競速機：X 型機架、四個旋翼、機頭相機
+    fpv: '<svg viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 20 44 44M44 20 20 44"/><circle cx="16" cy="16" r="9"/><circle cx="48" cy="16" r="9"/><circle cx="16" cy="48" r="9"/><circle cx="48" cy="48" r="9"/><rect x="26" y="25" width="12" height="14" rx="3"/><circle cx="32" cy="29" r="2.2" fill="currentColor"/></g><path d="M28 6h8l-4 5z" fill="currentColor"/></svg>',
+    // 足球無人機：球形保護籠＋中央小飛機
+    soccer: '<svg viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="32" cy="32" r="26"/><ellipse cx="32" cy="32" rx="26" ry="10"/><ellipse cx="32" cy="32" rx="10" ry="26"/><path d="M24 24 40 40M40 24 24 40"/><circle cx="24" cy="24" r="3.5"/><circle cx="40" cy="24" r="3.5"/><circle cx="24" cy="40" r="3.5"/><circle cx="40" cy="40" r="3.5"/></g></svg>',
+    // 固定翼飛機：機身、主翼、尾翼
+    fixedwing: '<svg viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M32 6c2.5 0 3.5 4 3.5 9v10l22 10v5l-22-5v12l7 5v4l-10.5-3-10.5 3v-4l7-5V40l-22 5v-5l22-10V15c0-5 1-9 3.5-9z"/></g></svg>',
+  };
+  const SPECIAL_ZONES = [
+    { id: 'fpv', title: 'FPV 競技課程專區', en: 'FPV RACING' },
+    { id: 'soccer', title: '足球無人機課程專區', en: 'DRONE SOCCER' },
+    { id: 'fixedwing', title: '固定翼飛機課程專區', en: 'FIXED-WING' },
+  ];
+  function specialZones() {
+    return `<section class="pg-zones" aria-label="專項課程專區">
+      <p class="pg-section-title"><span>專項課程專區</span><em>SPECIAL PROGRAMS</em></p>
+      <div class="pg-zone-grid">${SPECIAL_ZONES.map((z) => `<article class="pg-zone" data-zone="${z.id}" aria-disabled="true">
+          <span class="pg-zone-badge">開發中</span>
+          <div class="pg-zone-icon" aria-hidden="true">${ZONE_ICONS[z.id]}</div>
+          <p class="pg-zone-en">${z.en}</p>
+          <h3>${esc(z.title)}</h3>
+        </article>`).join('')}</div>
+    </section>`;
+  }
+
+  // ───────── 右上角「課程諮詢」閃亮提示：電話＋LINE 二維碼（只在課程專區與課程詳情頁顯示） ─────────
+  function mountConsultFab() {
+    if (document.getElementById('pgFab')) return;
+    const box = document.createElement('div');
+    box.id = 'pgFab';
+    box.className = 'pg-fab';
+    box.innerHTML = `<button type="button" class="pg-fab-btn" aria-expanded="false" aria-controls="pgFabPanel">
+        <span class="pg-fab-dot" aria-hidden="true"></span>課程諮詢</button>
+      <div class="pg-fab-panel" id="pgFabPanel" hidden>
+        <p class="pg-fab-title">課程諮詢</p>
+        <a class="pg-fab-phone" href="tel:${PHONE.replace(/-/g, '')}">電話 ${PHONE}</a>
+        <img class="pg-fab-qr" src="./assets/programs/line-qr.jpg" alt="FDE-AI LINE 二維碼" width="180" height="180" loading="lazy">
+        <p class="pg-fab-hint">手機掃描加入 LINE 詢問</p>
+        <a class="pg-fab-line" href="${LINE_URL}" target="_blank" rel="noopener">用 LINE 開啟</a>
+        <a class="pg-fab-form" href="#pg-consult">填寫線上諮詢表單</a>
+      </div>`;
+    document.body.appendChild(box);
+    const btn = box.querySelector('.pg-fab-btn'), panel = box.querySelector('.pg-fab-panel');
+    const setOpen = (open) => { panel.hidden = !open; btn.setAttribute('aria-expanded', String(open)); box.classList.toggle('open', open); };
+    btn.addEventListener('click', () => setOpen(panel.hidden));
+    // 點面板外面或按 Esc 收起
+    document.addEventListener('click', (e) => { if (!box.contains(e.target)) setOpen(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setOpen(false); });
+    box.querySelector('.pg-fab-form').addEventListener('click', () => setOpen(false));
+  }
+
+  // ───────── 課程總覽：最上面專項課程專區，下面五大職業實訓課程 ─────────
   function overview() {
     return `<div class="pg-head">
-        <p class="eyebrow">Vocational Programs · 課程專區</p>
-        <h2>課程專區｜五大職業實訓課程</h2>
+        <p class="eyebrow">Programs · 課程專區</p>
+        <h2>課程專區</h2>
       </div>
+      ${specialZones()}
+      <p class="pg-section-title"><span>五大職業實訓課程</span><em>VOCATIONAL PROGRAMS</em></p>
       <div class="pg-list-cards">${D.programs.map((p) => card(p, { stages: true })).join('')}</div>
       ${consultForm()}
       ${legalNote()}`;
@@ -241,6 +298,7 @@
   let lastKey = '';
   function render() {
     renderHome();
+    mountConsultFab();
     const key = document.body.dataset.route || '';
     const root = document.getElementById('programsRoot');
     if (!root || key === lastKey || !(key === 'programs' || byRoute[key])) return;
@@ -249,7 +307,7 @@
     root.innerHTML = p ? detail(p) : overview();
     root.dataset.view = p ? p.id : 'overview';
     bindConsult(root);
-    document.title = p ? `${p.title}｜FDE-AI 課程專區` : '課程專區｜FDE-AI 五大職業實訓課程';
+    document.title = p ? `${p.title}｜FDE-AI 課程專區` : '課程專區｜FDE-AI 專項課程與五大職業實訓課程';
     if (window.scrollY > 0) window.scrollTo(0, 0);
   }
 
