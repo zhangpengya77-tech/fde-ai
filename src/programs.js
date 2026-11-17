@@ -98,13 +98,38 @@
   function specialZones() {
     return `<section class="pg-zones" aria-label="專項課程專區">
       <p class="pg-section-title"><span>專項課程專區</span><em>SPECIAL PROGRAMS</em></p>
-      <div class="pg-zone-grid">${SPECIAL_ZONES.map((z) => `<article class="pg-zone" data-zone="${z.id}" aria-disabled="true">
-          <span class="pg-zone-badge">開發中</span>
-          <div class="pg-zone-icon" aria-hidden="true">${ZONE_ICONS[z.id]}</div>
+      <div class="pg-zone-grid">${SPECIAL_ZONES.map((z) => `<button type="button" class="pg-zone" data-zone="${z.id}" aria-haspopup="dialog">
+          <span class="pg-zone-icon" aria-hidden="true">${ZONE_ICONS[z.id]}</span>
+          <span class="pg-zone-en">${z.en}</span>
+          <span class="pg-zone-title">${esc(z.title)}</span>
+        </button>`).join('')}</div>
+    </section>`;
+  }
+  // 點專區才顯示「開發中」（外面卡片不顯示）：開一個小視窗，按關閉、點背景或 Esc 收起
+  function bindZones(scope) {
+    scope.querySelectorAll('.pg-zone[data-zone]').forEach((btn) => btn.addEventListener('click', () => {
+      const z = SPECIAL_ZONES.find((x) => x.id === btn.dataset.zone);
+      if (!z) return;
+      const dlg = document.createElement('div');
+      dlg.className = 'pg-zone-dialog';
+      dlg.setAttribute('role', 'dialog');
+      dlg.setAttribute('aria-modal', 'true');
+      dlg.setAttribute('aria-label', z.title);
+      dlg.innerHTML = `<div class="pg-zone-panel" data-zone="${z.id}">
+          <button type="button" class="pg-zone-close" aria-label="關閉">×</button>
+          <span class="pg-zone-icon" aria-hidden="true">${ZONE_ICONS[z.id]}</span>
           <p class="pg-zone-en">${z.en}</p>
           <h3>${esc(z.title)}</h3>
-        </article>`).join('')}</div>
-    </section>`;
+          <span class="pg-zone-badge">開發中</span>
+          <p class="pg-zone-note">課程規劃中，敬請期待。</p>
+        </div>`;
+      const close = () => { dlg.remove(); document.removeEventListener('keydown', onKey); btn.focus(); };
+      const onKey = (e) => { if (e.key === 'Escape') close(); };
+      dlg.addEventListener('click', (e) => { if (e.target === dlg || e.target.closest('.pg-zone-close')) close(); });
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(dlg);
+      dlg.querySelector('.pg-zone-close').focus();
+    }));
   }
 
   // ───────── 右上角「課程諮詢」閃亮提示：電話＋LINE 二維碼（只在課程專區與課程詳情頁顯示） ─────────
@@ -311,6 +336,7 @@
     root.innerHTML = p ? detail(p) : overview();
     root.dataset.view = p ? p.id : 'overview';
     bindConsult(root);
+    bindZones(root);
     document.title = p ? `${p.title}｜FDE-AI 課程專區` : '課程專區｜FDE-AI 專項課程與五大職業實訓課程';
     if (window.scrollY > 0) window.scrollTo(0, 0);
   }

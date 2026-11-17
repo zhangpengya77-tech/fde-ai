@@ -1,6 +1,7 @@
 // FDE-AI 公開首頁｜右下角「加入我們」浮動卡（2026-11-15）
 // 電腦：右下角顯示 LINE 群 QR 碼、「加入我們」與聯繫教師電話，可收合成小按鈕。
 // 手機：預設只顯示小按鈕（不擋內容），點開後可直接用 LINE 加入群組或撥電話。
+// 只在首頁顯示（2026-11-18），其他頁面（例如課程專區）隱藏。
 // 收合狀態存在瀏覽器本機（無痕模式存不了也照常運作）。
 (function () {
   'use strict';
@@ -25,6 +26,8 @@
     '.joinus-pill i{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;background:#06c755;color:#fff;font-style:normal;font-size:11px;font-weight:800}',
     '.joinus.collapsed .joinus-card{display:none}.joinus.collapsed .joinus-pill{display:inline-flex}',
     '@media (max-width:767px){.joinus-card{width:230px}.joinus-qr{width:140px;height:140px}.joinus-line{display:block}}',
+    // 2026-11-18 使用者要求：只在首頁顯示（app.js 在首頁時給 body 加 home-view）
+    'body:not(.home-view) .joinus{display:none}',
     '@media print{.joinus{display:none}}'
   ].join('\n');
 
