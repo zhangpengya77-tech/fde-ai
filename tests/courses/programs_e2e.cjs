@@ -65,7 +65,7 @@ async function serve(ctx) {
   const rows = await page.$$eval('#programsHome .pg-card', (c) => c.map((x) => Math.round(x.getBoundingClientRect().top)));
   ok(rows[0] === rows[1] && rows[1] === rows[2] && rows[3] === rows[4] && rows[3] > rows[0], `桌面 3+2 排列（${rows.join(',')}）`);
   const card = await page.locator('#programsHome .pg-card').first().innerText();
-  ok(['COURSE 01', '32 小時', '適合對象', '結訓成果', '發展方向', '了解課程'].every((t) => card.includes(t)) && await page.locator('#programsHome .pg-card').first().locator('img.pg-card-img').count() === 1, '卡片含頂部小圖、編號、時數、對象、成果、發展、了解課程');
+  ok(['COURSE 01', '7／21／35 小時', '適合對象', '結訓成果', '發展方向', '了解課程'].every((t) => card.includes(t)) && await page.locator('#programsHome .pg-card').first().locator('img.pg-card-img').count() === 1, '卡片含頂部小圖、編號、時數、對象、成果、發展、了解課程');
   const heights = await page.$$eval('#programsHome .pg-card-media', (n) => n.map((x) => Math.round(x.getBoundingClientRect().height)));
   ok(heights.every((h) => h > 0 && h <= 120), `卡片頂部圖片高度 ≤120px（${heights.join(',')}）`);
   const info = await page.locator('#programsHome .pg-card-info').first().innerText();
@@ -92,7 +92,7 @@ async function serve(ctx) {
     ok(await page.locator('#programsRoot').getAttribute('data-view') === p.id && t.includes(p.title), `詳情 ${p.slug}：直接開網址可顯示`);
     const need = ['適合對象', '設備', '軟體與平台', '學習成果', '發展方向', '開班形式', '課程諮詢'];
     ok(need.every((x) => t.includes(x)), `詳情 ${p.slug}：各區塊齊全`);
-    ok(await page.locator('#programsRoot .pg-stage').count() >= 5 && await page.locator('#programsRoot img.pg-hero-img').count() === 1, `詳情 ${p.slug}：主視覺概念圖與階段大綱（${await page.locator('#programsRoot .pg-stage').count()} 個）`);
+    ok(await page.locator('#programsRoot .pg-stage').count() >= (p.tiers ? p.tiers.length : 5) && await page.locator('#programsRoot img.pg-hero-img').count() === 1, `詳情 ${p.slug}：主視覺概念圖與階段大綱（${await page.locator('#programsRoot .pg-stage').count()} 個）`);
     ok(!/實拍|示意圖/.test(await page.locator('body').innerText()) && await page.locator('svg.pa-art').count() === 0, `詳情 ${p.slug}：沒有「實拍」「示意圖」字樣與線稿圖`);
     if (p.daily) {
       const rowsN = await page.locator('#programsRoot .pg-daily tbody tr').count();

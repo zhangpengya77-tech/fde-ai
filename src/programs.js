@@ -30,9 +30,12 @@
   const IMG = (p) => `./assets/programs/${p.id}.webp`;
   const banner = (p, cls) => `<img class="${cls}" src="${IMG(p)}" alt="${esc(p.title)}概念圖" loading="lazy" decoding="async" width="800" height="480">`;
   const classLine = (p) => (p.minClass ? `${p.minClass} 人即可開班` : '依設備、場地、師資與安全條件開班');
-  const infoLine = (p) => [p.id === 'pilot' ? '7～14 天（依選修）' : `${p.schedule.days} 天`, classLine(p), p.formats.filter((f) => /班$/.test(f)).join('／')].join(' · ');
+  const daysText = (p) => p.daysLabel || (p.id === 'pilot' ? '7～14 天（依選修）' : `${p.schedule.days} 天`);
+  const infoLine = (p) => [daysText(p), classLine(p), p.formats.filter((f) => /班$/.test(f)).join('／')].join(' · ');
   // 卡片上的階段清單（有階段的課程才列）：[{ label, hours, title, items }]
   function stagesOf(p) {
+    // 班別制課程（證照班：一日／三日／五日）：每個班別一列
+    if (p.tiers) return p.tiers.map((t) => ({ label: `${t.days} 天`, hours: t.hours, title: t.name, items: t.items }));
     if (p.stages) return p.stages.map((s, i) => ({ label: `階段 ${i + 1}`, hours: s.hours, title: s.title, items: s.items }));
     if (p.id === 'pilot') return [{ label: '共同基礎', hours: p.base.hours, title: '必修', items: p.base.items }, ...p.modules.map((m) => ({ label: `模組 ${m.code}`, hours: m.hours, title: m.title, items: m.items }))];
     if (p.blocks) return p.blocks.map((b, i) => ({ label: `階段 ${i + 1}`, hours: b.hours, title: `${b.title}（第 ${b.days[0]}–${b.days[1]} 天）`, items: b.items }));
@@ -186,6 +189,7 @@
   function detail(p) {
     let outline = '';
     if (p.stages) outline = p.stages.map((s, i) => stageBlock(s, i)).join('');
+    if (p.tiers) outline = p.tiers.map((t) => stageBlock({ title: t.name, hours: t.hours, items: t.items }, 0, `班別｜${t.days} 天`)).join('');
     if (p.id === 'pilot') outline = stageBlock(p.base, 0, '共同基礎（必修）') + p.modules.map((m) => stageBlock({ ...m, title: `模組 ${m.code}｜${m.title}` }, 0, '專業模組（選修）')).join('') + `<p class="pg-note">${esc(p.exam.note)}</p>`;
     if (p.blocks) outline = p.blocks.map((b) => stageBlock(b, 0, `第 ${b.days[0]}–${b.days[1]} 天`)).join('');
     if (p.groups) outline = p.groups.map((g) => stageBlock({ title: g.title, hours: p.daily.filter((d) => d.day >= g.days[0] && d.day <= g.days[1]).reduce((s, d) => s + d.hours, 0), items: p.days.slice(g.days[0] - 1, g.days[1]).map((d, k) => `D${g.days[0] + k}　${d.title}`), art: p.days[g.days[0] - 1].art, photo: p.days[g.days[0] - 1].photo }, 0, g.days[0] === g.days[1] ? `第 ${g.days[0]} 天` : `第 ${g.days[0]}–${g.days[1]} 天`)).join('');
@@ -199,7 +203,7 @@
           <p class="pg-lead">${esc(p.positioning)}</p>
           <div class="pg-facts">
             <div><span>總時數</span><b>${esc(hoursLabel(p))}</b></div>
-            <div><span>上課日數</span><b>${esc(p.id === 'pilot' ? '7～14 天（依選修）' : `${p.schedule.days} 天`)}</b></div>
+            <div><span>上課日數</span><b>${esc(daysText(p))}</b></div>
             <div><span>開班形式</span><b>${esc(p.formats.join('／'))}</b></div>
             <div><span>開班人數</span><b>${esc(classLine(p))}</b></div>
           </div>
