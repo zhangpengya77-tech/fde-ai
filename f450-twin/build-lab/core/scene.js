@@ -282,6 +282,23 @@ export function createScene(host, model, opts = {}) {
     return { x: r.left + ((c.x + 1) / 2) * r.width, y: r.top + ((1 - c.y) / 2) * r.height };
   }
 
+  // ───────── P2：3D 線束預覽（已接好的線，畫成兩零件之間略為拱起的曲線） ─────────
+  const wireGroup = new THREE.Group();
+  scene.add(wireGroup);
+  let wireList = [];
+  function drawWires() {
+    for (const c of [...wireGroup.children]) { c.geometry.dispose(); c.material.dispose(); wireGroup.remove(c); }
+    if (exploded) return;   // 爆炸視圖時零件分開，線會亂，先不畫
+    for (const w of wireList) {
+      const a = new THREE.Box3().setFromObject(objs.get(w.from)).getCenter(new THREE.Vector3());
+      const b = new THREE.Box3().setFromObject(objs.get(w.to)).getCenter(new THREE.Vector3());
+      const mid = a.clone().lerp(b, 0.5);
+      mid.y += 18 + a.distanceTo(b) * 0.08;
+      const pts = new THREE.QuadraticBezierCurve3(a, mid, b).getPoints(24);
+      wireGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: w.color })));
+    }
+  }
+
   // ───────── 尺寸與動畫迴圈 ─────────
   function resize() {
     const w = host.clientWidth || 1;
@@ -327,7 +344,9 @@ export function createScene(host, model, opts = {}) {
   return {
     /** 依引擎狀態擺放零件；animateIds 指定要動畫的零件（或 'all'） */
     setInstalled(ids, animateIds = []) { installed = new Set(ids); refresh(animateIds); },
-    setExploded(v) { exploded = !!v; refresh('all'); if (ghost) setGhost(ghost.userData.ghostOf); },
+    setExploded(v) { exploded = !!v; refresh('all'); drawWires(); if (ghost) setGhost(ghost.userData.ghostOf); },
+    /** 依已接好的線更新 3D 線束；等零件動畫結束後再畫，避免線停在半空 */
+    setWires(list) { wireList = list; setTimeout(drawWires, ANIM_MS + 50); },
     setHideInstalled(v) { hideInstalled = !!v; refresh([]); },
     returnToTray(id) { refresh([id]); },
     setGhost(id) { setGhost(id); },

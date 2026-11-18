@@ -6,7 +6,7 @@
 <!-- 組裝實訓室（R2.1 預覽版）：與舊版數位孿生並列，網站入口預設關閉（build-lab-flags.js），只能直接開網址預覽 -->
 <meta name="robots" content="noindex">
 <title>組裝實訓室｜FDE-AI</title>
-<link rel="stylesheet" href="./build-lab.css?v=p1-1">
+<link rel="stylesheet" href="./build-lab.css?v=p2-1">
 <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -52,6 +52,24 @@
     <div id="bl-tip" class="bl-float" hidden></div>
     <div id="bl-toast" class="bl-toast" role="status" aria-live="polite"></div>
     <div id="bl-loading" class="bl-loading">正在載入 3D 場景…</div>
+    <!-- P2：接線模式（俯視 2D 示意圖），蓋在 3D 視窗上方；按「返回 3D」回到組裝 -->
+    <div id="bl-wpanel" class="bl-wpanel" hidden>
+      <div class="bl-whead">
+        <button type="button" id="bl-wback">← 返回 3D</button>
+        <div class="bl-wtext">
+          <b id="bl-wstep"></b> <span id="bl-wtitle"></span>
+          <p id="bl-wexplain"></p>
+        </div>
+        <div class="bl-wbtns">
+          <button type="button" id="bl-wundo">撤銷上一條線</button>
+          <button type="button" id="bl-cases">錯誤案例</button>
+          <button type="button" id="bl-report" disabled>設定報告</button>
+        </div>
+      </div>
+      <div id="bl-wresult" class="bl-wresult" hidden></div>
+      <div id="bl-wsvg-host" class="bl-wsvg-host"></div>
+      <p class="bl-legend">線色：<i class="lg-red"></i>正極／電源 <i class="lg-black"></i>負極 <i class="lg-yellow"></i>訊號（PWM、RC） <i class="lg-blue"></i>資料（UART、I2C） <i class="lg-gray"></i>三相　｜　藍色圓圈＝這一步要接的位置（學習模式）；極性步驟請點「紅線」要焊的焊盤。</p>
+    </div>
   </section>
 
   <aside class="bl-side" id="bl-steps" aria-label="步驟與零件資訊">
@@ -87,7 +105,7 @@
     <button type="button" data-view="top">俯視</button>
     <button type="button" data-view="side">側視</button>
     <button type="button" data-view="iso">等角</button>
-    <button type="button" id="bl-wiring" disabled title="P2 開放：接線模式">放大看接線</button>
+    <button type="button" id="bl-wiring">接線模式</button>
   </div>
   <div class="bl-group">
     <button type="button" id="bl-export">匯出紀錄</button>
@@ -106,6 +124,24 @@
   </form>
 </dialog>
 
-<script type="module" src="./ui/app.js?v=p1-1"></script>
+<!-- P2：錯誤案例教學（只在虛擬環境展示） -->
+<dialog id="bl-cases-dlg" class="bl-done bl-wide">
+  <h2>錯誤案例教學</h2>
+  <p class="bl-muted">每個案例都由接線規則實際判定；危險後果只在虛擬環境說明，不對任何真實硬體供電。</p>
+  <div id="bl-cases-body"></div>
+  <form method="dialog" class="bl-done-actions"><button value="close" class="primary">關閉</button></form>
+</dialog>
+<!-- P2：ArduPilot 參數模擬設定報告（不寫入真實飛控） -->
+<dialog id="bl-report-dlg" class="bl-done bl-wide">
+  <h2>ArduPilot 參數模擬設定報告</h2>
+  <p class="bl-truth">這是模擬報告，不會寫入任何真實飛控；所有數值須經教師覆核（PENDING_MANUAL）。</p>
+  <div id="bl-report-body"></div>
+  <form method="dialog" class="bl-done-actions">
+    <button type="button" id="bl-report-dl">下載報告（文字檔）</button>
+    <button value="close" class="primary">關閉</button>
+  </form>
+</dialog>
+
+<script type="module" src="./ui/app.js?v=p2-2"></script>
 </body>
 </html>

@@ -209,7 +209,7 @@ export const CATEGORIES = [
 export const F450_MODEL = Object.freeze({
   modelId: 'f450-pixhawk248',
   nameZh: 'F450 四旋翼＋Pixhawk 2.4.8',
-  version: 'P1 通用件版（尺寸待確認）',
+  version: '通用件版（尺寸待確認）',
   frontAxis: '-Z',
   snapToleranceMm: 18,     // 拖放時離正確位置多近才算對（公釐）
   parts,

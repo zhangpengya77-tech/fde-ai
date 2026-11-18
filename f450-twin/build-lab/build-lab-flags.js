@@ -4,5 +4,5 @@
 export const BUILD_LAB_FLAGS = Object.freeze({
   entryVisible: false,
   // 版本號：顯示在頁首，也寫進匯出的紀錄檔，方便追查
-  version: 'R2.1-P1',
+  version: 'R2.1-P2',
 });

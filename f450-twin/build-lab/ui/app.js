@@ -4,12 +4,25 @@ import { BUILD_LAB_FLAGS } from '../build-lab-flags.js';
 import { F450_MODEL, CATEGORIES } from '../data/f450-pixhawk248.js';
 import { createAssemblyEngine, ERR } from '../core/assembly-engine.js';
 import { saveLocal, loadLocal, clearLocal, exportFile, readFile } from '../core/storage.js';
+// P2：接線
+import { PIXHAWK_248_GENERIC } from '../data/boards/pixhawk-248-generic.js';
+import { F450_WIRING, EXTRA_POINTS, CONNECTOR_FITS } from '../data/f450-wiring.js';
+import { createWiringEngine, wiringPreconditions } from '../core/wiring-engine.js';
+import { SEVERITY_ZH } from '../core/wiring-rules.js';
+import { buildErrorCases } from '../core/error-cases.js';
+import { buildParamsReport, reportToText } from '../core/params-report.js';
+import { createWiringView } from './wiring-view.js';
 
 const $ = (id) => document.getElementById(id);
 const model = F450_MODEL;
 const engine = createAssemblyEngine(model, { mode: 'learn' });
 const nameOf = (id) => engine.part(id)?.nameZh || id;
 const MODE_ZH = { learn: '學習', free: '自由組裝', exam: '考試' };
+const wiring = createWiringEngine(F450_WIRING, PIXHAWK_248_GENERIC, EXTRA_POINTS, CONNECTOR_FITS);
+const isProp = (id) => engine.part(id)?.shape.type === 'prop';
+/** 組裝＋接線一起存（本機），不含任何個資 */
+const serializeAll = () => ({ ...engine.serialize(), wiring: wiring.serialize() });
+const saveAll = () => saveLocal(model.modelId, serializeAll());
 
 let scene = null;
 let selected = null;
@@ -48,11 +61,18 @@ function explain(result, id) {
 // ───────── 安裝／拆下（統一經過這裡，成功後更新畫面與自動儲存） ─────────
 function afterChange(animateIds = []) {
   scene?.setInstalled(engine.installed, animateIds);
-  saveLocal(model.modelId, engine.serialize());
+  updateWires3d();   // 拆掉零件時 3D 線束也跟著更新
+  saveAll();
   render();
   if (engine.progress.done === engine.progress.total) showDone();
 }
 function tryInstall(id, placedPos) {
+  // 槳葉最後裝：接線完成前不能裝槳
+  if (isProp(id) && !wiring.complete && !engine.isInstalled(id)) {
+    scene?.returnToTray(id);
+    toast('槳葉要最後裝：請先按「接線模式」完成全部接線與檢查。接線、測試時一律不裝槳。', 'err');
+    return { ok: false, code: 'WIRING_FIRST' };
+  }
   const r = engine.install(id, placedPos);
   if (r.ok) {
     afterChange(placedPos ? [] : [id]);
@@ -173,7 +193,8 @@ function renderInfo() {
 function renderHint() {
   const hint = $('bl-hint');
   if (engine.progress.done === engine.progress.total) { hint.textContent = '全部零件都裝好了。'; scene?.setGhost(null); return; }
-  if (engine.mode === 'exam') { hint.textContent = '考試模式：不提供提示，請依正確順序完成組裝。'; scene?.setGhost(null); return; }
+  if (engine.mode === 'exam') { hint.textContent = '考試模式：不提供提示，請依正確順序完成組裝與接線。'; scene?.setGhost(null); return; }
+  if (wiringPreconditions(engine).ok && !wiring.complete) { hint.textContent = '零件（槳葉除外）都裝好了。下一步：按下方「接線模式」開始接線；槳葉最後才裝。'; scene?.setGhost(null); return; }
   const target = selected && !engine.isInstalled(selected) ? selected : (engine.mode === 'learn' ? engine.nextSuggested() : null);
   scene?.setGhost(target);
   if (!target) { hint.textContent = '自由組裝：選一個零件，拖到淺藍色虛影位置。'; return; }
@@ -220,7 +241,8 @@ function showDone() {
   $('bl-done-body').innerHTML = `
     <p>模式：${MODE_ZH[engine.mode]}｜零件 ${engine.progress.total} 件全部安裝｜用時約 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒</p>
     <table><tbody>${rows}</tbody></table>
-    <p class="bl-muted">接線、參數設定將在下一階段（P2）開放；真機組裝後仍需老師實際檢查。</p>`;
+    <p>接線：${wiring.progress.done}／${wiring.progress.total} 條${wiring.errors.length ? `，接線錯誤 ${wiring.errors.length} 次（${[...new Set(wiring.errors.map((e) => SEVERITY_ZH[e.severity]))].join('、')}）` : '，接線沒有錯誤'}</p>
+    <p class="bl-muted">真機組裝後仍需老師實際檢查；參數只產生模擬報告，不寫入飛控。</p>`;
   dlg.showModal();
 }
 
@@ -275,13 +297,14 @@ function bindUi() {
   for (const b of document.querySelectorAll('[data-mode]')) {
     b.addEventListener('click', () => {
       engine.setMode(b.dataset.mode);
-      saveLocal(model.modelId, engine.serialize());
+      saveAll();
       toast(`已切換到「${MODE_ZH[engine.mode]}」模式`);
       render();
     });
   }
   $('bl-next').addEventListener('click', () => {
     const id = engine.nextSuggested();
+    if (id && isProp(id) && !wiring.complete) { openWiring(); return; }
     if (id) { select(id); tryInstall(id); }
   });
   $('bl-prev').addEventListener('click', () => {
@@ -311,14 +334,16 @@ function bindUi() {
     if (matchMedia('(max-width: 819px)').matches) side.classList.toggle('open');
     else side.hidden = !side.hidden;
   });
-  $('bl-export').addEventListener('click', () => exportFile(engine.serialize(), BUILD_LAB_FLAGS.version));
-  $('bl-done-export').addEventListener('click', () => exportFile(engine.serialize(), BUILD_LAB_FLAGS.version));
+  $('bl-export').addEventListener('click', () => exportFile(serializeAll(), BUILD_LAB_FLAGS.version));
+  $('bl-done-export').addEventListener('click', () => exportFile(serializeAll(), BUILD_LAB_FLAGS.version));
   $('bl-import').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
     try {
-      engine.restore(await readFile(file));
+      const data = await readFile(file);
+      engine.restore(data);
+      wiring.restore(data.wiring);
       afterChange('all');
       toast('已載入紀錄', 'ok');
     } catch {
@@ -329,6 +354,7 @@ function bindUi() {
     if (!confirm('重置會拆掉所有零件並清除本機的進度與錯誤紀錄，確定嗎？')) return;
     clearLocal(model.modelId);
     engine.restore({ kind: 'fde-build-lab-progress', modelId: model.modelId, mode: engine.mode, installed: [], errors: [] });
+    wiring.reset();
     afterChange('all');
     toast('已重置');
   });
@@ -345,6 +371,109 @@ function bindUi() {
     if (e.key === 'y') { e.preventDefault(); $('bl-redo').click(); }
   });
 }
+// ───────── P2：接線模式 ─────────
+let wview = null;
+const WIRE_HEX = { power: '#d23b3b', signal: '#e0a800', data: '#1f6fd1', phase: '#6b7785' };
+/** 3D 線束預覽：已接好的線畫成兩個零件之間的線（零件都裝著才畫） */
+function updateWires3d() {
+  scene?.setWires(wiring.connections.map((d) => {
+    const s = wiring.steps.find((x) => x.id === d.stepId);
+    return { from: s.fromPart, to: s.toPart, color: WIRE_HEX[s.wireType] };
+  }).filter((w) => engine.isInstalled(w.from) && engine.isInstalled(w.to)));
+}
+function openWiring() {
+  const pre = wiringPreconditions(engine);
+  if (!pre.ok) {
+    if (pre.propsOn.length) toast(`接線與測試前一定要先拆槳：請拆下 ${pre.propsOn.map(nameOf).join('、')}。`, 'err');
+    else toast(`先完成組裝再接線：還差 ${pre.missing.length} 件（${pre.missing.slice(0, 3).map(nameOf).join('、')}${pre.missing.length > 3 ? '…' : ''}）。`, 'err');
+    return;
+  }
+  if (!wview) {
+    wview = createWiringView({ root: $('bl-wsvg-host'), wiring, mode: () => engine.mode, onAttempt: (choice) => onWireAttempt(choice) });
+  }
+  closeDrawers();
+  $('bl-wpanel').hidden = false;
+  $('bl-wresult').hidden = true;
+  renderWiring();
+}
+function renderWiring() {
+  const step = wiring.current;
+  const { done, total } = wiring.progress;
+  $('bl-wstep').textContent = step ? `接線 ${done + 1}／${total}` : `接線完成 ${total}／${total}`;
+  $('bl-wtitle').textContent = step ? step.titleZh : '全部接線都通過檢查了。';
+  $('bl-wexplain').textContent = step ? (engine.mode === 'exam' ? '考試模式：不提供說明。' : step.explainZh) : '可以查看「設定報告」，最後回到 3D 裝上槳葉。';
+  $('bl-wundo').disabled = !done;
+  $('bl-report').disabled = !wiring.complete;
+  wview?.render();
+}
+function showWireResult(r) {
+  const box = $('bl-wresult');
+  box.hidden = false;
+  box.className = `bl-wresult ${r.severity}`;
+  if (engine.mode === 'exam' && !r.ok) { box.textContent = '接錯了（已記錄），請再試一次。'; return; }
+  box.textContent = r.ok ? `✓ ${r.messageZh}` : `✗ ${SEVERITY_ZH[r.severity]}：${r.messageZh}　正確做法：${r.fixZh}`;
+}
+function onWireAttempt(choice) {
+  const r = wiring.attempt(choice);
+  showWireResult(r);
+  saveAll();
+  updateWires3d();
+  renderWiring();
+  if (r.ok && wiring.complete) {
+    const issues = wiring.systemIssues();
+    toast(issues.length ? `整機檢查發現問題：${issues.map((i) => i.messageZh).join('；')}` : '接線全部完成並通過整機檢查！最後回到 3D 裝上槳葉。', issues.length ? 'err' : 'ok');
+    render();
+  }
+}
+function showCases() {
+  const cases = buildErrorCases(F450_WIRING, PIXHAWK_248_GENERIC, EXTRA_POINTS, CONNECTOR_FITS);
+  $('bl-cases-body').replaceChildren(...cases.map((c, i) => {
+    const r = c.run();
+    const box = document.createElement('section');
+    box.className = 'bl-case';
+    const h = document.createElement('h3');
+    h.textContent = `${i + 1}. ${c.titleZh} `;
+    const sev = document.createElement('span');
+    sev.className = `bl-sev ${r.severity}`;
+    sev.textContent = `規則判定：${SEVERITY_ZH[r.severity]}（${r.code}）`;
+    h.append(sev);
+    const p = (label, text) => { const e = document.createElement('p'); const b = document.createElement('b'); b.textContent = label; e.append(b, text); return e; };
+    box.append(h, p('錯誤做法：', c.wrongZh), p('系統判定：', r.messageZh), p('虛擬後果：', c.effectZh), p('正確做法：', r.fixZh));
+    return box;
+  }));
+  $('bl-cases-dlg').showModal();
+}
+let lastReport = null;
+function showReport() {
+  lastReport = buildParamsReport({ connections: wiring.connections.map((d) => d.stepId) });
+  const body = $('bl-report-body');
+  body.className = 'bl-report';
+  const rows = lastReport.rows.map((r) => `<tr><td><code>${r.name}</code></td><td>${r.value}</td><td>${r.meaningZh}<br><span class="bl-muted">${r.why}</span></td><td><span class="bl-badge">${r.source.status}</span></td></tr>`).join('');
+  body.innerHTML = `<p class="bl-muted">${lastReport.firmwareNote}</p>
+    <table><thead><tr><th>參數</th><th>值</th><th>意思／理由</th><th>狀態</th></tr></thead><tbody>${rows}</tbody></table>
+    <h3>上線前檢查清單</h3><ol>${lastReport.checklist.map((c) => `<li>${c.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</li>`).join('')}</ol>`;
+  $('bl-report-dlg').showModal();
+}
+function bindWiring() {
+  $('bl-wiring').addEventListener('click', openWiring);
+  $('bl-wback').addEventListener('click', () => { $('bl-wpanel').hidden = true; render(); });
+  $('bl-wundo').addEventListener('click', () => {
+    if (!wiring.undo()) return;
+    saveAll(); updateWires3d(); renderWiring();
+    $('bl-wresult').hidden = true;
+  });
+  $('bl-cases').addEventListener('click', showCases);
+  $('bl-report').addEventListener('click', showReport);
+  $('bl-report-dl').addEventListener('click', () => {
+    if (!lastReport) return;
+    const blob = new Blob([reportToText(lastReport, { version: BUILD_LAB_FLAGS.version })], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'build-lab-ardupilot-模擬設定報告.txt';
+    document.body.append(a); a.click(); a.remove();
+  });
+}
+
 function closeDrawers() { $('bl-lib').classList.remove('open'); $('bl-steps').classList.remove('open'); }
 
 // ───────── 懸停說明浮層 ─────────
@@ -364,8 +493,9 @@ function onHover(id, x, y) {
 // ───────── 啟動 ─────────
 async function boot() {
   bindUi();
+  bindWiring();
   const saved = loadLocal(model.modelId);
-  if (saved) { try { engine.restore(saved); } catch { /* 舊存檔壞掉就從頭開始 */ } }
+  if (saved) { try { engine.restore(saved); wiring.restore(saved.wiring); } catch { /* 舊存檔壞掉就從頭開始 */ } }
   render();
   try {
     const { createScene } = await import('../core/scene.js');
@@ -375,6 +505,7 @@ async function boot() {
     scene.on('pick', (id) => select(id));
     scene.on('drop', (id, pos) => tryInstall(id, pos));
     scene.setInstalled(engine.installed);
+    updateWires3d();
     thumbs = scene.thumbnails();
     $('bl-loading').hidden = true;
     render();
