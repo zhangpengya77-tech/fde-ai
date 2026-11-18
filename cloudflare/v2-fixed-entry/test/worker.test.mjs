@@ -84,3 +84,14 @@ test("主機離線時配對 API 仍回跨網站許可，讓 GitHub 頁面能顯�
   assert.equal(res.status, 503);
   assert.equal(res.headers.get("access-control-allow-origin"), gh);
 });
+
+test("Cloudflare Pages 公開網址也可跨網站讀取；預覽子網域與相似網址不行", async () => {
+  const env = { ORIGIN_URL: "https://tunnel.example" };
+  const pages = "https://fde-ai.pages.dev";
+  let res = await worker.fetch(new Request(`${FIXED}/api/simlink/rooms`, { method: "POST", body: "{}", headers: { origin: pages } }), env, {}, async () => new Response("{}", { status: 201 }));
+  assert.equal(res.headers.get("access-control-allow-origin"), pages);
+  for (const bad of ["https://abc.fde-ai.pages.dev", "https://fde-ai.pages.dev.evil.example", "http://fde-ai.pages.dev"]) {
+    res = await worker.fetch(new Request(`${FIXED}/api/simlink/rooms`, { method: "POST", body: "{}", headers: { origin: bad } }), env, {}, async () => new Response("{}", { status: 201 }));
+    assert.equal(res.headers.get("access-control-allow-origin"), null, bad);
+  }
+});

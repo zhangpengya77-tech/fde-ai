@@ -11,6 +11,9 @@
 
 export const PAGES_HOME = "https://zhangpengya77-tech.github.io/fde-ai/v2/";
 export const PAGES_ORIGIN = "https://zhangpengya77-tech.github.io";
+// 2026-11-18：公開網站另有 Cloudflare Pages 網址（較對外公開的網址）。只認完全相同的網址，
+// 不接受 xxx.fde-ai.pages.dev 這類預覽子網域。實際網址以 Cloudflare 建立後拿到的為準。
+export const ALLOWED_ORIGINS = [PAGES_ORIGIN, "https://fde-ai.pages.dev"];
 const HEALTH_TIMEOUT_MS = 4000;
 
 // 主機離線時顯示的說明頁（繁體中文，手機可讀）
@@ -38,8 +41,8 @@ const OFFLINE_HTML = `<!doctype html>
 // 允許 GitHub 頁面讀取狀態（只有狀態端點開放跨網站讀取，其他路徑不開放）
 function corsHeaders(request) {
   const origin = request.headers.get("origin") || "";
-  return origin === PAGES_ORIGIN
-    ? { "access-control-allow-origin": PAGES_ORIGIN, "vary": "origin" }
+  return ALLOWED_ORIGINS.includes(origin)
+    ? { "access-control-allow-origin": origin, "vary": "origin" }
     : {};
 }
 
