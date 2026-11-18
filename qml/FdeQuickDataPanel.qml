@@ -1,6 +1,6 @@
 // FDE-QGC V2｜浮動面板：快速數據（取代 V1.0「飛行數據」，功能為其超集合）
 // - 4 欄 × 4 列共 16 張數據卡；點任一張卡可從清單自選要顯示的 MAVLink 數據，選擇會記住（QSettings）。
-// - 數值全部來自 QGC 官方 Vehicle Fact（單位依 QGC 系統設定），本面板只讀顯示、不送任何指令。
+// - 數值全部來自 QGC 官方 Vehicle Fact（單位依 QGC 應用設定），本面板只讀顯示、不送任何指令。
 import QtCore
 import QtQml
 import QtQuick

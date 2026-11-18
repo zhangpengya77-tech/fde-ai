@@ -15,6 +15,7 @@
 #include <QtCore/QTimer>
 #include "QGCMAVLink.h"
 #include "QGCPalette.h"
+#include "QmlComponentInfo.h"
 
 #include <QtCore/QApplicationStatic>
 #include <QtCore/QFile>
@@ -35,6 +36,29 @@ FdeOptions::FdeOptions(QObject *parent)
     : QGCOptions(parent)
     , _flyViewOptions(new FdeFlyViewOptions(this, this))
 {
+}
+
+// 「日誌」頁子選單：複製官方清單，在「日誌檢視器」後面插入「智能診斷」（原「日誌分析」頁）
+// 官方項目、順序與內容都不變；找不到日誌檢視器時（行動版沒有）放在第一項。
+const QVariantList &FdePlugin::analyzePages()
+{
+    if (_analyzePages.isEmpty()) {
+        _analyzePages = QGCCorePlugin::analyzePages();
+        qsizetype insertAt = 0;
+        for (qsizetype i = 0; i < _analyzePages.size(); i++) {
+            const QmlComponentInfo *info = _analyzePages.at(i).value<QmlComponentInfo *>();
+            if (info && info->url().toString().endsWith(QStringLiteral("LogViewerPage.qml"))) {
+                insertAt = i + 1;
+                break;
+            }
+        }
+        _analyzePages.insert(insertAt, QVariant::fromValue(new QmlComponentInfo(
+            QStringLiteral("智能診斷"),
+            QUrl::fromUserInput(QStringLiteral("qrc:/qml/FDE/Ui/FdeLogDiagnosePage.qml")),
+            QUrl::fromUserInput(QStringLiteral("qrc:/qmlimages/OnboardLogIcon.svg")),
+            this)));
+    }
+    return _analyzePages;
 }
 
 // 建構：建立選項物件；語音、SITL、日誌分析等在 createQmlApplicationEngine 時建立

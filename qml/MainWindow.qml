@@ -163,6 +163,33 @@ ApplicationWindow {
         showTool(qsTr("Analyze Tools"), "qrc:/qml/QGroundControl/AnalyzeView/AnalyzeView.qml", "/qmlimages/Analyze.svg")
     }
 
+    // FDE：經左側導覽切換頁面（頁內按鈕用，讓左側高亮跟著正確的項目）
+    function fdeActivateNav(key) {
+        fdeNavRail.activate(key)
+    }
+
+    // FDE：開啟「日誌」頁並切到指定子項（例如「智能診斷」）。
+    // 子選單清單來自 QGroundControl.corePlugin.analyzePages；切換方式與官方子選單按鈕相同。
+    function fdeShowAnalyzeSubPage(pageTitle) {
+        if (!allowViewSwitch()) {
+            return false
+        }
+        fdeNavRail.currentKey = "logs"
+        showAnalyzeTool()
+        const view = toolDrawerLoader.item
+        const pages = QGroundControl.corePlugin.analyzePages
+        for (let i = 0; i < pages.length; i++) {
+            if (pages[i].title === pageTitle) {
+                if (view && view._currentPage !== pages[i]) {
+                    view._currentPage = pages[i]
+                    view._updatePanelSource()
+                }
+                return true
+            }
+        }
+        return false
+    }
+
     function showVehicleConfig() {
         showTool(qsTr("Vehicle Configuration"), "qrc:/qml/QGroundControl/VehicleSetup/VehicleConfigView.qml", "/qmlimages/Gears.svg")
     }
@@ -396,6 +423,22 @@ ApplicationWindow {
             }
         }
     }
+    // 自我測試用：在物件樹（data 含子項目與非視覺物件）中找第一個符合條件的物件
+    function _fdeFindObject(obj, pred, depth = 0) {
+        if (!obj || depth > 60) {
+            return null
+        }
+        try { if (pred(obj)) { return obj } } catch (e) { }
+        const kids = obj.data !== undefined ? obj.data : (obj.children !== undefined ? obj.children : [])
+        for (let i = 0; i < kids.length; i++) {
+            const r = _fdeFindObject(kids[i], pred, depth + 1)
+            if (r) {
+                return r
+            }
+        }
+        return null
+    }
+
     // 自我測試的額外動作
     function fdeSelfTestCommand(cmd) {
         if (cmd === "loadplan") {
@@ -443,8 +486,63 @@ ApplicationWindow {
         } else if (cmd === "vehicle") {
             const v = QGroundControl.multiVehicleManager.activeVehicle
             FdeSelfTest.log(v ? ("vehicle id=" + v.id + " mode=" + v.flightMode + " armed=" + v.armed + " alt=" + v.altitudeRelative.rawValue.toFixed(1) + " lat=" + v.coordinate.latitude.toFixed(7) + " lon=" + v.coordinate.longitude.toFixed(7)) : "vehicle none")
+        } else if (cmd.indexOf("asub:") === 0) {
+            // 導覽精簡驗收：開啟「日誌」頁第 n 個子項並記錄標題
+            const pages = QGroundControl.corePlugin.analyzePages
+            const n = Number(cmd.substring(5))
+            const ok = n < pages.length && fdeShowAnalyzeSubPage(pages[n].title)
+            FdeSelfTest.log("asub " + n + " title=" + (n < pages.length ? pages[n].title : "?") + " ok=" + ok
+                            + " item=" + (_inPanelAnalyzePage !== null) + " nav=" + fdeNavRail.activeKey + " tool=" + toolDrawer.toolTitle)
+        } else if (cmd === "asublist") {
+            const pages = QGroundControl.corePlugin.analyzePages
+            let t = []
+            for (let i = 0; i < pages.length; i++) { t.push(pages[i].title) }
+            FdeSelfTest.log("asublist " + t.join(" | "))
+        } else if (cmd === "navlist") {
+            FdeSelfTest.log("navlist count=" + fdeNavRail.items.length + " " + fdeNavRail.items.map(it => it.label).join(" | "))
+        } else if (cmd === "lvopen") {
+            // 在「日誌檢視器」頁開啟測試用 .bin（呼叫官方頁面自己的 loadBinFile，和按「開啟」選檔相同）
+            const lv = _fdeFindObject(_inPanelAnalyzePage, o => typeof o.loadBinFile === "function")
+            FdeSelfTest.log("lvopen found=" + (lv !== null))
+            if (lv) { lv.loadBinFile(FdeSelfTest.outDir + "/test.bin") }
+        } else if (cmd === "logstate") {
+            const r = FdeLogAnalyzer.report
+            FdeSelfTest.log("logstate shared=" + FdeLogAnalyzer.sharedLogPath + " busy=" + FdeLogAnalyzer.busy + " reportFile=" + (r && r.file ? r.file : "")
+                            + " ok=" + (r ? r.ok : "") + " overall=" + (r ? r.overall : "") + " nav=" + fdeNavRail.activeKey + " tool=" + toolDrawer.toolTitle)
+        } else if (cmd === "diaggotune") {
+            // 智能診斷頁的「前往 AI 調參 →」按鈕：模擬點擊
+            const b = _fdeFindObject(_inPanelAnalyzePage, o => o.text === "前往 AI 調參 →" && o.clicked !== undefined)
+            FdeSelfTest.log("diaggotune found=" + (b !== null) + " enabled=" + (b ? b.enabled : false))
+            if (b && b.enabled) { b.clicked() }
+        } else if (cmd === "tunegodiag") {
+            // AI 調參頁的「前往智能診斷」按鈕：模擬點擊
+            const b = _fdeFindObject(toolDrawerLoader.item, o => o.text === "前往智能診斷" && o.clicked !== undefined)
+            FdeSelfTest.log("tunegodiag found=" + (b !== null))
+            if (b) { b.clicked() }
+        } else if (cmd === "params") {
+            // 飛控設定 → 參數（取代原「參數管理」入口）
+            fdeNavRail.activate("setup")
+            if (QGroundControl.multiVehicleManager.activeVehicle) { showVehicleConfigParametersPage() }
+            const pc = _fdeFindObject(toolDrawerLoader.item, o => o.searchText !== undefined && o.showModifiedOnly !== undefined)
+            FdeSelfTest.log("params nav=" + fdeNavRail.activeKey + " tool=" + toolDrawer.toolTitle + " editor=" + (pc !== null)
+                            + " rows=" + (pc && pc.parameters ? pc.parameters.rowCount : -1))
+        } else if (cmd.indexOf("paramsearch:") === 0) {
+            const pc = _fdeFindObject(toolDrawerLoader.item, o => o.searchText !== undefined && o.showModifiedOnly !== undefined)
+            if (pc) { pc.searchText = cmd.substring(12) }
+            FdeSelfTest.log("paramsearch text=" + cmd.substring(12) + " editor=" + (pc !== null) + " rows=" + (pc && pc.parameters ? pc.parameters.rowCount : -1))
+        } else if (cmd.indexOf("paramedit:") === 0 || cmd === "paramread") {
+            // 只對 FDE 模擬機修改參數（LOG_DISARMED，0/1，不影響飛行）；用官方 Fact 寫入，和在參數頁手動修改相同
+            const v = QGroundControl.multiVehicleManager.activeVehicle
+            const pc = _fdeFindObject(toolDrawerLoader.item, o => o.searchText !== undefined && o.showModifiedOnly !== undefined)
+            if (!v || !FdeSwarm.isSimVehicle(v.id) || !pc) {
+                FdeSelfTest.log("paramedit refused vehicle=" + (v ? v.id : "none") + " sim=" + (v ? FdeSwarm.isSimVehicle(v.id) : false) + " editor=" + (pc !== null))
+            } else {
+                const f = pc.getParameterFact(-1, "LOG_DISARMED", false)
+                if (f && cmd !== "paramread") { f.value = Number(cmd.substring(10)) }
+                FdeSelfTest.log("param LOG_DISARMED=" + (f ? f.rawValue : "missing") + " vehicle=" + v.id)
+            }
         } else if (cmd.indexOf("settings:") === 0) {
-            // V2-3：開啟系統設定的指定頁（例如 settings:FdeSimCenter）
+            // V2-3：開啟應用設定的指定頁（例如 settings:FdeSimCenter）
             showSettingsTool(cmd.substring(9))
         } else if (cmd === "swarmstart") {
             // V2-3 多機仿真自我測試：3 架模擬機、間距 5 m（ArduPilot 官方測試場 CMAC）
@@ -876,6 +974,8 @@ ApplicationWindow {
     // panelContainer is still alive.
     function destroyInPanelAnalyzePage() {
         if (_inPanelAnalyzePage) {
+            // FDE：離開日誌頁前記下「日誌檢視器」開啟的檔案，給「智能診斷」沿用
+            FdeLogAnalyzer.captureLogViewer(_inPanelAnalyzePage)
             _inPanelAnalyzePage.destroy()
             _inPanelAnalyzePage = null
         }
@@ -885,6 +985,8 @@ ApplicationWindow {
     // The caller sets the visual parent to panelContainer after creation.
     function createAnalyzePage(source) {
         if (_inPanelAnalyzePage) {
+            // FDE：切換日誌頁子項前記下「日誌檢視器」開啟的檔案，給「智能診斷」沿用
+            FdeLogAnalyzer.captureLogViewer(_inPanelAnalyzePage)
             _inPanelAnalyzePage.destroy()
             _inPanelAnalyzePage = null
         }

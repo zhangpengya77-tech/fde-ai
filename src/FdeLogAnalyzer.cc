@@ -455,6 +455,29 @@ QString csvPath()
 
 FdeLogAnalyzer::FdeLogAnalyzer(QObject *parent) : QObject(parent) {}
 
+// 記下官方「日誌檢視器」目前開啟的檔案：在頁面底下找 LogViewerController，讀它的 currentLogPath
+void FdeLogAnalyzer::captureLogViewer(QObject *page)
+{
+    if (!page) {
+        return;
+    }
+    const QList<QObject *> children = page->findChildren<QObject *>();
+    for (QObject *o : children) {
+        if (!o->inherits("LogViewerController")) {
+            continue;
+        }
+        QString path = o->property("currentLogPath").toString();
+        if (path.startsWith(QStringLiteral("file:"))) {
+            path = QUrl(path).toLocalFile();
+        }
+        if (!path.isEmpty() && path != _sharedLogPath) {
+            _sharedLogPath = path;
+            emit sharedLogPathChanged();
+        }
+        return;
+    }
+}
+
 QString FdeLogAnalyzer::tuningDirectory() const
 {
     return QFileInfo(csvPath()).absolutePath();
@@ -470,7 +493,7 @@ void FdeLogAnalyzer::analyze(const QString &fileOrUrl)
         path = QUrl(path).toLocalFile();
     }
     if (!path.endsWith(QStringLiteral(".bin"), Qt::CaseInsensitive) && !path.endsWith(QStringLiteral(".log"), Qt::CaseInsensitive)) {
-        _setResult({{"ok", false}, {"error", QStringLiteral("目前支援 ArduPilot DataFlash 日誌（.bin／.log）。tlog 請用「飛行日誌」頁的官方工具。")}}, {});
+        _setResult({{"ok", false}, {"error", QStringLiteral("目前支援 ArduPilot DataFlash 日誌（.bin／.log）。tlog 請用「日誌 → 日誌檢視器」。")}}, {});
         return;
     }
     _busy = true;

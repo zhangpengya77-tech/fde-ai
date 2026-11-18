@@ -1,4 +1,4 @@
-// FDE-QGC V2-3｜覆寫官方 SettingsPagesModel.qml（系統設定左側清單）
+// FDE-QGC V2-3｜覆寫官方 SettingsPagesModel.qml（應用設定左側清單）
 // - 內容複製自 QGC 5.1.5 建置時產生的同名檔（build/.../AppSettings/generated/SettingsPagesModel.qml），官方項目一律不改、不刪。
 // - 只在「說明（Help）」上方新增 FDE 的「仿真與編隊」頁（＝仿真訓練中心：單機訓練／多機編隊兩個分頁）。
 // - FdeOverrideInterceptor 會把 qrc:/qml/QGroundControl/AppSettings/SettingsPagesModel.qml 導向本檔。

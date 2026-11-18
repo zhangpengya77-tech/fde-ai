@@ -1,5 +1,5 @@
 // FDE-QGC V1.0｜AI 調參助理（離線規則式）
-// 依「日誌分析」結果＋已連線飛控目前參數，產生 ArduPilot 參數建議。
+// 依「日誌 → 智能診斷」結果＋已連線飛控目前參數，產生 ArduPilot 參數建議。
 // 寫入保護：必須 已連線＋參數下載完成＋未解鎖，且每一筆都要使用者確認；寫入前先把舊值備份到
 // 文件\FDE-QGC\Tuning\param-backup.csv，可一鍵還原最近一次修改。不會自動寫入、不會切換飛行模式。
 import QtQuick
@@ -139,8 +139,9 @@ Item {
                 spacing: _fw
                 QGCButton { text: "重新產生建議"; onClicked: page.recompute() }
                 QGCButton {
-                    text: "前往日誌分析"
-                    onClicked: mainWindow.showTool("日誌分析", "qrc:/qml/FDE/Ui/FdeLogAnalysisPage.qml", "/qmlimages/Analyze.svg")
+                    text: "前往智能診斷"
+                    // 導覽精簡：原「日誌分析」頁已併入「日誌 → 智能診斷」
+                    onClicked: mainWindow.fdeShowAnalyzeSubPage("智能診斷")
                 }
                 QGCButton {
                     text: page.last.ok ? ("還原上次修改（" + page.last.name + "）") : "還原上次修改"
@@ -154,7 +155,7 @@ Item {
             QGCLabel { text: "參數建議（" + page.suggestions.length + "）"; font.bold: true }
             QGCLabel {
                 visible: page.suggestions.length === 0
-                text: page.hasReport ? "目前沒有需要調整的參數。響應若仍不理想，請改用官方 AutoTune。" : "請先到「日誌分析」開啟一份飛行日誌，或連線飛控。"
+                text: page.hasReport ? "目前沒有需要調整的參數。響應若仍不理想，請改用官方 AutoTune。" : "請先到「日誌 → 智能診斷」開啟一份飛行日誌，或連線飛控。"
                 wrapMode: Text.WordWrap; Layout.fillWidth: true
             }
             Repeater {
@@ -196,10 +197,10 @@ Item {
             QGCLabel { text: "官方 AutoTune（自動調參）步驟"; font.bold: true }
             QGCLabel {
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
-                text: "1. 先確認日誌分析的「振動」為良好。\n"
+                text: "1. 先確認智能診斷的「振動」為良好。\n"
                     + "2. 在「飛控設定 → 飛行模式」把一個開關位置設為 AUTOTUNE。\n"
                     + "3. 無風空曠處以 AltHold 起飛，切到 AUTOTUNE，飛機會自行擺動數分鐘；過程中可隨時切回原模式中止。\n"
-                    + "4. 完成後在 AUTOTUNE 模式下降落上鎖即保存；再飛一次並重新做日誌分析確認。\n"
+                    + "4. 完成後在 AUTOTUNE 模式下降落上鎖即保存；再飛一次並重新做智能診斷確認。\n"
                     + "（本程式不會自動切換到 AUTOTUNE，必須由操作者在現場執行。）"
             }
 

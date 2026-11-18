@@ -1,4 +1,8 @@
-// FDE-QGC V1.0｜左側導覽列（原 8 項＋日誌分析、AI 調參 = 10 項）
+// FDE-QGC V1.0｜左側導覽列（2026-11-18 精簡為 8 項）
+// 飛行監控・航線規劃・飛控設定・仿真訓練・日誌・AI 調參・教學工具・應用設定
+// - 移除「參數管理」：它只是「飛控設定 → 參數」的捷徑，請從飛控設定進入。
+// - 「飛行日誌」與「日誌分析」合併為「日誌」：日誌分析改成日誌頁裡的「智能診斷」子項。
+// - 「系統設定」改名「應用設定」。
 // 每一項都只呼叫 QGC 主視窗原本就有的切換函式（showFlyView／showPlanView／showTool…），
 // 不另寫飛控功能；切換前一律經過 mainWindow.allowViewSwitch()（保留官方「校正中禁止切換」等保護）。
 import QtQuick
@@ -27,13 +31,13 @@ Rectangle {
         { key: "fly",      label: "飛行監控", icon: "/qmlimages/PaperPlane.svg" },
         { key: "plan",     label: "航線規劃", icon: "/qmlimages/Plan.svg" },
         { key: "setup",    label: "飛控設定", icon: "/qmlimages/Quad.svg" },
-        { key: "params",   label: "參數管理", icon: "/qmlimages/Gears.svg" },
         { key: "sim",      label: "仿真訓練", icon: "/qmlimages/Joystick.png" },
-        { key: "logs",     label: "飛行日誌", icon: "/qmlimages/Analyze.svg" },
-        { key: "logai",    label: "日誌分析", icon: "/qmlimages/OnboardLogIcon.svg" },
+        // 原「飛行日誌」＋「日誌分析」合併：官方分析工具頁，子選單多一項「智能診斷」
+        { key: "logs",     label: "日誌",     icon: "/qmlimages/Analyze.svg" },
         { key: "tune",     label: "AI 調參",  icon: "/qmlimages/Gears.svg" },
         { key: "teach",    label: "教學工具", icon: "/qmlimages/Megaphone.svg" },
-        { key: "settings", label: "系統設定", icon: "/res/QGCLogoWhite.svg" }
+        // 原「系統設定」改名，避免和「飛控設定」混淆（頁內標題仍是官方「應用程式設定」）
+        { key: "settings", label: "應用設定", icon: "/res/QGCLogoWhite.svg" }
     ]
 
     function activate(key) {
@@ -45,18 +49,10 @@ Rectangle {
         case "fly":      window.showFlyView(); break
         case "plan":     window.showPlanView(); break
         case "setup":    window.showVehicleConfig(); break
-        case "params":
-            // 沒有連線飛控時 QGC 參數頁無資料：先開飛控設定頁（會顯示官方的「未連線」提示）
-            if (QGroundControl.multiVehicleManager.activeVehicle) {
-                window.showVehicleConfigParametersPage()
-            } else {
-                window.showVehicleConfig()
-            }
-            break
         // V2-3：仿真訓練中心（單機訓練＋多機編隊）
         case "sim":      window.showTool("仿真訓練中心", "qrc:/qml/FDE/Ui/FdeSimCenterPage.qml", "/qmlimages/Joystick.png"); break
+        // 日誌：官方分析工具頁（日誌檢視器、智能診斷、機載日誌、地理標記影像、MAVLink 控制台、MAVLink 檢測、振動）
         case "logs":     window.showAnalyzeTool(); break
-        case "logai":    window.showTool("日誌分析", "qrc:/qml/FDE/Ui/FdeLogAnalysisPage.qml", "/qmlimages/Analyze.svg"); break
         case "tune":     window.showTool("AI 調參", "qrc:/qml/FDE/Ui/FdeTuningPage.qml", "/qmlimages/Gears.svg"); break
         case "teach":    window.showTool("教學工具", "qrc:/qml/FDE/Ui/FdeTeachingPage.qml", "/qmlimages/Megaphone.svg"); break
         case "settings": window.showSettingsTool(); break

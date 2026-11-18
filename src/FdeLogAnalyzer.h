@@ -20,12 +20,19 @@ class FdeLogAnalyzer : public QObject
     Q_OBJECT
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QVariantMap report READ report NOTIFY reportChanged)
+    /// 「日誌」頁共用的日誌檔：在「日誌檢視器」開過的檔案，切到「智能診斷」時直接沿用（不用重新選檔）
+    Q_PROPERTY(QString sharedLogPath READ sharedLogPath NOTIFY sharedLogPathChanged)
 
 public:
     explicit FdeLogAnalyzer(QObject *parent = nullptr);
 
     bool busy() const { return _busy; }
     QVariantMap report() const { return _report; }
+    QString sharedLogPath() const { return _sharedLogPath; }
+
+    /// 從「日誌檢視器」頁（官方 LogViewerPage）記下目前開啟的日誌路徑。
+    /// 在日誌頁切換子項、頁面被銷毀前由 MainWindow 呼叫；只讀官方控制器的 currentLogPath，不改它。
+    Q_INVOKABLE void captureLogViewer(QObject *page);
 
     /// 背景執行緒分析 .bin（ArduPilot DataFlash）；完成後 reportChanged
     Q_INVOKABLE void analyze(const QString &fileOrUrl);
@@ -44,11 +51,13 @@ public:
 signals:
     void busyChanged();
     void reportChanged();
+    void sharedLogPathChanged();
 
 private:
     void _setResult(const QVariantMap &report, const QHash<QString, QVector<QPointF>> &samples);
 
     bool _busy = false;
     QVariantMap _report;
+    QString _sharedLogPath;   // 日誌檢視器最後開啟的檔案（本機路徑）
     QHash<QString, QVector<QPointF>> _samples;   // 只保留圖表需要的欄位
 };

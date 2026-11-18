@@ -31,6 +31,7 @@ set(FDE_UI_QML
     ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdeSimTrainingPage.qml
     ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdePlanQuickPanel.qml
     ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdeLogAnalysisPage.qml
+    ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdeLogDiagnosePage.qml
     ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdeTuningPage.qml
     ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdeQuickDataPanel.qml
     ${CMAKE_CURRENT_SOURCE_DIR}/qml/FdeHudPanel.qml

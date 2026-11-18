@@ -54,12 +54,15 @@ public:
     void paletteOverride(const QString &colorName, QGCPalette::PaletteColorInfo_t &colorInfo) final;
     QQmlApplicationEngine *createQmlApplicationEngine(QObject *parent) final;
     void destroyQmlApplicationEngine(QQmlApplicationEngine *qmlEngine) final;
+    /// 「日誌」頁（官方分析工具）子選單：官方各項不變，在「日誌檢視器」之後插入「智能診斷」
+    const QVariantList &analyzePages() final;
 
 private:
     /// 介面語言為繁體中文時安裝 FDE 的台灣正體翻譯，否則移除
     void _applyZhTwTranslator();
 
     QTranslator _zhTw;
+    QVariantList _analyzePages;   // 官方清單＋智能診斷（第一次讀取時建立）
     bool _zhTwInstalled = false;
     FdeOptions *_options = nullptr;
     FdeSpeech *_speech = nullptr;

@@ -1,4 +1,4 @@
-// FDE-QGC V1.0｜日誌分析頁：開啟 ArduPilot DataFlash（.bin）→ 規則式診斷 → 圖表 → 前往 AI 調參
+// FDE-QGC V1.0｜日誌分析頁（2026-11-18 起放在「日誌 → 智能診斷」子項，由 FdeLogDiagnosePage 包裝）：開啟 ArduPilot DataFlash（.bin）→ 規則式診斷 → 圖表 → 前往 AI 調參
 // 解析使用 QGC 官方解析器；所有計算在本機完成，不上傳資料。
 import QtQuick
 import QtQuick.Controls
@@ -53,19 +53,20 @@ Item {
 
         RowLayout {
             spacing: _fw
-            QGCLabel { text: "日誌分析"; font.bold: true; font.pointSize: ScreenTools.largeFontPointSize }
+            QGCLabel { text: "智能診斷"; font.bold: true; font.pointSize: ScreenTools.largeFontPointSize }
             QGCButton { text: "開啟日誌（.bin）…"; primary: true; enabled: !FdeLogAnalyzer.busy; onClicked: openDialog.open() }
             QGCButton {
                 text: "前往 AI 調參 →"
                 enabled: page.hasReport
-                onClicked: mainWindow.showTool("AI 調參", "qrc:/qml/FDE/Ui/FdeTuningPage.qml", "/qmlimages/Gears.svg")
+                // 經左側導覽切換，讓「AI 調參」高亮
+                onClicked: mainWindow.fdeActivateNav("tune")
             }
             BusyIndicator { running: FdeLogAnalyzer.busy; visible: running; Layout.preferredHeight: _fh * 1.6; Layout.preferredWidth: _fh * 1.6 }
             QGCLabel { visible: FdeLogAnalyzer.busy; text: "分析中…（大型日誌約需數十秒）" }
             Item { Layout.fillWidth: true }
         }
         QGCLabel {
-            text: "從飛控 SD 卡或「飛行日誌 → 日誌下載」取得 .bin 檔。分析為離線規則式診斷（依 ArduPilot 官方調參指引），結果僅供教學參考，不會改動飛控。"
+            text: "從飛控 SD 卡或「日誌 → 機載日誌」取得 .bin 檔。分析為離線規則式診斷（依 ArduPilot 官方調參指引），結果僅供教學參考，不會改動飛控。"
             wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pointSize: ScreenTools.smallFontPointSize; opacity: 0.8
         }
         QGCLabel {

@@ -3,7 +3,7 @@
     <qresource prefix="/Custom/qml">
         <file alias="QGroundControl/MainWindow.qml">qml/MainWindow.qml</file>
         <file alias="QGroundControl/FlyView/FlyViewCustomLayer.qml">qml/FlyViewCustomLayer.qml</file>
-        <!-- V2-3：系統設定左側清單加入「仿真器」「編隊飛行」（官方項目不變） -->
+        <!-- V2-3：應用設定左側清單加入「仿真器」「編隊飛行」（官方項目不變） -->
         <file alias="QGroundControl/AppSettings/SettingsPagesModel.qml">qml/SettingsPagesModel.qml</file>
     </qresource>
     <!-- 台灣正體翻譯（由官方 zh_CN 以 OpenCC s2twp 轉換；tools\claude\make_zh_tw_ts.py） -->
