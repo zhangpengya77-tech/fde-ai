@@ -1,0 +1,89 @@
+{
+  "size": {
+    "width": 2500,
+    "height": 1686
+  },
+  "selected": true,
+  "name": "FDE-AI 六宮格 v1（預覽）",
+  "chatBarText": "FDE-AI 服務選單",
+  "areas": [
+    {
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 833,
+        "height": 843
+      },
+      "action": {
+        "type": "uri",
+        "label": "關於 FDE-AI",
+        "uri": "https://zhangpengya77-tech.github.io/fde-ai/v2/about"
+      }
+    },
+    {
+      "bounds": {
+        "x": 833,
+        "y": 0,
+        "width": 834,
+        "height": 843
+      },
+      "action": {
+        "type": "uri",
+        "label": "發起人簡介",
+        "uri": "https://zhangpengya77-tech.github.io/fde-ai/v2/about"
+      }
+    },
+    {
+      "bounds": {
+        "x": 1667,
+        "y": 0,
+        "width": 833,
+        "height": 843
+      },
+      "action": {
+        "type": "uri",
+        "label": "課程專區",
+        "uri": "https://zhangpengya77-tech.github.io/fde-ai/v2/"
+      }
+    },
+    {
+      "bounds": {
+        "x": 0,
+        "y": 843,
+        "width": 833,
+        "height": 843
+      },
+      "action": {
+        "type": "uri",
+        "label": "學員成果",
+        "uri": "https://www.youtube.com/channel/UCqKMXztPAsc2K6crQlKxzLg"
+      }
+    },
+    {
+      "bounds": {
+        "x": 833,
+        "y": 843,
+        "width": 834,
+        "height": 843
+      },
+      "action": {
+        "type": "message",
+        "label": "課程報名",
+        "text": "我想報名／詢問 FDE-AI 課程"
+      }
+    },
+    {
+      "bounds": {
+        "x": 1667,
+        "y": 843,
+        "width": 833,
+        "height": 843
+      },
+      "action": {
+        "type": "message",
+        "label": "考照與預約",
+        "text": "我想詢問考照培訓、私教、考前訓練或場地使用"
+      }
+    }
+  ]
+}

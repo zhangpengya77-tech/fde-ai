@@ -4,6 +4,8 @@
  * - 內容全部來自 src/data/vocational-programs.js；每門課一張概念圖 assets/programs/<課程>.webp（Pexels 授權，見 assets/CREDITS.md）。
  * - 路由沿用平台既有 FdeRouter：/platform/programs（總覽）、/platform/<課程代號>（詳情）；app.js 切換頁面時會設定 body[data-route]。
  * - 課程諮詢表單送到 /api/public/course-inquiry/（教師電腦的 Django）：存在獨立資料庫、寄通知信給老師，教師後台「課程諮詢」查看；GitHub 頁面上改送到固定入口。
+ * - 2026-11-18（V4.1 預覽）：表單欄位依 V4.1 擴充（姓名、Email、電話或 LINE、未成年法定代理人同意、隱私權說明）；
+ *   window.FdeContact.inquiryMode 不是 'live' 時只做前端檢查、不送出任何資料（報名資料儲存方案批准前）。
  */
 (function () {
   'use strict';
@@ -167,19 +169,26 @@
 
   // ───────── 課程諮詢：送到教師後台（獨立資料庫，保存 180 天） ─────────
   const INQUIRY_URL = ON_PAGES ? `${GATEWAY}/api/public/course-inquiry/` : '/api/public/course-inquiry/';
+  const CONTACT = window.FdeContact || {};
+  const INQUIRY_LIVE = CONTACT.inquiryMode === 'live';
+  const PRIVACY_URL = CONTACT.privacyUrl || './privacy/';
   function consultForm(selected = '') {
     return `<section class="pg-consult" id="pg-consult" aria-label="課程諮詢">
       <h3>課程諮詢</h3>
-      <p class="pg-note">留下聯絡方式，老師會主動聯絡你；也可以直接<a href="${LINE_URL}" target="_blank" rel="noopener">加入 LINE 群組</a>或來電 <a href="tel:0901189740">${PHONE}</a>。</p>
+      <p class="pg-note">留下聯絡方式，老師會主動聯絡你；也可以用課程專區右上角的「課程報名諮詢」直接聯繫老師。</p>
+      ${INQUIRY_LIVE ? '' : '<p class="pg-note pg-demo">預覽模式：這個表單目前只檢查填寫內容，<b>不會送出任何資料</b>（報名資料儲存方案批准後才開放）。</p>'}
       <form class="pg-form" novalidate data-consult-form>
-        <label>稱呼 <input name="name" maxlength="30" autocomplete="name" required></label>
-        <label>聯絡方式（手機或 Email）<input name="contact" maxlength="80" autocomplete="email" required></label>
+        <label>姓名 <input name="name" maxlength="30" autocomplete="name" required></label>
+        <label>Email <input name="email" type="email" maxlength="80" autocomplete="email"></label>
+        <label>聯絡電話或 LINE ID <input name="contact" maxlength="40" autocomplete="tel"></label>
         <label>有興趣的課程 <select name="course" required><option value="">請選擇</option>${D.programs.map((p) => `<option value="${p.id}"${p.id === selected ? ' selected' : ''}>${esc(p.title)}</option>`).join('')}</select></label>
         <label>班別 <select name="format"><option>周末班</option><option>常日班</option><option>都可以／未定</option></select></label>
-        <label class="pg-wide">想問的問題（選填）<textarea name="message" rows="3" maxlength="500"></textarea></label>
+        <label class="pg-wide">備註（選填）<textarea name="message" rows="3" maxlength="500"></textarea></label>
         <label class="pg-hp" aria-hidden="true">網站 <input name="website" tabindex="-1" autocomplete="off"></label>
         <input type="hidden" name="started_ms" value="${Date.now()}">
-        <label class="pg-wide pg-consent"><input type="checkbox" name="consent" required> 我同意：FDE-AI 只用這些資料回覆本次課程諮詢，不另作他用；資料保存 180 天後自動刪除，也可以來電要求提前刪除。</label>
+        <label class="pg-wide pg-consent"><input type="checkbox" name="minor" data-minor> 我未滿 18 歲</label>
+        <label class="pg-wide pg-consent" data-guardian hidden><input type="checkbox" name="guardian_consent"> 我的法定代理人（父母或監護人）已知悉並同意我提供以上資料</label>
+        <label class="pg-wide pg-consent"><input type="checkbox" name="consent" required> 我已閱讀<a href="${PRIVACY_URL}" target="_blank" rel="noopener">個人資料使用告知</a>並同意：FDE-AI 只用這些資料回覆本次課程諮詢，不另作他用；資料保存 180 天後自動刪除，也可以來電要求提前刪除。</label>
         <button class="pg-btn" type="submit">送出諮詢</button>
         <p class="pg-form-msg" role="status" aria-live="polite" data-consult-msg></p>
       </form>
@@ -189,19 +198,26 @@
   function bindConsult(scope) {
     scope.querySelectorAll('[data-consult-form]').forEach((form) => {
       let last = 0;
+      const minor = form.querySelector('[data-minor]'), guardian = form.querySelector('[data-guardian]');
+      if (minor && guardian) minor.addEventListener('change', () => { guardian.hidden = !minor.checked; });
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const msg = form.querySelector('[data-consult-msg]'), f = new FormData(form);
         if (f.get('website')) { msg.textContent = '已收到。'; return; }   // 機器人陷阱欄位：真人看不到
         if (Date.now() - last < 30000) { msg.textContent = '請稍候 30 秒再送出。'; return; }
-        const name = String(f.get('name') || '').trim(), contact = String(f.get('contact') || '').trim();
-        const okContact = /^09\d{2}-?\d{3}-?\d{3}$/.test(contact.replace(/\s/g, '')) || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact);
+        const name = String(f.get('name') || '').trim(), contact = String(f.get('contact') || '').trim(), email = String(f.get('email') || '').trim();
+        const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+        const okContact = /^09\d{2}-?\d{3}-?\d{3}$/.test(contact.replace(/\s/g, '')) || /^[A-Za-z0-9._-]{4,20}$/.test(contact);
         const errs = [];
-        if (!name) errs.push('請填寫稱呼');
-        if (!okContact) errs.push('請填寫正確的手機（09 開頭）或 Email');
+        if (!name) errs.push('請填寫姓名');
+        if (email && !okEmail) errs.push('Email 格式不正確');
+        if (contact && !okContact) errs.push('電話請填 09 開頭的手機號碼，LINE ID 為 4～20 個英數字');
+        if (!email && !contact) errs.push('Email 與電話／LINE ID 至少填一項');
         if (!f.get('course')) errs.push('請選擇課程');
+        if (f.get('minor') && !f.get('guardian_consent')) errs.push('未滿 18 歲需要法定代理人同意');
         if (!f.get('consent')) errs.push('請勾選同意個資告知');
         if (errs.length) { msg.textContent = errs.join('；'); msg.className = 'pg-form-msg bad'; return; }
+        if (!INQUIRY_LIVE) { msg.className = 'pg-form-msg ok'; msg.textContent = '預覽模式：填寫內容檢查通過，但沒有送出任何資料。'; return; }
         last = Date.now();
         const btn = form.querySelector('button[type="submit"]');
         btn.disabled = true; msg.className = 'pg-form-msg'; msg.textContent = '送出中…';

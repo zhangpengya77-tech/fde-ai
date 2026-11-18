@@ -116,6 +116,12 @@
         <div id="programsHome"></div>
       </section>
 
+      <!-- 2026-11-18（V4.1 預覽）：首頁「聯絡我們」：LINE 官方帳號入口與電話（內容由 src/contact-entries.js 依 src/data/contact-config.js 產生） -->
+      <section class="section-block contact-home" id="contact-home" data-also-route="home" aria-label="聯絡我們">
+        <div class="section-intro"><p class="eyebrow">Contact · 聯絡我們</p><h2>聯絡我們</h2></div>
+        <div id="contactHome"></div>
+      </section>
+
       <section class="mobile-demo-panel section-block" id="mobile-demo">
         <div class="section-intro">
           <p class="eyebrow">Mobile Demo Mode</p>
@@ -519,13 +525,16 @@
     <script src="./src/app.js?v=2.0f-programs-2"></script>
     <!-- 2026-11-17：五大職業實訓課程（資料、原創示意圖、頁面） -->
     <script src="./src/data/vocational-programs.js?v=1.0"></script>
-    <script src="./src/programs.js?v=2.1"></script>
+    <!-- 2026-11-18（V4.1 預覽）：聯絡入口共用設定（連結、電話、顯示模式、表單模式） -->
+    <script src="./src/data/contact-config.js?v=1.0"></script>
+    <script src="./src/programs.js?v=2.2-v41"></script>
+    <script src="./src/contact-entries.js?v=1.0"></script>
     <!-- 2026-11-06：主機在線偵測（GitHub 頁面版） -->
     <script src="./src/host-status.js?v=1.0"></script>
     <!-- 首頁右側 3D 無人機：沿用 F450 數位孿生的 three.js（同站 /f450-twin/vendor），延後到頁面載完才載入 -->
     <script type="importmap">{"imports":{"three":"./f450-twin/vendor/three/three.module.min.js"}}</script>
     <script type="module" src="./src/hero-drone-3d.js?v=3.0-neon"></script>
     <!-- 2026-11-15：右下角「加入我們」LINE 群 QR 碼與聯繫教師 -->
-    <script src="./src/join-us.js?v=1.1"></script>
+    <script src="./src/join-us.js?v=1.2-v41"></script>
   </body>
 </html>

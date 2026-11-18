@@ -4,8 +4,11 @@
 // 收合狀態存在瀏覽器本機（無痕模式存不了也照常運作）。
 (function () {
   'use strict';
-  var LINE_URL = 'https://line.me/ti/g/jnXbd7PKK8';   // QR 碼內容（LINE 群邀請連結）
-  var PHONE = '0901189740', PHONE_SHOW = '0901-189-740';
+  // 2026-11-18（V4.1 預覽）：連結與電話改讀共用設定 src/data/contact-config.js；沒有設定檔時沿用原值。
+  var CFG = window.FdeContact || {};
+  var LINE_URL = CFG.groupUrl || 'https://line.me/ti/g/jnXbd7PKK8';   // QR 碼內容（LINE 群邀請連結）
+  var PHONE = CFG.phone || '0901189740', PHONE_SHOW = CFG.phoneShow || '0901-189-740';
+  var SHOW_PHONE = CFG.mode !== 'official-only';
   var KEY = 'fde-joinus-collapsed';
   // QR 圖片放在這支程式旁邊（GitHub 頁面與教師電腦的平台路徑不同，用程式自己的位置找）
   var QR = (document.currentScript && document.currentScript.src) ? new URL('line-group-qr.png', document.currentScript.src).href : './src/line-group-qr.png';
@@ -25,6 +28,9 @@
     '.joinus-pill i{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;background:#06c755;color:#fff;font-style:normal;font-size:11px;font-weight:800}',
     '.joinus.collapsed .joinus-card{display:none}.joinus.collapsed .joinus-pill{display:inline-flex}',
     '@media (max-width:767px){.joinus-card{width:230px}.joinus-qr{width:140px;height:140px}.joinus-line{display:block}}',
+    '.joinus-intro{margin:0 0 8px;font-size:12px;line-height:1.5;color:#9fc4dc;text-align:left}',
+    // 首頁「聯絡我們」與課程專區右上角已顯示電話，這兩處的「加入我們」不再重複顯示電話
+    'body[data-route="home"] .joinus-tel,body[data-route="programs"] .joinus-tel,body[data-route^="program-"] .joinus-tel{display:none}',
     '@media print{.joinus{display:none}}'
   ].join('\n');
 
@@ -37,10 +43,11 @@
       '<div class="joinus-card">' +
         '<button type="button" class="joinus-x" aria-label="收合">×</button>' +
         '<h3>加入我們</h3>' +
+        '<p class="joinus-intro">歡迎已報名學員，以及對無人載具技術與實作學習有興趣的朋友加入交流社群。</p>' +
         '<img class="joinus-qr" src="' + QR + '" width="168" height="168" alt="FDE-AI LINE 群組 QR 碼">' +
         '<p class="joinus-note">LINE 掃碼加入學習群組</p>' +
         '<a class="joinus-line" href="' + LINE_URL + '" target="_blank" rel="noopener">用 LINE 加入群組</a>' +
-        '<a class="joinus-tel" href="tel:' + PHONE + '">聯繫教師<br><b>' + PHONE_SHOW + '</b></a>' +
+        (SHOW_PHONE ? '<a class="joinus-tel" href="tel:' + PHONE + '">聯繫教師<br><b>' + PHONE_SHOW + '</b></a>' : '') +
       '</div>' +
       '<button type="button" class="joinus-pill" aria-label="加入我們：LINE 群組與聯繫教師"><i>LINE</i>加入我們</button>';
     document.body.appendChild(box);

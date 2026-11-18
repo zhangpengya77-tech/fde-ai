@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>FDE-AI LINE 圖文選單（2500×1686）</title>
+<style>
+  /* FDE-AI 品牌色（取自官網 public-site/v2/src/styles.css）；不使用黃色高亮、不使用第三方圖片 */
+  :root { --bg:#07111f; --surface:#0f2033; --cyan:#00c2ff; --blue:#168bff; --green:#35e6a8; --text:#ddf3ff; --muted:#94abc2; }
+  html, body { margin:0; padding:0; }
+  body { width:2500px; height:1686px; background:var(--bg); font-family:"Noto Sans CJK TC","Noto Sans TC","Microsoft JhengHei",sans-serif; color:var(--text); overflow:hidden; }
+  .grid { display:grid; grid-template-columns:833px 834px 833px; grid-template-rows:843px 843px; width:2500px; height:1686px; }
+  .cell { position:relative; box-sizing:border-box; border:3px solid rgba(0,194,255,.28); background:
+      radial-gradient(circle at 50% 38%, rgba(0,194,255,.16), rgba(0,194,255,0) 58%), linear-gradient(160deg, #0f2033 0%, #07111f 78%);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  .cell::after { content:""; position:absolute; inset:22px; border-radius:36px; border:2px solid rgba(0,194,255,.18); pointer-events:none; }
+  .no { position:absolute; top:44px; left:52px; font-size:44px; font-weight:700; color:var(--cyan); letter-spacing:.08em; opacity:.85; }
+  .icon { width:250px; height:250px; margin-bottom:44px; }
+  .icon * { fill:none; stroke:var(--cyan); stroke-width:10; stroke-linecap:round; stroke-linejoin:round; }
+  .icon .accent { stroke:var(--green); }
+  .icon .fill { fill:var(--cyan); stroke:none; }
+  h2 { margin:0; font-size:112px; font-weight:900; letter-spacing:.06em; color:#ffffff; line-height:1.15; }
+  p { margin:26px 0 0; font-size:54px; font-weight:500; color:var(--muted); letter-spacing:.04em; }
+  .brand { position:absolute; bottom:40px; right:56px; font-size:34px; font-weight:700; color:rgba(0,194,255,.55); letter-spacing:.12em; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <section class="cell"><span class="no">01</span>
+    <svg class="icon" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="24" cy="24" r="15"/><circle cx="96" cy="24" r="15"/><circle cx="24" cy="96" r="15"/><circle cx="96" cy="96" r="15"/>
+      <path d="M35 35 L50 50 M85 35 L70 50 M35 85 L50 70 M85 85 L70 70"/>
+      <rect x="47" y="47" width="26" height="26" rx="6" class="accent"/>
+    </svg>
+    <h2>關於 FDE-AI</h2><p>平台介紹・教育理念</p></section>
+
+  <section class="cell"><span class="no">02</span>
+    <svg class="icon" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="40" r="20"/>
+      <path d="M22 104 C22 80 38 68 60 68 C82 68 98 80 98 104"/>
+      <path d="M50 84 L60 94 L74 78" class="accent"/>
+    </svg>
+    <h2>發起人簡介</h2><p>張鵬亞｜項目發起人</p></section>
+
+  <section class="cell"><span class="no">03</span>
+    <svg class="icon" viewBox="0 0 120 120" aria-hidden="true">
+      <path d="M10 44 L60 22 L110 44 L60 66 Z"/>
+      <path d="M30 54 L30 82 C30 90 44 98 60 98 C76 98 90 90 90 82 L90 54"/>
+      <path d="M110 44 L110 76" class="accent"/>
+    </svg>
+    <h2>課程專區</h2><p>五大職業實訓課程</p></section>
+
+  <section class="cell"><span class="no">04</span>
+    <svg class="icon" viewBox="0 0 120 120" aria-hidden="true">
+      <rect x="12" y="22" width="96" height="66" rx="10"/>
+      <path d="M50 42 L74 55 L50 68 Z" class="accent"/>
+      <path d="M40 104 L80 104 M60 88 L60 104"/>
+    </svg>
+    <h2>學員成果</h2><p>YouTube 成果影片</p></section>
+
+  <section class="cell"><span class="no">05</span>
+    <svg class="icon" viewBox="0 0 120 120" aria-hidden="true">
+      <rect x="22" y="18" width="76" height="92" rx="10"/>
+      <path d="M44 18 L44 10 L76 10 L76 18"/>
+      <path d="M38 48 L82 48 M38 66 L82 66"/>
+      <path d="M40 86 L52 96 L76 78" class="accent"/>
+    </svg>
+    <h2>課程報名</h2><p>線上報名・課程諮詢</p></section>
+
+  <section class="cell"><span class="no">06</span>
+    <svg class="icon" viewBox="0 0 120 120" aria-hidden="true">
+      <rect x="14" y="22" width="92" height="86" rx="10"/>
+      <path d="M14 46 L106 46 M38 12 L38 30 M82 12 L82 30"/>
+      <path d="M42 76 L55 88 L80 62" class="accent"/>
+    </svg>
+    <h2>考照與預約</h2><p>證照・私教・場地諮詢</p><span class="brand">FDE-AI</span></section>
+</div>
+</body>
+</html>
