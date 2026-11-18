@@ -5,7 +5,7 @@ const API = '/student/sim-practice/api/';
 
 // 這個網站版本能不能存（本機檔案、GitHub Pages、沒有後端的雲端版都不能）
 export async function recordStatus(fetchFn = fetch) {
-  if (location.protocol === 'file:' || location.hostname.endsWith('github.io')) return { available: false };
+  if (location.protocol === 'file:' || location.hostname.endsWith('github.io') || location.hostname.endsWith('pages.dev')) return { available: false };
   try {
     const res = await fetchFn(API, { credentials: 'same-origin', cache: 'no-store' });
     if (!res.ok) return { available: false };

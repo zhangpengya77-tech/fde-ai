@@ -17,7 +17,8 @@
   const LINE_URL = 'https://line.me/ti/g/jnXbd7PKK8', PHONE = '0901-189-740';
   // GitHub Pages 靜態版（教師電腦關機也能看）：站內的靜態頁改用 Pages 上的相對路徑，需要教師電腦的功能改連固定入口
   const GATEWAY = 'https://fde-ai-v2.fde-ai-gateway.workers.dev';
-  const ON_PAGES = /github\.io$/.test(location.hostname);
+  // 靜態公開站：GitHub Pages（github.io）或 Cloudflare Pages（pages.dev）
+  const ON_PAGES = /(github\.io|pages\.dev)$/.test(location.hostname);
   const link = (href) => {
     if (!ON_PAGES || !href.startsWith('/')) return href;
     if (href.startsWith('/f450-twin/') || href.startsWith('/sim/')) return `.${href}`;
