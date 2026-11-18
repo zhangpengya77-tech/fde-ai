@@ -17,7 +17,7 @@ window.FdeContact = {
   personalLineUrl: '',              // 待提供：官網目前只有學習群組連結，找不到個人 LINE 連結
   groupUrl: 'https://line.me/ti/g/jnXbd7PKK8',   // 既有學習群組（沿用 join-us.js 的連結）
   privacyUrl: '',                  // 隱私權說明頁待確認，正式版先不發布
-  founderUrl: '',                  // 發起人簡介頁待教官確認；留空時首頁六宮格第 2 格連到「關於我們」
+  founderUrl: './founder/',        // 發起人簡介：教官名片（2026-11-18 教官指示）
   inquiryMode: 'demo',
   inquiryUrl: ''                    // Cloudflare 報名 Worker 的 /api/inquiry 網址；部署完成前留空（留空時一律不送出）
 };
