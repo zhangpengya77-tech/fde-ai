@@ -16,6 +16,30 @@
     return String(template).replace(/\{(\w+)\}/g, (_, key) => (params[key] !== undefined ? params[key] : ''));
   }
 
+  /**
+   * 測試模式（2026-11-18 使用者要求「必須出現綠色、紅色」）：網址帶 ?test=1（或 #...&test=1）才啟用。
+   * 學員平常使用的模式不受影響。
+   */
+  function isTestMode(loc) {
+    const l = loc || {};
+    return /(^|[?&#])test=1(&|$)/.test(`${l.search || ''}&${l.hash || ''}`);
+  }
+
+  /**
+   * 測試模式上色：本幀判得出（非 UNCERTAIN）就直接用判定的綠／紅；
+   * 判不出時（只抓到 1～3 支、重疊等），改以「框中心相對畫面中心」的象限對照規則 layout：
+   * 該象限應裝的槳種與框類別相同 → 綠，不同 → 紅。只作測試觀察用，不寫入任何結果。
+   */
+  function testModeBoxes(judgement, rules, srcW, srcH) {
+    if (judgement.state !== 'UNCERTAIN') return judgement.boxes;
+    return judgement.boxes.map((b) => {
+      const [x1, y1, x2, y2] = b.bbox;
+      const q = `${(y1 + y2) / 2 < srcH / 2 ? 'T' : 'B'}${(x1 + x2) / 2 < srcW / 2 ? 'L' : 'R'}`;
+      const expected = rules.layout[q];
+      return { ...b, position: q, color: expected === b.class ? 'green' : 'red' };
+    });
+  }
+
   async function sha256Hex(buffer) {
     const digest = await crypto.subtle.digest('SHA-256', buffer);
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -31,6 +55,8 @@
       config: null, judge: null, worker: null, ready: false, busy: false, stream: null,
       running: false, frameId: 0, devices: [], deviceIndex: -1, fps: 0, lastResultAt: 0,
       lastText: '', imgsz: 640, backend: '', modelInfo: null, lastJudgement: null, onJudgement: opts.onJudgement || null,
+      // 測試模式：網址 ?test=1 時為 true（見 isTestMode）
+      testMode: opts.testMode !== undefined ? Boolean(opts.testMode) : isTestMode(root.location),
     };
 
     function ui(key, params) {
@@ -391,7 +417,13 @@
       // 診斷用：Worker 內單次推論耗時（含前後處理）的移動平均與總結果數，供實測 FPS 紀錄
       state.inferMs = state.inferMs ? state.inferMs * 0.8 + message.inferMs * 0.2 : message.inferMs;
       state.results = (state.results || 0) + 1;
-      el('fps').textContent = ui('fps', { fps: state.fps.toFixed(1), frames: state.results });
+      el('fps').textContent = (state.testMode ? '測試模式・' : '') + ui('fps', { fps: state.fps.toFixed(1), frames: state.results });
+      if (state.testMode) {
+        // 測試模式：門檻降到候選門檻（25%）、不等穩定，每幀直接上綠／紅色；答案面板仍用正式判定（不改）
+        const testRules = { ...state.config.rules, minConfidence: state.config.rules.candidateConfidence };
+        const tj = state.judge.judgePropellers(message.detections, testRules);
+        draw({ ...tj, boxes: testModeBoxes(tj, testRules, message.width, message.height) }, message.width, message.height);
+      }
       const judgement = state.judge.judgePropellers(message.detections, state.config.rules);
       state.lastJudgement = judgement;
       // 穩定化：8 幀取 5、晃動判斷、修正完成
@@ -400,7 +432,7 @@
       // 框的顏色：只有本幀與穩定結果一致時才上色，否則一律灰色（綠色必須有穩定結果支持）
       const agree = stableInfo.stable && stableInfo.signature !== 'UNCERTAIN' && stableInfo.frameSignature === stableInfo.signature;
       const shown = agree ? judgement : { ...judgement, boxes: judgement.boxes.map((b) => ({ ...b, color: 'gray' })) };
-      draw(shown, message.width, message.height);
+      if (!state.testMode) draw(shown, message.width, message.height);
       render(stableInfo);
       if (state.onJudgement) state.onJudgement(judgement, message, stableInfo);
     }
@@ -575,7 +607,7 @@
     root.FdePropLive.controller = controller;
   }
 
-  root.FdePropLive = { createController, initTabs, boot, controller: null };
+  root.FdePropLive = { createController, initTabs, boot, controller: null, isTestMode, testModeBoxes };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })(globalThis);

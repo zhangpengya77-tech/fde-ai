@@ -38,3 +38,32 @@ test('答案面板顯示穩定結果（含修正完成），而不是單幀結�
   assert.match(render, /stableInfo\.stable/);
   assert.match(render, /fixed: stableInfo\.fixed/);
 });
+
+// 2026-11-18 測試模式（?test=1）：必須出現綠／紅色，且平常模式不受影響
+test('測試模式：只有網址帶 test=1 才啟用', () => {
+  global.document = global.document || { baseURI: 'http://x/', readyState: 'loading', addEventListener() {} };
+  require('./prop-live.js');
+  const { isTestMode } = globalThis.FdePropLive;
+  assert.equal(isTestMode({ search: '?test=1', hash: '' }), true);
+  assert.equal(isTestMode({ search: '', hash: '#eagle&test=1' }), true);
+  assert.equal(isTestMode({ search: '?test=10', hash: '' }), false);
+  assert.equal(isTestMode({ search: '', hash: '' }), false);
+});
+
+test('測試模式：判不出時依象限上綠／紅，絕不出現灰色', () => {
+  const { testModeBoxes } = globalThis.FdePropLive;
+  const rules = { layout: { TL: 'CW', TR: 'CCW', BL: 'CCW', BR: 'CW' } };
+  const j = { state: 'UNCERTAIN', boxes: [
+    { bbox: [10, 10, 50, 50], class: 'CW', confidence: 0.32, color: 'gray' },   // 左上應 CW → 綠
+    { bbox: [700, 500, 760, 560], class: 'CCW', confidence: 0.3, color: 'gray' }, // 右下應 CW → 紅
+  ] };
+  const out = testModeBoxes(j, rules, 800, 600);
+  assert.deepEqual(out.map((b) => b.color), ['green', 'red']);
+  const judged = { state: 'OK', boxes: [{ bbox: [0, 0, 1, 1], class: 'CW', color: 'red' }] };
+  assert.equal(testModeBoxes(judged, rules, 800, 600)[0].color, 'red');
+});
+
+test('平常模式：onResult 仍只在非測試模式用穩定結果疊框', () => {
+  const onResult = live.slice(live.indexOf('function onResult'), live.indexOf('/** 疊框'));
+  assert.match(onResult, /if \(!state\.testMode\) draw\(shown/);
+});
