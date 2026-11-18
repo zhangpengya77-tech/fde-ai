@@ -32,7 +32,7 @@
 |---|---|---|
 | A（左上）關於 FDE-AI | 連結 | `https://zhangpengya77-tech.github.io/fde-ai/v2/about` |
 | B（中上）發起人簡介 | 連結 | 佔位：`https://zhangpengya77-tech.github.io/fde-ai/v2/about`（內容確認後改 `/v2/founder/`） |
-| C（右上）課程專區 | 連結 | 佔位：`https://zhangpengya77-tech.github.io/fde-ai/v2/`（批准後改 `/v2/programs`） |
+| C（右上）課程專區 | 連結 | `https://zhangpengya77-tech.github.io/fde-ai/v2/programs`（課程專區已在官網上線） |
 | D（左下）學員成果 | 連結 | `https://www.youtube.com/channel/UCqKMXztPAsc2K6crQlKxzLg` |
 | E（中下）課程報名 | 文字 | 我想報名／詢問 FDE-AI 課程 |
 | F（右下）考照與預約 | 文字 | 我想詢問考照培訓、私教、考前訓練或場地使用 |
