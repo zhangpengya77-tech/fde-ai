@@ -151,6 +151,15 @@
       + '不要判斷任何槳葉裝對或裝錯，也不要推測各電機的實際旋向。';
   }
 
+  /**
+   * 2026-11-19：知識庫目前沒有「怎麼拍照」的條目，問「無法判斷」時常回傳 M1～M4 安裝位置的固定說明，
+   * 對看不清楚的照片沒有幫助，也容易被誤會成在判斷對錯 → 這類回答一律不顯示。
+   */
+  function isDirectionAnswer(text) {
+    const value = String(text || '');
+    return /M[1-4]/.test(value) && /(CW|CCW|正槳|反槳)/i.test(value);
+  }
+
   function inspectionSummary(context = {}) {
     const errors = Array.isArray(context.errors) ? context.errors : [];
     return errors.map((item) => {
@@ -173,7 +182,10 @@
       askF450Assistant(question, context, source = 'student_chat') {
         // 無法判斷：只取拍攝與原因說明，不帶入任何對錯推測
         if (source === 'eagle_uncertain') {
-          return ragClient.askRag(uncertainQuestion(context));
+          return ragClient.askRag(uncertainQuestion(context)).then((result) => (
+            // 拒答或答成安裝位置說明 → 不顯示（畫面上已有固定的重拍清單）
+            result.source_type === 'refuse' || isDirectionAnswer(result.answer) ? { skipped: true } : result
+          ));
         }
         if (source === 'eagle_detection') {
           const status = String(context?.status || '').toUpperCase();
@@ -192,5 +204,5 @@
     return sourceLabels[sourceType] || sourceLabels.refuse;
   }
 
-  return { createRagClient, createF450AssistantService, sourceLabel, uncertainQuestion };
+  return { createRagClient, createF450AssistantService, sourceLabel, uncertainQuestion, isDirectionAnswer };
 });

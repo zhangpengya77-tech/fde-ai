@@ -249,3 +249,25 @@ test('app.js 無法判斷時查知識庫用 eagle_uncertain，且不呼叫 AI �
   assert.doesNotMatch(block, /requestEagleTutor|'eagle_detection'/);
   assert.match(block, /不代表槳葉裝對或裝錯/);
 });
+
+// 2026-11-19：知識庫沒有拍攝條目時，只回安裝位置或拒答 → 不顯示，改靠固定重拍清單
+test('eagle_uncertain：知識庫答成安裝位置或拒答時略過', async () => {
+  const { createF450AssistantService, isDirectionAnswer } = require('./rag-client.js');
+  const layout = '從正上方俯視、機頭朝上：左前 M3、右後 M4 裝 CW 正槳；右前 M1、左後 M2 裝 CCW 反槳。';
+  assert.equal(isDirectionAnswer(layout), true);
+  assert.equal(isDirectionAnswer('請從正上方拍攝，背景保持單純。'), false);
+  for (const reply of [{ answer: layout, source_type: 'rag' }, { answer: '證據不足', source_type: 'refuse' }]) {
+    const service = createF450AssistantService({ askRag: async () => reply });
+    assert.deepEqual(await service.askF450Assistant('', {}, 'eagle_uncertain'), { skipped: true });
+  }
+  const ok = { answer: '請從正上方拍攝，背景保持單純。', source_type: 'rag' };
+  const service = createF450AssistantService({ askRag: async () => ok });
+  assert.deepEqual(await service.askF450Assistant('', {}, 'eagle_uncertain'), ok);
+});
+
+test('app.js：無法判斷時固定顯示重拍清單，略過的知識庫回答不顯示', () => {
+  const app = require('node:fs').readFileSync(require('node:path').join(__dirname, 'app.js'), 'utf8');
+  assert.match(app, /const UNCERTAIN_RESHOOT_TIPS/);
+  assert.match(app, /\$\{UNCERTAIN_RESHOOT_TIPS\}/);
+  assert.match(app, /answer\.skipped/);
+});

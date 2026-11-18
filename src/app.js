@@ -1127,6 +1127,17 @@ async function pollPowerTutor(jobId, container, attempt = 0) {
   }
 }
 
+// 2026-11-19：「無法判斷」時固定顯示的重拍清單（知識庫目前沒有拍攝條目，不能只靠它）
+const UNCERTAIN_RESHOOT_TIPS = `
+      <p class="muted"><strong>常見看不清楚的原因：</strong>斜側拍（槳葉變成扁扁一條）、有槳被切到畫面外、背景有其他無人機或零件干擾、白槳配淺色背景看不出邊緣、光線太暗或反光。</p>
+      <p class="muted"><strong>請這樣重拍：</strong></p>
+      <ol class="muted">
+        <li>把飛機放在地上或桌上，手機舉到飛機正上方往下拍，機頭朝畫面上方。</li>
+        <li>四支槳完整入鏡，四周留一點空間。</li>
+        <li>底下墊深色或單色的布、地板，把旁邊其他飛機與零件移開。</li>
+        <li>光線充足、避免強烈反光，拍完確認照片清楚不模糊。</li>
+      </ol>`;
+
 async function appendInspectionKnowledgeAnswer(result) {
   const target = document.querySelector('[data-inspection-assistant]');
   if (!target) return;
@@ -1139,7 +1150,7 @@ async function appendInspectionKnowledgeAnswer(result) {
       <h3>AI 修正建議</h3>
       <p>${escapeHtml(result.summary)}</p>
       ${(result.judgeLines || []).map((line) => `<p class="muted">${escapeHtml(line)}</p>`).join('')}
-      <p class="muted">請從正上方俯視、機頭朝上，讓四支槳完整入鏡後重新拍照。</p>
+      ${UNCERTAIN_RESHOOT_TIPS}
       <div data-uncertain-rag><p class="muted">正在查詢 FDE 知識庫的拍攝建議...</p></div>
     `;
     const slot = target.querySelector('[data-uncertain-rag]');
@@ -1149,10 +1160,11 @@ async function appendInspectionKnowledgeAnswer(result) {
         reasonText: (result.judgeLines || []).join('；') || result.summary,
         detectedCount: Array.isArray(result.overlayBoxes) ? result.overlayBoxes.length : undefined,
       }, 'eagle_uncertain');
-      if (!answer || !String(answer.answer || '').trim()) { slot.remove(); return; }
+      // 知識庫沒有拍攝相關內容（拒答或只回安裝位置）時不顯示，只保留上方固定的重拍清單
+      if (!answer || answer.skipped || !String(answer.answer || '').trim()) { slot.remove(); return; }
       slot.innerHTML = `<p class="muted">以下為知識庫的拍攝與判讀建議，不代表槳葉裝對或裝錯。</p>${renderF450RagResult(answer)}`;
     } catch {
-      slot.innerHTML = '<p class="muted">知識庫暫時無法連接；請依上方說明重新拍照，或找線下老師確認。</p>';
+      slot.innerHTML = '<p class="muted">知識庫暫時無法連接；請依上方清單重新拍照，或找線下老師確認。</p>';
     }
     return;
   }
