@@ -6,7 +6,7 @@
 (function attachPropLiveConfig(root) {
   let cached = null;
   const BASE = './src/prop-live/';
-  const VERSION = 'v=4';
+  const VERSION = 'v=5-ng-confidence';   // 2026-11-19：規則新增 ngConfidence／diagonalCheck
 
   async function readJson(name) {
     const response = await fetch(`${BASE}${name}?${VERSION}`, { cache: 'no-cache' });

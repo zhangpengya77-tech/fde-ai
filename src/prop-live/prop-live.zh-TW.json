@@ -24,7 +24,9 @@
     "UNKNOWN_CLASS": "出現無法辨識的槳葉類別。",
     "OVERLAP": "有偵測框過度重疊。",
     "QUADRANT_CONFLICT": "有兩支槳落在同一個位置，無法對應四個馬達。",
-    "UNSTABLE": "畫面晃動，請拿穩後再看。"
+    "UNSTABLE": "畫面晃動，請拿穩後再看。",
+    "NG_LOW_CONFIDENCE": "{position}的槳看起來方向不對，但辨識信心只有 {confidence}%，請從正上方重拍確認，或找線下老師確認。",
+    "DIAGONAL_CONFLICT": "{position}的槳和對角的槳判斷互相矛盾（對角兩支應同旋向），{position}信心 {confidence}% 較低，請從正上方重拍確認。"
   },
   "qa": {
     "yes": "對，",

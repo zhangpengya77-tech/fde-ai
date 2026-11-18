@@ -17,6 +17,9 @@
   "expectedCount": 4,
   "minConfidence": 0.5,
   "candidateConfidence": 0.25,
+  "_ngConfidence說明": "2026-11-19：判成裝錯（NG）至少要這個信心，低於則改為無法判斷並請學員重拍；diagonalCheck 開啟對角同旋向矛盾檢查。",
+  "ngConfidence": 0.75,
+  "diagonalCheck": true,
   "maxOverlapIoU": 0.3,
   "minQuadrantMargin": 0.02,
   "stability": {

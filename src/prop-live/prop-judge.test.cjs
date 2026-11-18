@@ -213,3 +213,41 @@ test('所有 UNCERTAIN 情境都不會出現綠框（窮舉上面的不確定情
   ];
   for (const r of cases) assert.ok(r.state === 'UNCERTAIN' && !colors(r).includes('green'));
 });
+
+// 2026-11-19：使用者回報裝對的飛機被判 NG（右下 M4 CCW 61%）→ 新增 NG 信心門檻與對角檢查
+test('NG 信心不足：重現回報照片（右下 CCW 61%）改判無法判斷，文字含位置與信心', () => {
+  const r = judgePropellers(quad(['CW', 'CCW', 'CCW', 'CCW'], { conf: [0.871, 0.746, 0.941, 0.611] }), RULES);
+  assert.equal(r.state, 'UNCERTAIN');
+  assert.equal(r.reasonCode, 'NG_LOW_CONFIDENCE');
+  assert.deepEqual(r.reasonDetail, { position: 'BR', confidence: 0.611 });
+  assert.ok(r.boxes.every((b) => b.color === 'gray'));
+  const text = formatJudgement(r, MSG);
+  assert.equal(text.tone, 'gray');
+  assert.match(text.lines[0], /右下/);
+  assert.match(text.lines[0], /61%/);
+});
+
+test('對角矛盾：錯的那支比對角沒把握 → 無法判斷', () => {
+  const r = judgePropellers(quad(['CW', 'CCW', 'CCW', 'CCW'], { conf: [0.9, 0.9, 0.9, 0.8] }), RULES);
+  assert.equal(r.state, 'UNCERTAIN');
+  assert.equal(r.reasonCode, 'DIAGONAL_CONFLICT');
+  assert.match(formatJudgement(r, MSG).lines[0], /右下.*對角/);
+});
+
+test('真的裝錯且很有把握：仍判 NG（錯的那支信心不低於對角）', () => {
+  const r = judgePropellers(quad(['CW', 'CCW', 'CCW', 'CCW'], { conf: [0.85, 0.9, 0.9, 0.9] }), RULES);
+  assert.equal(r.state, 'WRONG');
+  assert.deepEqual(r.wrong, ['BR']);
+});
+
+test('四支全部相反且有把握：仍判 NG（全部裝反不做對角檢查）', () => {
+  const r = judgePropellers(quad(['CCW', 'CW', 'CW', 'CCW'], { conf: 0.9 }), RULES);
+  assert.equal(r.state, 'WRONG');
+  assert.equal(r.allReversed, true);
+});
+
+test('設定檔沒有 ngConfidence／diagonalCheck 時維持舊行為', () => {
+  const { ngConfidence, diagonalCheck, ...old } = RULES;
+  const r = judgePropellers(quad(['CW', 'CCW', 'CCW', 'CCW'], { conf: [0.871, 0.746, 0.941, 0.611] }), old);
+  assert.equal(r.state, 'WRONG');
+});

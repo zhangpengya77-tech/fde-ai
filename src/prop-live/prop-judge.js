@@ -10,6 +10,10 @@
  *   CORRECT   ：四個象限都偵測到且全部正確 → 全綠
  *   WRONG     ：偵測清楚，但有象限旋向相反 → 錯者紅、對者綠，逐位置列出
  *   UNCERTAIN ：數量不是 4、信心不足、同象限衝突、框過度重疊、未知類別、畫面晃動 → 全灰，絕不出現綠色
+ *   2026-11-19 使用者要求（避免誤判 NG）：
+ *     - 判成裝錯的那支信心低於 rules.ngConfidence → 改為無法判斷（NG_LOW_CONFIDENCE）
+ *     - rules.diagonalCheck=true 時，對角兩支（應同旋向）一對一錯、且錯的那支信心比對角低 → 改為無法判斷（DIAGONAL_CONFLICT）
+ *     兩項設定都寫在 prop-judge-rules.json；舊設定檔沒有這兩個欄位時維持原本行為。
  *
  * 象限以「四個偵測框中心點的重心」劃分，不使用固定畫面座標，所以機身不必在畫面正中央。
  * formatJudgement(result, messages, options?) 把判定結果轉成 i18n 文字（文字放在 prop-live.zh-TW.json）。
@@ -77,9 +81,10 @@
       const box = boxOf(item);
       candidates.push({ cls: String((item && (item.class || item.className)) || ''), confidence, box });
     }
-    const uncertain = (code) => {
+    const uncertain = (code, detail) => {
       result.state = 'UNCERTAIN';
       result.reasonCode = code;
+      result.reasonDetail = detail || null;   // 例如 { position: 'BR', confidence: 0.61 }，給文字顯示用
       result.positions = {};
       result.wrong = [];
       result.allReversed = false;
@@ -140,6 +145,25 @@
       if (!ok) result.wrong.push(q);
       result.boxes.push({ bbox: s.box, class: s.cls, confidence: s.confidence, color: ok ? 'green' : 'red', position: q });
     }
+    // 2026-11-19：信心不足就不判 NG（寧可請學員重拍，也不要把裝對的說成裝錯）
+    if (result.wrong.length && Number.isFinite(Number(rules.ngConfidence))) {
+      const weakWrong = result.wrong
+        .map((q) => result.positions[q])
+        .filter((p) => p.confidence < Number(rules.ngConfidence))
+        .sort((a, b) => a.confidence - b.confidence)[0];
+      if (weakWrong) return uncertain('NG_LOW_CONFIDENCE', { position: weakWrong.position, confidence: weakWrong.confidence });
+    }
+    // 2026-11-19：對角兩支應同旋向；一對一錯且錯的那支比較沒把握 → 兩者矛盾，請重拍確認
+    if (result.wrong.length && result.wrong.length < QUADRANTS.length && rules.diagonalCheck === true) {
+      for (const [a, b] of [['TL', 'BR'], ['TR', 'BL']]) {
+        const pa = result.positions[a];
+        const pb = result.positions[b];
+        if (pa.ok === pb.ok) continue;
+        const bad = pa.ok ? pb : pa;
+        const good = pa.ok ? pa : pb;
+        if (bad.confidence < good.confidence) return uncertain('DIAGONAL_CONFLICT', { position: bad.position, confidence: bad.confidence });
+      }
+    }
     if (result.wrong.length) {
       result.state = 'WRONG';
       result.reasonCode = result.wrong.length === QUADRANTS.length ? 'ALL_REVERSED' : 'WRONG_PROP';
@@ -177,7 +201,13 @@
       return { tone: 'red', headline: messages.state.WRONG, lines };
     }
     const why = messages.uncertainReason[result.reasonCode];
-    return { tone: 'gray', headline: messages.state.UNCERTAIN, lines: why ? [why] : [] };
+    // 有位置資訊時（信心不足／對角矛盾）把位置與信心填進文字
+    const detail = result.reasonDetail || {};
+    const params = {
+      position: detail.position ? (messages.positions[detail.position] || detail.position) : '',
+      confidence: Number.isFinite(detail.confidence) ? Math.round(detail.confidence * 100) : ''
+    };
+    return { tone: 'gray', headline: messages.state.UNCERTAIN, lines: why ? [fill(why, params)] : [] };
   }
 
   return { judgePropellers, formatJudgement, iou, QUADRANTS };
