@@ -442,6 +442,8 @@
                 <button type="button" class="secondary-action button" data-live="switch" data-live-text="switchCamera">切換鏡頭</button>
                 <select data-live="camera" aria-label="鏡頭"></select>
                 <label class="prop-live-lowres"><input type="checkbox" data-live="lowres" /> <span data-live-text="lowRes">省電模式（低解析度）</span></label>
+                <!-- 2026-11-18 測試模式勾選框：勾起來後框一律綠／紅色（網址參數在站內換頁會遺失，改用勾選） -->
+                <label class="prop-live-lowres"><input type="checkbox" data-live="testmode" /> <span>測試模式（框一律顯示綠／紅色）</span></label>
               </div>
               <!-- 2026-11-08 S5：學員發問才回答（不問不講話）；對錯由規則判定，知識庫只做補充 -->
               <div class="prop-live-qa">
@@ -548,7 +550,7 @@
     <script src="./src/prop-live/prop-live-config.js?v=4"></script>
     <script src="./src/prop-live/prop-stabilizer.js?v=1"></script>
     <script src="./src/prop-live/prop-qa.js?v=1"></script>
-    <script src="./src/prop-live/prop-live.js?v=5-test"></script>
+    <script src="./src/prop-live/prop-live.js?v=6-testbox"></script>
     <script src="./src/vision-client.js?v=1.0.6-prop-best-effort"></script>
     <script src="./src/data/nav-config.js?v=2.0"></script>
     <script src="./src/app.js?v=2.0c-programs-2"></script>

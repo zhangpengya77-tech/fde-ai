@@ -565,6 +565,12 @@
         try { await openCamera(); } catch { showError('noCamera'); stop(); }
       }
     });
+    // 測試模式勾選框：初始值跟網址 ?test=1 一致，之後以勾選為準（立即生效，不必重開鏡頭）
+    const testBox = el('testmode');
+    if (testBox) {
+      testBox.checked = state.testMode;
+      testBox.addEventListener('change', () => { state.testMode = testBox.checked; });
+    }
     el('lowres').addEventListener('change', async () => {
       if (state.running) {
         try { await openCamera(); } catch { showError('noCamera'); stop(); }
