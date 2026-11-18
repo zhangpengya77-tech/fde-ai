@@ -150,8 +150,10 @@
     let text = judge.formatJudgement(judgement, messages);
     // 2026-11-14：嚴格規則判為「無法判斷」時，改給參考判定，學員仍能看到每支槳的對錯並取得 AI 說明
     if (judgement.state === 'UNCERTAIN') {
+      const strictLines = text.lines;
       const ref = bestEffortJudgement(raw, rules, imageWidth, imageHeight);
-      if (ref) { judgement = ref.judgement; text = ref.text; }
+      // 2026-11-19：保留嚴格規則的原因（例如「右下信心只有 61%」），放在參考判定說明最前面
+      if (ref) { judgement = ref.judgement; text = { ...ref.text, lines: [...strictLines, ...ref.text.lines] }; }
     }
     const finalResult = judgement.state === 'CORRECT' ? 'PASS' : (judgement.state === 'WRONG' || (judgement.state === 'BEST_EFFORT' && judgement.wrong.length)) ? 'NG' : 'CHECK';
     const quadrantOf = {};
@@ -168,8 +170,12 @@
         };
       }
       return {
-        motor, result: item.ok ? 'PASS' : 'NG', position: place, detectedDirection: item.detected,
-        expectedDirection: item.expected, confidence: item.confidence, reason: item.ok ? (judgement.state === 'BEST_EFFORT' ? '參考判定，請老師確認' : '') : '旋向錯誤',
+        // 2026-11-19：參考判定中信心不足的位置（item.unsure）顯示 CHECK，不顯示 PASS／NG
+        motor, result: item.unsure ? 'CHECK' : (item.ok ? 'PASS' : 'NG'), position: place, detectedDirection: item.detected,
+        expectedDirection: item.expected, confidence: item.confidence,
+        reason: item.unsure
+          ? `看起來是 ${item.detected}，但信心只有 ${Math.round(item.confidence * 100)}%，請從正上方重拍或由老師確認`
+          : item.ok ? (judgement.state === 'BEST_EFFORT' ? '參考判定，請老師確認' : '') : '旋向錯誤',
       };
     });
     const simulationMode = payload?.simulation_mode === true;
@@ -229,11 +235,27 @@
       if (positions[q]) return;   // 同象限已有較高信心的框
       positions[q] = { position: q, expected: rules.layout[q], detected: k.cls, confidence: k.confidence, bbox: k.box, ok: k.cls === rules.layout[q] };
     });
-    const wrong = Object.keys(positions).filter((q) => !positions[q].ok);
+    // 2026-11-19 使用者回報：32%、28% 的框（甚至框到機臂）被判成 NG。參考判定也要守同樣的門檻：
+    //   - 信心低於 minConfidence 的位置一律「不確定」（灰框、CHECK），不給對錯
+    //   - 判成裝錯的位置，信心要達 ngConfidence（沒設定時用 minConfidence），且不能比對角那支更沒把握，才算 NG
+    const okLevel = Number(rules.minConfidence);
+    const ngLevel = Number.isFinite(Number(rules.ngConfidence)) ? Number(rules.ngConfidence) : okLevel;
+    const diagonalOf = { TL: 'BR', BR: 'TL', TR: 'BL', BL: 'TR' };
+    for (const v of Object.values(positions)) {
+      if (v.confidence < okLevel) { v.unsure = true; continue; }
+      if (v.ok) continue;
+      const partner = positions[diagonalOf[v.position]];
+      const contradicted = rules.diagonalCheck === true && partner && partner.ok && partner.confidence >= okLevel && partner.confidence > v.confidence;
+      if (v.confidence < ngLevel || contradicted) v.unsure = true;
+    }
+    const wrong = Object.keys(positions).filter((q) => !positions[q].ok && !positions[q].unsure);
+    const unsure = Object.keys(positions).filter((q) => positions[q].unsure);
     const missing = ['TL', 'TR', 'BL', 'BR'].filter((q) => !positions[q]);
-    const boxes = Object.values(positions).map((v) => ({ bbox: v.bbox, class: v.detected, confidence: v.confidence, color: v.ok ? 'green' : 'red', position: v.position }));
+    const boxes = Object.values(positions).map((v) => ({ bbox: v.bbox, class: v.detected, confidence: v.confidence, color: v.unsure ? 'gray' : (v.ok ? 'green' : 'red'), position: v.position }));
     const headline = wrong.length
       ? `參考判定：有 ${wrong.length} 支槳葉方向可能裝錯（請老師確認）`
+      : unsure.length
+        ? `參考判定：有 ${unsure.length} 支槳葉辨識信心不足，無法判斷對錯（請重拍或由老師確認）`
       : missing.length
         ? `參考判定：已辨識的槳葉方向正確，另有 ${missing.length} 支未辨識（請老師確認）`
         : '參考判定：四支槳葉方向皆正確（辨識信心偏低，請老師確認）';
@@ -242,7 +264,7 @@
     lines.push('此為辨識信心偏低時的參考判定，不代表可以起飛，請由老師確認。');
     return {
       judgement: { ruleVersion: rules.version || '', state: 'BEST_EFFORT', reasonCode: wrong.length ? 'WRONG_PROP' : 'PARTIAL', positions, wrong, boxes, allReversed: false },
-      text: { tone: wrong.length ? 'red' : 'green', headline, lines },
+      text: { tone: wrong.length ? 'red' : unsure.length ? 'gray' : 'green', headline, lines },
     };
   }
 

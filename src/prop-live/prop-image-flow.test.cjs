@@ -122,3 +122,32 @@ test('無法判斷時不呼叫 AI 助教（不讓 AI 自行推測對錯）', () 
   const guard = fn.indexOf("result.judgeState === 'UNCERTAIN'");
   assert.ok(guard > 0 && guard < fn.indexOf('requestEagleTutor'));
 });
+
+// 2026-11-19 使用者回報「答案不對」：低信心框經參考判定變成 NG → 參考判定也要守信心門檻與對角檢查
+test('回報照片 1：裝對的飛機右下 CCW 61% → 整體 CHECK、M4 為 CHECK 並說明信心，不再出現 NG', async () => {
+  const { result } = await run(quad(['CW', 'CCW', 'CCW', 'CCW'], { conf: [0.871, 0.746, 0.941, 0.611] }), 'NG');
+  assert.equal(result.finalResult, 'CHECK');
+  const m4 = result.motorChecks.find((m) => m.motor === 'M4');
+  assert.equal(m4.result, 'CHECK');
+  assert.match(m4.reason, /61%/);
+  assert.ok(result.motorChecks.every((m) => m.result !== 'NG'));
+  assert.match(result.judgeLines[0], /右下.*61%/);
+});
+
+test('回報照片 2：只有兩個 32%、28% 的低信心框 → 整體 CHECK、全部灰框、沒有 PASS／NG', async () => {
+  const dets = [
+    { class: 'CW', confidence: 0.323, bbox: [150, 500, 280, 600] },    // 左下（實際框到機臂）
+    { class: 'CW', confidence: 0.284, bbox: [900, 560, 1040, 640] },   // 右下
+  ];
+  const { result } = await run(dets, 'NG');
+  assert.equal(result.finalResult, 'CHECK');
+  assert.ok(result.motorChecks.every((m) => m.result === 'CHECK'));
+  assert.ok(result.overlayBoxes.every((b) => b.color === 'gray'));
+});
+
+test('缺一支但另一支高信心裝錯且對角也同意 → 仍判 NG', async () => {
+  const dets = quad(['CCW', 'CCW', 'CCW', 'CW'], { conf: [0.9, 0.9, 0.9, 0.9] }).slice(0, 3);   // 左上裝錯、右下沒拍到
+  const { result } = await run(dets, 'NG');
+  assert.equal(result.finalResult, 'NG');
+  assert.equal(result.motorChecks.find((m) => m.motor === 'M3').result, 'NG');
+});
