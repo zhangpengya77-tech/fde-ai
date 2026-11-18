@@ -1,13 +1,12 @@
 // FDE-AI 公開首頁｜右下角「加入我們」浮動卡（2026-11-15）
-// 電腦：右下角顯示 LINE 群 QR 碼、「加入我們」與聯繫教師電話，可收合成小按鈕。
-// 手機：預設只顯示小按鈕（不擋內容），點開後可直接用 LINE 加入群組或撥電話。
+// 2026-11-19 使用者要求：電腦與手機一律預設隱藏，只顯示「加入我們」小按鈕，點擊才展開 QR 碼與聯繫教師。
+// 手機展開後可直接用 LINE 加入群組或撥電話。
 // 只在首頁顯示（2026-11-18），其他頁面（例如課程專區）隱藏。
-// 收合狀態存在瀏覽器本機（無痕模式存不了也照常運作）。
+// 不再記住展開狀態：每次進入首頁都是收合的，避免上次點開後一直擋住畫面。
 (function () {
   'use strict';
   var LINE_URL = 'https://line.me/ti/g/jnXbd7PKK8';   // QR 碼內容（LINE 群邀請連結）
   var PHONE = '0901189740', PHONE_SHOW = '0901-189-740';
-  var KEY = 'fde-joinus-collapsed';
   // QR 圖片放在這支程式旁邊（GitHub 頁面與教師電腦的平台路徑不同，用程式自己的位置找）
   var QR = (document.currentScript && document.currentScript.src) ? new URL('line-group-qr.png', document.currentScript.src).href : './src/line-group-qr.png';
 
@@ -47,10 +46,8 @@
       '</div>' +
       '<button type="button" class="joinus-pill" aria-label="加入我們：LINE 群組與聯繫教師"><i>LINE</i>加入我們</button>';
     document.body.appendChild(box);
-    var saved = null; try { saved = localStorage.getItem(KEY); } catch (e) { /* 無痕模式 */ }
-    var small = window.matchMedia('(max-width: 767px)').matches;
-    box.classList.toggle('collapsed', saved === null ? small : saved === '1');   // 手機預設收合，電腦預設展開
-    function set(c) { box.classList.toggle('collapsed', c); try { localStorage.setItem(KEY, c ? '1' : '0'); } catch (e) { /* 無痕模式 */ } }
+    box.classList.add('collapsed');   // 一律預設收合，只顯示小按鈕
+    function set(c) { box.classList.toggle('collapsed', c); }   // 點「加入我們」展開、點「×」收合
     box.querySelector('.joinus-x').onclick = function () { set(true); };
     box.querySelector('.joinus-pill').onclick = function () { set(false); };
   }
