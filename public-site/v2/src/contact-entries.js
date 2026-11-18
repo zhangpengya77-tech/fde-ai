@@ -76,7 +76,8 @@
   // 網頁版六宮格：與 LINE 圖文選單同樣六個項目（line-oa/rich-menu.json）；網頁上連到站內既有頁面
   var GRID = [
     { no: '01', title: '關於 FDE-AI', sub: '平台介紹・教育理念', href: './about', route: 'about' },
-    { no: '02', title: '發起人簡介', sub: '張鵬亞｜實訓平台發起人', href: './founder/' },
+    // 發起人簡介頁經教官確認發布前，先連到「關於我們」（設定 founderUrl 後改連簡介頁）
+    { no: '02', title: '發起人簡介', sub: '張鵬亞｜實訓平台發起人', href: C.founderUrl || './about', route: C.founderUrl ? '' : 'about' },
     { no: '03', title: '課程專區', sub: '五大職業實訓課程', href: './programs', route: 'programs' },
     { no: '04', title: '學員成果', sub: 'YouTube 成果影片', href: 'https://www.youtube.com/channel/UCqKMXztPAsc2K6crQlKxzLg', external: true },
     { no: '05', title: '課程報名', sub: '線上報名・課程諮詢', href: './programs#pg-consult', route: 'programs', scrollTo: 'pg-consult' },
