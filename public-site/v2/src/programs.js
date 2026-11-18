@@ -170,7 +170,7 @@
   function consultForm(selected = '') {
     return `<section class="pg-consult" id="pg-consult" aria-label="課程諮詢">
       <h3>課程諮詢</h3>
-      <p class="pg-note">留下聯絡方式，老師會主動聯絡你；也可以直接<a href="${LINE_URL}" target="_blank" rel="noopener">加入 LINE 群組</a>或來電 <a href="tel:0901189740">${PHONE}</a>。</p>
+      <p class="pg-note">留下聯絡方式，老師會主動聯絡你；也可以用課程專區右上角的「課程報名諮詢」直接聯繫老師。</p>
       <form class="pg-form" novalidate data-consult-form>
         <label>稱呼 <input name="name" maxlength="30" autocomplete="name" required></label>
         <label>聯絡方式（手機或 Email）<input name="contact" maxlength="80" autocomplete="email" required></label>
