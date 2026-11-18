@@ -76,3 +76,11 @@ https://zhangpengya77-tech.github.io/fde-ai/v2/
 - 管理後台另有一個以 Manager 建立的選單；依 LINE 規則，API 設定的預設選單優先顯示。
 - 用 API 建立的選單無法在管理 App 修改；之後要改內容，修改 `rich-menu.json`／圖片後重新建立。
 - 權杖用完已從雲端刪除；因權杖與 Channel secret 曾貼在聊天中，請在 LINE Developers 重新發行（Reissue）兩者。
+
+### v2（2026-11-18 教官指示修改）
+
+- 第 2 格「發起人簡介」→ `…/v2/founder/`（官網新增頁面，顯示教官提供的名片）
+- 第 4 格「學員成果」→ `…/v2/results`（官網「歷屆學員成果」，不再連 YouTube）；圖片副標改為「FDE-AI 歷屆學員成果」
+- 第 5、6 格維持「傳送文字」
+- 新選單 `richmenu-9e936d934d54d99a134ee3e1782f8bac` 已設為所有好友的預設選單並回讀確認；舊選單 `richmenu-8336cc96…` 已刪除
+- 官網同步部署（GitHub Pages #56 成功）：首頁六宮格第 2 格連名片頁、第 4 格連歷屆學員成果
