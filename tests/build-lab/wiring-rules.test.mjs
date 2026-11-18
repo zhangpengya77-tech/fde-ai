@@ -1,14 +1,14 @@
 // 接線規則與接線引擎單元測試（node --test）
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { F450_MODEL } from '../data/f450-pixhawk248.js';
-import { F450_WIRING, EXTRA_POINTS, CONNECTOR_FITS } from '../data/f450-wiring.js';
-import { PIXHAWK_248_GENERIC } from '../data/boards/pixhawk-248-generic.js';
-import { evaluateStep, buildCatalog, CODES, SEVERITY, checkOrientation, checkProp } from '../core/wiring-rules.js';
-import { createWiringEngine, wiringPreconditions } from '../core/wiring-engine.js';
-import { createAssemblyEngine } from '../core/assembly-engine.js';
-import { buildErrorCases } from '../core/error-cases.js';
-import { buildParamsReport, reportToText } from '../core/params-report.js';
+import { F450_MODEL } from '../../f450-twin/build-lab/data/f450-pixhawk248.js';
+import { F450_WIRING, EXTRA_POINTS, CONNECTOR_FITS } from '../../f450-twin/build-lab/data/f450-wiring.js';
+import { PIXHAWK_248_GENERIC } from '../../f450-twin/build-lab/data/boards/pixhawk-248-generic.js';
+import { evaluateStep, buildCatalog, CODES, SEVERITY, checkOrientation, checkProp } from '../../f450-twin/build-lab/core/wiring-rules.js';
+import { createWiringEngine, wiringPreconditions } from '../../f450-twin/build-lab/core/wiring-engine.js';
+import { createAssemblyEngine } from '../../f450-twin/build-lab/core/assembly-engine.js';
+import { buildErrorCases } from '../../f450-twin/build-lab/core/error-cases.js';
+import { buildParamsReport, reportToText } from '../../f450-twin/build-lab/core/params-report.js';
 
 const catalog = buildCatalog(PIXHAWK_248_GENERIC, EXTRA_POINTS);
 const ctx = { catalog, fits: CONNECTOR_FITS, occupied: new Set() };

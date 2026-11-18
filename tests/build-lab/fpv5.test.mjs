@@ -1,16 +1,16 @@
 // 5 吋 FPV（P3）單元測試：資料完整、Betaflight 編號與旋向、接線規則、錯誤案例、Betaflight 報告、機型註冊表
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FPV5_MODEL } from '../data/fpv5-225.js';
-import { FPV5_WIRING, FPV5_EXTRA_POINTS, FPV5_FITS } from '../data/fpv5-wiring.js';
-import { BETAFLIGHT_F7_3030_GENERIC } from '../data/boards/betaflight-f7-3030-generic.js';
-import { F450_MODEL } from '../data/f450-pixhawk248.js';
-import { evaluateStep, buildCatalog, CODES, SEVERITY, checkVoltage } from '../core/wiring-rules.js';
-import { createWiringEngine, wiringPreconditions } from '../core/wiring-engine.js';
-import { createAssemblyEngine } from '../core/assembly-engine.js';
-import { buildFpv5ErrorCases } from '../core/fpv5-error-cases.js';
-import { buildBetaflightReport, betaflightReportToText } from '../core/betaflight-report.js';
-import { MODELS, pickModel, DEFAULT_MODEL } from '../data/models.js';
+import { FPV5_MODEL } from '../../f450-twin/build-lab/data/fpv5-225.js';
+import { FPV5_WIRING, FPV5_EXTRA_POINTS, FPV5_FITS } from '../../f450-twin/build-lab/data/fpv5-wiring.js';
+import { BETAFLIGHT_F7_3030_GENERIC } from '../../f450-twin/build-lab/data/boards/betaflight-f7-3030-generic.js';
+import { F450_MODEL } from '../../f450-twin/build-lab/data/f450-pixhawk248.js';
+import { evaluateStep, buildCatalog, CODES, SEVERITY, checkVoltage } from '../../f450-twin/build-lab/core/wiring-rules.js';
+import { createWiringEngine, wiringPreconditions } from '../../f450-twin/build-lab/core/wiring-engine.js';
+import { createAssemblyEngine } from '../../f450-twin/build-lab/core/assembly-engine.js';
+import { buildFpv5ErrorCases } from '../../f450-twin/build-lab/core/fpv5-error-cases.js';
+import { buildBetaflightReport, betaflightReportToText } from '../../f450-twin/build-lab/core/betaflight-report.js';
+import { MODELS, pickModel, DEFAULT_MODEL } from '../../f450-twin/build-lab/data/models.js';
 
 const catalog = buildCatalog(BETAFLIGHT_F7_3030_GENERIC, FPV5_EXTRA_POINTS);
 const ctx = { catalog, fits: FPV5_FITS, occupied: new Set() };

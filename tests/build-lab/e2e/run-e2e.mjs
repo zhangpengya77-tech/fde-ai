@@ -1,5 +1,5 @@
 // 組裝實訓室｜瀏覽器測試一鍵執行
-// 用法（在 f450-twin/build-lab 資料夾）：node tests/e2e/run-e2e.mjs [截圖輸出資料夾]
+// 用法（在專案根目錄）：node tests/build-lab/e2e/run-e2e.mjs [截圖輸出資料夾]
 // 會自己啟動一個只讀的本機靜態伺服器（預設 127.0.0.1:8095，可用 BL_PORT 改；避開正式站使用的埠），
 // 依序執行各測試腳本，結束時關閉伺服器。不連任何正式服務。
 import http from 'node:http';
@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, '../../../..');            // worktree 根目錄（含 f450-twin/）
+const repoRoot = path.resolve(here, '../../..');            // worktree 根目錄（含 f450-twin/）
 const port = Number(process.env.BL_PORT || 8095);
 const out = path.resolve(process.argv[2] || path.join(os.tmpdir(), 'build-lab-e2e'));
 fs.mkdirSync(out, { recursive: true });

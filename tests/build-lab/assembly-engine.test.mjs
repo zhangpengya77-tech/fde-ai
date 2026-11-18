@@ -1,9 +1,9 @@
 // 組裝引擎單元測試（node --test）：依賴、位置校驗、撤銷重做、拆解、存檔恢復、資料完整性
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAssemblyEngine, ERR, distanceMm } from '../core/assembly-engine.js';
-import { F450_MODEL } from '../data/f450-pixhawk248.js';
-import { saveLocal, loadLocal } from '../core/storage.js';
+import { createAssemblyEngine, ERR, distanceMm } from '../../f450-twin/build-lab/core/assembly-engine.js';
+import { F450_MODEL } from '../../f450-twin/build-lab/data/f450-pixhawk248.js';
+import { saveLocal, loadLocal } from '../../f450-twin/build-lab/core/storage.js';
 
 const fresh = (mode) => createAssemblyEngine(F450_MODEL, { mode, now: () => 1000 });
 

@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.BL_PLAYWRIGHT || 'D:/FDE-AI-UAS-v2.0-live-camera/node_modules/playwright');
-const { FPV5_WIRING: F450_WIRING } = await import(new URL('../../data/fpv5-wiring.js', import.meta.url).href);
+const { FPV5_WIRING: F450_WIRING } = await import(new URL('../../../f450-twin/build-lab/data/fpv5-wiring.js', import.meta.url).href);
 const OUT = process.argv[2];
 const PAGE_URL = (process.env.BL_BASE || 'http://127.0.0.1:8095') + '/f450-twin/build-lab/?model=fpv5-225';
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });

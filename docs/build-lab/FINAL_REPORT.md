@@ -18,14 +18,14 @@
 
 | 驗收項目 | 狀態 | 證據 |
 |---|---|---|
-| 單元測試（引擎、規則、計分、紀錄、AI 提問、匯入安全） | PASS | `node --test tests/*.test.js`：**42／42** |
+| 單元測試（引擎、規則、計分、紀錄、AI 提問、匯入安全） | PASS | `node --test tests/build-lab/*.test.mjs`（專案根目錄）：**42／42** |
 | 接線規則測試（兩機型每步正確答案、所有錯誤代碼、整機檢查） | PASS | 同上 |
 | 3D 互動測試（載入、縮圖、下一步、拖放錯／對、撤銷、爆炸、俯視、完成、重新整理恢復） | PASS | `tests/e2e/p1-assembly.cjs` |
 | F450 完整組裝與接線、拆槳限制、錯誤案例、報告 | PASS | `p2-f450-wiring.mjs` |
 | 5 吋完整組裝與接線、Betaflight 編號錯誤識別 | PASS | `p3-fpv5-wiring.mjs` |
 | 考試流程、計分、紀錄、CSV 匯出、重新整理不重複記錄 | PASS | `p4-exam-records.mjs` |
 | 手機（390 寬、觸控點選）：抽屜、點選、下一步、接線點選、無水平溢出 | PASS | `p5-mobile.mjs` |
-| 一鍵執行全部瀏覽器測試 | PASS | `node tests/e2e/run-e2e.mjs`：**5／5**，主控台 0 錯誤 |
+| 一鍵執行全部瀏覽器測試 | PASS | `node tests/build-lab/e2e/run-e2e.mjs`：**5／5**，主控台 0 錯誤 |
 | 兩機型可完整組裝與拆解 | PASS | p1～p3 |
 | 錯誤接線能識別並解釋 | PASS | 16 個錯誤案例全由規則判定並附原因與正確做法 |
 | 尺寸與引腳來源可追溯 | PASS（多數值為「待確認」） | 每個零件與步驟都有 `source`／`validationStatus`；DIMENSION_SOURCES.md |
@@ -47,7 +47,7 @@
 - **已修正**：被竄改的「進度檔」原本可能把任意文字（例如 HTML）帶進完成畫面。現在載入時只保留已知零件、已知錯誤代碼與嚴重度並重組欄位；畫面輸出的紀錄與錯誤一律跳脫；匯入檔上限 2 MB。已加測試。
 - CSV 匯出防試算表公式注入。
 - 危險錯誤只在虛擬環境以文字說明，不對任何真實硬體供電；參數／設定報告不寫入飛控。
-- 提醒（部署前決定）：`f450-twin/build-lab/tests/` 與 `package.json` 若一起部署，會被公開讀到（內含本機測試路徑，無密鑰）。建議部署時排除這兩項。
+- 測試已移出公開資料夾（`tests/build-lab/`，網站不提供）；`f450-twin/build-lab/package.json` 只有一行說明與 type 設定，公開無妨。
 
 ## 4. 預覽網址
 
@@ -69,7 +69,7 @@ f450-twin/build-lab/
   data/   models（機型註冊表）  f450-pixhawk248  f450-wiring  fpv5-225  fpv5-wiring  scoring-rules
           boards/pixhawk-248-generic  boards/betaflight-f7-3030-generic
   ui/     app  wiring-view  layouts/f450-layout  layouts/fpv5-layout
-  tests/  assembly-engine  wiring-rules  fpv5  p4（單元）；e2e/run-e2e＋p1～p5（瀏覽器）
+  （測試已移到專案根目錄 tests/build-lab/：單元測試 4 檔＋e2e/run-e2e 與 p1～p5，不隨網站公開）
 ```
 
 ## 6. 授權清單

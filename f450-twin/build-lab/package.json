@@ -1,9 +1,9 @@
 {
   "name": "fde-build-lab",
   "private": true,
-  "description": "組裝實訓室（R2.1）：讓 node --test 以 ES Module 載入本資料夾的 .js；瀏覽器不讀這個檔",
+  "description": "組裝實訓室（R2.1）：讓 node 以 ES Module 載入本資料夾的 .js（測試放在專案根目錄 tests/build-lab，不隨網站公開）",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test ../../tests/build-lab/*.test.mjs"
   }
 }
