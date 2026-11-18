@@ -21,11 +21,15 @@
     '.ct-btn.line{background:#06c755;border-color:#06c755;color:#fff}',
     '.ct-tel b{color:#35e6a8;letter-spacing:.03em}',
     '.ct-pending{display:inline-block;padding:8px 12px;border-radius:10px;border:1px dashed #ff5c73;color:#ff9aa9;font-size:13px}',
-    '.ct-course{position:absolute;top:18px;right:22px;z-index:5;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(0,194,255,.45);border-radius:12px;background:rgba(7,17,31,.9)}',
+    // 放在網站整體右上角按鈕列（學員登入等，也是 FDE-GCS 入口所在）的下方，避免互相覆蓋
+    '.ct-course{position:absolute;top:84px;right:22px;z-index:5;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(0,194,255,.45);border-radius:12px;background:rgba(7,17,31,.9)}',
     '.ct-course strong{color:#ddf3ff;font-size:14px;margin-right:2px;white-space:nowrap}',
     '.ct-course .ct-btn{padding:6px 10px;font-size:13px}',
     '#programs{position:relative}',
     '[data-guardian][hidden]{display:none!important}',
+    // 寬螢幕首頁只顯示 #home 與 #programs-home（programs.css 同樣做法）；聯絡我們區塊也放行
+    '@media (min-width:1101px){body.home-view main > section#contact-home{display:block}}',
+    '.contact-home{padding:8px clamp(14px,3vw,40px) 48px}',
     '.pg-demo{padding:8px 12px;border:1px dashed rgba(0,194,255,.6);border-radius:10px;color:#ddf3ff}',
     '@media (max-width:767px){.ct-course{position:static;flex-wrap:wrap;margin:0 0 12px}}'
   ].join('\n');
