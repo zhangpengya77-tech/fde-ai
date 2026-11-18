@@ -5,7 +5,7 @@
  *   - 連結一律填真實網址；還沒提供的留空字串，畫面會標「待提供」（預覽模式）或不顯示（正式模式），不得用其他連結頂替。
  *   - mode：'full' 顯示電話與個人 LINE；'official-only' 只顯示 LINE 官方帳號（電話與個人 LINE 全部隱藏）。
  *   - preview：true 時把「待提供」項目標示出來給教師驗收；正式上線前改成 false。
- *   - inquiryMode：'demo' 表單只做前端檢查、不送出任何資料；'live' 送到既有的課程諮詢後端。
+ *   - inquiryMode：'demo' 表單只做前端檢查、不送出任何資料；'live' 且 inquiryUrl 有值時，送到 Cloudflare 報名 Worker（方案 A）。
  */
 window.FdeContact = {
   mode: 'full',
@@ -17,5 +17,6 @@ window.FdeContact = {
   personalLineUrl: '',              // 待提供：官網目前只有學習群組連結，找不到個人 LINE 連結
   groupUrl: 'https://line.me/ti/g/jnXbd7PKK8',   // 既有學習群組（沿用 join-us.js 的連結）
   privacyUrl: './privacy/',
-  inquiryMode: 'demo'
+  inquiryMode: 'demo',
+  inquiryUrl: ''                    // Cloudflare 報名 Worker 的 /api/inquiry 網址；部署完成前留空（留空時一律不送出）
 };

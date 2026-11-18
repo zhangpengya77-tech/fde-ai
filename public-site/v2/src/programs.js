@@ -3,7 +3,8 @@
  * - 首頁專區（#programsHome）、課程總覽與五門課程詳情（#programsRoot）、職業飛手選課計算器、課程諮詢入口。
  * - 內容全部來自 src/data/vocational-programs.js；每門課一張概念圖 assets/programs/<課程>.webp（Pexels 授權，見 assets/CREDITS.md）。
  * - 路由沿用平台既有 FdeRouter：/platform/programs（總覽）、/platform/<課程代號>（詳情）；app.js 切換頁面時會設定 body[data-route]。
- * - 課程諮詢表單送到 /api/public/course-inquiry/（教師電腦的 Django）：存在獨立資料庫、寄通知信給老師，教師後台「課程諮詢」查看；GitHub 頁面上改送到固定入口。
+ * - 課程諮詢表單（2026-11-18 起）：改送到 Cloudflare 報名 Worker（cloudflare/course-inquiry/，方案 A），不再經教師電腦；
+ *   原本的 /api/public/course-inquiry/（教師電腦 Django）不再使用。
  * - 2026-11-18（V4.1 預覽）：表單欄位依 V4.1 擴充（姓名、Email、電話或 LINE、未成年法定代理人同意、隱私權說明）；
  *   window.FdeContact.inquiryMode 不是 'live' 時只做前端檢查、不送出任何資料（報名資料儲存方案批准前）。
  */
@@ -168,9 +169,9 @@
   }
 
   // ───────── 課程諮詢：送到教師後台（獨立資料庫，保存 180 天） ─────────
-  const INQUIRY_URL = ON_PAGES ? `${GATEWAY}/api/public/course-inquiry/` : '/api/public/course-inquiry/';
   const CONTACT = window.FdeContact || {};
-  const INQUIRY_LIVE = CONTACT.inquiryMode === 'live';
+  // 方案 A（2026-11-18 決定）：live 模式只送到 Cloudflare 報名 Worker；沒有設定網址時不送出，不再退回教師電腦
+  const INQUIRY_LIVE = CONTACT.inquiryMode === 'live' && Boolean(CONTACT.inquiryUrl);
   const PRIVACY_URL = CONTACT.privacyUrl || './privacy/';
   function consultForm(selected = '') {
     return `<section class="pg-consult" id="pg-consult" aria-label="課程諮詢">
@@ -223,12 +224,12 @@
         btn.disabled = true; msg.className = 'pg-form-msg'; msg.textContent = '送出中…';
         const fallback = `請改用 <a href="${LINE_URL}" target="_blank" rel="noopener">LINE 群組</a>或來電 ${PHONE} 聯繫老師。`;
         // 用一般表單格式送出（不需要跨網站預檢）；不帶 Cookie
-        fetch(INQUIRY_URL, { method: 'POST', body: new URLSearchParams(f), credentials: 'omit' })
+        fetch(CONTACT.inquiryUrl, { method: 'POST', body: new URLSearchParams(f), credentials: 'omit' })
           .then(async (r) => ({ status: r.status, data: await r.json().catch(() => ({})) }))
           .then(({ status, data }) => {
             if (status === 200 && data.ok) { msg.className = 'pg-form-msg ok'; msg.textContent = '已送出！老師收到後會盡快和你聯絡。'; form.reset(); return; }
             msg.className = 'pg-form-msg bad';
-            if (status === 503) msg.innerHTML = `教學主機目前離線，諮詢暫時無法送出。${fallback}`;
+            if (status === 429) msg.innerHTML = `${esc(data.error || '送出次數過多')}。${fallback}`;
             else msg.innerHTML = `${esc(data.error || '送出失敗')}。${fallback}`;
             if (status !== 400) last = Date.now(); else last = 0;
           })

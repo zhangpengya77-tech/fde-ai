@@ -1,0 +1,21 @@
+// FDE-AI 課程報名 Worker 設定範本（複製成 wrangler.jsonc 後填入；不要把祕密寫進這個檔案）
+{
+  "name": "fde-ai-course-inquiry",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "d1_databases": [
+    { "binding": "DB", "database_name": "fde-ai-course-inquiry", "database_id": "<建立 D1 後填入>" }
+  ],
+  "triggers": { "crons": ["17 3 * * *"] },   // 每天 03:17（UTC）刪除超過保存期限的資料
+  "vars": {
+    "ALLOWED_ORIGIN": "https://zhangpengya77-tech.github.io",
+    "RETENTION_DAYS": "180",
+    "ACCESS_TEAM_DOMAIN": "<你的團隊>.cloudflareaccess.com",
+    "ACCESS_AUD": "<Access 應用程式的 AUD 標籤>",
+    "ADMIN_EMAILS": "zhangpengya77@gmail.com",
+    "ADMIN_URL": "https://fde-ai-course-inquiry.<你的子網域>.workers.dev/admin"
+  }
+  // 祕密用 `wrangler secret put` 設定：IP_SALT（必要）、TURNSTILE_SECRET（選用）
+  // 通知信（選用，需要在 Cloudflare 有網域並啟用 Email Routing）：
+  // "send_email": [{ "name": "NOTIFY", "destination_address": "zhangpengya77@gmail.com" }]，並在 vars 加 NOTIFY_FROM、NOTIFY_TO
+}
