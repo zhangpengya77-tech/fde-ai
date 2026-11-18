@@ -314,6 +314,12 @@ const cohorts = [
         phase: '職前',
         title: '2026風電無人機巡檢ai應用職前教育（嘉義）',
         url: 'https://www.youtube.com/watch?v=oXK6lE6KFmI'
+      },
+      // 2026-11-19：使用者指定放在最後一個的影片
+      {
+        phase: '10',
+        title: 'FDE-AI自媒體空拍🎬未達2KG證照特訓營',
+        url: 'https://youtu.be/rZYU01tNPhU'
       }
     ],
     githubUrl: 'https://github.com/Elijahieee/fde-ai',
