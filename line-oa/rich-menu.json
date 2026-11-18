@@ -4,7 +4,7 @@
     "height": 1686
   },
   "selected": true,
-  "name": "FDE-AI 六宮格 v1",
+  "name": "FDE-AI 六宮格 v2",
   "chatBarText": "FDE-AI 服務選單",
   "areas": [
     {
@@ -30,7 +30,7 @@
       "action": {
         "type": "uri",
         "label": "發起人簡介",
-        "uri": "https://zhangpengya77-tech.github.io/fde-ai/v2/about"
+        "uri": "https://zhangpengya77-tech.github.io/fde-ai/v2/founder/"
       }
     },
     {
@@ -56,7 +56,7 @@
       "action": {
         "type": "uri",
         "label": "學員成果",
-        "uri": "https://www.youtube.com/channel/UCqKMXztPAsc2K6crQlKxzLg"
+        "uri": "https://zhangpengya77-tech.github.io/fde-ai/v2/results"
       }
     },
     {
