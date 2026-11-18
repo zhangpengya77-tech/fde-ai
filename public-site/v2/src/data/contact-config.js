@@ -13,10 +13,11 @@ window.FdeContact = {
   phone: '0901189740',
   phoneShow: '0901-189-740',
   serviceHours: '',                 // 待提供：例如「週一至週五 09:00–18:00」
-  officialAccountUrl: '',           // 待提供：LINE 官方帳號「加好友」連結（註冊完成後提供）
+  officialAccountUrl: 'https://lin.ee/vZatya5',   // LINE 官方帳號加好友網址（2026-11-18 由教官提供的 QR 碼解碼）
   personalLineUrl: '',              // 待提供：官網目前只有學習群組連結，找不到個人 LINE 連結
   groupUrl: 'https://line.me/ti/g/jnXbd7PKK8',   // 既有學習群組（沿用 join-us.js 的連結）
   privacyUrl: './privacy/',
+  founderUrl: './founder/',         // 預覽版連到發起人簡介草稿；正式版在教官確認前留空（改連「關於我們」）
   inquiryMode: 'demo',
   inquiryUrl: ''                    // Cloudflare 報名 Worker 的 /api/inquiry 網址；部署完成前留空（留空時一律不送出）
 };
