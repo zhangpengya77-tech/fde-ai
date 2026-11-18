@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 組裝實訓室（R2.1 預覽版）：與舊版數位孿生並列，網站入口預設關閉（build-lab-flags.js），只能直接開網址預覽 -->
+<meta name="robots" content="noindex">
+<title>組裝實訓室｜FDE-AI</title>
+<link rel="stylesheet" href="./build-lab.css?v=p1-1">
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script>
+</head>
+<body>
+<header class="bl-head">
+  <div class="bl-brand">
+    <a href="../" class="bl-back" title="回到舊版 F450 數位孿生">← 數位孿生</a>
+    <div>
+      <h1 id="bl-model">組裝實訓室</h1>
+      <p id="bl-version" class="bl-muted"></p>
+    </div>
+  </div>
+  <div class="bl-progress" aria-live="polite">
+    <span id="bl-step">第 0 步／共 0 步</span>
+    <div class="bl-bar"><i id="bl-bar"></i></div>
+  </div>
+  <nav class="bl-modes" role="tablist" aria-label="模式">
+    <button type="button" data-mode="learn" role="tab">學習</button>
+    <button type="button" data-mode="free" role="tab">自由組裝</button>
+    <button type="button" data-mode="exam" role="tab">考試</button>
+  </nav>
+  <div class="bl-drawer-btns">
+    <button type="button" id="bl-open-lib">零件庫</button>
+    <button type="button" id="bl-open-steps">步驟</button>
+  </div>
+</header>
+<p class="bl-truth">模擬結果不能取代實際檢查。所有接線與通電都只在虛擬環境中進行；實機操作請依老師指導，測試前一律先拆槳、拔電池。</p>
+
+<main class="bl-main">
+  <aside class="bl-lib" id="bl-lib" aria-label="零件庫">
+    <div class="bl-lib-head">
+      <h2>零件庫 <small id="bl-lib-count"></small></h2>
+      <button type="button" class="bl-close" data-close="bl-lib" aria-label="關閉">×</button>
+    </div>
+    <input type="search" id="bl-search" placeholder="搜尋零件名稱…" autocomplete="off">
+    <div class="bl-cats" id="bl-cats"></div>
+    <p class="bl-muted bl-tip">點選零件看說明；按住零件拖到 3D 機體上的淺藍虛影位置即可安裝。</p>
+    <div id="bl-list" class="bl-list"></div>
+  </aside>
+
+  <section class="bl-stage" aria-label="3D 組裝視窗">
+    <div id="bl-viewer" class="bl-viewer"></div>
+    <div id="bl-hint" class="bl-hint"></div>
+    <div id="bl-tip" class="bl-float" hidden></div>
+    <div id="bl-toast" class="bl-toast" role="status" aria-live="polite"></div>
+    <div id="bl-loading" class="bl-loading">正在載入 3D 場景…</div>
+  </section>
+
+  <aside class="bl-side" id="bl-steps" aria-label="步驟與零件資訊">
+    <div class="bl-lib-head">
+      <h2>步驟清單</h2>
+      <button type="button" class="bl-close" data-close="bl-steps" aria-label="關閉">×</button>
+    </div>
+    <ol id="bl-steplist" class="bl-steplist"></ol>
+    <section id="bl-info" class="bl-info" hidden></section>
+  </aside>
+</main>
+
+<footer class="bl-toolbar" aria-label="操作列">
+  <div class="bl-group">
+    <button type="button" id="bl-prev">上一步</button>
+    <button type="button" id="bl-next" class="primary">下一步安裝 →</button>
+    <button type="button" id="bl-undo">撤銷</button>
+    <button type="button" id="bl-redo">重做</button>
+  </div>
+  <div class="bl-group">
+    <button type="button" id="bl-install">安裝此件</button>
+    <button type="button" id="bl-remove">拆下此件</button>
+    <button type="button" id="bl-zoom">放大查看此件</button>
+  </div>
+  <div class="bl-group">
+    <button type="button" id="bl-all">全部顯示</button>
+    <button type="button" id="bl-explode" aria-pressed="false">爆炸視圖</button>
+    <button type="button" id="bl-disasm">拆解全部</button>
+    <button type="button" id="bl-hide" aria-pressed="false">隱藏已安裝</button>
+    <button type="button" id="bl-toggle-steps">步驟清單</button>
+  </div>
+  <div class="bl-group">
+    <button type="button" data-view="top">俯視</button>
+    <button type="button" data-view="side">側視</button>
+    <button type="button" data-view="iso">等角</button>
+    <button type="button" id="bl-wiring" disabled title="P2 開放：接線模式">放大看接線</button>
+  </div>
+  <div class="bl-group">
+    <button type="button" id="bl-export">匯出紀錄</button>
+    <label class="bl-filebtn">載入紀錄<input type="file" id="bl-import" accept="application/json,.json" hidden></label>
+    <button type="button" id="bl-reset">重置</button>
+  </div>
+</footer>
+
+<dialog id="bl-done" class="bl-done">
+  <h2>組裝完成</h2>
+  <div id="bl-done-body"></div>
+  <p class="bl-truth">模擬結果不能取代實際檢查。</p>
+  <form method="dialog" class="bl-done-actions">
+    <button type="button" id="bl-done-export">匯出紀錄</button>
+    <button value="close" class="primary">關閉</button>
+  </form>
+</dialog>
+
+<script type="module" src="./ui/app.js?v=p1-1"></script>
+</body>
+</html>
