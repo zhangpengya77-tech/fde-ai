@@ -139,6 +139,18 @@
     return `F450 槳葉方向 CW CCW 安裝檢查（${status}）：${summary}。請優先依 F450 知識庫提供 1-2 句修正建議；資料不足時不要推測具體電機方向或安裝參數。`;
   }
 
+  /**
+   * 2026-11-18 使用者要求：「無法判斷」時也查知識庫，但只問「看不清楚的原因」與「怎麼重拍」，
+   * 明確要求不得判斷槳葉裝對或裝錯（PASS／NG／CHECK 仍只由判定規則決定）。
+   */
+  function uncertainQuestion(context = {}) {
+    const reason = String(context.reasonText || '').trim() || '畫面資訊不足';
+    const found = Number.isFinite(Number(context.detectedCount)) ? `，目前畫面辨識到 ${Number(context.detectedCount)} 支槳` : '';
+    return `F450 槳葉方向檢查照片無法判斷（原因：${reason}${found}）。`
+      + '請依 F450 知識庫用 2-3 句說明：1. 可能看不清楚的原因；2. 如何重新拍攝（手機位置、角度、背景、光線、機頭方向、四支槳完整入鏡）。'
+      + '不要判斷任何槳葉裝對或裝錯，也不要推測各電機的實際旋向。';
+  }
+
   function inspectionSummary(context = {}) {
     const errors = Array.isArray(context.errors) ? context.errors : [];
     return errors.map((item) => {
@@ -159,6 +171,10 @@
 
     return {
       askF450Assistant(question, context, source = 'student_chat') {
+        // 無法判斷：只取拍攝與原因說明，不帶入任何對錯推測
+        if (source === 'eagle_uncertain') {
+          return ragClient.askRag(uncertainQuestion(context));
+        }
         if (source === 'eagle_detection') {
           const status = String(context?.status || '').toUpperCase();
           if (status === 'PASS') return Promise.resolve({ skipped: true });
@@ -176,5 +192,5 @@
     return sourceLabels[sourceType] || sourceLabels.refuse;
   }
 
-  return { createRagClient, createF450AssistantService, sourceLabel };
+  return { createRagClient, createF450AssistantService, sourceLabel, uncertainQuestion };
 });

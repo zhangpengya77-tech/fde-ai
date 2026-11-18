@@ -1131,15 +1131,29 @@ async function appendInspectionKnowledgeAnswer(result) {
   const target = document.querySelector('[data-inspection-assistant]');
   if (!target) return;
 
-  // 2026-11-08：共用判定模組判為「無法判斷」時，不呼叫 AI 助教或知識庫（避免 AI 自行推測對錯），
-  // 只顯示固定說明：寧可無法判斷，也不亂判斷。
+  // 2026-11-08：共用判定模組判為「無法判斷」時，不呼叫 AI 助教（避免 AI 自行推測對錯），先顯示固定說明。
+  // 2026-11-18 使用者要求：再向知識庫查「看不清楚的原因與重拍方法」附在下方；
+  // 問題明確禁止判斷對錯，畫面上的 PASS／NG／CHECK 仍只由判定規則決定。查不到時保留固定說明即可。
   if (result.judgeState === 'UNCERTAIN') {
     target.innerHTML = `
       <h3>AI 修正建議</h3>
       <p>${escapeHtml(result.summary)}</p>
       ${(result.judgeLines || []).map((line) => `<p class="muted">${escapeHtml(line)}</p>`).join('')}
       <p class="muted">請從正上方俯視、機頭朝上，讓四支槳完整入鏡後重新拍照。</p>
+      <div data-uncertain-rag><p class="muted">正在查詢 FDE 知識庫的拍攝建議...</p></div>
     `;
+    const slot = target.querySelector('[data-uncertain-rag]');
+    if (!assistantService || result.simulationMode) { slot.remove(); return; }
+    try {
+      const answer = await assistantService.askF450Assistant('', {
+        reasonText: (result.judgeLines || []).join('；') || result.summary,
+        detectedCount: Array.isArray(result.overlayBoxes) ? result.overlayBoxes.length : undefined,
+      }, 'eagle_uncertain');
+      if (!answer || !String(answer.answer || '').trim()) { slot.remove(); return; }
+      slot.innerHTML = `<p class="muted">以下為知識庫的拍攝與判讀建議，不代表槳葉裝對或裝錯。</p>${renderF450RagResult(answer)}`;
+    } catch {
+      slot.innerHTML = '<p class="muted">知識庫暫時無法連接；請依上方說明重新拍照，或找線下老師確認。</p>';
+    }
     return;
   }
 

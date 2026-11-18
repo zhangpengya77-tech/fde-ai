@@ -225,3 +225,27 @@ test('keeps LOCAL RAG enabled without pinning an expiring public tunnel URL in s
   assert.match(config, /RAG_API_BASE_URL:\s*'http:\/\/127\.0\.0\.1:8770'/);
   assert.match(config, /PUBLIC_RAG_API_URL:\s*''/);
 });
+
+// 2026-11-18：無法判斷時只問「原因與重拍方法」，問題必須禁止判斷對錯
+test('eagle_uncertain：問題含原因與重拍，並明確禁止判斷裝對裝錯', async () => {
+  const { createF450AssistantService, uncertainQuestion } = require('./rag-client.js');
+  let asked = '';
+  const service = createF450AssistantService({ askRag: async (q) => { asked = q; return { answer: '請從正上方拍攝', source_type: 'rag' }; } });
+  const result = await service.askF450Assistant('', { reasonText: '畫面中沒有偵測到槳葉。', detectedCount: 0 }, 'eagle_uncertain');
+  assert.equal(result.answer, '請從正上方拍攝');
+  assert.match(asked, /無法判斷/);
+  assert.match(asked, /畫面中沒有偵測到槳葉/);
+  assert.match(asked, /辨識到 0 支槳/);
+  assert.match(asked, /重新拍攝/);
+  assert.match(asked, /不要判斷任何槳葉裝對或裝錯/);
+  assert.match(uncertainQuestion({}), /畫面資訊不足/);
+});
+
+test('app.js 無法判斷時查知識庫用 eagle_uncertain，且不呼叫 AI 助教', () => {
+  const app = readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const start = app.indexOf("if (result.judgeState === 'UNCERTAIN')");
+  const block = app.slice(start, app.indexOf('// 優先使用後端 AI 助教', start));
+  assert.match(block, /'eagle_uncertain'/);
+  assert.doesNotMatch(block, /requestEagleTutor|'eagle_detection'/);
+  assert.match(block, /不代表槳葉裝對或裝錯/);
+});
