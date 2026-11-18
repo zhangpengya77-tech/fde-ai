@@ -15,6 +15,8 @@ import { addRecord, listRecords, clearRecords, recordsToCsv } from '../core/reco
 import { partQuestion, wiringErrorQuestion, askAI } from '../core/ai-explain.js';
 
 const $ = (id) => document.getElementById(id);
+/** 放進 innerHTML 的文字一律跳脫（紀錄、匯入檔都可能被改過） */
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // P3：依網址 ?model= 選機型（f450-pixhawk248／fpv5-225），預設 F450
 const MODEL_ID = pickModel(location.search);
 const CFG = MODELS[MODEL_ID];
@@ -300,7 +302,7 @@ function showDone() {
     saveAll();
   }
   const scoreRows = result.breakdown.map((x) => `<tr><td>${x.label}</td><td>${x.count} 次 × −${x.each}</td><td>−${x.total}</td></tr>`).join('') || '<tr><td colspan="3">沒有扣分</td></tr>';
-  const rows = Object.entries(byCode).map(([k, n]) => `<tr><td>${label[k] || k}</td><td>${n} 次</td></tr>`).join('') || '<tr><td>沒有錯誤</td><td>—</td></tr>';
+  const rows = Object.entries(byCode).map(([k, n]) => `<tr><td>${esc(label[k] || k)}</td><td>${Number(n)} 次</td></tr>`).join('') || '<tr><td>沒有錯誤</td><td>—</td></tr>';
   dlg.querySelector('h2').textContent = engine.mode === 'exam' ? '考試結果（模擬成績）' : '組裝完成';
   $('bl-done-body').innerHTML = `
     <p class="bl-score ${result.pass ? 'pass' : 'fail'}">模擬成績 <b>${result.score}</b> 分｜${result.pass ? '及格（模擬）' : '未及格（模擬）'}｜${result.reasonZh}</p>
@@ -429,6 +431,7 @@ function bindUi() {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast('檔案太大（超過 2 MB），不是組裝進度檔。', 'err'); return; }
     try {
       const data = await readFile(file);
       engine.restore(data);
@@ -588,7 +591,7 @@ function showRecords() {
   const body = $('bl-rec-body');
   if (!list.length) { body.textContent = '還沒有完成的紀錄。完成一次組裝與接線後會自動記錄。'; }
   else {
-    const rows = [...list].reverse().map((r) => `<tr><td>${String(r.finishedAt || '').replace('T', ' ').slice(0, 16)}</td><td>${r.modelNameZh || ''}</td><td>${r.modeZh || ''}</td><td>${r.score}</td><td>${r.pass ? '是' : '否'}</td><td>${r.assemblyErrors}／${r.wiringErrors}</td><td>${Math.round((r.elapsedMs || 0) / 1000)}</td></tr>`).join('');
+    const rows = [...list].reverse().map((r) => `<tr><td>${esc(String(r.finishedAt || '').replace('T', ' ').slice(0, 16))}</td><td>${esc(r.modelNameZh)}</td><td>${esc(r.modeZh)}</td><td>${Number(r.score) || 0}</td><td>${r.pass ? '是' : '否'}</td><td>${Number(r.assemblyErrors) || 0}／${Number(r.wiringErrors) || 0}</td><td>${Math.round((Number(r.elapsedMs) || 0) / 1000)}</td></tr>`).join('');
     body.innerHTML = `<table class="bl-rec"><thead><tr><th>完成時間</th><th>機型</th><th>模式</th><th>分數</th><th>及格</th><th>組裝／接線錯誤</th><th>秒</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   $('bl-rec-dlg').showModal();

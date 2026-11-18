@@ -195,7 +195,12 @@ export function createAssemblyEngine(model, options = {}) {
     // 重新依依賴順序檢查：存檔被改壞時，不讓「沒有底座卻有機臂」這種狀態出現
     installed = [];
     for (const id of ids) if (canInstall(id).ok) installed.push(id);
-    errors = Array.isArray(data.errors) ? data.errors.filter((e) => e && byId.has(e.partId)).map((e) => ({ ...e })) : [];
+    // 只保留「已知零件＋已知錯誤代碼」，欄位重新組合；匯入的檔案可能被竄改，不能把任意文字帶進畫面
+    const known = new Set(Object.values(ERR));
+    errors = Array.isArray(data.errors)
+      ? data.errors.filter((e) => e && byId.has(e.partId) && known.has(e.code))
+        .map((e) => ({ at: Number(e.at) || 0, partId: e.partId, code: e.code, detail: null }))
+      : [];
     if (MODES.includes(data.mode)) mode = data.mode;
     undoStack = [];
     redoStack = [];

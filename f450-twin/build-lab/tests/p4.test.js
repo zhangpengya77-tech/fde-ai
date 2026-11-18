@@ -76,3 +76,24 @@ test('AI 呼叫：成功取回答；拒答、錯誤狀態、例外、逾時都�
   const slow = (url, init) => new Promise((_, rej) => init.signal.addEventListener('abort', () => rej(new Error('abort'))));
   assert.equal((await askAI('q', { fetchImpl: slow, timeoutMs: 20 })).ok, false);
 });
+
+// P5 安全：被竄改的進度檔不能把任意文字（例如 HTML／script）帶進錯誤紀錄
+test('匯入安全：未知錯誤代碼、嚴重度與多餘欄位都會被丟掉', async () => {
+  const { createAssemblyEngine } = await import('../core/assembly-engine.js');
+  const { createWiringEngine } = await import('../core/wiring-engine.js');
+  const { F450_MODEL } = await import('../data/f450-pixhawk248.js');
+  const { F450_WIRING, EXTRA_POINTS, CONNECTOR_FITS } = await import('../data/f450-wiring.js');
+  const { PIXHAWK_248_GENERIC } = await import('../data/boards/pixhawk-248-generic.js');
+  const a = createAssemblyEngine(F450_MODEL, { now: () => 0 });
+  a.restore({ kind: 'fde-build-lab-progress', modelId: 'f450-pixhawk248', installed: [], errors: [
+    { partId: 'bottom_plate', code: '<img src=x onerror=alert(1)>', at: 1 },
+    { partId: 'bottom_plate', code: 'POSITION', at: 2, detail: '<script>', extra: 'x' },
+  ] });
+  assert.deepEqual(a.errors, [{ at: 2, partId: 'bottom_plate', code: 'POSITION', detail: null }]);
+  const w = createWiringEngine(F450_WIRING, PIXHAWK_248_GENERIC, EXTRA_POINTS, CONNECTOR_FITS, { now: () => 0 });
+  w.restore({ done: [], errors: [
+    { stepId: 'esc1-power', code: 'REVERSED_POLARITY', severity: '<b>x</b>' },
+    { stepId: 'esc1-power', code: 'REVERSED_POLARITY', severity: 'danger', html: '<script>' },
+  ] });
+  assert.deepEqual(w.errors, [{ at: 0, stepId: 'esc1-power', code: 'REVERSED_POLARITY', severity: 'danger' }]);
+});

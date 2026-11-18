@@ -1,6 +1,6 @@
 // 組裝實訓室｜接線引擎（純邏輯）：目前第幾步、已接的線、錯誤紀錄、撤銷、存檔。
 // 每一步都呼叫 wiring-rules.js 校驗；接錯不會接上，錯誤寫進紀錄（考試模式完整保留）。
-import { evaluateStep, buildCatalog, validateSystem, CODES } from './wiring-rules.js';
+import { evaluateStep, buildCatalog, validateSystem, CODES, SEVERITY } from './wiring-rules.js';
 
 /**
  * 進入接線前的條件：除了槳葉以外的零件都要裝好；槳葉必須全部拆下（接線、測試前一定拆槳）。
@@ -61,12 +61,18 @@ export function createWiringEngine(wiring, board, extraPoints, fits, options = {
   /** 恢復時每一步重新校驗，存檔被改壞也不會留下錯誤的線 */
   function restore(data) {
     done = [];
-    errors = Array.isArray(data?.errors) ? data.errors.filter((e) => steps.some((s) => s.id === e.stepId)).map((e) => ({ ...e })) : [];
+    // 只保留已知步驟、已知代碼與嚴重度（匯入檔可能被竄改）
+    const codes = new Set(Object.values(CODES));
+    const sevs = new Set(Object.values(SEVERITY));
+    errors = Array.isArray(data?.errors)
+      ? data.errors.filter((e) => e && steps.some((s) => s.id === e.stepId) && codes.has(e.code) && sevs.has(e.severity))
+        .map((e) => ({ at: Number(e.at) || 0, stepId: e.stepId, code: e.code, severity: e.severity }))
+      : [];
     for (const d of Array.isArray(data?.done) ? data.done : []) {
       const step = current();
       if (!step || d.stepId !== step.id) break;
       if (!evaluateStep(step, d.choice || {}, { catalog, fits, occupied: occupied() }).ok) break;
-      done.push({ stepId: d.stepId, choice: d.choice });
+      done.push({ stepId: d.stepId, choice: step.kind === 'polarity' ? { red: d.choice.red } : { target: d.choice.target } });   // 只留需要的欄位
     }
     emit({ type: 'change' });
   }
