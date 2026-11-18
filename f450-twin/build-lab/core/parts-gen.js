@@ -104,8 +104,43 @@ const BUILDERS = {
   battery(s) {
     const g = new THREE.Group();
     g.add(box(s.w, s.h, s.d, s.color, { rough: 0.7 }));
-    g.add(at(box(s.w + 3, s.h + 3, 18, '#1b1b1b'), 0, 0, -s.d / 4));   // 綁帶
-    g.add(at(box(s.w + 3, s.h + 3, 18, '#1b1b1b'), 0, 0, s.d / 4));
+    const strap = Math.max(8, s.d * 0.12);   // 綁帶寬度依電池長度縮放（5 吋電池較小）
+    g.add(at(box(s.w + 3, s.h + 3, strap, '#1b1b1b'), 0, 0, -s.d / 4));
+    g.add(at(box(s.w + 3, s.h + 3, strap, '#1b1b1b'), 0, 0, s.d / 4));
+    return g;
+  },
+  // P3（5 吋 FPV）：四根鋁柱；原點在鋁柱底部中心
+  standoffs(s) {
+    const g = new THREE.Group();
+    for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) g.add(at(cyl(2.5, s.h, s.color, { metal: 0.8, rough: 0.3 }, 12), x * s.dx, s.h / 2, z * s.dz));
+    return g;
+  },
+  // 攝影機：方塊機身＋朝機頭（−Z）的鏡頭
+  camera(s) {
+    const g = new THREE.Group();
+    g.add(box(s.w, s.w, s.w, s.color));
+    const lens = cyl(s.w * 0.32, 6, '#0d0d0d', { metal: 0.3, rough: 0.2 });
+    lens.rotation.x = Math.PI / 2;
+    lens.position.z = -s.w / 2 - 3;
+    g.add(lens);
+    return g;
+  },
+  // 天線：細桿＋頂端天線帽；原點在底部
+  antenna(s) {
+    const g = new THREE.Group();
+    g.add(at(cyl(1.5, s.len, '#222', {}, 8), 0, s.len / 2, 0));
+    g.add(at(cyl(5, 14, s.color, {}, 16), 0, s.len + 7, 0));
+    return g;
+  },
+  // 電解電容（外殼條紋側為負極）
+  capacitor(s) {
+    const g = new THREE.Group();
+    const body = cyl(s.r, s.h, s.color);
+    body.rotation.z = Math.PI / 2;
+    g.add(body);
+    const stripe = box(s.h * 0.98, s.r * 0.6, 1, '#e8e8e8');
+    stripe.position.z = s.r - 0.2;
+    g.add(stripe);
     return g;
   },
   // 螺旋槳：兩片槳葉（依旋向決定扭轉方向）＋槳轂；方向環上的箭頭只做視覺提示
@@ -113,7 +148,7 @@ const BUILDERS = {
     const g = new THREE.Group();
     const dir = s.spin === 'CW' ? 1 : -1;
     for (const side of [1, -1]) {
-      const blade = box(s.dia / 2 - 10, 2, 20, s.color, { rough: 0.5 });
+      const blade = box(s.dia / 2 - 10, 2, Math.max(10, s.dia * 0.08), s.color, { rough: 0.5 });
       blade.position.x = side * (s.dia / 4 + 3);
       blade.rotation.x = side * dir * 0.18;   // 槳葉攻角：CW 與 CCW 互為鏡像
       g.add(blade);

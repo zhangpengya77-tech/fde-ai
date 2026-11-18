@@ -1,24 +1,23 @@
 // 組裝實訓室｜頁面主程式：把組裝引擎（規則）、3D 場景（畫面）與介面（零件庫、操作列、步驟清單）接起來。
 // 判斷能不能裝、裝對沒有，一律由 core/assembly-engine.js 決定；這裡只負責顯示與轉達操作。
 import { BUILD_LAB_FLAGS } from '../build-lab-flags.js';
-import { F450_MODEL, CATEGORIES } from '../data/f450-pixhawk248.js';
+import { MODELS, CATEGORIES, pickModel } from '../data/models.js';
 import { createAssemblyEngine, ERR } from '../core/assembly-engine.js';
 import { saveLocal, loadLocal, clearLocal, exportFile, readFile } from '../core/storage.js';
 // P2：接線
-import { PIXHAWK_248_GENERIC } from '../data/boards/pixhawk-248-generic.js';
-import { F450_WIRING, EXTRA_POINTS, CONNECTOR_FITS } from '../data/f450-wiring.js';
 import { createWiringEngine, wiringPreconditions } from '../core/wiring-engine.js';
 import { SEVERITY_ZH } from '../core/wiring-rules.js';
-import { buildErrorCases } from '../core/error-cases.js';
-import { buildParamsReport, reportToText } from '../core/params-report.js';
 import { createWiringView } from './wiring-view.js';
 
 const $ = (id) => document.getElementById(id);
-const model = F450_MODEL;
+// P3：依網址 ?model= 選機型（f450-pixhawk248／fpv5-225），預設 F450
+const MODEL_ID = pickModel(location.search);
+const CFG = MODELS[MODEL_ID];
+const model = CFG.model;
 const engine = createAssemblyEngine(model, { mode: 'learn' });
 const nameOf = (id) => engine.part(id)?.nameZh || id;
 const MODE_ZH = { learn: '學習', free: '自由組裝', exam: '考試' };
-const wiring = createWiringEngine(F450_WIRING, PIXHAWK_248_GENERIC, EXTRA_POINTS, CONNECTOR_FITS);
+const wiring = createWiringEngine(CFG.wiring, CFG.board, CFG.points, CFG.fits);
 const isProp = (id) => engine.part(id)?.shape.type === 'prop';
 /** 組裝＋接線一起存（本機），不含任何個資 */
 const serializeAll = () => ({ ...engine.serialize(), wiring: wiring.serialize() });
@@ -249,6 +248,19 @@ function showDone() {
 // ───────── 綁定介面事件 ─────────
 function bindUi() {
   $('bl-model').textContent = model.nameZh;
+  const sel = $('bl-model-select');
+  sel.replaceChildren(...Object.entries(MODELS).map(([id, m]) => {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = m.model.nameZh;
+    o.selected = id === MODEL_ID;
+    return o;
+  }));
+  sel.addEventListener('change', () => {
+    const q = new URLSearchParams(location.search);
+    q.set('model', sel.value);
+    location.search = q.toString();
+  });
   $('bl-version').textContent = `組裝實訓室 ${BUILD_LAB_FLAGS.version}｜${model.version}`;
   $('bl-cats').replaceChildren(...CATEGORIES.map((c) => {
     const b = document.createElement('button');
@@ -389,7 +401,11 @@ function openWiring() {
     return;
   }
   if (!wview) {
-    wview = createWiringView({ root: $('bl-wsvg-host'), wiring, mode: () => engine.mode, onAttempt: (choice) => onWireAttempt(choice) });
+    wview = 'loading';
+    CFG.layout().then((layout) => {
+      wview = createWiringView({ root: $('bl-wsvg-host'), wiring, layout, mode: () => engine.mode, onAttempt: (choice) => onWireAttempt(choice) });
+      renderWiring();
+    });
   }
   closeDrawers();
   $('bl-wpanel').hidden = false;
@@ -404,7 +420,7 @@ function renderWiring() {
   $('bl-wexplain').textContent = step ? (engine.mode === 'exam' ? '考試模式：不提供說明。' : step.explainZh) : '可以查看「設定報告」，最後回到 3D 裝上槳葉。';
   $('bl-wundo').disabled = !done;
   $('bl-report').disabled = !wiring.complete;
-  wview?.render();
+  if (wview && wview !== 'loading') wview.render();
 }
 function showWireResult(r) {
   const box = $('bl-wresult');
@@ -426,7 +442,7 @@ function onWireAttempt(choice) {
   }
 }
 function showCases() {
-  const cases = buildErrorCases(F450_WIRING, PIXHAWK_248_GENERIC, EXTRA_POINTS, CONNECTOR_FITS);
+  const cases = CFG.buildCases();
   $('bl-cases-body').replaceChildren(...cases.map((c, i) => {
     const r = c.run();
     const box = document.createElement('section');
@@ -445,7 +461,8 @@ function showCases() {
 }
 let lastReport = null;
 function showReport() {
-  lastReport = buildParamsReport({ connections: wiring.connections.map((d) => d.stepId) });
+  lastReport = CFG.buildReport({ connections: wiring.connections.map((d) => d.stepId) });
+  $('bl-report-title').textContent = CFG.reportTitle;
   const body = $('bl-report-body');
   body.className = 'bl-report';
   const rows = lastReport.rows.map((r) => `<tr><td><code>${r.name}</code></td><td>${r.value}</td><td>${r.meaningZh}<br><span class="bl-muted">${r.why}</span></td><td><span class="bl-badge">${r.source.status}</span></td></tr>`).join('');
@@ -466,10 +483,10 @@ function bindWiring() {
   $('bl-report').addEventListener('click', showReport);
   $('bl-report-dl').addEventListener('click', () => {
     if (!lastReport) return;
-    const blob = new Blob([reportToText(lastReport, { version: BUILD_LAB_FLAGS.version })], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([CFG.reportToText(lastReport, { version: BUILD_LAB_FLAGS.version })], { type: 'text/plain;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'build-lab-ardupilot-模擬設定報告.txt';
+    a.download = CFG.reportFile;
     document.body.append(a); a.click(); a.remove();
   });
 }

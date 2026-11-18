@@ -22,6 +22,9 @@ const ANIM_MS = 650;
  */
 export function createScene(host, model, opts = {}) {
   const lowPower = !!opts.lowPower;
+  // 機型尺度：以 F450（中心到槳尖約 350 mm）為 1，5 吋約 0.5；零件盤、視角距離都依此縮放
+  const extent = Math.max(...model.parts.map((p) => Math.hypot(p.target.pos[0], p.target.pos[2]) + Math.max(p.dimensionsMm.x, p.dimensionsMm.z) / 2));
+  const S = Math.min(1.2, Math.max(0.35, extent / 350));
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#eef2f6');
   const camera = new THREE.PerspectiveCamera(38, 1, 5, 20000);
@@ -34,8 +37,8 @@ export function createScene(host, model, opts = {}) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI * 0.495;   // 不鑽到地面下
-  controls.minDistance = 120;
-  controls.maxDistance = 3200;
+  controls.minDistance = 120 * S;
+  controls.maxDistance = 3200 * S;
 
   // 燈光：柔和環境光＋一盞投影主光
   scene.add(new THREE.HemisphereLight('#ffffff', '#b8c4d0', 1.6));
@@ -62,12 +65,12 @@ export function createScene(host, model, opts = {}) {
   const props = parts.filter((p) => p.shape.type === 'prop');
   normal.forEach((p, i) => {
     const a = (i / normal.length) * Math.PI * 2 + Math.PI / 2;
-    trayPos.set(p.partId, new THREE.Vector3(Math.cos(a) * 470, 0, Math.sin(a) * 470));
+    trayPos.set(p.partId, new THREE.Vector3(Math.cos(a) * 470 * S, 0, Math.sin(a) * 470 * S));
   });
   props.forEach((p, i) => {
     const corners = [[1, -1], [-1, -1], [-1, 1], [1, 1]];
     const [x, z] = corners[i % 4];
-    trayPos.set(p.partId, new THREE.Vector3(x * 640, 0, z * 640));
+    trayPos.set(p.partId, new THREE.Vector3(x * 640 * S, 0, z * 640 * S));
   });
   for (const p of parts) {
     const g = buildPart(p);
@@ -233,8 +236,8 @@ export function createScene(host, model, opts = {}) {
   // ───────── 視角 ─────────
   function view(name, animate = true) {
     const v = VIEW_PRESETS[name] || VIEW_PRESETS.iso;
-    const to = new THREE.Vector3(...v.pos);
-    const tgt = new THREE.Vector3(...v.target);
+    const to = new THREE.Vector3(...v.pos).multiplyScalar(S);
+    const tgt = new THREE.Vector3(...v.target).multiplyScalar(S);
     if (!animate) { camera.position.copy(to); controls.target.copy(tgt); controls.update(); return; }
     camAnim = { fromPos: camera.position.clone(), toPos: to, fromT: controls.target.clone(), toT: tgt, start: performance.now() };
   }

@@ -29,7 +29,7 @@ export function createWiringEngine(wiring, board, extraPoints, fits, options = {
     const set = new Set();
     for (const d of done) {
       const step = steps.find((s) => s.id === d.stepId);
-      if (step.kind === 'polarity') { set.add(step.expect.red); set.add(step.expect.black); } else set.add(step.expect);
+      if (step.kind === 'polarity') { set.add(step.expect.red); set.add(step.expect.black); } else set.add(d.choice?.target || step.expect);   // 有多個正確答案時以實際接的為準
     }
     return set;
   }
@@ -80,7 +80,7 @@ export function createWiringEngine(wiring, board, extraPoints, fits, options = {
     get errors() { return errors.map((e) => ({ ...e })); },
     get complete() { return done.length === steps.length; },
     isDone: (stepId) => done.some((d) => d.stepId === stepId),
-    systemIssues: () => validateSystem(done.map((d) => d.stepId)),
+    systemIssues: () => validateSystem(done.map((d) => d.stepId), wiring.requirements),   // 每個機型自己的必要項目
     attempt, undo, serialize, restore, reset,
     on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };

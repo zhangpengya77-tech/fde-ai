@@ -6,7 +6,7 @@
 <!-- 組裝實訓室（R2.1 預覽版）：與舊版數位孿生並列，網站入口預設關閉（build-lab-flags.js），只能直接開網址預覽 -->
 <meta name="robots" content="noindex">
 <title>組裝實訓室｜FDE-AI</title>
-<link rel="stylesheet" href="./build-lab.css?v=p2-1">
+<link rel="stylesheet" href="./build-lab.css?v=p3-1">
 <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -15,6 +15,7 @@
     <a href="../" class="bl-back" title="回到舊版 F450 數位孿生">← 數位孿生</a>
     <div>
       <h1 id="bl-model">組裝實訓室</h1>
+      <label class="bl-pick">機型 <select id="bl-model-select" aria-label="選擇機型"></select></label>
       <p id="bl-version" class="bl-muted"></p>
     </div>
   </div>
@@ -131,9 +132,9 @@
   <div id="bl-cases-body"></div>
   <form method="dialog" class="bl-done-actions"><button value="close" class="primary">關閉</button></form>
 </dialog>
-<!-- P2：ArduPilot 參數模擬設定報告（不寫入真實飛控） -->
+<!-- P2／P3：設定報告（F450＝ArduPilot 參數、5 吋＝Betaflight 設定；都是模擬，不寫入真實飛控） -->
 <dialog id="bl-report-dlg" class="bl-done bl-wide">
-  <h2>ArduPilot 參數模擬設定報告</h2>
+  <h2 id="bl-report-title">設定報告</h2>
   <p class="bl-truth">這是模擬報告，不會寫入任何真實飛控；所有數值須經教師覆核（PENDING_MANUAL）。</p>
   <div id="bl-report-body"></div>
   <form method="dialog" class="bl-done-actions">
@@ -142,6 +143,6 @@
   </form>
 </dialog>
 
-<script type="module" src="./ui/app.js?v=p2-2"></script>
+<script type="module" src="./ui/app.js?v=p3-1"></script>
 </body>
 </html>

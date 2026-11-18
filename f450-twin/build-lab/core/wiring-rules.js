@@ -23,6 +23,10 @@ export const CODES = Object.freeze({
   FC_ORIENTATION: 'FC_ORIENTATION',
   PROP_REVERSED: 'PROP_REVERSED',
   RC_MISSING: 'RC_MISSING',
+  TX_RX_SWAPPED: 'TX_RX_SWAPPED',       // 序列埠 TX／RX 沒有交叉
+  VOLTAGE_RANGE: 'VOLTAGE_RANGE',       // 電池電壓超出零件規格
+  ANTENNA_MISSING: 'ANTENNA_MISSING',   // 圖傳沒接天線就通電
+  REQUIRED_MISSING: 'REQUIRED_MISSING',
 });
 
 /** 合併板卡接口與其他接點成一份目錄 */
@@ -45,14 +49,20 @@ export function evaluateStep(step, choice, ctx) {
     const red = catalog[choice.red];
     if (!red) return result(CODES.UNKNOWN_POINT, SEVERITY.warn, '找不到這個接點。');
     if (red.group !== step.group) {
-      return result(CODES.WRONG_PAD, SEVERITY.warn, `要焊在「${catalog[step.expect.red].nameZh.replace(/ ＋$/, '')}」這一組焊盤。`, '每顆電調焊在自己機臂旁邊的那組焊盤，線最短、不交叉。');
+      return result(CODES.WRONG_PAD, SEVERITY.warn, `要接在「${step.groupZh || catalog[step.expect.red].nameZh.replace(/ ＋$/, '')}」這一組。`,
+        step.pair === 'uart' ? '接收機固定接在設定好的那一組 UART，Betaflight 的 Ports 分頁也要開同一組。' : '每顆電調焊在自己機臂旁邊的那組焊盤，線最短、不交叉。');
     }
     if (choice.red !== step.expect.red) {
+      if (step.pair === 'uart') {
+        return result(CODES.TX_RX_SWAPPED, SEVERITY.warn,
+          'TX／RX 沒有交叉：接收機的 TX（傳送）接到了飛控的 TX，兩邊都在講話、沒有人在聽，飛控收不到遙控訊號。',
+          '序列埠要交叉接：接收機 TX → 飛控 RX、接收機 RX → 飛控 TX。');
+      }
       return result(CODES.REVERSED_POLARITY, SEVERITY.danger,
-        '正負極接反！通電瞬間可能燒毀電調或電源模組，嚴重時會讓鋰電池短路起火。',
-        '紅線（正）接「＋」、黑線（負）接「−」：正接正、負接負。');
+        step.capacitor ? '電容極性接反！電解電容反接通電會發熱、鼓包甚至爆裂。' : '正負極接反！通電瞬間可能燒毀電調或電源模組，嚴重時會讓鋰電池短路起火。',
+        step.capacitor ? '電容外殼有白色條紋（−號）的那腳接「−」焊盤，另一腳接「＋」。' : '紅線（正）接「＋」、黑線（負）接「−」：正接正、負接負。');
     }
-    return OK('極性正確：紅接＋、黑接−。');
+    return OK(step.pair === 'uart' ? 'TX／RX 交叉正確。' : '極性正確：紅接＋、黑接−。');
   }
 
   const target = catalog[choice.target];
@@ -62,18 +72,20 @@ export function evaluateStep(step, choice, ctx) {
   }
 
   if (step.kind === 'phase') {
-    if (target.type !== 'motor-phase') return result(CODES.NO_FIT, SEVERITY.warn, '三相線只能接到電機的三條線。');
+    const phaseType = step.targetType || 'motor-phase';
+    if (target.type !== phaseType) return result(CODES.NO_FIT, SEVERITY.warn, '三相線只能焊在電機／電調的三相焊盤上。');
     if (choice.target !== step.expect) {
       return result(CODES.MOTOR_MISMATCH, SEVERITY.danger,
-        `焊點錯誤：這顆電調吃的是 ${catalog[step.expect].nameZh.slice(0, 2)} 的訊號，卻接到了 ${target.nameZh.slice(0, 2)}。起飛時馬達順序錯亂，飛機會立刻翻覆。`,
-        '每顆電調只接自己機臂上的那顆電機（電調編號＝電機編號）。');
+        `焊點錯誤：應該接「${catalog[step.expect].nameZh}」，卻接到「${target.nameZh}」。起飛時馬達順序錯亂，飛機會立刻翻覆。`,
+        step.orderRuleZh || '每顆電調只接自己機臂上的那顆電機（電調編號＝電機編號）。');
     }
     return OK('三相線接好了；旋向之後用馬達測試確認（拆槳）。');
   }
 
   // 一般接頭（port）
   const fitTypes = fits[step.connector] || [];
-  if (step.connector === 'xt60' && choice.target === 'fc.power') {
+  const accepted = step.accept || [step.expect];
+  if (step.connector === 'xt60' && target.type === 'power6') {
     return result(CODES.BATTERY_TO_FC, SEVERITY.critical,
       '嚴重危險：主電池電壓（3S 約 11～12.6V）直接接飛控 POWER 口，遠超過 5V 的設計，會立即燒毀飛控。',
       '電池只能接電源模組，由電源模組降壓成 5V 再送到飛控。');
@@ -81,14 +93,14 @@ export function evaluateStep(step, choice, ctx) {
   if (!fitTypes.includes(target.type)) {
     return result(CODES.NO_FIT, SEVERITY.warn, `接頭插不進「${target.nameZh}」（介面類型不同）。`, '先看接頭針數與形狀，再找對應的接口。');
   }
-  if (choice.target === step.expect) return OK();
+  if (accepted.includes(choice.target)) return OK();
 
   // 插得進去但不對：依情況給具體說明
   if (target.type === 'pwm' && step.connector === 'esc-signal') {
     const want = Number(step.expect.replace('fc.main', ''));
     return result(CODES.ESC_ORDER, SEVERITY.danger,
       `電調訊號順序錯誤：${want} 號電調接到了 MAIN OUT ${target.index}。飛控會把 ${target.index} 號馬達的指令送給 ${want} 號位置的電機，起飛會翻。`,
-      `依 ArduPilot Quad X：${want} 號電調接 MAIN OUT ${want}。`);
+      step.orderRuleZh || `依 ArduPilot Quad X：${want} 號電調接 MAIN OUT ${want}。`);
   }
   if (target.type === 'uart') {
     const what = step.connector === 'gps-6p' ? 'GPS' : '數傳';
@@ -122,10 +134,32 @@ export function checkProp(motorSpin, propSpin) {
 }
 
 /** 整機完整性檢查（接線全部完成後、模擬上電前） */
-export function validateSystem(connectedStepIds) {
-  const issues = [];
-  if (!connectedStepIds.includes('rx-rcin')) {
-    issues.push(result(CODES.RC_MISSING, SEVERITY.danger, '接收機未連接：遙控器無法控制飛機，也無法觸發失控保護。', '接收機接到 RC IN，並在地面站做遙控校準。'));
+const F450_REQUIREMENTS = [
+  { stepId: 'rx-rcin', code: CODES.RC_MISSING, severity: SEVERITY.danger, messageZh: '接收機未連接：遙控器無法控制飛機，也無法觸發失控保護。', fixZh: '接收機接到 RC IN，並在地面站做遙控校準。' },
+];
+export function validateSystem(connectedStepIds, requirements = F450_REQUIREMENTS) {
+  return requirements
+    .filter((req) => !connectedStepIds.includes(req.stepId))
+    .map((req) => result(req.code || CODES.REQUIRED_MISSING, req.severity || SEVERITY.danger, req.messageZh, req.fixZh));
+}
+
+/**
+ * 電池電壓檢查：電池滿電電壓必須落在每個零件的規格範圍內（公式：串數 × 4.2V）。
+ * @param {number} cells   電池串數（例如 4 代表 4S）
+ * @param {Array<{nameZh: string, minCells: number, maxCells: number}>} parts
+ */
+export function checkVoltage(cells, parts) {
+  const over = parts.filter((p) => cells > p.maxCells);
+  const under = parts.filter((p) => cells < p.minCells);
+  if (over.length) {
+    return result(CODES.VOLTAGE_RANGE, SEVERITY.critical,
+      `電壓超出規格：${cells}S 電池滿電約 ${(cells * 4.2).toFixed(1)}V，超過「${over.map((p) => `${p.nameZh}（最高 ${p.maxCells}S）`).join('、')}」，通電可能燒毀。`,
+      '先確認電調、圖傳等零件標示的電壓範圍，選擇規格內的電池。');
   }
-  return issues;
+  if (under.length) {
+    return result(CODES.VOLTAGE_RANGE, SEVERITY.warn,
+      `電壓不足：${cells}S 低於「${under.map((p) => `${p.nameZh}（最低 ${p.minCells}S）`).join('、')}」的需求，可能無法正常開機或動力不足。`,
+      '選擇零件規格範圍內的電池。');
+  }
+  return OK('電池電壓在所有零件的規格範圍內。');
 }
