@@ -6,7 +6,7 @@
 <!-- 組裝實訓室（R2.1 預覽版）：與舊版數位孿生並列，網站入口預設關閉（build-lab-flags.js），只能直接開網址預覽 -->
 <meta name="robots" content="noindex">
 <title>組裝實訓室｜FDE-AI</title>
-<link rel="stylesheet" href="./build-lab.css?v=p3-1">
+<link rel="stylesheet" href="./build-lab.css?v=p4-1">
 <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -20,7 +20,7 @@
     </div>
   </div>
   <div class="bl-progress" aria-live="polite">
-    <span id="bl-step">第 0 步／共 0 步</span>
+    <span id="bl-step">第 0 步／共 0 步</span> <b id="bl-timer" class="bl-timer"></b>
     <div class="bl-bar"><i id="bl-bar"></i></div>
   </div>
   <nav class="bl-modes" role="tablist" aria-label="模式">
@@ -109,8 +109,9 @@
     <button type="button" id="bl-wiring">接線模式</button>
   </div>
   <div class="bl-group">
-    <button type="button" id="bl-export">匯出紀錄</button>
-    <label class="bl-filebtn">載入紀錄<input type="file" id="bl-import" accept="application/json,.json" hidden></label>
+    <button type="button" id="bl-records">我的紀錄</button>
+    <button type="button" id="bl-export">匯出進度</button>
+    <label class="bl-filebtn">載入進度<input type="file" id="bl-import" accept="application/json,.json" hidden></label>
     <button type="button" id="bl-reset">重置</button>
   </div>
 </footer>
@@ -120,7 +121,8 @@
   <div id="bl-done-body"></div>
   <p class="bl-truth">模擬結果不能取代實際檢查。</p>
   <form method="dialog" class="bl-done-actions">
-    <button type="button" id="bl-done-export">匯出紀錄</button>
+    <button type="button" id="bl-done-records">我的紀錄</button>
+    <button type="button" id="bl-done-export">匯出進度</button>
     <button value="close" class="primary">關閉</button>
   </form>
 </dialog>
@@ -143,6 +145,19 @@
   </form>
 </dialog>
 
-<script type="module" src="./ui/app.js?v=p3-1"></script>
+<!-- P4：我的紀錄（只存在這台瀏覽器，不上傳） -->
+<dialog id="bl-rec-dlg" class="bl-done bl-wide">
+  <h2>我的紀錄（本機）</h2>
+  <p class="bl-muted">紀錄只存在這台瀏覽器，不會上傳，也不含姓名等個資；換電腦或清除瀏覽器資料就會消失，請定期匯出。分數為模擬成績，正式成績以教師覆核為準。</p>
+  <div id="bl-rec-body"></div>
+  <form method="dialog" class="bl-done-actions">
+    <button type="button" id="bl-rec-json">匯出 JSON</button>
+    <button type="button" id="bl-rec-csv">匯出 CSV（Excel）</button>
+    <button type="button" id="bl-rec-clear">清除紀錄</button>
+    <button value="close" class="primary">關閉</button>
+  </form>
+</dialog>
+
+<script type="module" src="./ui/app.js?v=p4-1"></script>
 </body>
 </html>

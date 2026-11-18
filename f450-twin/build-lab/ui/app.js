@@ -8,6 +8,11 @@ import { saveLocal, loadLocal, clearLocal, exportFile, readFile } from '../core/
 import { createWiringEngine, wiringPreconditions } from '../core/wiring-engine.js';
 import { SEVERITY_ZH } from '../core/wiring-rules.js';
 import { createWiringView } from './wiring-view.js';
+// P4：計分、本機紀錄、AI 講解
+import { computeScore } from '../core/scoring.js';
+import { SCORING_RULES } from '../data/scoring-rules.js';
+import { addRecord, listRecords, clearRecords, recordsToCsv } from '../core/records.js';
+import { partQuestion, wiringErrorQuestion, askAI } from '../core/ai-explain.js';
 
 const $ = (id) => document.getElementById(id);
 // P3：依網址 ?model= 選機型（f450-pixhawk248／fpv5-225），預設 F450
@@ -20,7 +25,19 @@ const MODE_ZH = { learn: '學習', free: '自由組裝', exam: '考試' };
 const wiring = createWiringEngine(CFG.wiring, CFG.board, CFG.points, CFG.fits);
 const isProp = (id) => engine.part(id)?.shape.type === 'prop';
 /** 組裝＋接線一起存（本機），不含任何個資 */
-const serializeAll = () => ({ ...engine.serialize(), wiring: wiring.serialize() });
+// 這一回合（從開始／重置到完成）的資訊：開始時間、是否已寫入紀錄
+let session = { startedAt: Date.now(), recorded: false };
+const serializeAll = () => ({ ...engine.serialize(), wiring: wiring.serialize(), session: { ...session } });
+/** 清空進度並開始新的一回合（重置、進入考試時使用） */
+function resetAll(mode) {
+  clearLocal(model.modelId);
+  engine.restore({ kind: 'fde-build-lab-progress', modelId: model.modelId, mode, installed: [], errors: [] });
+  wiring.reset();
+  session = { startedAt: Date.now(), recorded: false };
+  if ($('bl-wpanel')) $('bl-wpanel').hidden = true;
+  afterChange('all');
+}
+const elapsedMs = () => Date.now() - session.startedAt;
 const saveAll = () => saveLocal(model.modelId, serializeAll());
 
 let scene = null;
@@ -187,6 +204,38 @@ function renderInfo() {
     s.textContent = `⚠ 安全提醒：${p.safety}`;
     box.append(s);
   }
+  if (engine.mode === 'exam') return;   // 考試模式不提供教學卡與 AI
+  // 教學卡：怎麼裝（由資料自動產生，不需要 AI）
+  const teach = document.createElement('ol');
+  teach.className = 'bl-teach';
+  const deps = (p.dependsOn || []).map(nameOf);
+  const lines = [
+    deps.length ? `先確認這些零件已裝好：${deps.join('、')}。` : '這是第一個要裝的零件。',
+    `在 3D 中把「${p.nameZh}」拖到淺藍色虛影的位置（誤差 ${model.snapToleranceMm} mm 以內才算對），或按「安裝此件」。`,
+    p.shape.type === 'prop' ? '槳葉一定最後裝；裝之前要完成全部接線與檢查。' : '裝好後在右邊步驟清單會打勾。',
+  ];
+  teach.replaceChildren(...lines.map((t) => { const li = document.createElement('li'); li.textContent = t; return li; }));
+  const th = document.createElement('h4');
+  th.textContent = '怎麼裝';
+  const aiBtn = document.createElement('button');
+  aiBtn.type = 'button';
+  aiBtn.textContent = '🤖 AI 講解這個零件';
+  const aiOut = document.createElement('div');
+  aiOut.className = 'bl-ai';
+  aiBtn.addEventListener('click', () => explainWithAI(aiOut, partQuestion(model.nameZh, p), p.desc));
+  box.append(th, teach, aiBtn, aiOut);
+}
+
+/** 呼叫 AI 講解；失敗時顯示內建說明。AI 只解釋，不改變任何判定。 */
+async function explainWithAI(out, question, fallbackZh) {
+  out.textContent = 'AI 正在整理說明…';
+  const r = await askAI(question);
+  out.replaceChildren();
+  const tag = document.createElement('small');
+  tag.textContent = r.ok ? 'AI 講解（FDE 知識庫，僅供參考；對錯以規則判定為準）' : '知識庫暫時無法回答，以下為內建說明：';
+  const p = document.createElement('p');
+  p.textContent = r.ok ? r.answer : fallbackZh;
+  out.append(tag, p);
 }
 
 function renderHint() {
@@ -235,9 +284,28 @@ function showDone() {
   const byCode = {};
   for (const e of errs) byCode[e.code] = (byCode[e.code] || 0) + 1;
   const label = { [ERR.MISSING_DEPENDENCY]: '順序錯誤（前面零件未裝）', [ERR.POSITION]: '位置錯誤', [ERR.HAS_DEPENDENTS]: '拆卸順序錯誤' };
-  const secs = Math.round(engine.serialize().elapsedMs / 1000);
+  const secs = Math.round(elapsedMs() / 1000);
+  const result = computeScore({
+    assemblyErrors: engine.errors, wiringErrors: wiring.errors,
+    assemblyComplete: engine.progress.done === engine.progress.total, wiringComplete: wiring.complete,
+  }, SCORING_RULES);
+  if (!session.recorded) {
+    addRecord({
+      finishedAt: new Date().toISOString(), modelId: model.modelId, modelNameZh: model.nameZh, mode: engine.mode, modeZh: MODE_ZH[engine.mode],
+      score: result.score, pass: result.pass, assemblyErrors: engine.errors.length, wiringErrors: wiring.errors.length,
+      elapsedMs: elapsedMs(), rulesVersion: result.rulesVersion, reviewStatus: result.review.status, breakdown: result.breakdown,
+      appVersion: BUILD_LAB_FLAGS.version,
+    });
+    session.recorded = true;
+    saveAll();
+  }
+  const scoreRows = result.breakdown.map((x) => `<tr><td>${x.label}</td><td>${x.count} 次 × −${x.each}</td><td>−${x.total}</td></tr>`).join('') || '<tr><td colspan="3">沒有扣分</td></tr>';
   const rows = Object.entries(byCode).map(([k, n]) => `<tr><td>${label[k] || k}</td><td>${n} 次</td></tr>`).join('') || '<tr><td>沒有錯誤</td><td>—</td></tr>';
+  dlg.querySelector('h2').textContent = engine.mode === 'exam' ? '考試結果（模擬成績）' : '組裝完成';
   $('bl-done-body').innerHTML = `
+    <p class="bl-score ${result.pass ? 'pass' : 'fail'}">模擬成績 <b>${result.score}</b> 分｜${result.pass ? '及格（模擬）' : '未及格（模擬）'}｜${result.reasonZh}</p>
+    <table><tbody>${scoreRows}</tbody></table>
+    <p class="bl-muted">計分規則 ${result.rulesVersion}（${SCORING_RULES.status}，教師確認前僅供參考）；正式 PASS／NG 以教師覆核為準（狀態：待教師覆核）。</p>
     <p>模式：${MODE_ZH[engine.mode]}｜零件 ${engine.progress.total} 件全部安裝｜用時約 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒</p>
     <table><tbody>${rows}</tbody></table>
     <p>接線：${wiring.progress.done}／${wiring.progress.total} 條${wiring.errors.length ? `，接線錯誤 ${wiring.errors.length} 次（${[...new Set(wiring.errors.map((e) => SEVERITY_ZH[e.severity]))].join('、')}）` : '，接線沒有錯誤'}</p>
@@ -308,7 +376,16 @@ function bindUi() {
 
   for (const b of document.querySelectorAll('[data-mode]')) {
     b.addEventListener('click', () => {
-      engine.setMode(b.dataset.mode);
+      const next = b.dataset.mode;
+      if (next === engine.mode) return;
+      if (next === 'exam') {
+        const dirty = engine.installed.length || wiring.progress.done || engine.errors.length;
+        if (dirty && !confirm('開始考試會清空目前的組裝與接線進度，並重新計時。確定開始考試嗎？')) return;
+        resetAll('exam');
+        toast('考試開始：不提供提示與 AI 講解，所有錯誤都會記錄。');
+        return;
+      }
+      engine.setMode(next);
       saveAll();
       toast(`已切換到「${MODE_ZH[engine.mode]}」模式`);
       render();
@@ -364,10 +441,7 @@ function bindUi() {
   });
   $('bl-reset').addEventListener('click', () => {
     if (!confirm('重置會拆掉所有零件並清除本機的進度與錯誤紀錄，確定嗎？')) return;
-    clearLocal(model.modelId);
-    engine.restore({ kind: 'fde-build-lab-progress', modelId: model.modelId, mode: engine.mode, installed: [], errors: [] });
-    wiring.reset();
-    afterChange('all');
+    resetAll(engine.mode);
     toast('已重置');
   });
 
@@ -428,6 +502,17 @@ function showWireResult(r) {
   box.className = `bl-wresult ${r.severity}`;
   if (engine.mode === 'exam' && !r.ok) { box.textContent = '接錯了（已記錄），請再試一次。'; return; }
   box.textContent = r.ok ? `✓ ${r.messageZh}` : `✗ ${SEVERITY_ZH[r.severity]}：${r.messageZh}　正確做法：${r.fixZh}`;
+  if (!r.ok) {
+    const step = wiring.steps.find((x) => x.id === r.stepId);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bl-ai-btn';
+    btn.textContent = '🤖 AI 解釋原理';
+    const out = document.createElement('div');
+    out.className = 'bl-ai';
+    btn.addEventListener('click', () => explainWithAI(out, wiringErrorQuestion(model.nameZh, step, r), `${r.messageZh} ${r.fixZh}`));
+    box.append(' ', btn, out);
+  }
 }
 function onWireAttempt(choice) {
   const r = wiring.attempt(choice);
@@ -491,6 +576,43 @@ function bindWiring() {
   });
 }
 
+// ───────── P4：我的紀錄（本機） ─────────
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  document.body.append(a); a.click(); a.remove();
+}
+function showRecords() {
+  const list = listRecords();
+  const body = $('bl-rec-body');
+  if (!list.length) { body.textContent = '還沒有完成的紀錄。完成一次組裝與接線後會自動記錄。'; }
+  else {
+    const rows = [...list].reverse().map((r) => `<tr><td>${String(r.finishedAt || '').replace('T', ' ').slice(0, 16)}</td><td>${r.modelNameZh || ''}</td><td>${r.modeZh || ''}</td><td>${r.score}</td><td>${r.pass ? '是' : '否'}</td><td>${r.assemblyErrors}／${r.wiringErrors}</td><td>${Math.round((r.elapsedMs || 0) / 1000)}</td></tr>`).join('');
+    body.innerHTML = `<table class="bl-rec"><thead><tr><th>完成時間</th><th>機型</th><th>模式</th><th>分數</th><th>及格</th><th>組裝／接線錯誤</th><th>秒</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  $('bl-rec-dlg').showModal();
+}
+function bindRecords() {
+  $('bl-records').addEventListener('click', showRecords);
+  $('bl-done-records').addEventListener('click', () => { $('bl-done').close(); showRecords(); });
+  $('bl-rec-json').addEventListener('click', () => download('build-lab-紀錄.json', JSON.stringify({ kind: 'fde-build-lab-records', exportedAt: new Date().toISOString(), appVersion: BUILD_LAB_FLAGS.version, records: listRecords() }, null, 2), 'application/json'));
+  $('bl-rec-csv').addEventListener('click', () => download('build-lab-紀錄.csv', recordsToCsv(listRecords()), 'text/csv;charset=utf-8'));
+  $('bl-rec-clear').addEventListener('click', () => {
+    if (!confirm('確定清除這台瀏覽器上的所有練習與考試紀錄嗎？清除後無法復原，建議先匯出。')) return;
+    clearRecords();
+    showRecords();
+  });
+}
+// 考試計時：頁首顯示經過時間
+setInterval(() => {
+  const t = $('bl-timer');
+  if (!t) return;
+  if (engine.mode !== 'exam') { t.textContent = ''; return; }
+  const sec = Math.floor(elapsedMs() / 1000);
+  t.textContent = `考試中 ${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+}, 1000);
+
 function closeDrawers() { $('bl-lib').classList.remove('open'); $('bl-steps').classList.remove('open'); }
 
 // ───────── 懸停說明浮層 ─────────
@@ -511,8 +633,15 @@ function onHover(id, x, y) {
 async function boot() {
   bindUi();
   bindWiring();
+  bindRecords();
   const saved = loadLocal(model.modelId);
-  if (saved) { try { engine.restore(saved); wiring.restore(saved.wiring); } catch { /* 舊存檔壞掉就從頭開始 */ } }
+  if (saved) {
+    try {
+      engine.restore(saved);
+      wiring.restore(saved.wiring);
+      if (saved.session && Number.isFinite(saved.session.startedAt)) session = { startedAt: saved.session.startedAt, recorded: !!saved.session.recorded };
+    } catch { /* 舊存檔壞掉就從頭開始 */ }
+  }
   render();
   try {
     const { createScene } = await import('../core/scene.js');
