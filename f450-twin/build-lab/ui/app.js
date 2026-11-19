@@ -7,7 +7,7 @@ import { saveLocal, loadLocal, clearLocal, exportFile, readFile } from '../core/
 // P2：接線
 import { createWiringEngine, wiringPreconditions } from '../core/wiring-engine.js';
 import { SEVERITY_ZH } from '../core/wiring-rules.js';
-import { createWiringView } from './wiring-view.js';
+import { createWiringView } from './wiring-view.js?v=p5-3';   // 加版本號：避免手機沿用舊的接線畫面程式
 // P4：計分、本機紀錄、AI 講解
 import { computeScore } from '../core/scoring.js';
 import { SCORING_RULES } from '../data/scoring-rules.js';
