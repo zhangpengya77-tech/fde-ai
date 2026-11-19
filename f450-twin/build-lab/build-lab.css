@@ -193,3 +193,28 @@ body.bl-demo-running .bl-whead button{pointer-events:none;opacity:.45}
   .bl-pick select{flex:1;min-width:0;max-width:100%}
   .bl-drawer-btns{order:2}
 }
+
+/* 接線圖放大：容器可上下左右捲動，SVG 依倍率放大（高度依比例自動） */
+.bl-wsvg-host{overflow:auto;-webkit-overflow-scrolling:touch}
+.bl-wsvg-host.is-zoomed{display:block}
+.bl-wsvg-host.is-zoomed .bl-wsvg{max-width:none;display:block}
+#bl-wzoom-in,#bl-wzoom-out{min-width:36px}
+
+/* 手機：接線畫面蓋滿整個螢幕，標題列精簡，圖例縮小 */
+@media (max-width:819px){
+  body.bl-wiring-open .bl-wpanel{position:fixed;inset:0;z-index:50;border-radius:0}
+  body.bl-wiring-open .bl-toolbar{display:none}
+  .bl-whead{padding:6px 8px;gap:6px}
+  .bl-whead #bl-wback{padding:4px 10px}
+  .bl-wtext b,.bl-wtext span{font-size:14px}
+  .bl-wtext p{font-size:12px}
+  .bl-wbtns button{padding:4px 8px;font-size:13px}
+  .bl-wresult{margin:4px 6px 0;padding:5px 8px;font-size:12.5px}
+  .bl-legend{font-size:10.5px;padding:3px 8px}
+  /* 演示進行中手機仍要能按「停止演示」：接線全螢幕時把停止鈕固定在右下角 */
+  body.bl-demo-running.bl-wiring-open #bl-demo{position:fixed;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60}
+  body.bl-demo-running.bl-wiring-open .bl-toolbar{display:flex;position:fixed;right:0;bottom:0;background:transparent;pointer-events:none}
+  body.bl-demo-running.bl-wiring-open .bl-toolbar #bl-demo{pointer-events:auto}
+  body.bl-demo-running.bl-wiring-open .bl-toolbar > .bl-group > :not(#bl-demo),
+  body.bl-demo-running.bl-wiring-open .bl-toolbar > .bl-group:not(:first-child){display:none}
+}

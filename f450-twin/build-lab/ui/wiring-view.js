@@ -22,6 +22,15 @@ export function createWiringView(o) {
   const { points: POINTS, parts: PARTS } = layout;
   const svg = el('svg', { viewBox: '0 0 1000 700', class: 'bl-wsvg', role: 'img', 'aria-label': '接線示意圖（俯視，機頭朝上）' });
   root.replaceChildren(svg);
+  // 放大倍率：手機螢幕窄，預設放大 2.2 倍，並自動捲到這一步的位置；電腦預設 1 倍（整張圖）
+  const ZOOMS = [1, 1.6, 2.2, 3];
+  let zoom = matchMedia('(max-width: 819px)').matches ? 2.2 : 1;
+  function applyZoom() {
+    svg.style.width = `${zoom * 100}%`;
+    svg.style.height = 'auto';
+    root.classList.toggle('is-zoomed', zoom > 1);
+  }
+  applyZoom();
   layout.drawStatic(svg, el);
   const wireLayer = el('g');
   const hotLayer = el('g');
@@ -64,15 +73,38 @@ export function createWiringView(o) {
     }
     // 接點；學習模式標出這一步要接的位置與步驟編號
     const showTarget = step && o.mode() === 'learn';
+    let focusId = null;   // 放大時要捲到的接點
     for (const id of Object.keys(POINTS)) {
       const isTarget = showTarget && (step.kind === 'polarity' ? id === step.expect.red : (step.accept || [step.expect]).includes(id));
       const g = hotspot(id, isTarget);
       if (isTarget) {
         const [x, y] = POINTS[id];
         g.append(el('text', { x: x + 15, y: y - 12, class: 'bl-wnum' }, String(wiring.progress.done + 1)));
+        focusId = id;
       }
       hotLayer.append(g);
     }
+    if (zoom > 1 && step) scrollToStep(focusId, step);
+  }
+
+  /** 放大時把「來源零件與目標接點的中間」捲到畫面中央（考試模式沒有目標，就只捲到來源零件） */
+  function scrollToStep(targetId, step) {
+    const src = PARTS[step.fromPart];
+    const tgt = targetId ? POINTS[targetId] : src;
+    const cx = (src[0] + tgt[0]) / 2;
+    const cy = (src[1] + tgt[1]) / 2;
+    const w = svg.clientWidth;
+    const h = svg.clientHeight;
+    root.scrollTo({ left: (cx / 1000) * w - root.clientWidth / 2, top: (cy / 700) * h - root.clientHeight / 2, behavior: 'smooth' });
+  }
+
+  /** 調整放大倍率：dir = +1 放大、-1 縮小、0 回到整張圖 */
+  function setZoom(dir) {
+    const i = ZOOMS.indexOf(zoom);
+    zoom = dir === 0 ? 1 : ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, (i < 0 ? 0 : i) + dir))];
+    applyZoom();
+    render();
+    return zoom;
   }
 
   function pick(id) {
@@ -83,5 +115,5 @@ export function createWiringView(o) {
   svg.addEventListener('click', (e) => pick(e.target.closest('[data-point]')?.dataset.point));
   svg.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e.target.closest('[data-point]')?.dataset.point); } });
 
-  return { render };
+  return { render, setZoom, get zoom() { return zoom; } };
 }

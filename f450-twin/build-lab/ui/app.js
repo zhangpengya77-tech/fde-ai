@@ -490,6 +490,7 @@ function openWiring() {
   closeDrawers();
   $('bl-wpanel').hidden = false;
   $('bl-wresult').hidden = true;
+  document.body.classList.add('bl-wiring-open');   // 手機：接線畫面改全螢幕
   renderWiring();
 }
 function renderWiring() {
@@ -564,13 +565,18 @@ function showReport() {
 }
 function bindWiring() {
   $('bl-wiring').addEventListener('click', openWiring);
-  $('bl-wback').addEventListener('click', () => { $('bl-wpanel').hidden = true; render(); });
+  $('bl-wback').addEventListener('click', () => { $('bl-wpanel').hidden = true; document.body.classList.remove('bl-wiring-open'); render(); });
   $('bl-wundo').addEventListener('click', () => {
     if (!wiring.undo()) return;
     saveAll(); updateWires3d(); renderWiring();
     $('bl-wresult').hidden = true;
   });
   $('bl-cases').addEventListener('click', showCases);
+  // 接線圖放大／縮小／全圖（手機預設放大並自動捲到這一步）
+  const zoomBy = (dir) => { if (wview && wview !== 'loading') { const z = wview.setZoom(dir); $('bl-wzoom-fit').textContent = z > 1 ? `全圖（${z}×）` : '全圖'; } };
+  $('bl-wzoom-in').addEventListener('click', () => zoomBy(1));
+  $('bl-wzoom-out').addEventListener('click', () => zoomBy(-1));
+  $('bl-wzoom-fit').addEventListener('click', () => zoomBy(0));
   $('bl-report').addEventListener('click', showReport);
   $('bl-report-dl').addEventListener('click', () => {
     if (!lastReport) return;
@@ -668,6 +674,7 @@ async function runDemo() {
         await wait(700);
       }
       $('bl-wpanel').hidden = true;
+      document.body.classList.remove('bl-wiring-open');
     }
     await demoInstallUntil(false);   // 最後裝槳
     if (!demo.stop) {
@@ -685,6 +692,7 @@ async function runDemo() {
     document.body.classList.remove('bl-demo-running');
     $('bl-demo').textContent = '▶ 完整演示';
     $('bl-wpanel').hidden = true;
+    document.body.classList.remove('bl-wiring-open');
     afterChange('all');
     toast('演示結束，已回到你原本的進度。');
   }
@@ -723,7 +731,7 @@ async function boot() {
   render();
   try {
     // 加版本號，避免瀏覽器沿用舊的場景程式
-    const { createScene } = await import('../core/scene.js?v=p5-2');
+    const { createScene } = await import('../core/scene.js?v=p5-3');
     const lowPower = matchMedia('(pointer: coarse)').matches || innerWidth < 820 || new URLSearchParams(location.search).get('lite') === '1';
     scene = createScene($('bl-viewer'), model, { lowPower });
     scene.on('hover', onHover);

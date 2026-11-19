@@ -6,7 +6,7 @@
 <!-- 組裝實訓室（R2.1 預覽版）：與舊版數位孿生並列，網站入口預設關閉（build-lab-flags.js），只能直接開網址預覽 -->
 <meta name="robots" content="noindex">
 <title>組裝實訓室｜FDE-AI</title>
-<link rel="stylesheet" href="./build-lab.css?v=p5-2">
+<link rel="stylesheet" href="./build-lab.css?v=p5-3">
 <script type="importmap">{"imports":{"three":"../vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
@@ -62,6 +62,9 @@
           <p id="bl-wexplain"></p>
         </div>
         <div class="bl-wbtns">
+          <button type="button" id="bl-wzoom-out" aria-label="縮小接線圖">－</button>
+          <button type="button" id="bl-wzoom-in" aria-label="放大接線圖">＋</button>
+          <button type="button" id="bl-wzoom-fit">全圖</button>
           <button type="button" id="bl-wundo">撤銷上一條線</button>
           <button type="button" id="bl-cases">錯誤案例</button>
           <button type="button" id="bl-report" disabled>設定報告</button>
@@ -159,6 +162,6 @@
   </form>
 </dialog>
 
-<script type="module" src="./ui/app.js?v=p5-2"></script>
+<script type="module" src="./ui/app.js?v=p5-3"></script>
 </body>
 </html>

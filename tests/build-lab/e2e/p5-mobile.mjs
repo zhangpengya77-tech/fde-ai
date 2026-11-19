@@ -11,7 +11,7 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMo
 const logs = [];
 page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' && !/api\/rag\/ask|501|Failed to load resource/.test(m.text())) logs.push(m.text()); });
-const tapEl = async (sel) => { const b = await page.locator(sel).first().boundingBox(); await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2); };
+const tapEl = async (sel) => { const loc = page.locator(sel).first(); await loc.scrollIntoViewIfNeeded(); const b = await loc.boundingBox(); await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2); };
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
 const r = {};
 await page.goto(URL_);
@@ -41,7 +41,14 @@ await page.waitForSelector('#bl-loading[hidden]', { state: 'attached', timeout: 
 await page.evaluate(() => document.getElementById('bl-wiring').scrollIntoView());
 await tapEl('#bl-wiring');
 await page.waitForSelector('#bl-wpanel:not([hidden]) .bl-wsvg', { timeout: 10000 });
+await page.waitForTimeout(900);   // 等自動捲到本步位置
 r.svgWidth = await page.evaluate(() => Math.round(document.querySelector('.bl-wsvg').getBoundingClientRect().width));
+r.panel = await page.evaluate(() => { const b = document.getElementById('bl-wpanel').getBoundingClientRect(); return [Math.round(b.width), Math.round(b.height)]; });
+r.targetVisible = await page.evaluate(() => { const t = document.querySelector('.bl-hot.is-target circle').getBoundingClientRect(); const h = document.getElementById('bl-wsvg-host').getBoundingClientRect(); return t.left >= h.left && t.right <= h.right && t.top >= h.top && t.bottom <= h.bottom; });
+await page.screenshot({ path: `${OUT}/p5-02a-phone-wiring-zoom.png` });
+await page.click('#bl-wzoom-fit');
+r.fitWidth = await page.evaluate(() => Math.round(document.querySelector('.bl-wsvg').getBoundingClientRect().width));
+await page.click('#bl-wzoom-in'); await page.click('#bl-wzoom-in');
 await tapEl('[data-point="pdb.fr+"]');
 await page.waitForTimeout(200);
 r.wireAfterTap = await page.textContent('#bl-wstep');
@@ -51,5 +58,6 @@ r.logs = logs;
 console.log(JSON.stringify(r, null, 2));
 await browser.close();
 const ok = r.canvas && r.canvas[0] > 0 && !r.overflowStart && r.libOpen && r.selectedHasInstall && /已裝 1 件/.test(r.afterNext)
-  && r.svgWidth <= 390 && /接線 2／21/.test(r.wireAfterTap) && !r.overflowWiring && !logs.length;
+  && r.svgWidth > 390 && r.panel[0] === 390 && r.panel[1] >= 800 && r.targetVisible && r.fitWidth <= 390
+  && /接線 2／21/.test(r.wireAfterTap) && !r.overflowWiring && !logs.length;
 process.exit(ok ? 0 : 1);
