@@ -1,4 +1,5 @@
 // 主網站課程專區入口功能開關測試：預設不顯示；?youth=1 預覽時才出現，且連到 /live/youth/
+// 2026-11-20 入口已開啟（YOUTH_LAB_ENTRY = true）：預設與 ?youth=1 都應顯示入口
 // 用法：node tests/youth/entry-flag.mjs（自帶 127.0.0.1:8273 靜態伺服器）
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import { createRequire } from 'node:module'; import { fileURLToPath } from 'node:url';
@@ -11,7 +12,7 @@ const srv = http.createServer((q, r) => { let u = decodeURIComponent(new URL(q.u
 await new Promise(o => srv.listen(8273, '127.0.0.1', o));
 const b = await chromium.launch(); const p = await b.newPage();
 let ok = true;
-for (const [qs, want] of [['', 0], ['?youth=1', 1]]) {
+for (const [qs, want] of [['', 1], ['?youth=1', 1]]) {
   await p.goto(`http://127.0.0.1:8273/platform/programs${qs}`); await p.waitForTimeout(2500);
   const n = await p.locator('a[data-zone-link="youth"]').count();
   const zones = await p.locator('.pg-zone').count();

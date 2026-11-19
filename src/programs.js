@@ -98,7 +98,7 @@
   // ───────── 青少年無人機科學實驗室入口（2026-11-20，功能開關）─────────
   // 預設關閉：正式站看不到任何改變。開啟方式：把 YOUTH_LAB_ENTRY 改成 true（需使用者授權部署），
   // 或預覽時在網址加 ?youth=1。入口連到獨立模組 /live/youth/（不改既有課程、登入與後台）。
-  const YOUTH_LAB_ENTRY = false;
+  const YOUTH_LAB_ENTRY = true;   // 2026-11-20 使用者同意開啟入口
   const youthEntryOn = () => YOUTH_LAB_ENTRY || /[?&]youth=1\b/.test(location.search);
   ZONE_ICONS.youth = '<svg viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M26 8h12M28 8v14L14 50a4 4 0 0 0 3.6 6h28.8A4 4 0 0 0 50 50L36 22V8"/><path d="M20 40h24"/><circle cx="28" cy="47" r="2.2" fill="currentColor"/><circle cx="37" cy="44" r="1.6" fill="currentColor"/></g></svg>';
   function specialZones() {
