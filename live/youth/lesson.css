@@ -1,0 +1,203 @@
+/* ===== V1.2 單課頁樣式（對標單課版面：左學習路徑／中演示／右當前動作與觀察；淺色主題）===== */
+body.lesson-mode{background:linear-gradient(180deg,#d8eaff 0,#eef6ff 300px,#f7fbff 100%)}
+body.lesson-mode>.top,body.lesson-mode>.foot{display:none}
+body.lesson-mode .wrap{max-width:1440px;padding:0 16px 96px}
+.ls-top{display:flex;align-items:center;gap:12px;padding:10px 4px;position:sticky;top:0;z-index:20;background:rgba(238,246,255,.94);backdrop-filter:blur(8px)}
+.ls-back{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;border-radius:12px;background:#fff;border:1px solid var(--line);text-decoration:none;color:var(--ink);font-weight:700;padding:0 10px}
+.logo.sm{width:34px;height:34px;border-radius:10px;font-size:.7rem}
+.ls-title{flex:1;min-width:0}
+.ls-title b{display:block;font-size:1.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls-title small{color:var(--muted);font-size:.8rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls-kind{background:#e6efff;color:var(--blue);border-radius:999px;padding:4px 12px;font-size:.82rem;white-space:nowrap}
+.ls-icon{min-width:44px;min-height:44px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:1.1rem;cursor:pointer}
+.ls-teach{min-height:44px}
+.ls-tools{display:flex;justify-content:flex-end;gap:8px;margin:2px 0 10px}
+.ls{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;align-items:start}
+.ls.has-right{grid-template-columns:250px minmax(0,1fr) 300px}
+.ls-path{position:sticky;top:76px;display:flex;flex-direction:column;gap:10px}
+.ls-path-h{margin:0;font-weight:700;color:var(--muted);font-size:.9rem}
+.ls-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ls-steps li{position:relative}
+.ls-step{display:flex;align-items:center;gap:12px;padding:14px;border-radius:16px;background:#fff;border:1px solid var(--line);text-decoration:none;color:var(--ink);min-height:44px}
+.ls-step b{font-size:1.6rem;color:#9db6dc;font-weight:800;line-height:1}
+.ls-step em{display:block;font-style:normal;font-weight:800;font-size:1.05rem}
+.ls-step small{display:block;color:var(--muted);font-size:.8rem}
+.ls-step i{margin-left:auto;font-style:normal;color:var(--ok);font-weight:800}
+.ls-step u{display:none;text-decoration:none}
+.ls-steps li.cur .ls-step{background:linear-gradient(135deg,#2f6bf0,#4f8dff);color:#fff;border-color:transparent;box-shadow:0 10px 24px rgba(47,107,240,.3)}
+.ls-steps li.cur .ls-step b,.ls-steps li.cur .ls-step small{color:#fff}
+.ls-steps li.done .ls-step b{color:var(--ok)}
+.ls-steps li.locked .ls-step{opacity:.55;cursor:not-allowed;background:#f3f6fb}
+.ls-pageno-m{display:none}
+.ls-sum{background:linear-gradient(135deg,#eaf3ff,#fff);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:2px}
+.ls-sum b{font-size:1.15rem;color:var(--blue)}
+.ls-sum span{font-size:.9rem;color:var(--muted)}
+.ls-sum-m{display:none}
+.ls-main{min-width:0;display:flex;flex-direction:column;gap:12px}
+.ls-head{position:relative;padding-right:90px}
+.ls-eyebrow{margin:0;font-size:.82rem;letter-spacing:.12em;font-weight:800;color:var(--blue)}
+.ls-eyebrow span{letter-spacing:0;color:var(--muted)}
+.ls-head h1{font-size:1.75rem;margin:.2em 0 0}
+.ls-pageno{position:absolute;right:0;top:0;font-size:1.8rem;font-weight:800;color:var(--blue)}
+.ls-obj{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;counter-reset:o}
+.ls-obj li{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 14px 14px 46px;position:relative;font-size:1rem;counter-increment:o}
+.ls-obj li::before{content:counter(o,decimal-leading-zero);position:absolute;left:12px;top:12px;font-weight:800;color:var(--blue)}
+.ls-cards{display:flex;align-items:stretch;gap:8px}
+.ls-card{flex:1;background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;min-height:180px;box-shadow:0 8px 22px rgba(32,80,160,.07)}
+.ls-card small{color:var(--blue);font-weight:700}
+.ls-card h3{font-size:1.35rem;margin:.3em 0}
+.ls-card p{font-size:1.05rem;margin:0}
+.ls-cnav{width:44px;border:1px solid var(--line);background:#fff;border-radius:14px;font-size:1.6rem;cursor:pointer;color:var(--blue)}
+.ls-cnav:disabled{opacity:.35;cursor:default}
+.ls-dots{display:flex;justify-content:center;gap:8px}
+.ls-dots button{width:12px;height:12px;border-radius:50%;border:0;background:#cfdcf0;cursor:pointer;padding:0}
+.ls-dots button.seen{background:#8fb3f0}
+.ls-dots button.on{background:var(--blue);width:28px;border-radius:8px}
+.ls-stage{position:relative;padding:0;overflow:hidden;border-radius:20px}
+.ls-views{position:absolute;left:12px;top:12px;z-index:3;display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;max-width:calc(100% - 200px);scrollbar-width:none}
+.ls-views button{border:0;border-radius:999px;padding:8px 14px;background:rgba(255,255,255,.92);font:inherit;font-size:.88rem;cursor:pointer;white-space:nowrap;min-height:36px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.ls-views button.on{background:var(--blue);color:#fff}
+.ls-hud{position:absolute;right:12px;top:12px;z-index:3;background:rgba(255,255,255,.95);border-radius:14px;padding:8px 14px;text-align:right;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.ls-hud small{display:block;color:var(--muted);font-size:.75rem}
+.ls-hud b{font-size:1.5rem;color:var(--blue);font-variant-numeric:tabular-nums}
+.ls-3d{position:relative;height:440px}
+.ls-3d canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ls-tip{position:absolute;left:12px;z-index:3;bottom:132px;margin:0;background:rgba(255,255,255,.92);border-radius:10px;padding:6px 10px;font-size:.82rem;color:var(--muted)}
+.ls-overlay{background:#fff;border-top:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.ls-phases{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.ls-phases button{border:1px solid var(--line);background:#f6f9fe;border-radius:12px;padding:8px 4px;font:inherit;font-size:.92rem;cursor:pointer;min-height:44px;color:var(--ink)}
+.ls-phases button b{color:#9db6dc;margin-right:2px}
+.ls-phases button.past{background:#eaf3ff}
+.ls-phases button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.ls-phases button.on b{color:#fff}
+.ls-play{display:flex;align-items:center;gap:8px}
+.ls-play .btn{min-height:44px}
+.ls-play input{flex:1;min-width:60px;accent-color:var(--blue)}
+.ls-play span{font-variant-numeric:tabular-nums;font-size:.9rem;white-space:nowrap}
+.ls-right{display:flex;flex-direction:column;gap:12px;position:sticky;top:76px}
+.ls-cap{margin:0 0 4px;font-size:.8rem;font-weight:800;color:var(--muted);letter-spacing:.06em}
+.ls-act h2{font-size:1.6rem;margin:.1em 0}
+.ls-act p{margin:.3em 0;font-size:1rem}
+.ls-status{display:inline-block;background:#e4f7ec;color:#13693a;border-radius:999px;padding:3px 12px;font-size:.85rem;font-weight:700}
+.ls-timer{font-size:1.3rem;font-weight:800;color:var(--blue);font-variant-numeric:tabular-nums;margin:.4em 0 0}
+.ls-obs dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 10px}
+.ls-obs dt{color:var(--muted)}
+.ls-obs dd{margin:0;font-weight:700;text-align:right}
+.ls-legend{list-style:none;padding:0;margin:0 0 10px}
+.ls-legend li{display:flex;align-items:center;gap:8px;font-size:.92rem}
+.ls-legend i{width:22px;height:4px;border-radius:3px}
+.lg-orange{background:#ff8a00}
+.lg-blue{background:#2f8cff;height:12px !important;opacity:.6}
+.ls-pass{margin:0;padding-left:18px}
+.ls-pass li{font-weight:700}
+.ls-big{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.ls-big .card{text-align:center;padding:18px}
+.ls-big b{display:block;font-size:2.2rem;color:var(--blue);line-height:1.1}
+.ls-big b small{font-size:1rem}
+.ls-big span{color:var(--muted)}
+.ls-rules ol{margin:0;padding-left:20px}
+.ls-rules li{margin:4px 0;font-size:1rem}
+.ls-judge{margin:8px 0 0;font-weight:700;color:var(--blue)}
+.ls-quiz fieldset{font-size:1rem}
+.ls-quiz .opt{padding:8px 0;min-height:44px;display:flex;align-items:center;gap:8px}
+.ls-exp{color:#a32020;margin:4px 0 0}
+.ls-score{padding:12px;border-radius:12px;margin:8px 0}
+.ls-score.ok{background:#e4f7ec}
+.ls-score.bad{background:#fde8e8}
+.ls-score b{font-size:1.5rem}
+.ls-tipgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.ls-tipgrid h3{margin:.2em 0}
+.ls-tipgrid p{margin:0;font-size:1rem}
+.ls-num{font-size:1.6rem;font-weight:800;color:#9db6dc}
+.ls-mis ul{margin:0;padding-left:20px}
+.ls-mis li{margin:3px 0}
+.ls-prac{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.ls-prac p{margin:0}
+.ls-nextunit{font-size:1.2rem;padding:16px 22px;justify-content:center}
+.ls-review{text-align:center;color:var(--muted);font-size:.8rem;margin:16px 0}
+.ls-nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;gap:10px;padding:10px max(16px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:rgba(255,255,255,.96);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(32,80,160,.08)}
+.ls-nav .btn{min-height:48px;min-width:110px;justify-content:center;font-size:1rem}
+.ls-nav .btn:disabled{background:#c9d3e3;color:#fff;cursor:not-allowed;border-color:transparent}
+.ls-why{flex:1;text-align:center;font-size:.88rem;color:#a35a00}
+.ls-ai-fab{position:fixed;right:16px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:31;width:58px;height:58px;border-radius:50%;border:0;background:linear-gradient(135deg,#4f8dff,#2f6bf0);color:#fff;font:inherit;font-weight:800;box-shadow:0 8px 20px rgba(47,107,240,.4);cursor:pointer}
+.ls-sheet{position:fixed;inset:0;z-index:40;background:rgba(10,25,60,.35);display:flex;align-items:flex-end;justify-content:center}
+.ls-sheet[hidden]{display:none}
+.ls-sheet-in{width:min(560px,100%);max-height:75vh;overflow:auto;border-radius:20px 20px 0 0;position:relative;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.ls-sheet-x{position:absolute;right:10px;top:8px;width:44px;height:44px;border:0;background:none;font-size:1.6rem;cursor:pointer}
+/* 全屏授課（教師投影）：隱藏站內導航、字級放大、步驟不鎖 */
+body.teach .ls{font-size:1.1rem}
+body.teach .ls-head h1{font-size:2.1rem}
+@media (min-width:721px) and (min-height:501px){body.teach .ls-3d{height:520px}}
+/* 全屏實驗：3D 滿版，時間軸與播放列疊在底部 */
+#ls-stage:fullscreen{border-radius:0;display:flex;flex-direction:column;background:#e4f0ff}
+#ls-stage:fullscreen .ls-3d{flex:1;height:auto}
+#ls-stage:fullscreen .ls-overlay{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.9)}
+#ls-stage:fullscreen .ls-tip{bottom:120px;top:auto}
+/* 平板 */
+@media (max-width:1100px){
+  .ls.has-right{grid-template-columns:220px minmax(0,1fr)}
+  .ls-right{grid-column:2;position:static;flex-direction:row}
+  .ls-right>.card{flex:1}
+}
+/* 直式手機：同樣區塊依原順序上下堆疊 */
+@media (max-width:720px){
+  body.lesson-mode .wrap{padding:0 12px 100px}
+  .ls-top{gap:8px;padding:8px 0}
+  .ls-back span,.logo.sm,.ls-kind,.ls-tools,.ls-path-h,.ls-sum-d{display:none}
+  .ls-title b{font-size:1.05rem}
+  .ls-title small{font-size:.75rem}
+  .ls-teach{padding:6px 10px}
+  .ls,.ls.has-right{grid-template-columns:minmax(0,1fr);gap:12px}
+  .ls-path{position:static;flex-direction:row;align-items:center;gap:8px}
+  .ls-steps{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .ls-step{flex-direction:column;gap:2px;padding:8px 2px;border-radius:12px;justify-content:center;text-align:center;min-height:56px}
+  .ls-step b{font-size:1.05rem}
+  .ls-step em,.ls-step small{display:none}
+  .ls-step u{display:block;font-size:.85rem;font-weight:700}
+  .ls-steps li .ls-step i{position:absolute;right:4px;top:2px;margin:0;font-size:.75rem}
+  .ls-pageno-m{display:block;font-weight:800;color:var(--blue);white-space:nowrap}
+  .ls-pageno{display:none}
+  .ls-head{padding-right:0}
+  .ls-head h1{font-size:1.5rem}
+  .ls-obj{grid-template-columns:1fr}
+  .ls-card{padding:18px;min-height:200px}
+  .ls-cnav{width:40px}
+  .ls-views{max-width:calc(100% - 24px)}
+  .ls-hud{top:58px;padding:6px 10px}
+  .ls-hud b{font-size:1.2rem}
+  .ls-3d{height:min(45vh,calc((100vw - 24px) * .75))}
+  .ls-tip{display:none}
+  .ls-phases{gap:4px}
+  .ls-phases button{font-size:.85rem;padding:6px 0}
+  .ls-phases button b{display:none}
+  .ls-play{gap:6px}
+  .ls-play .btn{padding:8px 10px;font-size:.88rem}
+  .ls-right{position:static;flex-direction:column;grid-column:auto}
+  .ls-sum-m{display:flex}
+  .ls-big{gap:6px}
+  .ls-big .card{padding:12px 4px}
+  .ls-big b{font-size:1.5rem}
+  .ls-tipgrid{grid-template-columns:1fr}
+  .ls-nav .btn{min-width:96px}
+  .ls-ai-fab{width:50px;height:50px;bottom:calc(150px + env(safe-area-inset-bottom));font-size:.85rem}
+  .ls-why{font-size:.8rem}
+  /* 站內主導航（課程以外的頁面）：4 欄完整顯示，不再左右切掉文字 */
+  .topnav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;overflow:visible}
+  .topnav a{text-align:center;padding:7px 2px;font-size:.88rem;min-height:40px;display:flex;align-items:center;justify-content:center}
+  .who .btn{padding:6px 10px;font-size:.85rem}
+  .brand b{font-size:.95rem}
+}
+/* 手機橫向（全屏授課／全屏實驗）：3D 區滿版 */
+@media (max-height:500px) and (orientation:landscape){
+  body.lesson-mode .wrap{padding:0 8px 70px}
+  .ls-top{padding:4px 0}.ls-tools,.ls-kind,.ls-path,.ls-right,.ls-sum,.ls-review,.ls-ai-fab{display:none}
+  .ls,.ls.has-right{grid-template-columns:minmax(0,1fr)}
+  .ls-head{display:none}.ls-title small,.logo.sm{display:none}.ls-back,.ls-icon,.ls-teach{min-height:40px}
+  .ls-stage{height:calc(100vh - 124px)}
+  body.lesson-mode .ls-3d{height:100%}
+  .ls-overlay{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.88);padding:6px 10px;gap:6px}
+  .ls-phases button{min-height:34px;padding:4px 0;font-size:.82rem}
+  .ls-play .btn{min-height:36px;padding:4px 10px}
+  .ls-tip{display:none}
+  .ls-nav{padding-top:6px;padding-bottom:calc(6px + env(safe-area-inset-bottom))}.ls-nav .btn{min-height:44px}
+}

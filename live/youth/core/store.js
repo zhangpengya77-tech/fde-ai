@@ -114,5 +114,29 @@ export function teacherImport(report, onlyClass) {
   teacherSave(d); return { cls, nick };
 }
 
+// ---- V1.2 單課線性推進狀態：目前步驟、知識卡翻閱、演示看完、時間軸位置、測驗、實作 ----
+// 已登入存在學員紀錄；未登入存在「訪客」區（同樣只在這台裝置）
+export const LESSON_STEPS = ['task', 'demo', 'criteria', 'tips'];
+export function lesson(unitId) {
+  const d = load(); const m = me();
+  const bucket = m ? (m.lessons ??= {}) : (d.guestLessons ??= {});
+  return (bucket[unitId] ??= { step: 'task', reached: 0, cards: [], demoDone: false, demoT: 0, quiz: { best: null, attempts: 0, last: null }, practiceDone: false, done: false });
+}
+export function saveLessonState() { save(); }
+/** 步驟完成條件（V1.2 第 2 節） */
+export function stepComplete(L, step, spec) {
+  if (step === 'task') return L.cards.length >= spec.steps.task.cards.length;
+  if (step === 'demo') return L.demoDone;
+  if (step === 'criteria') return L.quiz.last != null;
+  if (step === 'tips') return true;   // 完成實作或按「本課完成」
+  return false;
+}
+export function stepBlockReason(L, step, spec) {
+  if (step === 'task') return `還有 ${spec.steps.task.cards.length - L.cards.length} 張知識卡沒翻`;
+  if (step === 'demo') return '請把演示播放到結尾一次（可用倍速）';
+  if (step === 'criteria') return '請先完成隨堂測驗';
+  return '';
+}
+
 // 測試用：重設記憶體快取
 export function _reset() { mem.data = null; }

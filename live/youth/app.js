@@ -90,8 +90,15 @@ function viewCourses(level = 'all') {
 
 // ---------- 單元頁（左章節／中內容／右助教）----------
 const STEPS = [['read', '知識講解'], ['widget', '互動操作'], ['lab', '3D 實驗'], ['quiz', '隨堂測驗'], ['record', '學習紀錄']];
-async function viewUnit(id, step = 'read') {
+// V1.2 四步單課頁：已改版的單元放這裡（其他單元暫用 V1.0 版面，待使用者確認版型後再套用）
+const LESSON_FILES = { 9: () => import('./data/lessons/u09.js') };
+async function viewUnit(id, step) {
   const u = UNITS.find(x => x.id === +id); if (!u) return viewNotFound();
+  if (LESSON_FILES[u.id]) {
+    const [{ default: spec }, { viewLesson }] = await Promise.all([LESSON_FILES[u.id](), import('./lesson.js')]);
+    return viewLesson(spec, step, { app, esc, units: UNITS, unit: u, aiPanel, bindAi, loginDialog, setCleanup: f => { cleanup = f; } });
+  }
+  step ||= 'read';
   const idx = UNITS.indexOf(u);
   app.innerHTML = `${crumbs([['首頁', '#/'], ['課程中心', '#/courses'], [`${u.code} ${u.title}`]])}
   <div class="unit">
@@ -165,7 +172,7 @@ function bindAi() {
     log.scrollTop = log.scrollHeight;
   };
   f.onsubmit = e => { e.preventDefault(); const q = f.querySelector('#ai-q').value.trim(); if (q) { send(q); f.reset(); } };
-  document.querySelectorAll('.uai .chip, .aipage .chip').forEach(c => c.onclick = () => send(c.dataset.q));
+  document.querySelectorAll('.uai .chip, .aipage .chip, .ls-sheet .chip').forEach(c => c.onclick = () => send(c.dataset.q));
 }
 function viewAi() {
   app.innerHTML = `${crumbs([['首頁', '#/'], ['AI 助教']])}<div class="card aipage">${aiPanel(null)}<div class="chips">${['什麼是 Yaw', '3S 是幾伏', '換相是什麼', '陀螺儀量什麼', '足球怎麼得分', '迴圈'].map(q => `<button class="chip" data-q="${q}">${q}</button>`).join('')}</div></div>`;
@@ -307,6 +314,7 @@ function viewNotFound() { app.innerHTML = `<div class="card"><h2>找不到這個
 // ---------- 路由 ----------
 function route() {
   try { cleanup?.(); } catch { /* 略 */ } cleanup = null;
+  document.body.classList.remove('lesson-mode');   // 單課頁專用的精簡版面，離開時還原
   input.virtualActive = false; input.estop = false;
   const [path, qs] = location.hash.replace(/^#/, '').split('?');
   const q = new URLSearchParams(qs || ''); const p = path.split('/').filter(Boolean);

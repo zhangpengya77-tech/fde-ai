@@ -55,7 +55,8 @@ try {
 
   // 每個單元的知識講解都能打開且有 4 段內容
   let readOk = 0;
-  for (const u of UNITS) { await page.goto(`${BASE}#/unit/${u.id}`); await page.waitForSelector('.sections article'); if (await page.locator('.sections article').count() === 4) readOk++; }
+  // U09 已改用 V1.2 四步單課頁（知識卡一次一張），其他單元仍是 4 段講解
+  for (const u of UNITS) { await page.goto(`${BASE}#/unit/${u.id}`); if (u.id === 9) { await page.waitForSelector('.ls-card'); readOk++; continue; } await page.waitForSelector('.sections article'); if (await page.locator('.sections article').count() === 4) readOk++; }
   check('12 單元知識講解皆可閱讀', readOk === 12, `${readOk}/12`);
   await page.goto(`${BASE}#/unit/5`); await page.waitForSelector('.sections'); await page.screenshot({ path: path.join(OUT, '03_unit5_read.png') });
 
