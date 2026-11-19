@@ -647,7 +647,8 @@ async function boot() {
   }
   render();
   try {
-    const { createScene } = await import('../core/scene.js');
+    // 加版本號，避免瀏覽器沿用舊的場景程式
+    const { createScene } = await import('../core/scene.js?v=p5-1');
     const lowPower = matchMedia('(pointer: coarse)').matches || innerWidth < 820 || new URLSearchParams(location.search).get('lite') === '1';
     scene = createScene($('bl-viewer'), model, { lowPower });
     scene.on('hover', onHover);

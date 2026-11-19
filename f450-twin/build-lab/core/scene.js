@@ -322,6 +322,29 @@ export function createScene(host, model, opts = {}) {
     helper.box.setFromObject(objs.get(id)).expandByScalar(3);
     helper.visible = true;
   }
+  // ───────── 實機效能量測（網址加 ?fps=1 才顯示）：每秒更新平均幀率、最低幀率與繪圖次數 ─────────
+  const perf = { on: new URLSearchParams(location.search).get('fps') === '1', frames: 0, last: performance.now(), worst: 0, prev: 0, el: null, samples: [] };
+  if (perf.on) {
+    perf.el = document.createElement('div');
+    perf.el.className = 'bl-fps';
+    host.append(perf.el);
+  }
+  function tickPerf(now) {
+    if (perf.prev) perf.worst = Math.max(perf.worst, now - perf.prev);   // 這一秒內最慢的一幀（毫秒）
+    perf.prev = now;
+    perf.frames++;
+    if (now - perf.last < 1000) return;
+    const fps = Math.round((perf.frames * 1000) / (now - perf.last));
+    perf.samples.push(fps);
+    if (perf.samples.length > 30) perf.samples.shift();
+    const avg = Math.round(perf.samples.reduce((a, b) => a + b, 0) / perf.samples.length);
+    perf.el.textContent = `FPS ${fps}｜30 秒平均 ${avg}｜最慢一幀 ${Math.round(perf.worst)} ms｜繪圖 ${renderer.info.render.calls} 次｜像素比 ${renderer.getPixelRatio()}｜${lowPower ? '省電模式' : '一般模式'}`;
+    perf.el.dataset.avg = String(avg);
+    perf.frames = 0;
+    perf.worst = 0;
+    perf.last = now;
+  }
+
   renderer.setAnimationLoop((now) => {
     for (const [id, a] of anims) {
       const t = Math.min(1, (now - a.start) / ANIM_MS);
@@ -342,6 +365,7 @@ export function createScene(host, model, opts = {}) {
       if (now > until) { h.visible = false; flashes.delete(id); } else updateBox(h, id);
     }
     renderer.render(scene, camera);
+    if (perf.on) tickPerf(now);
   });
 
   return {

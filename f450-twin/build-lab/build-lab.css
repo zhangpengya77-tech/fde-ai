@@ -169,3 +169,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .bl-timer{color:var(--warn);font-weight:600}
 .bl-rec{width:100%;border-collapse:collapse;font-size:12.5px}
 .bl-rec td,.bl-rec th{border-bottom:1px solid var(--line);padding:4px;text-align:left}
+
+/* 實機效能量測（?fps=1） */
+.bl-fps{position:absolute;right:8px;bottom:8px;z-index:4;padding:4px 8px;border-radius:6px;background:rgba(0,0,0,.72);color:#7CFC9A;font:12px/1.4 ui-monospace,Consolas,monospace;pointer-events:none}

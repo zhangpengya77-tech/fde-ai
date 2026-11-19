@@ -1,0 +1,22 @@
+// 組裝實訓室｜實機效能量測工具測試：網址加 ?fps=1 時顯示幀率面板，沒加時不顯示
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.BL_PLAYWRIGHT || 'D:/FDE-AI-UAS-v2.0-live-camera/node_modules/playwright');
+const BASE = (process.env.BL_BASE || 'http://127.0.0.1:8095') + '/f450-twin/build-lab/';
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const logs = [];
+page.on('pageerror', (e) => logs.push(e.message));
+const r = {};
+await page.goto(BASE);
+await page.waitForSelector('#bl-loading[hidden]', { state: 'attached', timeout: 30000 });
+r.hiddenByDefault = (await page.locator('.bl-fps').count()) === 0;
+await page.goto(`${BASE}?fps=1`);
+await page.waitForSelector('#bl-loading[hidden]', { state: 'attached', timeout: 30000 });
+await page.waitForFunction(() => document.querySelector('.bl-fps')?.dataset.avg, null, { timeout: 15000 });
+r.text = await page.textContent('.bl-fps');
+r.avg = Number(await page.getAttribute('.bl-fps', 'data-avg'));
+r.logs = logs;
+console.log(JSON.stringify(r, null, 2));
+await browser.close();
+process.exitCode = r.hiddenByDefault && /FPS \d+/.test(r.text) && r.avg > 0 && !logs.length ? 0 : 1;

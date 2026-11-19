@@ -35,7 +35,7 @@
 | 正式站與既有功能不受影響 | PASS | `git diff 442b3cf` 在 `f450-twin/build-lab/`、`docs/build-lab/` 以外**零變更**；舊版數位孿生後端測試 5／5；網站既有前端測試 13 通過、3 失敗與改動前相同（homepage-portal-entry、platform-integration、programs，版本號舊斷言） |
 | Gateway 認證與 Cohort 隔離不退化 | PASS（未觸及） | 沒有改任何後端、Gateway、Worker、Django、資料庫檔案 |
 | 實機觸控「拖放零件」 | PENDING_MANUAL | Playwright 無法模擬手指拖曳，需真機測 |
-| 效能：MX450 筆電 ≥45 fps、中階手機 ≥30 fps | PENDING_MANUAL | 無頭瀏覽器用軟體繪圖，幀率不具代表性；需實機量 |
+| 效能：MX450 筆電 ≥45 fps、中階手機 ≥30 fps | PENDING_MANUAL | 無頭瀏覽器用軟體繪圖，幀率不具代表性；需實機量。已提供量測工具：網址加 `?fps=1`，右下角顯示即時幀率、30 秒平均、最慢一幀、繪圖次數與是否省電模式 |
 | 首次載入大小 | PASS | 新程式約 178 KB（28 檔）＋既有共用 three.js 約 758 KB，遠低於 4 MB 預算；無 GLB |
 | 接線、參數、引腳、尺寸、計分規則內容 | PENDING_MANUAL | 須教師或有實機經驗者覆核 |
 | REA 安裝 | BLOCKED | 本機 Node 24.19.0 低於要求 24.22.1；依指示未升級、未安裝 |
