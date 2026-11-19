@@ -172,3 +172,24 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
 /* 實機效能量測（?fps=1） */
 .bl-fps{position:absolute;right:8px;bottom:8px;z-index:4;padding:4px 8px;border-radius:6px;background:rgba(0,0,0,.72);color:#7CFC9A;font:12px/1.4 ui-monospace,Consolas,monospace;pointer-events:none}
+
+/* 完整演示進行中：除了「停止演示」以外的操作先鎖住，避免干擾自動播放 */
+body.bl-demo-running .bl-toolbar button:not(#bl-demo),
+body.bl-demo-running .bl-toolbar .bl-filebtn,
+body.bl-demo-running .bl-modes,
+body.bl-demo-running .bl-lib,
+body.bl-demo-running .bl-side,
+body.bl-demo-running .bl-wsvg-host,
+body.bl-demo-running .bl-whead button{pointer-events:none;opacity:.45}
+#bl-demo{white-space:nowrap}
+
+/* 手機頁首：機型選單與返回鍵不再擠在一起重疊 */
+@media (max-width:819px){
+  .bl-head{grid-template-columns:1fr}
+  .bl-brand{align-items:flex-start;gap:8px}
+  .bl-back{white-space:nowrap;padding:4px 8px;font-size:12px}
+  .bl-brand h1{font-size:1rem}
+  .bl-pick{display:flex;width:100%;margin:2px 0}
+  .bl-pick select{flex:1;min-width:0;max-width:100%}
+  .bl-drawer-btns{order:2}
+}

@@ -27,7 +27,7 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((ok) => server.listen(port, '127.0.0.1', ok));
 
-const scripts = ['p1-assembly.cjs', 'p2-f450-wiring.mjs', 'p3-fpv5-wiring.mjs', 'p4-exam-records.mjs', 'p5-mobile.mjs', 'p6-fps.mjs'];
+const scripts = ['p1-assembly.cjs', 'p2-f450-wiring.mjs', 'p3-fpv5-wiring.mjs', 'p4-exam-records.mjs', 'p5-mobile.mjs', 'p6-fps.mjs', 'p7-demo.mjs'];
 const env = { ...process.env, BL_BASE: `http://127.0.0.1:${port}` };
 let failed = 0;
 for (const s of scripts) {

@@ -375,6 +375,8 @@ export function createScene(host, model, opts = {}) {
     /** 依已接好的線更新 3D 線束；等零件動畫結束後再畫，避免線停在半空 */
     setWires(list) { wireList = list; setTimeout(drawWires, ANIM_MS + 50); },
     setHideInstalled(v) { hideInstalled = !!v; refresh([]); },
+    /** 完整演示時讓鏡頭慢慢繞機體旋轉 */
+    setAutoRotate(on) { controls.autoRotate = !!on; controls.autoRotateSpeed = 1.2; },
     returnToTray(id) { refresh([id]); },
     setGhost(id) { setGhost(id); },
     select(id) { selected = id; },

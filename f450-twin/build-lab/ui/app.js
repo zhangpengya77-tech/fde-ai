@@ -40,7 +40,9 @@ function resetAll(mode) {
   afterChange('all');
 }
 const elapsedMs = () => Date.now() - session.startedAt;
-const saveAll = () => saveLocal(model.modelId, serializeAll());
+// 完整演示進行中（demo 不為 null）時不存檔、不寫紀錄，結束後還原學員原本的進度
+let demo = null;
+const saveAll = () => { if (!demo) saveLocal(model.modelId, serializeAll()); };
 
 let scene = null;
 let selected = null;
@@ -82,7 +84,7 @@ function afterChange(animateIds = []) {
   updateWires3d();   // 拆掉零件時 3D 線束也跟著更新
   saveAll();
   render();
-  if (engine.progress.done === engine.progress.total) showDone();
+  if (!demo && engine.progress.done === engine.progress.total) showDone();
 }
 function tryInstall(id, placedPos) {
   // 槳葉最後裝：接線完成前不能裝槳
@@ -242,6 +244,7 @@ async function explainWithAI(out, question, fallbackZh) {
 
 function renderHint() {
   const hint = $('bl-hint');
+  if (demo) { hint.textContent = demo.text; scene?.setGhost(null); return; }   // 演示中顯示旁白
   if (engine.progress.done === engine.progress.total) { hint.textContent = '全部零件都裝好了。'; scene?.setGhost(null); return; }
   if (engine.mode === 'exam') { hint.textContent = '考試模式：不提供提示，請依正確順序完成組裝與接線。'; scene?.setGhost(null); return; }
   if (wiringPreconditions(engine).ok && !wiring.complete) { hint.textContent = '零件（槳葉除外）都裝好了。下一步：按下方「接線模式」開始接線；槳葉最後才裝。'; scene?.setGhost(null); return; }
@@ -616,6 +619,77 @@ setInterval(() => {
   t.textContent = `考試中 ${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 }, 1000);
 
+// ───────── 完整演示（自動播放整台機的組裝與接線） ─────────
+const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function demoInstallUntil(stopAtProp) {
+  let id;
+  while (demo && !demo.stop && (id = engine.nextSuggested()) && !(stopAtProp && isProp(id))) {
+    const p = engine.part(id);
+    demo.text = `演示 ${engine.progress.done + 1}／${engine.progress.total}：安裝「${p.nameZh}」。${p.desc}`;
+    select(id);
+    engine.install(id);
+    afterChange([id]);
+    scene?.flash(id);
+    await wait(1600);
+  }
+}
+async function runDemo() {
+  if (demo) { demo.stop = true; return; }   // 再按一次＝停止
+  if (engine.mode === 'exam') { toast('考試模式不能播放演示。', 'err'); return; }
+  const snapshot = serializeAll();
+  const savedSession = { ...session };
+  demo = { stop: false, text: '完整演示：從零開始一步一步組裝、接線，最後裝槳。演示結束會回到你原本的進度。' };
+  document.body.classList.add('bl-demo-running');
+  $('bl-demo').textContent = '■ 停止演示';
+  closeDrawers();
+  $('bl-wpanel').hidden = true;
+  engine.restore({ kind: 'fde-build-lab-progress', modelId: model.modelId, mode: 'learn', installed: [], errors: [] });
+  wiring.reset();
+  afterChange('all');
+  scene?.view('iso');
+  scene?.setAutoRotate(true);
+  try {
+    await wait(2000);
+    await demoInstallUntil(true);   // 先裝槳葉以外的零件
+    if (!demo.stop) {
+      demo.text = '零件裝好了，接著示範接線（接線與測試時一律不裝槳）。';
+      renderHint();
+      await wait(1500);
+      openWiring();
+      await wait(800);
+      for (const s of wiring.steps) {
+        if (demo.stop) break;
+        renderWiring();   // 標出這一步的來源與目標
+        await wait(900);
+        const r = wiring.attempt(s.kind === 'polarity' ? { red: s.expect.red } : { target: s.expect });
+        showWireResult(r);
+        updateWires3d();
+        renderWiring();
+        await wait(700);
+      }
+      $('bl-wpanel').hidden = true;
+    }
+    await demoInstallUntil(false);   // 最後裝槳
+    if (!demo.stop) {
+      select(null);
+      demo.text = `演示完成：這就是組好的「${model.nameZh}」。幾秒後回到你原本的進度。`;
+      renderHint();
+      await wait(5000);
+    }
+  } finally {
+    scene?.setAutoRotate(false);
+    engine.restore(snapshot);
+    wiring.restore(snapshot.wiring);
+    session = savedSession;
+    demo = null;
+    document.body.classList.remove('bl-demo-running');
+    $('bl-demo').textContent = '▶ 完整演示';
+    $('bl-wpanel').hidden = true;
+    afterChange('all');
+    toast('演示結束，已回到你原本的進度。');
+  }
+}
+
 function closeDrawers() { $('bl-lib').classList.remove('open'); $('bl-steps').classList.remove('open'); }
 
 // ───────── 懸停說明浮層 ─────────
@@ -636,6 +710,7 @@ function onHover(id, x, y) {
 async function boot() {
   bindUi();
   bindWiring();
+  $('bl-demo').addEventListener('click', runDemo);
   bindRecords();
   const saved = loadLocal(model.modelId);
   if (saved) {
@@ -648,7 +723,7 @@ async function boot() {
   render();
   try {
     // 加版本號，避免瀏覽器沿用舊的場景程式
-    const { createScene } = await import('../core/scene.js?v=p5-1');
+    const { createScene } = await import('../core/scene.js?v=p5-2');
     const lowPower = matchMedia('(pointer: coarse)').matches || innerWidth < 820 || new URLSearchParams(location.search).get('lite') === '1';
     scene = createScene($('bl-viewer'), model, { lowPower });
     scene.on('hover', onHover);
