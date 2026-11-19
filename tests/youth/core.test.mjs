@@ -114,7 +114,7 @@ test('教師端：只能匯入已建立班級、班級篩選阻擋跨班', () =>
 });
 
 test('規則式助教：命中、未命中不編造、錯題建議', () => {
-  const r = A.ask('什麼是 Yaw？'); assert.ok(r.matched); assert.equal(r.unit, 3);
+  const r = A.ask('什麼是 Yaw？'); assert.ok(r.matched); assert.equal(r.unit, 6, 'V1.1 新順序：飛行姿態為第 6 單元');
   assert.ok(A.ask('3S 是幾伏').answer.includes('11.1'));
   const n = A.ask('今天晚餐吃什麼'); assert.equal(n.matched, false); assert.ok(n.answer.includes('問老師'));
   assert.ok(A.reviewAdvice(UNITS[0], [0, 1]).includes('重讀'));
@@ -128,4 +128,15 @@ test('遙控器軸讀值：校準、反向、死區', () => {
   const cal = { 1: { min: -0.8, max: 0.9, center: 0.1 } };
   assert.equal(I.readAxis(0.9, { axis: 1, invert: false }, cal, 0), 1, '校準後滿行程為 1');
   assert.equal(I.readAxis(0.1, { axis: 1, invert: false }, cal, 0), 0, '校準中心為 0');
+});
+
+test('V1.1 新順序：安全第 2、科學第 3、姿態第 6、程式第 10、足球第 11，舊紀錄自動搬移', async () => {
+  const names = Object.fromEntries(UNITS.map(u => [u.id, u.title]));
+  assert.match(names[2], /安全/); assert.match(names[3], /科學/); assert.match(names[6], /姿態/); assert.match(names[10], /程式/); assert.match(names[11], /足球/);
+  assert.deepEqual(UNITS.map(u => u.id), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  // 舊版（無 order 欄位）的紀錄：舊第 8 單元（安全）應搬到新第 2 單元
+  mem.clear(); S._reset();
+  localStorage.setItem('fde-youth-v1', JSON.stringify({ current: 'A1::舊生', learners: { 'A1::舊生': { nick: '舊生', cls: 'A1', units: { 8: { steps: { read: 1 }, best: 90, attempts: 1 } }, labs: {}, soccer: [], projects: [], log: [] } } }));
+  assert.equal(S.unitProgress(2).best, 90);
+  assert.equal(S.unitProgress(8).best, null);
 });

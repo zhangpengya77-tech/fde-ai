@@ -35,6 +35,7 @@ const { UNITS } = await import(new URL('../../live/youth/data/units.js', import.
 try {
   // ===== 電腦版：學生完整流程 =====
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  await ctx.addInitScript(() => sessionStorage.setItem('fde-youth-teach', '1'));
   const page = await ctx.newPage(); watch(page);
   const t0 = Date.now();
   await page.goto(BASE); await page.waitForSelector('.hero');
@@ -56,14 +57,15 @@ try {
   // 每個單元的知識講解都能打開且有 4 段內容
   let readOk = 0;
   // U09 已改用 V1.2 四步單課頁（知識卡一次一張），其他單元仍是 4 段講解
-  for (const u of UNITS) { await page.goto(`${BASE}#/unit/${u.id}`); if (u.id === 9) { await page.waitForSelector('.ls-card'); readOk++; continue; } await page.waitForSelector('.sections article'); if (await page.locator('.sections article').count() === 4) readOk++; }
+  for (const u of UNITS) { await page.goto(`${BASE}#/unit/${u.id}`); if ([1, 2, 4, 5, 9].includes(u.id)) { await page.waitForSelector('.ls-card'); readOk++; continue; } await page.waitForSelector('.sections article'); if (await page.locator('.sections article').count() === 4) readOk++; }
   check('12 單元知識講解皆可閱讀', readOk === 12, `${readOk}/12`);
-  await page.goto(`${BASE}#/unit/5`); await page.waitForSelector('.sections'); await page.screenshot({ path: path.join(OUT, '03_unit5_read.png') });
+  await page.goto(`${BASE}#/unit/6`); await page.waitForSelector('.sections'); await page.screenshot({ path: path.join(OUT, '03_unit6_read.png') });
 
-  // 單元 5 互動操作：電池計算
-  await page.goto(`${BASE}#/unit/5/widget`); await page.waitForSelector('#bc-v');
-  await page.fill('#bc-v', '14.8'); await page.fill('#bc-c', '4400'); await page.fill('#bc-e', '65.1'); await page.click('#bc-k');
-  check('互動操作：電池計算題完成', (await page.textContent('#wg-st')).includes('完成'));
+  // 單元 6（飛行姿態，舊版面）互動操作：搖桿方向配對
+  await page.goto(`${BASE}#/unit/6/widget`); await page.waitForSelector('#sm-c');
+  for (const [i, v] of ['Throttle 油門', 'Yaw 偏航', 'Pitch 俯仰', 'Roll 橫滾'].entries()) await page.selectOption(`select[data-i="${i}"]`, v);
+  await page.click('#sm-c');
+  check('互動操作：搖桿配對完成', (await page.textContent('#wg-st')).includes('完成'));
 
   // 實驗 C 電池
   await page.goto(`${BASE}#/lab/battery?unit=5`); await page.waitForSelector('#b-V');
@@ -76,13 +78,13 @@ try {
   await page.click('.tabs button[data-t="2"]'); await page.waitForTimeout(300); await page.screenshot({ path: path.join(OUT, '04_battery_ions.png') });
   await page.click('.tabs button[data-t="1"]'); await page.screenshot({ path: path.join(OUT, '04_battery.png') });
 
-  // 單元 5 測驗（全對）
-  await page.goto(`${BASE}#/unit/5/quiz`); await page.waitForSelector('#qz');
-  for (const [i, q] of UNITS[4].quiz.entries()) await page.check(`input[name=q${i}][value="${q.answer}"]`);
+  // 單元 6 測驗（全對）
+  await page.goto(`${BASE}#/unit/6/quiz`); await page.waitForSelector('#qz');
+  for (const [i, q] of UNITS[5].quiz.entries()) await page.check(`input[name=q${i}][value="${q.answer}"]`);
   await page.click('#qz button'); await page.waitForSelector('.result');
   check('測驗：全對 100 分並給解析', (await page.textContent('.result b')).includes('100'));
-  await page.goto(`${BASE}#/unit/5/record`); await page.waitForSelector('.kpis');
-  check('學習紀錄：單元 5 完成 5/5', (await page.textContent('.kpis')).includes('5/5'));
+  await page.goto(`${BASE}#/unit/6/record`); await page.waitForSelector('.kpis');
+  check('學習紀錄：單元 6 已記錄互動與測驗', /[2-5]\/5/.test(await page.textContent('.kpis')));
 
   // 3D 實驗：載入與操作
   for (const id of ['teardown', 'attitude', 'motor', 'sensor']) {
@@ -171,7 +173,8 @@ try {
   await page.screenshot({ path: path.join(OUT, '07_me.png'), fullPage: true });
 
   // ===== 教師 =====
-  const t = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage(); watch(t);
+  const tctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }); await tctx.addInitScript(() => sessionStorage.setItem('fde-youth-teach', '1'));
+  const t = await tctx.newPage(); watch(t);
   await t.goto(BASE + '#/teacher'); await t.fill('#tc-new input[name=c]', 'E2E-A1'); await t.fill('#tc-new input[name=n]', '測試班'); await t.click('#tc-new button');
   await t.waitForSelector('#tc-file'); await t.setInputFiles('#tc-file', repPath); await t.waitForTimeout(1600);
   check('教師：匯入學生報告並顯示成績', (await t.textContent('.tbl')).includes('測試鷹'));
@@ -181,9 +184,10 @@ try {
   await t.screenshot({ path: path.join(OUT, '08_teacher.png') });
 
   // ===== 手機版面 =====
-  const mp = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })).newPage(); watch(mp);
+  const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await mctx.addInitScript(() => sessionStorage.setItem('fde-youth-teach', '1'));
+  const mp = await mctx.newPage(); watch(mp);
   const overflow = () => mp.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
-  for (const [n, h] of [['home', ''], ['courses', '#/courses'], ['unit', '#/unit/3'], ['lab', '#/lab/battery'], ['soccer', '#/soccer'], ['teacher', '#/teacher']]) {
+  for (const [n, h] of [['home', ''], ['courses', '#/courses'], ['unit', '#/unit/6'], ['lab', '#/lab/battery'], ['soccer', '#/soccer'], ['teacher', '#/teacher']]) {
     await mp.goto(BASE + h); await mp.waitForTimeout(1200);
     check(`手機版面無水平溢出：${n}`, !(await overflow()));
     await mp.screenshot({ path: path.join(OUT, `09_mobile_${n}.png`) });
@@ -199,7 +203,8 @@ try {
   const vh = parseFloat(await mp.textContent('#sc-h'));
   await mp.dispatchEvent('#st-l', 'pointerup', { pointerId: 7, bubbles: true });
   check('手機：虛擬搖桿推油門上升', (await mp.textContent('#sc-src')) === '虛擬搖桿' && vh > 0.5, `高度 ${vh}`);
-  const tab = await (await browser.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true })).newPage(); watch(tab);
+  const tbctx = await browser.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true }); await tbctx.addInitScript(() => sessionStorage.setItem('fde-youth-teach', '1'));
+  const tab = await tbctx.newPage(); watch(tab);
   await tab.goto(BASE + '#/soccer'); await tab.waitForTimeout(1500);
   check('平板版面無水平溢出：soccer', !(await tab.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));
   await tab.screenshot({ path: path.join(OUT, '10_tablet_soccer.png') });

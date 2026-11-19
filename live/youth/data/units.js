@@ -2,6 +2,8 @@
 // 每單元結構：知識講解 sections → 互動動畫 widget → 學生操作 task → 3D 實驗 lab → 測驗 quiz → 學習紀錄（由 store.js 寫入）
 // 測驗 answer 為正確選項索引（從 0 起算）；explain 是答錯時給學生看的解析。
 
+import { OLD_TO_NEW } from './order.js';
+
 export const LEVELS = { A: '國小高年級', B: '國中', C: '高中初階' };
 
 export const UNITS = [
@@ -233,3 +235,10 @@ export const LABS = [
   { id: 'f450', name: '實驗 E　F450 組裝', desc: '沿用 FDE-AI 組裝實訓室：零件拖放、Pixhawk 2.4.8 接線、電機方向、錯誤檢查與評分。', unit: 7 },
   { id: 'sensor', name: '實驗 F　感測器', desc: '陀螺儀、加速度計讀數與姿態角回饋，開關自穩看 PID 回正。', unit: 6 }
 ];
+
+// ---- 套用 V1.1 新順序：重新編號、重排，實驗對應的單元也一起換 ----
+UNITS.forEach(u => { u.id = OLD_TO_NEW[u.id]; u.code = `U${String(u.id).padStart(2, '0')}`; });
+UNITS.sort((a, b) => a.id - b.id);
+LABS.forEach(l => { l.unit = OLD_TO_NEW[l.unit]; });
+UNITS.find(u => u.id === 2).title = '飛行安全與規範';
+UNITS.find(u => u.id === 3).title = '飛行科學（四力）';

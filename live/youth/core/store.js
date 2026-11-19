@@ -2,6 +2,7 @@
 // 每個班級代碼＋暱稱是一個獨立紀錄，讀取時只取目前學員自己的資料（不跨班、不跨人）
 // 尚未接 FDE-AI 伺服器帳號系統：要接 student_portal 需要後端修改與使用者授權（見 DEPLOYMENT_AND_ROLLBACK.md）
 
+import { OLD_TO_NEW, ORDER_VERSION } from '../data/order.js';
 const KEY = 'fde-youth-v1';
 const mem = { data: null };   // 無法使用 localStorage（私密模式）時退回記憶體
 
@@ -9,7 +10,14 @@ function load() {
   if (mem.data) return mem.data;
   let d = null;
   try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { d = null; }
-  mem.data = d && typeof d === 'object' ? d : { current: null, learners: {} };
+  mem.data = d && typeof d === 'object' ? d : { current: null, learners: {}, order: ORDER_VERSION };
+  // V1.1 單元重新編號：舊紀錄的單元編號換成新編號（只做一次）
+  if (mem.data.order !== ORDER_VERSION) {
+    const remap = obj => { const o = {}; for (const [k, v] of Object.entries(obj || {})) o[OLD_TO_NEW[k] ?? k] = v; return o; };
+    for (const m of Object.values(mem.data.learners || {})) { m.units = remap(m.units); if (m.lessons) m.lessons = remap(m.lessons); }
+    if (mem.data.guestLessons) mem.data.guestLessons = remap(mem.data.guestLessons);
+    mem.data.order = ORDER_VERSION; save();
+  }
   return mem.data;
 }
 function save() {
@@ -123,6 +131,17 @@ export function lesson(unitId) {
   return (bucket[unitId] ??= { step: 'task', reached: 0, cards: [], demoDone: false, demoT: 0, quiz: { best: null, attempts: 0, last: null }, practiceDone: false, done: false });
 }
 export function saveLessonState() { save(); }
+/** 單元是否完成：新版四步課完成，或舊版五步全部完成（V1.2 第 4 節依序解鎖用） */
+export function unitDone(unitId) {
+  const d = load(); const m = me();
+  const L = m ? m.lessons?.[unitId] : d.guestLessons?.[unitId];
+  if (L?.done) return true;
+  const u = m?.units?.[unitId];
+  return !!u && ['read', 'widget', 'task', 'lab', 'quiz'].every(s => u.steps[s]);
+}
+/** 單元是否已解鎖：第 1 單元永遠開放，其他要上一單元完成 */
+export function unitUnlocked(unitId) { return unitId <= 1 || unitDone(unitId - 1); }
+
 /** 步驟完成條件（V1.2 第 2 節） */
 export function stepComplete(L, step, spec) {
   if (step === 'task') return L.cards.length >= spec.steps.task.cards.length;

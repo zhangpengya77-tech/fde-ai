@@ -15,9 +15,11 @@ const { default: spec } = await import(new URL('../../live/youth/data/lessons/u0
 const results = []; const errs = [];
 const check = (n, ok, d = '') => { results.push({ n, ok: !!ok, d }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? '　' + d : ''}`); };
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+// 依序解鎖：測 U09 前先把 U01–U08 標成已完成（訪客紀錄），只在第一次載入時寫入
+const SEED = () => { if (!localStorage.getItem('fde-youth-v1')) { const g = {}; for (let i = 1; i <= 8; i++) g[i] = { done: true, step: 'tips', reached: 3, cards: [], quiz: {} }; localStorage.setItem('fde-youth-v1', JSON.stringify({ current: null, learners: {}, order: 2, guestLessons: g })); } };
 
 async function run(name, ctxOpt, shots) {
-  const ctx = await browser.newContext(ctxOpt); const p = await ctx.newPage();
+  const ctx = await browser.newContext(ctxOpt); await ctx.addInitScript(SEED); const p = await ctx.newPage();
   p.on('pageerror', e => errs.push(`${name} pageerror: ${e.message}`)); p.on('console', m => { if (m.type() === 'error') errs.push(`${name}: ${m.text()}`); });
   const shot = async f => { if (shots) await p.screenshot({ path: path.join(OUT, `${name}_${f}.png`) }); };
   const overflow = () => p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
@@ -91,7 +93,7 @@ try {
   await run('desktop', { viewport: { width: 1440, height: 900 } }, true);
   await run('iphone13', { ...devices['iPhone 13'] }, true);
   // 橫式全屏授課（教師模式：步驟不鎖）
-  const ctx = await browser.newContext({ ...devices['iPhone 13 landscape'] }); const p = await ctx.newPage();
+  const ctx = await browser.newContext({ ...devices['iPhone 13 landscape'] }); await ctx.addInitScript(SEED); const p = await ctx.newPage();
   p.on('pageerror', e => errs.push(`landscape pageerror: ${e.message}`));
   await p.goto(BASE + '#/unit/9'); await p.waitForSelector('.ls-card');
   await p.click('#ls-teach'); await p.waitForTimeout(400);
@@ -103,7 +105,7 @@ try {
   await p.click('#ls-next'); await p.waitForSelector('#ls-qz'); await p.screenshot({ path: path.join(OUT, 'iphone13-landscape_03_criteria_teach.png') });
   await ctx.close();
   // 手機 3D 區不超過畫面 45%
-  const c2 = await browser.newContext({ ...devices['iPhone 13'] }); const p2 = await c2.newPage();
+  const c2 = await browser.newContext({ ...devices['iPhone 13'] }); await c2.addInitScript(SEED); const p2 = await c2.newPage();
   await p2.goto(BASE + '#/unit/9'); await p2.click('#ls-teach'); await p2.click('.ls-steps li:nth-child(2) a'); await p2.waitForSelector('#ls-3d canvas', { timeout: 20000 });
   const r = await p2.evaluate(() => ({ h: document.querySelector('#ls-3d').getBoundingClientRect().height, vh: innerHeight }));
   check('手機：3D 區高度 ≤ 畫面 45%', r.h <= r.vh * 0.45 + 1, `${Math.round(r.h)}/${r.vh}`);

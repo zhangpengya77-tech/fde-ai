@@ -2,6 +2,7 @@
 // 目前「沒有」接上外部大型語言模型；回答來自本檔經教材整理的知識庫＋關鍵字比對。
 // 畫面上會明確標示「規則式助教」，不假裝是 AI 推理。學員輸入的文字只在瀏覽器內處理，不送出。
 import { UNITS } from '../data/units.js';
+import { OLD_TO_NEW } from '../data/order.js';
 
 export const GLOSSARY = [
   { k: ['pitch', '俯仰'], a: 'Pitch（俯仰）：機頭往下或往上，控制前進後退。前後兩組電機產生轉速差。', unit: 3 },
@@ -43,8 +44,9 @@ export function ask(question) {
     if (score > bestScore) { bestScore = score; best = g; }
   }
   if (!best) return { answer: '這個問題目前的知識庫沒有收錄，請把問題記下來問老師。你也可以試著換個關鍵字，例如「串聯」「陀螺儀」「換相」。', matched: false };
-  const u = UNITS.find(x => x.id === best.unit);
-  return { answer: best.a, unit: best.unit, unitTitle: u?.title, matched: true };
+  const unitId = OLD_TO_NEW[best.unit];
+  const u = UNITS.find(x => x.id === unitId);
+  return { answer: best.a, unit: unitId, unitTitle: u?.title, matched: true };
 }
 
 /** 答錯分析：依錯題回傳複習建議 */

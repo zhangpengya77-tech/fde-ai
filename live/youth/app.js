@@ -21,7 +21,8 @@ function who() {
   document.getElementById('who').innerHTML = m
     ? `<span class="pill">${esc(m.cls)}・${esc(m.nick)}</span><button class="link" id="logout">登出</button>`
     : '<button class="btn small" id="loginBtn">學員登入</button>';
-  document.getElementById('logout')?.addEventListener('click', () => { store.logout(); who(); route(); });
+  document.getElementById('logout')?.addEventListener('click', () => { store.logout(); try { if (sessionStorage.getItem('fde-youth-teach') === '1') document.body.classList.add('teach'); } catch { /* 略 */ }
+who(); route(); });
   document.getElementById('loginBtn')?.addEventListener('click', () => loginDialog());
 }
 function loginDialog(after) {
@@ -81,19 +82,31 @@ function viewCourses(level = 'all') {
   app.innerHTML = `${crumbs([['首頁', '#/'], ['課程中心']])}
   <h2>課程中心</h2>
   <div class="filters">${[['all', '全部'], ...Object.entries(LEVELS)].map(([k, n]) => `<a class="chip ${k === level ? 'on' : ''}" href="#/courses/${k}">${n}</a>`).join('')}</div>
-  <div class="cards">${list.map(u => `
-    <a class="ucard" href="#/unit/${u.id}">
-      <div class="cover" style="--c:${u.color}"><span>${u.code}</span><b>${esc(u.title)}</b></div>
-      <div class="body"><small>${LEVELS[u.level]}・${u.minutes} 分鐘</small><p>${esc(u.goal)}</p><div class="row">${progressBadge(u)}<span class="btn small">開始學習</span></div></div>
-    </a>`).join('')}</div>`;
+  <p class="muted small">課程依序解鎖：完成上一課才能進入下一課。第 2 單元「飛行安全與規範」完成後，才能使用足球訓練與操作實驗。</p>
+  <div class="cards">${list.map(u => { const open = unlocked(u.id); const tag = open ? 'a' : 'div'; return `
+    <${tag} class="ucard ${open ? '' : 'locked'}" ${open ? `href="#/unit/${u.id}"` : 'aria-disabled="true"'}>
+      <div class="cover" style="--c:${u.color}"><span>${u.code}${LESSON_FILES[u.id] ? '・新版課程' : ''}</span><b>${esc(u.title)}</b></div>
+      <div class="body"><small>${LEVELS[u.level]}・${u.minutes} 分鐘</small><p>${esc(u.goal)}</p><div class="row">${progressBadge(u)}<span class="btn small">${open ? (store.unitDone(u.id) ? '再看一次' : '開始學習') : '🔒 完成上一課解鎖'}</span></div></div>
+    </${tag}>`; }).join('')}</div>`;
 }
 
 // ---------- 單元頁（左章節／中內容／右助教）----------
 const STEPS = [['read', '知識講解'], ['widget', '互動操作'], ['lab', '3D 實驗'], ['quiz', '隨堂測驗'], ['record', '學習紀錄']];
 // V1.2 四步單課頁：已改版的單元放這裡（其他單元暫用 V1.0 版面，待使用者確認版型後再套用）
-const LESSON_FILES = { 9: () => import('./data/lessons/u09.js') };
+const LESSON_FILES = {
+  1: () => import('./data/lessons/u01.js'), 2: () => import('./data/lessons/u02.js'), 4: () => import('./data/lessons/u04.js'),
+  5: () => import('./data/lessons/u05.js'), 9: () => import('./data/lessons/u09.js')
+};
+// 依序解鎖（V1.2 第 4 節）：教師「全屏授課」模式不受限制
+const teachOn = () => document.body.classList.contains('teach');
+const unlocked = id => teachOn() || store.unitUnlocked(id);
+const safetyOk = () => teachOn() || store.unitDone(2);
+function gate(title, msg, href, btn) {
+  app.innerHTML = `<div class="card gate"><h2>🔒 ${esc(title)}</h2><p>${esc(msg)}</p><a class="btn" href="${href}">${esc(btn)}</a> <a class="btn ghost" href="#/courses">回課程中心</a></div>`;
+}
 async function viewUnit(id, step) {
   const u = UNITS.find(x => x.id === +id); if (!u) return viewNotFound();
+  if (!unlocked(u.id)) { const pu = UNITS.find(x => x.id === u.id - 1); return gate(`${u.code} ${u.title} 尚未解鎖`, `請先完成上一課「${pu.code} ${pu.title}」。`, `#/unit/${pu.id}`, `前往 ${pu.code}`); }
   if (LESSON_FILES[u.id]) {
     const [{ default: spec }, { viewLesson }] = await Promise.all([LESSON_FILES[u.id](), import('./lesson.js')]);
     return viewLesson(spec, step, { app, esc, units: UNITS, unit: u, aiPanel, bindAi, loginDialog, setCleanup: f => { cleanup = f; } });
@@ -126,7 +139,7 @@ async function viewUnit(id, step) {
     });
   } else if (step === 'lab') {
     if (u.lab === 'soccer') {
-      uc.innerHTML = `${head}<h3>3D 實驗：足球訓練場</h3><p>${esc(u.task)}</p><p class="muted small">這個單元的實驗在「無人機足球訓練場」進行，完成任務後會自動記錄到本單元。</p><a class="btn" href="#/soccer/${u.id === 9 ? 'hover' : u.id === 8 ? 'free' : 'ring'}?unit=${u.id}">進入足球訓練場</a> ${nextBtn}`;
+      uc.innerHTML = `${head}<h3>3D 實驗：足球訓練場</h3><p>${esc(u.task)}</p><p class="muted small">這個單元的實驗在「無人機足球訓練場」進行，完成任務後會自動記錄到本單元。</p><a class="btn" href="#/soccer/${u.id === 9 ? 'hover' : u.id === 2 ? 'free' : 'ring'}?unit=${u.id}">進入足球訓練場</a> ${nextBtn}`;
     } else if (['coding', 'project'].includes(u.lab)) {
       uc.innerHTML = `${head}<h3>實作</h3><p>本單元的實作就是「互動操作」頁的${u.lab === 'coding' ? '方塊程式模擬' : '專題紀錄表'}，完成後自動記錄。</p><a class="btn" href="#/unit/${u.id}/widget">前往互動操作</a> ${nextBtn}`;
     } else {
@@ -187,6 +200,7 @@ function viewLabs() {
 }
 async function viewLab(id, q) {
   const L = LABS.find(x => x.id === id); if (!L || !LAB_LOADERS[id]) return viewNotFound();
+  if (!safetyOk()) return gate('先完成飛行安全', '所有操作實驗都要先完成「U02 飛行安全與規範」。', '#/unit/2', '前往 U02 飛行安全');
   const unitId = +(q.get('unit') || L.unit);
   app.innerHTML = `<div class="labbar"><div><b>⚗ ${esc(L.name)}</b><small>虛擬實驗室・互動演示</small></div><div class="sc-row"><button class="btn ghost small" id="lb-reset">↺ 重新開始</button><button class="btn ghost small" id="lb-full">⛶ 全螢幕</button><a class="btn small" href="#/unit/${unitId}/lab">← 返回課程</a></div></div><p class="state" id="lb-st"></p><div id="labhost" class="labhost"></div>`;
   const host = document.getElementById('labhost');
@@ -205,7 +219,8 @@ async function viewLab(id, q) {
 
 // ---------- 足球 ----------
 async function viewSoccer(mode, q) {
-  const unitId = +(q.get('unit') || 10);
+  if (!safetyOk()) return gate('先完成飛行安全', '足球訓練場要先完成「U02 飛行安全與規範」。', '#/unit/2', '前往 U02 飛行安全');
+  const unitId = +(q.get('unit') || 11);
   app.innerHTML = `<div class="labbar"><div><b>⚽ 無人機足球 3D 專項訓練</b><small>Drone Soccer 3D Training Lab・教學級模擬</small></div><div class="sc-row"><button class="btn ghost small" id="lb-full">⛶ 全螢幕</button><a class="btn small" href="#/unit/${unitId}/lab">← 返回課程</a></div></div><div id="labhost" class="labhost"></div>`;
   const host = document.getElementById('labhost');
   try {
@@ -335,4 +350,5 @@ function route() {
   }
 }
 window.addEventListener('hashchange', route);
+try { if (sessionStorage.getItem('fde-youth-teach') === '1') document.body.classList.add('teach'); } catch { /* 略 */ }
 who(); route();

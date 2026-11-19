@@ -77,6 +77,7 @@ export async function viewLesson(spec, stepArg, deps) {
   $('#ls-user').onclick = () => { if (!m) deps.loginDialog(() => viewLesson(spec, step, deps)); else location.hash = '#/me'; };
   $('#ls-teach').onclick = async () => {
     const on = !teach(); document.body.classList.toggle('teach', on);
+    try { sessionStorage.setItem('fde-youth-teach', on ? '1' : '0'); } catch { /* 略 */ }
     try { if (on) { await document.documentElement.requestFullscreen?.(); await screen.orientation?.lock?.('landscape'); } else if (document.fullscreenElement) await document.exitFullscreen(); } catch { /* 部分瀏覽器不支援，忽略 */ }
     viewLesson(spec, step, deps);
   };
@@ -145,7 +146,7 @@ export async function viewLesson(spec, stepArg, deps) {
     main.innerHTML = `${head(D.eyebrow, D.title, D.headline)}
       <div class="ls-stage card" id="ls-stage">
         <div class="ls-views" role="tablist">${D.views.map(([k, n]) => `<button data-v="${k}" class="${k === 'three' ? 'on' : ''}">${n}</button>`).join('')}</div>
-        <div class="ls-hud"><small>相對起飛面高度</small><b id="ls-hud">0.00 m</b></div>
+        <div class="ls-hud"><small>${esc(D.hudLabel || '相對起飛面高度')}</small><b id="ls-hud">—</b></div>
         <div class="ls-3d" id="ls-3d"></div>
         <p class="ls-tip">${(isTouch() ? D.tipsTouch : D.tips).map(esc).join('<br>')}</p>
         <div class="ls-overlay">
@@ -160,14 +161,19 @@ export async function viewLesson(spec, stepArg, deps) {
         <ul class="ls-legend">${D.observe.legend.map(([c, t]) => `<li><i class="lg-${c}"></i>${esc(t)}</li>`).join('')}</ul>
         <p class="ls-cap">達標範圍</p><ul class="ls-pass">${D.observe.pass.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>`;
     let scene = null;
-    try { const mod = await import('./labs/scene-u09.js'); scene = mod.createU09Scene($('#ls-3d'), D); }
+    try {
+      if (D.scene === 'u09-hover') { const mod = await import('./labs/scene-u09.js'); scene = mod.createU09Scene($('#ls-3d'), D); }
+      else { const mod = await import('./labs/scenes-r1.js'); scene = mod.createScene(D.scene, $('#ls-3d'), D); }
+    }
     catch (e) { $('#ls-3d').innerHTML = `<p class="state over">3D 載入失敗：${esc(e.message)}</p>`; }
     let t = Math.min(L.demoT || 0, D.durationSec), playing = false, speed = 1, raf = 0, last = 0, saveAcc = 0;
     const SPEEDS = [1, 2, 4, 6];
     const paint = () => {
-      const s = scene ? scene.setTime(t) : { y: 0, phase: D.phases.reduce((a, p, k) => t >= p.t ? k : a, 0) };
+      const s = scene ? scene.setTime(t) : {};
+      const phaseNo = D.phases.reduce((a, p, k) => t >= p.t ? k : a, 0);
+      s.phase ??= phaseNo;
       const ph = D.phases[s.phase], a = ph.action, el = t - ph.t;
-      $('#ls-hud').textContent = `${s.y.toFixed(2)} m`;
+      $('#ls-hud').textContent = s.hud ?? `${(s.y ?? 0).toFixed(2)} m`;
       $('#ls-tm').textContent = `${fmt(t)} / ${fmt(D.durationSec)}`; $('#ls-sc').value = t;
       app.querySelectorAll('#ls-phases button').forEach((b, k) => { b.classList.toggle('on', k === s.phase); b.classList.toggle('past', k < s.phase); });
       $('#ls-an').textContent = a.name; $('#ls-ad').textContent = a.desc; $('#ls-as').textContent = a.status;
