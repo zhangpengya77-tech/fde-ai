@@ -1,0 +1,6 @@
+{
+  "name": "fde-youth-lab",
+  "private": true,
+  "description": "青少年無人機科學實驗室：讓 node 以 ES Module 載入本資料夾的 .js（測試在專案根目錄 tests/youth，不隨網站公開）",
+  "type": "module"
+}

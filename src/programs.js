@@ -95,10 +95,21 @@
     { id: 'soccer', title: '足球無人機課程專區', en: 'DRONE SOCCER' },
     { id: 'fixedwing', title: '固定翼飛機課程專區', en: 'FIXED-WING' },
   ];
+  // ───────── 青少年無人機科學實驗室入口（2026-11-20，功能開關）─────────
+  // 預設關閉：正式站看不到任何改變。開啟方式：把 YOUTH_LAB_ENTRY 改成 true（需使用者授權部署），
+  // 或預覽時在網址加 ?youth=1。入口連到獨立模組 /live/youth/（不改既有課程、登入與後台）。
+  const YOUTH_LAB_ENTRY = false;
+  const youthEntryOn = () => YOUTH_LAB_ENTRY || /[?&]youth=1\b/.test(location.search);
+  ZONE_ICONS.youth = '<svg viewBox="0 0 64 64"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M26 8h12M28 8v14L14 50a4 4 0 0 0 3.6 6h28.8A4 4 0 0 0 50 50L36 22V8"/><path d="M20 40h24"/><circle cx="28" cy="47" r="2.2" fill="currentColor"/><circle cx="37" cy="44" r="1.6" fill="currentColor"/></g></svg>';
   function specialZones() {
+    const youth = youthEntryOn() ? `<a class="pg-zone" href="/live/youth/" data-zone-link="youth">
+          <span class="pg-zone-icon" aria-hidden="true">${ZONE_ICONS.youth}</span>
+          <span class="pg-zone-en">YOUTH DRONE STEM LAB</span>
+          <span class="pg-zone-title">青少年無人機科學實驗室</span>
+        </a>` : '';
     return `<section class="pg-zones" aria-label="專項課程專區">
       <p class="pg-section-title"><span>專項課程專區</span><em>SPECIAL PROGRAMS</em></p>
-      <div class="pg-zone-grid">${SPECIAL_ZONES.map((z) => `<button type="button" class="pg-zone" data-zone="${z.id}" aria-haspopup="dialog">
+      <div class="pg-zone-grid">${youth}${SPECIAL_ZONES.map((z) => `<button type="button" class="pg-zone" data-zone="${z.id}" aria-haspopup="dialog">
           <span class="pg-zone-icon" aria-hidden="true">${ZONE_ICONS[z.id]}</span>
           <span class="pg-zone-en">${z.en}</span>
           <span class="pg-zone-title">${esc(z.title)}</span>

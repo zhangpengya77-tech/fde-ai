@@ -160,6 +160,7 @@
 .pg-section-title em { font: 700 11px/1 monospace; letter-spacing: 0.18em; color: var(--cyan, #00c2ff); font-style: normal; }
 .pg-zones { max-width: 980px; margin: 0 0 34px; }
 .pg-zone-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+a.pg-zone { text-decoration: none; color: inherit; }  /* 青少年實驗室入口為連結（2026-11-20） */
 .pg-zone { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 26px 14px 20px; text-align: center; font: inherit; color: inherit; background: radial-gradient(circle at 50% 30%, rgba(0, 194, 255, 0.16), rgba(15, 32, 51, 0.78) 62%); border: 1px solid var(--pg-line); border-radius: 18px; box-shadow: var(--pg-glow); overflow: hidden; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease; }
 .pg-zone:hover, .pg-zone:focus-visible { transform: translateY(-2px); border-color: rgba(0, 194, 255, 0.7); outline: none; }
 .pg-zone::before { content: ""; position: absolute; inset: -40% auto -40% -60%; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent); transform: skewX(-20deg); animation: pg-shine 4.5s ease-in-out infinite; pointer-events: none; }
