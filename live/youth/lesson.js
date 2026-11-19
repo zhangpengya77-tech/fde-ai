@@ -163,7 +163,8 @@ export async function viewLesson(spec, stepArg, deps) {
     let scene = null;
     try {
       if (D.scene === 'u09-hover') { const mod = await import('./labs/scene-u09.js'); scene = mod.createU09Scene($('#ls-3d'), D); }
-      else { const mod = await import('./labs/scenes-r1.js'); scene = mod.createScene(D.scene, $('#ls-3d'), D); }
+      else if (['u01-parts', 'u02-safety', 'u04-motor', 'u05-battery'].includes(D.scene)) { const mod = await import('./labs/scenes-r1.js'); scene = mod.createScene(D.scene, $('#ls-3d'), D); }
+      else { const mod = await import('./labs/scenes-r2.js'); scene = mod.createScene(D.scene, $('#ls-3d'), D); }
     }
     catch (e) { $('#ls-3d').innerHTML = `<p class="state over">3D 載入失敗：${esc(e.message)}</p>`; }
     let t = Math.min(L.demoT || 0, D.durationSec), playing = false, speed = 1, raf = 0, last = 0, saveAcc = 0;

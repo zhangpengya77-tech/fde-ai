@@ -95,7 +95,11 @@ const STEPS = [['read', '知識講解'], ['widget', '互動操作'], ['lab', '3D
 // V1.2 四步單課頁：已改版的單元放這裡（其他單元暫用 V1.0 版面，待使用者確認版型後再套用）
 const LESSON_FILES = {
   1: () => import('./data/lessons/u01.js'), 2: () => import('./data/lessons/u02.js'), 4: () => import('./data/lessons/u04.js'),
-  5: () => import('./data/lessons/u05.js'), 9: () => import('./data/lessons/u09.js')
+  5: () => import('./data/lessons/u05.js'), 9: () => import('./data/lessons/u09.js'),
+  // v1.3：其餘 7 課也改成四步單課頁
+  3: () => import('./data/lessons/u03.js'), 6: () => import('./data/lessons/u06.js'), 7: () => import('./data/lessons/u07.js'),
+  8: () => import('./data/lessons/u08.js'), 10: () => import('./data/lessons/u10.js'), 11: () => import('./data/lessons/u11.js'),
+  12: () => import('./data/lessons/u12.js')
 };
 // 依序解鎖（V1.2 第 4 節）：教師「全屏授課」模式不受限制
 const teachOn = () => document.body.classList.contains('teach');
@@ -215,6 +219,20 @@ async function viewLab(id, q) {
   } catch (e) { host.innerHTML = `<div class="card"><p class="state over">實驗載入失敗：${esc(e.message)}</p><p class="small">請重新整理頁面；若仍失敗，可能是這台裝置不支援 WebGL（3D 繪圖），請改用電腦或較新的瀏覽器。</p></div>`; }
   document.getElementById('lb-reset').onclick = () => { ctx.onReset?.(); const s = document.getElementById('lb-st'); s.className = 'state'; s.textContent = ''; };
   document.getElementById('lb-full').onclick = () => (host.requestFullscreen?.() || host.webkitRequestFullscreen?.());
+}
+
+// ---------- 實作頁（v1.3）：U10 方塊程式、U12 專題紀錄表 ----------
+const PRACTICE = { coding: { widget: 'block-coding', title: '方塊程式：飛一個正方形', unit: 10 }, project: { widget: 'project-sheet', title: '專題紀錄表', unit: 12 } };
+function viewPractice(kind, q) {
+  const P = PRACTICE[kind]; if (!P) return viewNotFound();
+  const unitId = +(q.get('unit') || P.unit);
+  app.innerHTML = `<div class="labbar"><div><b>🛠 ${esc(P.title)}</b><small>實作練習・完成後回課程按「本課完成」</small></div><div class="sc-row"><a class="btn small" href="#/unit/${unitId}/tips">← 返回課程</a></div></div>
+    ${kind === 'project' && !store.me() ? '<p class="state">目前未登入：專題可以填寫，但不會保存，也無法交給老師。請先登入。</p>' : ''}
+    <div class="card"><div class="widget" id="wg"></div><p class="state" id="wg-st"></p></div>`;
+  mountWidget(P.widget, document.getElementById('wg'), {
+    done: () => { store.markStep(unitId, 'task'); store.markStep(unitId, 'lab'); const s = document.getElementById('wg-st'); if (s) { s.className = 'state ok'; s.innerHTML = `完成！已記錄。<a href="#/unit/${unitId}/tips">回到課程 →</a>`; } },
+    project: p => store.saveProject({ unitId, ...p })
+  });
 }
 
 // ---------- 足球 ----------
@@ -342,6 +360,7 @@ function route() {
     case 'labs': return viewLabs();
     case 'lab': return viewLab(p[1], q);
     case 'soccer': return viewSoccer(p[1], q);
+    case 'practice': return viewPractice(p[1], q);
     case 'me': return viewMe();
     case 'teacher': return viewTeacher(p[1]);
     case 'ai': return viewAi();

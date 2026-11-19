@@ -57,15 +57,14 @@ try {
   // 每個單元的知識講解都能打開且有 4 段內容
   let readOk = 0;
   // U09 已改用 V1.2 四步單課頁（知識卡一次一張），其他單元仍是 4 段講解
-  for (const u of UNITS) { await page.goto(`${BASE}#/unit/${u.id}`); if ([1, 2, 4, 5, 9].includes(u.id)) { await page.waitForSelector('.ls-card'); readOk++; continue; } await page.waitForSelector('.sections article'); if (await page.locator('.sections article').count() === 4) readOk++; }
+  for (const u of UNITS) { await page.goto(`${BASE}#/unit/${u.id}`); await page.waitForSelector('.ls-card'); if (await page.locator('.ls-obj li').count() >= 3) readOk++; }   // v1.3：12 單元全部是四步單課頁
   check('12 單元知識講解皆可閱讀', readOk === 12, `${readOk}/12`);
-  await page.goto(`${BASE}#/unit/6`); await page.waitForSelector('.sections'); await page.screenshot({ path: path.join(OUT, '03_unit6_read.png') });
-
-  // 單元 6（飛行姿態，舊版面）互動操作：搖桿方向配對
-  await page.goto(`${BASE}#/unit/6/widget`); await page.waitForSelector('#sm-c');
-  for (const [i, v] of ['Throttle 油門', 'Yaw 偏航', 'Pitch 俯仰', 'Roll 橫滾'].entries()) await page.selectOption(`select[data-i="${i}"]`, v);
-  await page.click('#sm-c');
-  check('互動操作：搖桿配對完成', (await page.textContent('#wg-st')).includes('完成'));
+  // v1.3：U10 實作頁（方塊程式）用迴圈飛正方形
+  await page.goto(`${BASE}#/practice/coding?unit=10`); await page.waitForSelector('.blk');
+  for (const k of ['up', 'rep4', 'fwd', 'right', 'land']) await page.click(`.blk[data-k="${k}"]`);
+  await page.click('#bk-run');
+  check('實作頁：方塊程式用迴圈飛正方形', (await page.textContent('#bk-r')).includes('成功'));
+  await page.screenshot({ path: path.join(OUT, '03_practice_coding.png') });
 
   // 實驗 C 電池
   await page.goto(`${BASE}#/lab/battery?unit=5`); await page.waitForSelector('#b-V');
@@ -77,14 +76,6 @@ try {
   check('電池實驗：完成判定', (await page.textContent('#lb-st')).includes('完成'));
   await page.click('.tabs button[data-t="2"]'); await page.waitForTimeout(300); await page.screenshot({ path: path.join(OUT, '04_battery_ions.png') });
   await page.click('.tabs button[data-t="1"]'); await page.screenshot({ path: path.join(OUT, '04_battery.png') });
-
-  // 單元 6 測驗（全對）
-  await page.goto(`${BASE}#/unit/6/quiz`); await page.waitForSelector('#qz');
-  for (const [i, q] of UNITS[5].quiz.entries()) await page.check(`input[name=q${i}][value="${q.answer}"]`);
-  await page.click('#qz button'); await page.waitForSelector('.result');
-  check('測驗：全對 100 分並給解析', (await page.textContent('.result b')).includes('100'));
-  await page.goto(`${BASE}#/unit/6/record`); await page.waitForSelector('.kpis');
-  check('學習紀錄：單元 6 已記錄互動與測驗', /[2-5]\/5/.test(await page.textContent('.kpis')));
 
   // 3D 實驗：載入與操作
   for (const id of ['teardown', 'attitude', 'motor', 'sensor']) {

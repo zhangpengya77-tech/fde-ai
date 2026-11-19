@@ -128,7 +128,14 @@ export const LESSON_STEPS = ['task', 'demo', 'criteria', 'tips'];
 export function lesson(unitId) {
   const d = load(); const m = me();
   const bucket = m ? (m.lessons ??= {}) : (d.guestLessons ??= {});
-  return (bucket[unitId] ??= { step: 'task', reached: 0, cards: [], demoDone: false, demoT: 0, quiz: { best: null, attempts: 0, last: null }, practiceDone: false, done: false });
+  // 舊紀錄或不完整紀錄：補齊缺少的欄位，避免讀取時出錯
+  const def = { step: 'task', reached: 0, cards: [], demoDone: false, demoT: 0, quiz: { best: null, attempts: 0, last: null }, practiceDone: false, done: false };
+  const L = (bucket[unitId] ??= def);
+  for (const [k, v] of Object.entries(def)) if (L[k] == null) L[k] = v;
+  if (!Array.isArray(L.cards)) L.cards = [];
+  L.quiz = { best: null, attempts: 0, last: null, ...L.quiz };
+  if (L.done) L.reached = 3;
+  return L;
 }
 export function saveLessonState() { save(); }
 /** 單元是否完成：新版四步課完成，或舊版五步全部完成（V1.2 第 4 節依序解鎖用） */
